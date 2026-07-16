@@ -345,17 +345,22 @@ export function detectQueryType(query: string): QueryType {
 
   // Financial / stock keywords (Korean + English + Chinese)
   // Must be checked BEFORE news because stock queries often contain year numbers
-  if (/주가|주식|증권|코스피|코스닥|kospi|kosdaq|시세|변동률|상한가|하한가|목표주가|투자의견|실적|배당|주주|공시|기업분석|리서치|per|pbr|roe|eps|시가총액|거래량|시장가|주봉|일봉|월봉|chart|finance|financial|stock|price|share|dividend|market\s?cap|trading|ipo|공모가/i.test(query)) {
+  // \b word boundaries on short English terms (per, pbr, roe, eps) to prevent
+  // false matches in words like "operator", "perform", "paper", "experience"
+  if (/주가|주식|증권|코스피|코스닥|kospi|kosdaq|시세|변동률|상한가|하한가|목표주가|투자의견|실적|배당|주주|공시|기업분석|리서치|\bper\b|\bpbr\b|\broe\b|\beps\b|시가총액|거래량|시장가|주봉|일봉|월봉|\bchart\b|\bfinance\b|\bfinancial\b|\bstock\b|\bprice\b|\bshare\b|\bshares\b|\bdividend\b|market\s?cap|\btrading\b|\bipo\b|공모가/i.test(query)) {
     return 'financial'
   }
 
-  // Technical keywords
-  if (/\b(github|code|programming|api|framework|library|npm|pip|docker|kubernetes|react|vue|python|javascript|typescript|rust|go|java|sql|database|cloud|deploy|docker|git)\b/i.test(query)) {
+  // Technical keywords (expanded for accurate detection)
+  // Covers: tutorial/learning, cloud infra, languages, frameworks, tools, concepts
+  // Checked BEFORE news so that "React 2025" or "D1 tutorial 2025" → technical, not news
+  if (/\b(tutorial|tutorials|guide|guides|docs|documentation|example|examples|walkthrough|how\s?to|github|code|coding|programming|api|apis|framework|frameworks|library|libraries|sdk|cli|npm|pip|cargo|yarn|pnpm|docker|kubernetes|react|vue|angular|svelte|nextjs|next\.js|nuxt|express|fastify|hono|django|flask|rails|spring|laravel|python|javascript|typescript|rust|golang|java|kotlin|swift|ruby|php|sql|database|sqlite|postgres|postgresql|mysql|mongodb|redis|graphql|rest|grpc|serverless|cloudflare|workers?|lambda|aws|azure|gcp|vercel|netlify|edge|deploy|deployment|git|webpack|vite|rollup|esbuild|eslint|prettier|jest|vitest|tailwind|bootstrap|html|css|node|deno|bun|oauth|jwt|cors|websocket|devtools)\b/i.test(query)) {
     return 'technical'
   }
 
   // News/current events keywords
-  if (/\b(latest|news|today|2024|2025|2026|recent|breaking|update|announce|launch|release)\b/i.test(query)) {
+  // Year numbers alone are news indicators only if no technical/financial keywords matched above
+  if (/\b(latest|news|today|2024|2025|2026|recent|breaking|update|updates|announce|announcement|launch|launched|release|released)\b/i.test(query)) {
     return 'news'
   }
 

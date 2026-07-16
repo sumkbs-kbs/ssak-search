@@ -172,15 +172,43 @@ export async function fetchWithTimeout(
 export function generateRelatedQueries(query: string, resultTitles: string[]): string[] {
   const related = new Set<string>()
   const baseQuery = query.trim()
+  const isKorean = /[\uAC00-\uD7A3]/.test(baseQuery)
 
-  // Generic question variants
-  const templates = [
-    `${baseQuery} guide`,
-    `${baseQuery} explained`,
-    `best ${baseQuery}`,
-    `${baseQuery} examples`,
-    `${baseQuery} 2026`,
-  ]
+  // Detect financial/stock queries for specialized related queries
+  const isFinancial = /주가|주식|증권|코스피|코스닥|kospi|kosdaq|stock|price|finance|dividend|per|pbr|시세|목표주가|투자의견|실적|배당/i.test(baseQuery)
+
+  // Generic question variants — use Korean templates for Korean queries
+  const templates = isKorean
+    ? isFinancial
+      ? [
+          `${baseQuery} 전망`,
+          `${baseQuery} 분석`,
+          `${baseQuery} 실적`,
+          `${baseQuery} 목표주가`,
+          `${baseQuery} 배당`,
+        ]
+      : [
+          `${baseQuery} 정리`,
+          `${baseQuery} 설명`,
+          `${baseQuery} 최신`,
+          `${baseQuery} 가이드`,
+          `${baseQuery} 2026`,
+        ]
+    : isFinancial
+      ? [
+          `${baseQuery} forecast`,
+          `${baseQuery} analysis`,
+          `${baseQuery} earnings`,
+          `${baseQuery} price target`,
+          `${baseQuery} dividend`,
+        ]
+      : [
+          `${baseQuery} guide`,
+          `${baseQuery} explained`,
+          `best ${baseQuery}`,
+          `${baseQuery} examples`,
+          `${baseQuery} 2026`,
+        ]
   for (const t of templates) {
     if (t.toLowerCase() !== baseQuery.toLowerCase()) related.add(t)
   }
@@ -191,8 +219,9 @@ export function generateRelatedQueries(query: string, resultTitles: string[]): s
     const words = title
       .toLowerCase()
       .split(/\s+/)
-      .filter((w) => w.length > 4 && !isStopWord(w))
+      .filter((w) => w.length > 1 && !isStopWord(w))
       .map((w) => w.replace(/[^\p{L}\p{N}]/gu, ''))
+      .filter((w) => w.length > 0)
     for (const w of words) {
       topWords.set(w, (topWords.get(w) ?? 0) + 1)
     }
@@ -212,6 +241,7 @@ export function generateRelatedQueries(query: string, resultTitles: string[]): s
 }
 
 const STOP_WORDS = new Set([
+  // English stop words
   'about', 'above', 'after', 'again', 'against', 'between', 'both',
   'during', 'having', 'their', 'there', 'these', 'those', 'where',
   'which', 'while', 'with', 'your', 'what', 'when', 'where', 'this',
@@ -219,6 +249,18 @@ const STOP_WORDS = new Set([
   'been', 'were', 'they', 'them', 'more', 'most', 'some', 'such',
   'only', 'very', 'than', 'then', 'also', 'just', 'like', 'make',
   'made', 'many', 'much', 'must', 'need', 'even', 'ever', 'every',
+  // Korean stop words — particles, common verbs, filler words
+  '그리고', '그래서', '그러나', '그런', '그렇게', '그것', '그게', '그',
+  '이런', '이것', '이게', '이', '저런', '저것', '저게',
+  '하는', '한다', '했다', '할', '한', '하다', '되는', '된다', '됐다',
+  '있는', '있다', '없는', '없다', '없는',
+  '이런', '저런', '그런', '어떤', '무엇', '누가', '언제', '어디',
+  '에서', '에게', '에게서', '한테', '한테서', '으로', '로', '로서',
+  '와', '과', '하고', '며', '며는', '이고', '이며', '거나', '든지',
+  '는', '은', '가', '이', '을', '를', '의', '에', '도', '만', '까지',
+  '부터', '조차', '마저', '든지', '이나', '나', '든', '인', '일',
+  '매우', '정말', '진짜', '너무', '좀', '조금', '다시', '또', '또한',
+  '더', '더욱', '특히', '바로', '미리', '이미', '아직', '벌써',
 ])
 
 function isStopWord(word: string): boolean {

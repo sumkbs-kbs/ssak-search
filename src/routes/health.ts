@@ -16,7 +16,9 @@ healthRoute.get('/', (c) => {
     status: 'ok',
     version: '1.0.0',
     backends: {
-      // Primary: Bing mobile web scraping (no API key, no registration)
+      // Primary for Korean queries: Naver mobile web scraping (no API key)
+      naver: 'operational',
+      // Secondary: Bing mobile web scraping (no API key, no registration)
       bing: 'operational',
       // Specialized free sources (no API key required)
       wikipedia: 'operational',
@@ -34,12 +36,14 @@ healthRoute.get('/', (c) => {
       answer: !!c.env.AI,
       news: true,
       multilingual: true,
+      korean_optimized: true,
     },
     notes: [
       'All search backends are free and require no API keys',
-      'Bing mobile scraping is the primary backend for all queries',
+      'Naver mobile scraping is the PRIMARY backend for Korean queries (stock cards, news, blogs)',
+      'Bing mobile scraping is the secondary backend for all queries',
       'Specialized sources (Wikipedia, GitHub, HN, Reddit) add depth based on query type',
-      'Korean/CJK queries automatically use correct regional market (mkt=ko-KR)',
+      'Financial/stock queries are detected and routed to Naver for real-time price data',
     ],
     uptime_hint: 'edge-deployed',
     auth_required: !!c.env.SEARCH_API_KEY,

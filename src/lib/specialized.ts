@@ -338,10 +338,16 @@ interface DDGInstantAnswerResponse {
 /**
  * Detect the type of a search query to determine which specialized sources to use.
  */
-export type QueryType = 'technical' | 'factual' | 'news' | 'academic' | 'general'
+export type QueryType = 'technical' | 'factual' | 'financial' | 'news' | 'academic' | 'general'
 
 export function detectQueryType(query: string): QueryType {
   const lower = query.toLowerCase()
+
+  // Financial / stock keywords (Korean + English + Chinese)
+  // Must be checked BEFORE news because stock queries often contain year numbers
+  if (/주가|주식|증권|코스피|코스닥|kospi|kosdaq|시세|변동률|상한가|하한가|목표주가|투자의견|실적|배당|주주|공시|기업분석|리서치|per|pbr|roe|eps|시가총액|거래량|시장가|주봉|일봉|월봉|chart|finance|financial|stock|price|share|dividend|market\s?cap|trading|ipo|공모가/i.test(query)) {
+    return 'financial'
+  }
 
   // Technical keywords
   if (/\b(github|code|programming|api|framework|library|npm|pip|docker|kubernetes|react|vue|python|javascript|typescript|rust|go|java|sql|database|cloud|deploy|docker|git)\b/i.test(query)) {
@@ -379,6 +385,9 @@ export function getSourcesForQueryType(type: QueryType): {
     case 'technical':
       return { useWikipedia: false, useGitHub: true, useHackerNews: true, useReddit: false }
     case 'factual':
+      return { useWikipedia: true, useGitHub: false, useHackerNews: false, useReddit: false }
+    case 'financial':
+      // Financial queries: Wikipedia for company background, skip HN/Reddit (not useful for stock data)
       return { useWikipedia: true, useGitHub: false, useHackerNews: false, useReddit: false }
     case 'news':
       return { useWikipedia: false, useGitHub: false, useHackerNews: true, useReddit: true }

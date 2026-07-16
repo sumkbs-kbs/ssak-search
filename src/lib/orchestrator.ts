@@ -22,6 +22,7 @@ import type {
   SearchAnswer,
 } from '../types'
 import { bingSearch, bingNewsSearch } from './bing-search'
+import { naverSearch } from './naver-search'
 import {
   wikipediaSearch,
   githubSearch,
@@ -166,7 +167,11 @@ export async function executeSearch(
   const sources = getSourcesForQueryType(queryType)
   const korean = isKoreanQuery(query)
   const wikiLang = korean ? 'ko' : 'en'
-  const bingRegion = korean ? 'ko-KR' : undefined
+  // IMPORTANT: Do NOT set mkt=ko-KR for Bing when called from US datacenter IPs.
+  // Bing's mkt=ko-KR from a US IP returns garbage results (e.g. Denver shopping malls
+  // for Korean stock queries). Without mkt, Bing auto-detects Korean query text and
+  // returns correct results (Google Finance, Naver Finance, Investing.com, etc.).
+  const bingRegion = undefined
   const bingTimeRange = toBingTimeRange(time_range)
   const isNews = topic === 'news' || queryType === 'news'
 
@@ -177,7 +182,17 @@ export async function executeSearch(
   const tasks: Promise<SearchResult[]>[] = []
   const taskNames: string[] = []
 
-  // 1. Bing search (primary) — always
+  // 0. Naver search (PRIMARY for Korean queries) — runs FIRST and gets highest priority
+  //    Naver is the dominant Korean search engine with far superior Korean content,
+  //    especially for stock/financial/news queries. Stock cards return real-time prices.
+  if (korean) {
+    tasks.push(
+      naverSearch(query, { maxResults: overFetch }),
+    )
+    taskNames.push('naver')
+  }
+
+  // 1. Bing search (secondary) — always runs, but no longer forces mkt=ko-KR
   if (isNews) {
     // For news: use both Bing News endpoint and regular Bing for broader coverage
     tasks.push(

@@ -534,8 +534,10 @@ export function getSourcesForQueryType(type: QueryType): {
       // HackerNews boosts result count for "what is X" queries with community explanations
       return { useWikipedia: true, useGitHub: false, useHackerNews: true, useReddit: false, useArxiv: false }
     case 'financial':
-      // Financial queries: Wikipedia for company background, skip HN/Reddit (not useful for stock data)
-      return { useWikipedia: true, useGitHub: false, useHackerNews: false, useReddit: false, useArxiv: false }
+      // Financial queries: Wikipedia for company background + HackerNews for stock discussion/news.
+      // HN provides stock market discussions, earnings analysis, and investor commentary
+      // that Bing stock-card results don't cover — boosts result count to 10+.
+      return { useWikipedia: true, useGitHub: false, useHackerNews: true, useReddit: false, useArxiv: false }
     case 'news':
       return { useWikipedia: false, useGitHub: false, useHackerNews: true, useReddit: true, useArxiv: false }
     case 'academic':

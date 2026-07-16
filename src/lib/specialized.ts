@@ -13,7 +13,7 @@
  */
 
 import type { SearchResult } from '../types'
-import { fetchWithTimeout, extractDomain, stripHtml, decodeEntities, computeScore, truncateToTokens } from './util'
+import { fetchWithTimeout, extractDomain, stripHtml, decodeEntities, computeScore, truncateToTokens, simplifyQuery } from './util'
 
 // ============================================================
 // Wikipedia REST API
@@ -28,18 +28,36 @@ export async function wikipediaSearch(
   query: string,
   opts: { maxResults?: number; timeoutMs?: number; language?: string } = {},
 ): Promise<SearchResult[]> {
-  const { maxResults = 3, timeoutMs = 8000, language = 'en' } = opts
+  const { maxResults = 5, timeoutMs = 8000, language = 'en' } = opts
   const results: SearchResult[] = []
+
+  // Wikipedia REST API can return HTTP 429 (rate limit) under rapid sequential calls.
+  // Implement retry with exponential backoff: 500ms → 1200ms → 3000ms
+  const maxRetries = 3
+  const backoffDelays = [500, 1200, 3000]
 
   try {
     // Search for page titles
     const searchUrl = `https://${language}.wikipedia.org/w/rest.php/v1/search/page?q=${encodeURIComponent(query)}&limit=${maxResults}`
-    const response = await fetchWithTimeout(searchUrl, {
-      headers: { Accept: 'application/json', 'User-Agent': 'SearchAPI/1.0 (contact@example.com)' },
-    }, timeoutMs)
 
-    if (!response.ok) return results
-    const data = await response.json() as { pages?: Array<{ title: string; key: string; excerpt: string; description?: string }> }
+    let response: Response | null = null
+    for (let attempt = 0; attempt <= maxRetries; attempt++) {
+      response = await fetchWithTimeout(searchUrl, {
+        headers: { Accept: 'application/json', 'User-Agent': 'SearchAPI/1.0 (contact@example.com)' },
+      }, timeoutMs)
+
+      if (response.ok) break
+      if (response.status === 429 && attempt < maxRetries) {
+        // Rate limited — wait and retry
+        await new Promise((r) => setTimeout(r, backoffDelays[attempt]))
+        continue
+      }
+      // Non-429 error or exhausted retries
+      break
+    }
+
+    if (!response || !response.ok) return results
+    const data = await response.json() as { pages?: { title: string; key: string; excerpt: string; description?: string }[] }
     const pages = data.pages || []
 
     for (const page of pages) {
@@ -57,6 +75,34 @@ export async function wikipediaSearch(
         score: computeScore(page.title, excerpt, query) + 0.15, // Wikipedia authority boost
         domain: `${language}.wikipedia.org`,
       })
+    }
+
+    // Fallback: if REST API returned no results, try Action API (list=search)
+    // This helps for Chinese and other non-English wikis where REST search may return empty
+    if (results.length === 0) {
+      try {
+        const actionUrl = `https://${language}.wikipedia.org/w/api.php?action=query&list=search&srsearch=${encodeURIComponent(query)}&format=json&srlimit=${maxResults}&srprop=snippet`
+        const actionRes = await fetchWithTimeout(actionUrl, {
+          headers: { Accept: 'application/json', 'User-Agent': 'SearchAPI/1.0 (contact@example.com)' },
+        }, timeoutMs)
+        if (actionRes.ok) {
+          const actionData = await actionRes.json() as { query?: { search?: { title: string; snippet: string }[] } }
+          for (const item of actionData.query?.search || []) {
+            if (results.length >= maxResults) break
+            const pageUrl = `https://${language}.wikipedia.org/wiki/${encodeURIComponent(item.title.replace(/ /g, '_'))}`
+            const excerpt = stripHtml(item.snippet || '').trim()
+            results.push({
+              title: item.title,
+              url: pageUrl,
+              content: truncateToTokens(excerpt, 500),
+              score: computeScore(item.title, excerpt, query) + 0.15,
+              domain: `${language}.wikipedia.org`,
+            })
+          }
+        }
+      } catch {
+        // Action API also failed — give up silently
+      }
     }
   } catch (err) {
     console.warn('Wikipedia search failed:', err)
@@ -102,15 +148,19 @@ export async function githubSearch(
   query: string,
   opts: { maxResults?: number; timeoutMs?: number } = {},
 ): Promise<SearchResult[]> {
-  const { maxResults = 3, timeoutMs = 8000 } = opts
+  const { maxResults = 8, timeoutMs = 8000 } = opts
   const results: SearchResult[] = []
 
   try {
+    // GitHub Search API returns 0 results for overly specific natural-language queries.
+    // Simplify: strip years, filler words, keep only key tech terms.
+    // e.g. "Cloudflare Workers D1 tutorial 2025" → "cloudflare workers d1"
+    const simplified = simplifyQuery(query, 4)
     const params = new URLSearchParams({
-      q: query,
+      q: simplified,
       sort: 'stars',
       order: 'desc',
-      per_page: String(Math.min(maxResults, 10)),
+      per_page: String(Math.min(maxResults, 30)),
     })
     const url = `https://api.github.com/search/repositories?${params}`
     const response = await fetchWithTimeout(url, {
@@ -121,7 +171,7 @@ export async function githubSearch(
     }, timeoutMs)
 
     if (!response.ok) return results
-    const data = await response.json() as { items?: Array<{ full_name: string; description: string | null; html_url: string; stargazers_count: number; language: string | null; topics?: string[] }> }
+    const data = await response.json() as { items?: { full_name: string; description: string | null; html_url: string; stargazers_count: number; language: string | null; topics?: string[] }[] }
 
     for (const repo of data.items || []) {
       if (results.length >= maxResults) break
@@ -160,14 +210,18 @@ export async function hackerNewsSearch(
   query: string,
   opts: { maxResults?: number; timeoutMs?: number; timeRange?: string } = {},
 ): Promise<SearchResult[]> {
-  const { maxResults = 3, timeoutMs = 8000, timeRange } = opts
+  const { maxResults = 8, timeoutMs = 8000, timeRange } = opts
   const results: SearchResult[] = []
 
   try {
+    // HN Algolia API returns 0 hits for overly specific natural-language queries.
+    // Simplify query to key terms for better match rate.
+    // e.g. "Cloudflare Workers D1 tutorial 2025" → "cloudflare workers d1"
+    const simplified = simplifyQuery(query, 4)
     const params = new URLSearchParams({
-      query: query,
+      query: simplified,
       tags: 'story',
-      hitsPerPage: String(Math.min(maxResults, 10)),
+      hitsPerPage: String(Math.min(maxResults, 20)),
     })
     // Add time range filter if specified (Unix timestamp)
     if (timeRange) {
@@ -183,15 +237,15 @@ export async function hackerNewsSearch(
     }, timeoutMs)
 
     if (!response.ok) return results
-    const data = await response.json() as { hits?: Array<{ title: string; url: string; points: number; num_comments: number; objectID: string; created_at: string }> }
+    const data = await response.json() as { hits?: { title: string; url: string; points: number; num_comments: number; objectID: string; created_at: string }[] }
 
     for (const hit of data.hits || []) {
       if (results.length >= maxResults) break
       // HN stories may have external URL or point to HN discussion
       const extUrl = hit.url || `https://news.ycombinator.com/item?id=${hit.objectID}`
 
-      // Relevance filter: skip results with very low relevance to the query
-      // This prevents "Show HN" posts and trending unrelated stories from polluting results
+      // Relevance filter: skip results with very low relevance to the ORIGINAL query
+      // (not the simplified one) — this prevents unrelated trending stories
       const relevance = computeScore(hit.title, '', query)
       if (relevance < 0.08) continue  // Skip low-relevance results
       // Extra filter: "Show HN:" posts are only useful if actually relevant
@@ -228,13 +282,15 @@ export async function redditSearch(
   query: string,
   opts: { maxResults?: number; timeoutMs?: number; timeRange?: string } = {},
 ): Promise<SearchResult[]> {
-  const { maxResults = 3, timeoutMs = 8000, timeRange } = opts
+  const { maxResults = 5, timeoutMs = 8000, timeRange } = opts
   const results: SearchResult[] = []
 
   try {
+    // Reddit search also benefits from simplified queries for better hit rates
+    const simplified = simplifyQuery(query, 5)
     const params = new URLSearchParams({
-      q: query,
-      limit: String(Math.min(maxResults, 10)),
+      q: simplified,
+      limit: String(Math.min(maxResults, 25)),
       sort: 'relevance',
     })
     if (timeRange) {
@@ -251,7 +307,7 @@ export async function redditSearch(
     }, timeoutMs)
 
     if (!response.ok) return results
-    const data = await response.json() as { data?: { children?: Array<{ data: { title: string; url: string; selftext: string; subreddit: string; score: number; num_comments: number; permalink: string } }> } }
+    const data = await response.json() as { data?: { children?: { data: { title: string; url: string; selftext: string; subreddit: string; score: number; num_comments: number; permalink: string } }[] } }
     const children = data.data?.children || []
 
     for (const child of children) {
@@ -277,6 +333,88 @@ export async function redditSearch(
     }
   } catch (err) {
     console.warn('Reddit search failed:', err)
+  }
+
+  return results
+}
+
+
+
+// ============================================================
+// arXiv API (Academic Papers — No Key Required)
+// ============================================================
+
+/**
+ * Search arXiv for academic papers.
+ * Free, no API key. Returns research paper titles, abstracts, and URLs.
+ * Excellent for academic/scientific queries — far better than Wikipedia
+ * for ML/AI/physics/cs papers.
+ *
+ * Endpoint: https://export.arxiv.org/api/query?search_query=all:QUERY&max_results=N
+ * Returns Atom XML feed.
+ */
+export async function arxivSearch(
+  query: string,
+  opts: { maxResults?: number; timeoutMs?: number } = {},
+): Promise<SearchResult[]> {
+  const { maxResults = 8, timeoutMs = 10000 } = opts
+  const results: SearchResult[] = []
+
+  try {
+    // Simplify query for arXiv — strip filler words, keep key terms
+    const simplified = simplifyQuery(query, 4)
+    const params = new URLSearchParams({
+      search_query: `all:${simplified}`,
+      start: '0',
+      max_results: String(Math.min(maxResults, 20)),
+      sortBy: 'relevance',
+      sortOrder: 'descending',
+    })
+    const url = `https://export.arxiv.org/api/query?${params.toString()}`
+    const response = await fetchWithTimeout(url, {
+      headers: { Accept: 'application/xml, application/atom+xml' },
+    }, timeoutMs)
+
+    if (!response.ok) return results
+    const xml = await response.text()
+
+    // Parse Atom XML entries: <entry>...<title>...</title><summary>...</summary><id>...</id>...</entry>
+    const entryRegex = /<entry>([\s\S]*?)<\/entry>/gi
+    let match: RegExpExecArray | null
+    while ((match = entryRegex.exec(xml)) !== null && results.length < maxResults) {
+      const entry = match[1]
+      const titleMatch = entry.match(/<title[^>]*>([\s\S]*?)<\/title>/i)
+      const summaryMatch = entry.match(/<summary[^>]*>([\s\S]*?)<\/summary>/i)
+      const idMatch = entry.match(/<id[^>]*>([\s\S]*?)<\/id>/i)
+      // Also try to get published date
+      const publishedMatch = entry.match(/<published[^>]*>([\s\S]*?)<\/published>/i)
+      // Try to get authors
+      const authorMatches = [...entry.matchAll(/<name[^>]*>([\s\S]*?)<\/name>/gi)]
+
+      if (!titleMatch || !idMatch) continue
+      const title = stripHtml(titleMatch[1]).trim()
+      if (!title || title.length < 5) continue
+
+      const rawId = idMatch[1].trim()
+      // arXiv IDs look like http://arxiv.org/abs/2106.09685v1
+      const url = rawId.replace(/^http:/, 'https:')
+      const summary = summaryMatch ? stripHtml(summaryMatch[1]).trim() : ''
+      const authors = authorMatches.map((m) => stripHtml(m[1]).trim()).slice(0, 3).join(', ')
+      const publishedDate = publishedMatch ? publishedMatch[1].trim() : undefined
+
+      const content = truncateToTokens(`${authors ? `[${authors}] ` : ''}${summary}`, 500)
+
+      results.push({
+        title,
+        url,
+        content,
+        score: computeScore(title, summary, query) + 0.12, // arXiv authority boost for academic
+        domain: 'arxiv.org',
+        published_date: publishedDate,
+      })
+    }
+  } catch (err) {
+    console.warn('arXiv search failed:', err)
   }
 
   return results
@@ -370,7 +508,8 @@ export function detectQueryType(query: string): QueryType {
   }
 
   // Factual - short queries that look like entity lookups
-  if (query.trim().split(/\s+/).length <= 3 && /\b(what|who|when|where|definition|meaning|is|are|was|were)\b/i.test(lower)) {
+  // Includes Chinese question patterns: 什么是/什麼是 (what is), 什么是 (what)
+  if (query.trim().split(/\s+/).length <= 4 && (/\b(what|who|when|where|definition|meaning|is|are|was|were)\b/i.test(lower) || /什么是|什麼是|什么叫|什麼叫/.test(query))) {
     return 'factual'
   }
 
@@ -385,20 +524,24 @@ export function getSourcesForQueryType(type: QueryType): {
   useGitHub: boolean
   useHackerNews: boolean
   useReddit: boolean
+  useArxiv: boolean
 } {
   switch (type) {
     case 'technical':
-      return { useWikipedia: false, useGitHub: true, useHackerNews: true, useReddit: false }
+      return { useWikipedia: false, useGitHub: true, useHackerNews: true, useReddit: false, useArxiv: false }
     case 'factual':
-      return { useWikipedia: true, useGitHub: false, useHackerNews: false, useReddit: false }
+      // Factual: Wikipedia for definitions + HackerNews for discussions/explanations
+      // HackerNews boosts result count for "what is X" queries with community explanations
+      return { useWikipedia: true, useGitHub: false, useHackerNews: true, useReddit: false, useArxiv: false }
     case 'financial':
       // Financial queries: Wikipedia for company background, skip HN/Reddit (not useful for stock data)
-      return { useWikipedia: true, useGitHub: false, useHackerNews: false, useReddit: false }
+      return { useWikipedia: true, useGitHub: false, useHackerNews: false, useReddit: false, useArxiv: false }
     case 'news':
-      return { useWikipedia: false, useGitHub: false, useHackerNews: true, useReddit: true }
+      return { useWikipedia: false, useGitHub: false, useHackerNews: true, useReddit: true, useArxiv: false }
     case 'academic':
-      return { useWikipedia: true, useGitHub: false, useHackerNews: false, useReddit: false }
+      // Academic: Wikipedia + arXiv for research papers
+      return { useWikipedia: true, useGitHub: false, useHackerNews: false, useReddit: false, useArxiv: true }
     default:
-      return { useWikipedia: true, useGitHub: false, useHackerNews: true, useReddit: false }
+      return { useWikipedia: true, useGitHub: false, useHackerNews: true, useReddit: false, useArxiv: false }
   }
 }

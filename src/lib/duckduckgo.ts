@@ -43,6 +43,11 @@ export async function duckDuckGoSearch(
   params.append('b', '') // search button field (required by DDG HTML)
 
   let results: SearchResult[] = []
+  // Track whether the html endpoint returned a genuine HTTP 200 response.
+  // DDG returns HTTP 202 for anti-bot challenges — response.ok is TRUE (2xx) but the
+  // page contains no search results. We must NOT fall through to lite in that case,
+  // because lite will also get 202 from the same IP, doubling the timeout for zero gain.
+  let htmlReturned200 = false
 
   try {
     const response = await fetchWithTimeout(
@@ -61,7 +66,9 @@ export async function duckDuckGoSearch(
       timeoutMs,
     )
 
-    if (response.ok) {
+    // Only treat HTTP 200 as a real response. 202 = anti-bot challenge page.
+    if (response.status === 200) {
+      htmlReturned200 = true
       const html = await response.text()
       results = parseDuckDuckGoHtml(html, query, maxResults)
     }
@@ -70,7 +77,10 @@ export async function duckDuckGoSearch(
   }
 
   // Fallback: DuckDuckGo Lite endpoint
-  if (results.length === 0) {
+  // ONLY try lite if html returned a valid 200 response but parsed 0 results.
+  // If html timed out (threw) or returned 202 anti-bot, lite will also fail from
+  // the same IP — skip it to avoid wasting another full timeout cycle.
+  if (results.length === 0 && htmlReturned200) {
     try {
       results = await duckDuckGoLiteSearch(query, opts)
     } catch (err) {
@@ -107,7 +117,8 @@ async function duckDuckGoLiteSearch(
     timeoutMs,
   )
 
-  if (!response.ok) {
+  // 202 = anti-bot challenge (response.ok is true for 2xx, but no results inside)
+  if (response.status !== 200) {
     throw new Error(`DuckDuckGo lite search failed: ${response.status}`)
   }
 

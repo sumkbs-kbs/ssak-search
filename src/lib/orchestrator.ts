@@ -2,17 +2,20 @@
  * Search Engine Orchestrator (No API Key Required)
  *
  * Architecture:
- *   1. Bing mobile search (primary, no key) — always runs
- *   2. Specialized sources (parallel, no key) — based on query type:
- *      - technical: GitHub + HackerNews
- *      - factual:   Wikipedia
+ *   1. Naver mobile search (PRIMARY for Korean queries, no key)
+ *   2. Bing mobile search (secondary, no key) — always runs
+ *   3. Specialized sources (parallel, no key) — based on query type:
+ *      - technical: GitHub + HackerNews (queries simplified for API match)
+ *      - factual:   Wikipedia (with 429 retry/backoff)
  *      - news:      HackerNews + Reddit (+ Bing News endpoint)
  *      - academic:  Wikipedia
  *      - general:   Wikipedia + HackerNews
- *   3. Merge → deduplicate by URL → re-rank by combined score
- *   4. DDG emergency fallback (only if all above return nothing)
- *   5. Jina Reader enrichment for top results (advanced depth, no key)
- *   6. Answer generation: Workers AI → extractive summary → DDG Instant Answer
+ *   4. DuckDuckGo HTML search (regular backend for non-Korean, non-news)
+ *      — provides independent result diversity + abundance boost
+ *   5. Merge → deduplicate by URL+title → re-rank by combined score
+ *   6. DDG emergency fallback (only if all above return nothing)
+ *   7. Jina Reader enrichment for top results (advanced depth, no key)
+ *   8. Answer generation: Workers AI → extractive summary → DDG Instant Answer
  */
 
 import type {
@@ -28,6 +31,7 @@ import {
   githubSearch,
   hackerNewsSearch,
   redditSearch,
+  arxivSearch,
   duckDuckGoInstantAnswer,
   detectQueryType,
   getSourcesForQueryType,
@@ -57,6 +61,35 @@ export interface OrchestratorConfig {
 /** Detect if query contains Korean (Hangul) characters */
 function isKoreanQuery(query: string): boolean {
   return /[\uAC00-\uD7A3]/.test(query)
+}
+
+/** Detect if query contains Chinese (CJK) characters — but NOT Korean Hangul */
+function isChineseQuery(query: string): boolean {
+  // CJK Unified Ideographs: U+4E00–U+9FFF
+  // Exclude Korean-only queries (Hangul range already checked separately)
+  return /[\u4E00-\u9FFF]/.test(query) && !/[\uAC00-\uD7A3]/.test(query)
+}
+
+/** Detect query language for Wikipedia — ko for Korean, zh for Chinese, en otherwise */
+function detectWikiLanguage(query: string): string {
+  if (isKoreanQuery(query)) return 'ko'
+  if (isChineseQuery(query)) return 'zh'
+  return 'en'
+}
+
+/** Strip question particles from Chinese queries for better Wikipedia/API matching */
+function cleanChineseQuery(query: string): string {
+  // 什么是 → what is, 什么是量子计算 → 量子计算
+  return query
+    .replace(/^什么是/, '')
+    .replace(/^什么/, '')
+    .replace(/^什么是/, '')
+    .replace(/^什麼是/, '')
+    .replace(/^什麼/, '')
+    .replace(/^怎么/, '')
+    .replace(/^如何/, '')
+    .replace(/^为什么/, '')
+    .trim() || query
 }
 
 /** Normalize a URL for deduplication (strip protocol, trailing slash, fragments, tracking params) */
@@ -166,17 +199,23 @@ export async function executeSearch(
   const queryType = detectQueryType(query)
   const sources = getSourcesForQueryType(queryType)
   const korean = isKoreanQuery(query)
-  const wikiLang = korean ? 'ko' : 'en'
+  const wikiLang = detectWikiLanguage(query)
   // IMPORTANT: Do NOT set mkt=ko-KR for Bing when called from US datacenter IPs.
   // Bing's mkt=ko-KR from a US IP returns garbage results (e.g. Denver shopping malls
   // for Korean stock queries). Without mkt, Bing auto-detects Korean query text and
   // returns correct results (Google Finance, Naver Finance, Investing.com, etc.).
-  const bingRegion = undefined
+  //
+  // EXCEPTION: Chinese (CJK) queries MUST use mkt=zh-CN. Without it, Bing from a US IP
+  // returns completely irrelevant results (e.g. Reddit Hannah_OwO spam for "量子计算").
+  // With mkt=zh-CN, Bing returns proper Chinese results (zhihu, baike.baidu, 36kr, etc.).
+  const chinese = isChineseQuery(query)
+  const bingRegion = chinese ? 'zh-CN' : undefined
   const bingTimeRange = toBingTimeRange(time_range)
   const isNews = topic === 'news' || queryType === 'news'
 
   // Over-fetch so we have room for filtering and dedup
-  const overFetch = Math.max(max_results * 2, 20)
+  // 3x multiplier ensures enough raw results after dedup + score filtering
+  const overFetch = Math.max(max_results * 3, 30)
 
   // --- Build parallel search tasks ---
   const tasks: Promise<SearchResult[]>[] = []
@@ -208,30 +247,76 @@ export async function executeSearch(
       bingSearch(query, { maxResults: overFetch, timeRange: bingTimeRange, region: bingRegion }),
     )
     taskNames.push('bing')
+
+    // For Chinese queries: also search with the cleaned query (without question particles)
+    // "什么是量子计算" → Bing search for "量子计算" returns different/better results
+    // This doubles the Bing result pool for CJK queries where Bing is the primary backend
+    if (chinese) {
+      const cleanedQuery = cleanChineseQuery(query)
+      if (cleanedQuery !== query && cleanedQuery.length > 0) {
+        tasks.push(
+          bingSearch(cleanedQuery, { maxResults: overFetch, timeRange: bingTimeRange, region: bingRegion }),
+        )
+        taskNames.push('bing-cleaned')
+      }
+    }
   }
 
-  // 2. Wikipedia (factual / academic / general)
+  // 2. Wikipedia (factual / academic / general) — increased from 3→5
   if (sources.useWikipedia) {
-    tasks.push(wikipediaSearch(query, { maxResults: 3, language: wikiLang }))
+    // For Chinese queries, strip question particles (什么是...) before Wikipedia search
+    // Also increase maxResults for CJK queries since Bing often returns fewer relevant CJK results
+    const wikiQuery = isChineseQuery(query) ? cleanChineseQuery(query) : query
+    const wikiMax = isChineseQuery(query) ? 8 : 5
+    tasks.push(wikipediaSearch(wikiQuery, { maxResults: wikiMax, language: wikiLang }))
     taskNames.push('wikipedia')
   }
 
-  // 3. GitHub (technical)
+  // 3. GitHub (technical) — increased from 3→8
   if (sources.useGitHub) {
-    tasks.push(githubSearch(query, { maxResults: 3 }))
+    tasks.push(githubSearch(query, { maxResults: 8 }))
     taskNames.push('github')
   }
 
-  // 4. HackerNews (technical / news / general)
+  // 4. HackerNews (technical / news / general) — increased from 4→8
   if (sources.useHackerNews) {
-    tasks.push(hackerNewsSearch(query, { maxResults: 4, timeRange: bingTimeRange }))
+    tasks.push(hackerNewsSearch(query, { maxResults: 8, timeRange: bingTimeRange }))
     taskNames.push('hackernews')
   }
 
-  // 5. Reddit (news)
+  // 5. Reddit (news) — increased from 3→5
   if (sources.useReddit) {
-    tasks.push(redditSearch(query, { maxResults: 3, timeRange: bingTimeRange }))
+    tasks.push(redditSearch(query, { maxResults: 5, timeRange: bingTimeRange }))
     taskNames.push('reddit')
+  }
+
+  // 5b. arXiv (academic) — research papers, no API key required
+  if (sources.useArxiv) {
+    tasks.push(arxivSearch(query, { maxResults: 8 }))
+    taskNames.push('arxiv')
+  }
+
+  // 6. DuckDuckGo as REGULAR backend (not just emergency fallback)
+  //    DDG provides independent result diversity — different ranking than Bing,
+  //    different sources, and helps fill gaps when Bing/Bing-News underperforms.
+  //    Skip for Korean queries (Naver already covers Korean well, and DDG's
+  //    Korean results are sparse). Skip for news queries (Bing-News + HN + Reddit
+  //    already cover news comprehensively).
+  //    Skip for Chinese queries: DDG HTML endpoint returns HTTP 202 (anti-bot)
+  //    from sandbox IPs, wasting time on timeout with zero results.
+  //
+  //    Timeout reduced from 12000 → 5000ms. DDG from sandbox IPs consistently
+  //    returns 202 anti-bot challenges, so the html fetch fails fast and lite
+  //    is skipped (see duckduckgo.ts fail-fast logic). At 5s, even if DDG hangs
+  //    it only blocks one Promise for 5s, not 24s.
+  if (!korean && !isNews && !chinese) {
+    tasks.push(
+      duckDuckGoSearch(query, {
+        maxResults: Math.max(max_results, 10),
+        timeoutMs: 5000,
+      }),
+    )
+    taskNames.push('duckduckgo')
   }
 
   // --- Run all searches in parallel ---
@@ -249,14 +334,15 @@ export async function executeSearch(
   // --- Merge & deduplicate ---
   let results = mergeAndDeduplicate(resultSets)
 
-  // --- Emergency fallback: DDG HTML (currently blocked by anti-bot, but kept as last resort) ---
+  // --- Emergency fallback: DDG HTML (only if DDG wasn't already run as regular backend) ---
   let fallbackUsed = false
-  if (results.length === 0) {
+  const ddgAlreadyRan = usedBackends.includes('duckduckgo')
+  if (results.length === 0 && !ddgAlreadyRan) {
     fallbackUsed = true
     try {
       const ddgResults = await duckDuckGoSearch(query, {
         maxResults: overFetch,
-        timeoutMs: 12000,
+        timeoutMs: 5000,
       })
       if (ddgResults.length > 0) {
         results = ddgResults
@@ -320,8 +406,9 @@ export async function executeSearch(
   // --- Minimum quality threshold ---
   // Remove very low-relevance results (score near zero) to prevent noise from
   // unrelated trending content, personal projects, etc.
-  // Only apply if we have enough results to spare
-  const minScore = 0.12
+  // Lowered from 0.12 → 0.10 to preserve more valid results (abundance boost).
+  // Only apply if we have enough results to spare after filtering.
+  const minScore = 0.10
   const filtered = results.filter((r) => r.score >= minScore)
   if (filtered.length >= Math.min(3, max_results)) {
     results = filtered

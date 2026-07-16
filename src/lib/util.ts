@@ -96,7 +96,23 @@ export function truncateToTokens(text: string, maxTokens: number): string {
   return (lastSpace > maxChars * 0.5 ? truncated.slice(0, lastSpace) : truncated) + '…'
 }
 
-/** Compute a simple relevance score based on query term overlap */
+/** Check if a string contains CJK (Chinese/Japanese) characters (U+4E00–U+9FFF) */
+function hasCJK(text: string): boolean {
+  return /[\u4E00-\u9FFF]/.test(text)
+}
+
+/** Extract CJK bigrams (2-char substrings) from a CJK string for fuzzy matching */
+function cjkBigrams(text: string): string[] {
+  // Extract only CJK characters, then form bigrams
+  const cjkOnly = text.replace(/[^\u4E00-\u9FFF]/g, '')
+  const bigrams: string[] = []
+  for (let i = 0; i < cjkOnly.length - 1; i++) {
+    bigrams.push(cjkOnly.slice(i, i + 2))
+  }
+  return bigrams
+}
+
+/** Compute a relevance score based on query term overlap + phrase matching bonus */
 export function computeScore(title: string, content: string, query: string): number {
   const queryTerms = query
     .toLowerCase()
@@ -104,9 +120,57 @@ export function computeScore(title: string, content: string, query: string): num
     .filter((t) => t.length > 1)
     .map((t) => t.replace(/[^\p{L}\p{N}]/gu, ''))
     .filter((t) => t.length > 0)
-  if (queryTerms.length === 0) return 0.5
+
   const titleLower = title.toLowerCase()
   const contentLower = content.toLowerCase()
+
+  // --- CJK (Chinese/Japanese) special handling ---
+  // CJK text has no spaces, so whitespace-splitting produces one huge "word" that
+  // won't match anything. Use bigram matching instead for CJK queries.
+  const queryIsCJK = hasCJK(query)
+  if (queryIsCJK) {
+    const queryBigrams = cjkBigrams(query)
+    if (queryBigrams.length > 0) {
+      // Check bigram overlap with title and content
+      let titleBigramHits = 0
+      let contentBigramHits = 0
+      for (const bg of queryBigrams) {
+        if (titleLower.includes(bg)) titleBigramHits++
+        if (contentLower.includes(bg)) contentBigramHits++
+      }
+      const titleScoreCJK = (titleBigramHits / queryBigrams.length) * 0.6
+      const contentScoreCJK = Math.min(contentBigramHits / queryBigrams.length, 1) * 0.3
+      const baseScoreCJK = 0.1
+
+      // Cross-language penalty: if the query is CJK but the result title/content
+      // contains NO CJK characters at all, the result is likely in a different language
+      // and probably irrelevant (e.g. English "AARP Games" for a Chinese query).
+      // Penalize heavily so these don't pass the minimum score threshold.
+      let crossLangPenalty = 0
+      const titleIsCJK = hasCJK(title)
+      const contentIsCJK = hasCJK(content)
+      if (!titleIsCJK && !contentIsCJK) {
+        crossLangPenalty = 0.15 // Heavy penalty — drops score below 0.10 threshold
+      } else if (!titleIsCJK) {
+        crossLangPenalty = 0.05 // Title is non-CJK but content has some — mild penalty
+      }
+
+      // Phrase bonus: if cleaned CJK query appears verbatim in title
+      let phraseBonusCJK = 0
+      const cleanedCJK = query.replace(/^[什么是什麼是什么叫什麼叫]+/, '').trim()
+      if (cleanedCJK.length > 1 && titleLower.includes(cleanedCJK)) {
+        phraseBonusCJK = 0.12
+      }
+
+      const rawScore = titleScoreCJK + contentScoreCJK + baseScoreCJK + phraseBonusCJK - crossLangPenalty
+      return Math.min(Math.max(Math.round(rawScore * 100) / 100, 0), 0.99)
+    }
+    // If CJK bigrams couldn't be formed (e.g. single char query), fall through
+    if (queryTerms.length === 0) return 0.5
+  }
+
+  if (queryTerms.length === 0) return 0.5
+
   let titleHits = 0
   let contentHits = 0
   for (const term of queryTerms) {
@@ -118,7 +182,117 @@ export function computeScore(title: string, content: string, query: string): num
   const contentScore = Math.min(contentHits / queryTerms.length, 1) * 0.3
   // Base score so results aren't too low
   const baseScore = 0.1
-  return Math.min(Math.round((titleScore + contentScore + baseScore) * 100) / 100, 0.99)
+
+  // Phrase matching bonus: if the full query (or a significant substring) appears
+  // verbatim in the title, give extra weight. This disambiguates e.g.
+  // "transformer architecture paper" from electrical transformer pages.
+  let phraseBonus = 0
+  const queryLower = query.toLowerCase().trim()
+  if (queryLower.length > 3) {
+    if (titleLower.includes(queryLower)) {
+      phraseBonus = 0.12 // Exact full-query match in title → strong signal
+    } else {
+      // Try progressively shorter substrings (2+ consecutive terms)
+      const terms = queryLower.split(/\s+/).filter((t) => t.length > 1)
+      for (let len = terms.length - 1; len >= 2; len--) {
+        for (let start = 0; start <= terms.length - len; start++) {
+          const sub = terms.slice(start, start + len).join(' ')
+          if (titleLower.includes(sub)) {
+            phraseBonus = Math.max(phraseBonus, 0.04 * len)
+            break
+          }
+        }
+        if (phraseBonus > 0) break
+      }
+    }
+  }
+
+  return Math.min(Math.round((titleScore + contentScore + baseScore + phraseBonus) * 100) / 100, 0.99)
+}
+
+// ============================================================
+// Query Simplification for API-based specialized sources
+// ============================================================
+
+/**
+ * Words/tokens that are generic and should be stripped when building
+ * a simplified query for GitHub / HackerNews / Reddit search APIs.
+ * These APIs match on keywords, not natural language — removing filler
+ * dramatically increases hit rate (e.g. "Cloudflare Workers D1 tutorial 2025"
+ * → "cloudflare workers d1" which actually returns results).
+ */
+const QUERY_NOISE_WORDS = new Set([
+  // English filler / intent words
+  'tutorial', 'tutorials', 'guide', 'guides', 'how', 'to', 'for', 'with',
+  'best', 'top', 'latest', 'new', 'newest', 'recent', 'updated', 'modern',
+  'simple', 'easy', 'beginner', 'advanced', 'complete', 'comprehensive',
+  'introduction', 'intro', 'overview', 'explained', 'examples', 'example',
+  'vs', 'versus', 'alternative', 'alternatives', 'comparison', 'compare',
+  'what', 'is', 'are', 'was', 'were', 'the', 'a', 'an', 'of', 'in', 'on',
+  'about', 'into', 'from', 'using', 'use', 'learn', 'learning',
+  'documentation', 'docs', 'reference', 'cheatsheet', 'cheat', 'sheet',
+  'deep', 'dive', 'deepdive', 'crash', 'course', 'step', 'by', 'stepbystep',
+  // Korean filler words (already in STOP_WORDS but duplicated here for clarity)
+  '튜토리얼', '가이드', '설명', '정리', '최신', '쉽게', '간단한', '완벽',
+  '소개', '개요', '예시', '예제', '비교', '대안', '사용법', '방법',
+  '하는', '하는법', '알아보기', '정리해', '모음', '추천',
+  // Academic filler words — strip for API-based searches
+  'paper', 'papers', 'article', 'articles', 'survey', 'surveys',
+  'architecture', 'model', 'models', 'method', 'methods', 'approach',
+  'network', 'networks', 'algorithm', 'algorithms', 'system', 'systems',
+  'based', 'novel', 'new', 'proposed', 'towards', 'toward',
+])
+
+/**
+ * Simplify a natural-language query into a compact keyword string suitable
+ * for API-based search backends (GitHub, HackerNews, Reddit).
+ *
+ * Strategy:
+ *   1. Strip year-only tokens (2024, 2025, 2026) — they kill API match rates
+ *   2. Remove generic noise words (tutorial, guide, best, latest, ...)
+ *   3. Remove single-char tokens and pure punctuation
+ *   4. Keep proper nouns, tech terms, entity names
+ *   5. Limit to 5 most significant terms (APIs prefer shorter queries)
+ *
+ * Examples:
+ *   "Cloudflare Workers D1 tutorial 2025" → "cloudflare workers d1"
+ *   "React state management best practices" → "react state management"
+ *   "Hono TypeScript framework" → "hono typescript framework"
+ *   "Apple stock price" → "apple stock price"
+ */
+export function simplifyQuery(query: string, maxTerms = 5): string {
+  const tokens = query
+    .toLowerCase()
+    .split(/\s+/)
+    .map((t) => t.replace(/[^\p{L}\p{N}]/gu, '').trim())
+    .filter((t) => t.length > 1)
+    // Remove year-only tokens
+    .filter((t) => !/^(19|20)\d{2}$/.test(t))
+    // Remove noise words
+    .filter((t) => !QUERY_NOISE_WORDS.has(t))
+
+  // Deduplicate while preserving order
+  const seen = new Set<string>()
+  const unique: string[] = []
+  for (const t of tokens) {
+    if (!seen.has(t)) {
+      seen.add(t)
+      unique.push(t)
+    }
+  }
+
+  // If simplification removed everything, fall back to original query
+  // (minus years) so we don't send an empty string to the API
+  if (unique.length === 0) {
+    return query
+      .toLowerCase()
+      .split(/\s+/)
+      .filter((t) => t.length > 1 && !/^(19|20)\d{2}$/.test(t))
+      .join(' ')
+      .trim() || query.trim()
+  }
+
+  return unique.slice(0, maxTerms).join(' ')
 }
 
 /** Parse a date string and return ISO 8601 if valid */

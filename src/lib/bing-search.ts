@@ -45,83 +45,87 @@ export async function bingSearch(
 ): Promise<SearchResult[]> {
   const { maxResults = 10, timeoutMs = 15000, region, timeRange } = opts
 
-  // Build URL parameters
-  const params = new URLSearchParams()
-  params.append('q', query)
-  params.append('count', String(Math.min(Math.max(maxResults * 2, 20), 50)))
-  params.append('first', '1')
-  // Bing freshness filter: Day, Week, Month, Year
-  if (timeRange) {
-    const freshnessMap: Record<string, string> = {
-      day: 'Day',
-      week: 'Week',
-      month: 'Month',
-      year: 'Year',
+  // Build URL parameters for a given page offset
+  const buildParams = (first: number): URLSearchParams => {
+    const params = new URLSearchParams()
+    params.append('q', query)
+    params.append('count', String(Math.min(Math.max(maxResults * 2, 20), 50)))
+    params.append('first', String(first))
+    if (timeRange) {
+      const freshnessMap: Record<string, string> = {
+        day: 'Day',
+        week: 'Week',
+        month: 'Month',
+        year: 'Year',
+      }
+      params.append('freshness', freshnessMap[timeRange] || '')
     }
-    params.append('freshness', freshnessMap[timeRange] || '')
-  }
-  // Market/language hints — mkt is the most powerful parameter for Bing.
-  // It forces a specific market regardless of server Geo-IP location.
-  // Without mkt, Bing routes based on server IP (which may be in China/Asia).
-  if (region && region !== 'wt-wt') {
-    // Use full locale for mkt (e.g., ko-KR, en-US)
-    params.append('mkt', region)
-    params.append('setlang', region)
-    if (region.includes('-')) {
-      params.append('cc', region.split('-')[1].toUpperCase())
+    if (region && region !== 'wt-wt') {
+      params.append('mkt', region)
+      params.append('setlang', region)
+      if (region.includes('-')) {
+        params.append('cc', region.split('-')[1].toUpperCase())
+      }
     }
+    return params
   }
 
-  let results: SearchResult[] = []
+  // Build Accept-Language header based on region for better localized results.
+  // zh-CN region → prioritize Chinese in Accept-Language so Bing returns CJK content.
+  const acceptLang = region && region.startsWith('zh')
+    ? 'zh-CN,zh;q=0.9,en;q=0.8'
+    : 'en-US,en;q=0.9,ko;q=0.8,zh-CN;q=0.7'
 
-  try {
-    const response = await fetchWithTimeout(
-      `${BING_SEARCH_URL}?${params.toString()}`,
-      {
-        method: 'GET',
-        headers: {
-          'User-Agent': MOBILE_UA,
-          Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-          'Accept-Language': 'en-US,en;q=0.9,ko;q=0.8',
-          'Cache-Control': 'no-cache',
-          Pragma: 'no-cache',
-        },
-      },
-      timeoutMs,
-    )
-
-    if (response.ok) {
-      const html = await response.text()
-      results = parseBingHtml(html, query, maxResults)
-    }
-  } catch (err) {
-    console.warn('Bing search failed:', err)
+  const fetchHeaders: Record<string, string> = {
+    'User-Agent': MOBILE_UA,
+    Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+    'Accept-Language': acceptLang,
+    'Cache-Control': 'no-cache',
+    Pragma: 'no-cache',
   }
 
-  // Fallback: try second page if we got very few results
-  if (results.length < 3 && maxResults > results.length) {
+  // Bing mobile renders ~5 b_algo blocks per page regardless of count param.
+  // To get enough results, fetch multiple pages in parallel.
+  // Target = maxResults * 2 (over-fetch for dedup headroom), capped at 30.
+  const targetCount = Math.min(Math.max(maxResults * 2, 20), 50)
+  const resultsPerPage = 5
+  const numPages = Math.min(Math.ceil(targetCount / resultsPerPage), 6)
+
+  // Page offsets: 1, 6, 11, 16, 21, 26
+  const pageOffsets: number[] = []
+  for (let p = 0; p < numPages; p++) {
+    pageOffsets.push(p * resultsPerPage + 1)
+  }
+
+  // Fetch all pages in parallel
+  const fetchPage = async (first: number): Promise<SearchResult[]> => {
     try {
-      const params2 = new URLSearchParams(params)
-      params2.set('first', '21')
-      const response2 = await fetchWithTimeout(
-        `${BING_SEARCH_URL}?${params2.toString()}`,
-        {
-          method: 'GET',
-          headers: {
-            'User-Agent': MOBILE_UA,
-            Accept: 'text/html,application/xhtml+xml',
-            'Accept-Language': 'en-US,en;q=0.9,ko;q=0.8',
-          },
-        },
+      const response = await fetchWithTimeout(
+        `${BING_SEARCH_URL}?${buildParams(first).toString()}`,
+        { method: 'GET', headers: fetchHeaders },
         timeoutMs,
       )
-      if (response2.ok) {
-        const html2 = await response2.text()
-        const more = parseBingHtml(html2, query, maxResults - results.length)
-        results = [...results, ...more]
+      if (response.ok) {
+        const html = await response.text()
+        return parseBingHtml(html, query, targetCount)
       }
     } catch (err) {
-      console.warn('Bing page 2 failed:', err)
+      console.warn(`Bing page first=${first} failed:`, err)
+    }
+    return []
+  }
+
+  const pageResults = await Promise.all(pageOffsets.map((offset) => fetchPage(offset)))
+
+  // Merge all page results, deduplicating by URL
+  const seenUrls = new Set<string>()
+  const results: SearchResult[] = []
+  for (const pageResult of pageResults) {
+    for (const r of pageResult) {
+      if (!seenUrls.has(r.url)) {
+        seenUrls.add(r.url)
+        results.push(r)
+      }
     }
   }
 

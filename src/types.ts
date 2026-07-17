@@ -68,6 +68,23 @@ export interface SearchResult {
   images?: string[]
   /** Structured stock/financial data (when available from Naver Finance) */
   stock_data?: StockData
+  /** Rich snippet (rating, price, FAQ, etc.) */
+  rich_snippet?: RichSnippet
+}
+
+/** Rich snippet / structured metadata */
+export interface RichSnippet {
+  type: 'rating' | 'price' | 'faq' | 'article' | 'breadcrumb'
+  /** For 'rating': star rating 1-5 */
+  rating?: number
+  /** For 'rating': number of reviews */
+  review_count?: number
+  /** For 'price': formatted price string */
+  price?: string
+  /** For 'article': author name */
+  author?: string
+  /** For 'article': reading time in minutes */
+  reading_time_min?: number
 }
 
 /** Structured stock/financial data for search results */
@@ -120,6 +137,30 @@ export interface SearchResponse {
   page?: number
   /** Total results found (before pagination) */
   total_results?: number
+  /** Image results (when available) */
+  images?: ImageResult[]
+  /** Knowledge panel / entity data */
+  knowledge_graph?: KnowledgeGraph
+}
+
+/** Image search result */
+export interface ImageResult {
+  url: string
+  title: string
+  source: string
+  width?: number
+  height?: number
+  thumbnail?: string
+}
+
+/** Knowledge graph / entity panel */
+export interface KnowledgeGraph {
+  title: string
+  description: string
+  url?: string
+  image?: string
+  type?: string // person | organization | place | concept
+  facts?: Record<string, string> // e.g. { "Founded": "1969", "CEO": "John Doe" }
 }
 
 // ============================================================

@@ -23,8 +23,9 @@ import type {
   SearchResponse,
   SearchResult,
   SearchAnswer,
+  ImageResult,
 } from '../types'
-import { bingSearch, bingNewsSearch } from './bing-search'
+import { bingSearch, bingNewsSearch, bingImageSearch } from './bing-search'
 import { naverSearch } from './naver-search'
 import {
   wikipediaSearch,
@@ -35,6 +36,7 @@ import {
   duckDuckGoInstantAnswer,
   detectQueryType,
   getSourcesForQueryType,
+  getKnowledgeGraph,
 } from './specialized'
 import { duckDuckGoSearch } from './duckduckgo'
 import { extractContent } from './extractor'
@@ -336,7 +338,27 @@ export async function executeSearch(
     taskNames.push('duckduckgo')
   }
 
-  // --- Run all searches in parallel ---
+  // --- Run image search in parallel (separate from text results) ---
+  let imageResults: ImageResult[] = []
+  let knowledgeGraph: { title: string; description: string; url?: string; image?: string; type?: string; facts?: Record<string, string> } | null = null
+
+  if (!chinese) {
+    try {
+      const [imgs, kg] = await Promise.all([
+        bingImageSearch(query, { maxResults: 8, timeoutMs: 8000 }),
+        // Knowledge graph only for factual/general queries (not news/technical)
+        (queryType === 'factual' || queryType === 'general')
+          ? getKnowledgeGraph(query, wikiLang)
+          : Promise.resolve(null),
+      ])
+      imageResults = imgs
+      knowledgeGraph = kg
+    } catch {
+      // Image/KG failure is non-critical
+    }
+  }
+
+  // --- Run all text searches in parallel ---
   const settled = await Promise.allSettled(tasks)
   const resultSets: SearchResult[][] = []
   const usedBackends: string[] = []
@@ -392,10 +414,10 @@ export async function executeSearch(
     })
   }
 
-  // --- Recompute scores with full query context + freshness ---
+  // --- Recompute scores with full query context + freshness + authority ---
   results = results.map((r) => ({
     ...r,
-    score: computeScore(r.title, r.content, query, r.published_date),
+    score: computeScore(r.title, r.content, query, r.published_date, r.url),
   }))
 
   // --- Sort results ---
@@ -581,5 +603,7 @@ export async function executeSearch(
     related_queries: relatedQueries,
     page: pageNum,
     total_results: totalResults,
+    images: imageResults.length > 0 ? imageResults : undefined,
+    knowledge_graph: knowledgeGraph || undefined,
   }
 }

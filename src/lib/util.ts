@@ -2,6 +2,44 @@
  * Shared utility functions for the search engine
  */
 
+// ============================================================
+// Domain Authority Map
+// ============================================================
+
+/** Domain authority scores (0.0-0.15) for known high-quality sources */
+const DOMAIN_AUTHORITY: Record<string, number> = {
+  'wikipedia.org': 0.12,
+  'en.wikipedia.org': 0.12,
+  'ko.wikipedia.org': 0.12,
+  'zh.wikipedia.org': 0.12,
+  'github.com': 0.10,
+  'stackoverflow.com': 0.10,
+  'arxiv.org': 0.10,
+  'developer.mozilla.org': 0.09,
+  'reddit.com': 0.05,
+  'news.ycombinator.com': 0.06,
+  'naver.com': 0.06,
+  'm.stock.naver.com': 0.08,
+  'daum.net': 0.04,
+  'namu.wiki': 0.05,
+  'investing.com': 0.07,
+  'bloomberg.com': 0.10,
+  'reuters.com': 0.10,
+  'nytimes.com': 0.09,
+  'bbc.com': 0.08,
+}
+
+/** Get domain authority boost for a URL */
+export function getDomainAuthority(url: string): number {
+  const domain = extractDomain(url)
+  for (const [known, score] of Object.entries(DOMAIN_AUTHORITY)) {
+    if (domain === known || domain.endsWith(`.${known}`)) {
+      return score
+    }
+  }
+  return 0
+}
+
 /** Extract the registered domain from a URL string */
 export function extractDomain(url: string): string {
   try {
@@ -114,8 +152,8 @@ function cjkBigrams(text: string): string[] {
   return bigrams
 }
 
-/** Compute a relevance score based on query term overlap + phrase matching + freshness */
-export function computeScore(title: string, content: string, query: string, publishedDate?: string): number {
+/** Compute a relevance score based on query term overlap + phrase matching + freshness + authority */
+export function computeScore(title: string, content: string, query: string, publishedDate?: string, url?: string): number {
   const queryTerms = query
     .toLowerCase()
     .split(/\s+/)
@@ -134,7 +172,6 @@ export function computeScore(title: string, content: string, query: string, publ
       if (!isNaN(pubDate.getTime())) {
         const daysOld = (Date.now() - pubDate.getTime()) / (1000 * 60 * 60 * 24)
         if (daysOld < 365) {
-          // Exponential decay: full +0.05 at 0 days, ~0.02 at 30 days, ~0.005 at 180 days
           freshnessBoost = 0.05 * Math.exp(-daysOld / 90)
         }
       }
@@ -142,6 +179,9 @@ export function computeScore(title: string, content: string, query: string, publ
       // Invalid date — no boost
     }
   }
+
+  // --- Domain authority boost ---
+  const authorityBoost = url ? getDomainAuthority(url) : 0
 
   // --- CJK (Chinese/Japanese) special handling ---
   // CJK text has no spaces, so whitespace-splitting produces one huge "word" that
@@ -181,7 +221,7 @@ export function computeScore(title: string, content: string, query: string, publ
         phraseBonusCJK = 0.12
       }
 
-      const rawScore = titleScoreCJK + contentScoreCJK + baseScoreCJK + phraseBonusCJK - crossLangPenalty + freshnessBoost
+      const rawScore = titleScoreCJK + contentScoreCJK + baseScoreCJK + phraseBonusCJK - crossLangPenalty + freshnessBoost + authorityBoost
       return Math.min(Math.max(Math.round(rawScore * 100) / 100, 0), 0.99)
     }
     // If CJK bigrams couldn't be formed (e.g. single char query), fall through
@@ -227,7 +267,7 @@ export function computeScore(title: string, content: string, query: string, publ
     }
   }
 
-  return Math.min(Math.round((titleScore + contentScore + baseScore + phraseBonus + freshnessBoost) * 100) / 100, 0.99)
+  return Math.min(Math.round((titleScore + contentScore + baseScore + phraseBonus + freshnessBoost + authorityBoost) * 100) / 100, 0.99)
 }
 
 // ============================================================

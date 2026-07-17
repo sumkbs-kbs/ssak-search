@@ -550,3 +550,55 @@ export function getSourcesForQueryType(type: QueryType): {
       return { useWikipedia: true, useGitHub: false, useHackerNews: true, useReddit: false, useArxiv: false }
   }
 }
+
+// ============================================================
+// Knowledge Graph / Entity Panel
+// ============================================================
+
+/**
+ * Fetch a knowledge graph panel for a query using Wikipedia's REST summary API.
+ * Returns a KnowledgeGraph object with title, description, image, and key facts,
+ * or null if no entity is found.
+ */
+export async function getKnowledgeGraph(
+  query: string,
+  language = 'en',
+): Promise<{ title: string; description: string; url?: string; image?: string; type?: string; facts?: Record<string, string> } | null> {
+  try {
+    // Try the Wikipedia summary API directly with the query
+    const summaryUrl = `https://${language}.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(query.replace(/\s+/g, '_'))}`
+    const response = await fetchWithTimeout(summaryUrl, {
+      headers: { Accept: 'application/json', 'User-Agent': 'SearchAPI/1.0 (contact@example.com)' },
+    }, 6000)
+
+    if (!response.ok) return null
+    const data = await response.json() as Record<string, unknown>
+
+    // Wikipedia returns type: "standard" for real articles, "disambiguation" for ambiguous
+    if (data.type === 'disambiguation' || !data.extract) return null
+
+    const title = data.title as string
+    const extract = data.extract as string
+    const pageUrl = (data.content_urls as { desktop?: { page?: string } })?.desktop?.page
+    const thumbnail = (data.thumbnail as { source?: string })?.source
+    const description = data.description as string | undefined
+
+    // Build facts from available metadata
+    const facts: Record<string, string> = {}
+    if (description) facts['Description'] = description
+
+    return {
+      title,
+      description: extract.slice(0, 400),
+      url: pageUrl || `https://${language}.wikipedia.org/wiki/${encodeURIComponent(title)}`,
+      image: thumbnail,
+      type: description?.toLowerCase().includes('company') ? 'organization'
+        : description?.toLowerCase().includes('person') ? 'person'
+        : description?.toLowerCase().includes('city') || description?.toLowerCase().includes('country') ? 'place'
+        : 'concept',
+      facts: Object.keys(facts).length > 0 ? facts : undefined,
+    }
+  } catch {
+    return null
+  }
+}

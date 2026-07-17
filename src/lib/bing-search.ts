@@ -20,7 +20,7 @@
  *   </li>
  */
 
-import type { SearchResult } from '../types'
+import type { SearchResult, ImageResult } from '../types'
 import { fetchWithTimeout, extractDomain, stripHtml, decodeEntities, computeScore, truncateToTokens } from './util'
 
 const BING_SEARCH_URL = 'https://www.bing.com/search'
@@ -339,6 +339,79 @@ export async function bingNewsSearch(
     }
   } catch (err) {
     console.warn('Bing news search failed:', err)
+  }
+
+  return results
+}
+
+/**
+ * Bing Image Search (mobile endpoint, no API key).
+ * Returns image results with thumbnails.
+ */
+export async function bingImageSearch(
+  query: string,
+  opts: { maxResults?: number; timeoutMs?: number } = {},
+): Promise<ImageResult[]> {
+  const { maxResults = 8, timeoutMs = 8000 } = opts
+  const results: ImageResult[] = []
+
+  try {
+    const params = new URLSearchParams({
+      q: query,
+      first: '1',
+      count: String(maxResults),
+      form: 'HDRSC2',
+    })
+    const response = await fetchWithTimeout(
+      `${BING_SEARCH_URL}/images/search?${params.toString()}`,
+      {
+        method: 'GET',
+        headers: {
+          'User-Agent': MOBILE_UA,
+          Accept: 'text/html',
+          'Accept-Language': 'en-US,en;q=0.9,ko;q=0.8',
+        },
+      },
+      timeoutMs,
+    )
+    if (!response.ok) return results
+
+    const html = await response.text()
+
+    // Parse Bing image results — <a class="iusc" m="{JSON}">
+    const iuscRegex = /<a[^>]*class="iusc"[^>]*m="([^"]+)"/gi
+    let match: RegExpExecArray | null
+    while ((match = iuscRegex.exec(html)) !== null && results.length < maxResults) {
+      try {
+        const rawJson = decodeEntities(match[1]).replace(/&quot;/g, '"')
+        const data = JSON.parse(rawJson) as Record<string, unknown>
+        const url = (data.murl as string) || (data.imgurl as string)
+        const title = (data.t as string) || ''
+        const thumbnail = (data.turl as string) || undefined
+        const width = data.mw ? parseInt(String(data.mw), 10) : undefined
+        const height = data.mh ? parseInt(String(data.mh), 10) : undefined
+
+        if (url && /^https?:\/\//i.test(url)) {
+          results.push({ url, title: title || extractDomain(url), source: extractDomain(url), thumbnail, width, height })
+        }
+      } catch {
+        // Skip malformed entries
+      }
+    }
+
+    // Fallback: parse mimg <img> tags
+    if (results.length === 0) {
+      const imgRegex = /<img[^>]*class="[^"]*mimg[^"]*"[^>]*src="([^"]+)"[^>]*>/gi
+      let imgMatch: RegExpExecArray | null
+      while ((imgMatch = imgRegex.exec(html)) !== null && results.length < maxResults) {
+        const src = imgMatch[1]
+        if (src && !src.includes('data:') && /^https?:\/\//i.test(src)) {
+          results.push({ url: src, title: query, source: extractDomain(src), thumbnail: src })
+        }
+      }
+    }
+  } catch (err) {
+    console.warn('Bing image search failed:', err)
   }
 
   return results

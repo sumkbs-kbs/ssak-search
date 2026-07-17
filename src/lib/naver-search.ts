@@ -18,7 +18,7 @@
  *   3. Stock/financial queries return structured price data
  */
 
-import type { SearchResult } from '../types'
+import type { SearchResult, StockData } from '../types'
 import { fetchWithTimeout, extractDomain, stripHtml, decodeEntities, computeScore, truncateToTokens } from './util'
 
 const NAVER_SEARCH_URL = 'https://m.search.naver.com/search.naver'
@@ -157,6 +157,18 @@ function parseStockCard(html: string, query: string): SearchResult[] {
 
   const content = parts.join(' | ')
 
+  // Build structured StockData
+  const stockData: StockData | undefined = (stockCode && price) ? {
+    name: stockName,
+    ticker: stockCode,
+    exchange: exchange || 'KOSPI',
+    price: parseInt(price.replace(/,/g, ''), 10) || 0,
+    currency: 'KRW',
+    change: changeAmt ? parseInt(changeAmt.replace(/,/g, ''), 10) * (changeDir === '하락' ? -1 : 1) : 0,
+    change_percent: changePct ? parseFloat(changePct) : 0,
+    direction: changeDir === '하락' ? 'down' : changeDir === '상승' ? 'up' : 'flat',
+  } : undefined
+
   // Naver stock detail page
   if (stockCode) {
     const stockUrl = `https://m.stock.naver.com/domestic/stock/${stockCode}/total`
@@ -166,6 +178,7 @@ function parseStockCard(html: string, query: string): SearchResult[] {
       content: truncateToTokens(content, 500),
       score: 0.95, // Stock card is the most relevant result for stock queries
       domain: 'm.stock.naver.com',
+      stock_data: stockData,
     })
 
     // Add finance/research sub-pages

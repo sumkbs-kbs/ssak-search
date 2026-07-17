@@ -197,6 +197,7 @@ export async function executeSearch(
     time_range,
     sort_by = 'relevance',
     max_tokens = 4000,
+    page = 1,
   } = request
 
   // --- Detect query characteristics ---
@@ -391,10 +392,10 @@ export async function executeSearch(
     })
   }
 
-  // --- Recompute scores with full query context ---
+  // --- Recompute scores with full query context + freshness ---
   results = results.map((r) => ({
     ...r,
-    score: computeScore(r.title, r.content, query),
+    score: computeScore(r.title, r.content, query, r.published_date),
   }))
 
   // --- Sort results ---
@@ -564,13 +565,21 @@ export async function executeSearch(
 
   const responseTimeMs = Date.now() - startTime
 
+  // --- Pagination ---
+  const totalResults = results.length
+  const pageNum = Math.max(1, page)
+  const startIndex = (pageNum - 1) * max_results
+  const paginatedResults = results.slice(startIndex, startIndex + max_results)
+
   return {
     query,
     answer,
-    results,
+    results: paginatedResults,
     response_time_ms: responseTimeMs,
     backend,
     fallback_used: fallbackUsed,
     related_queries: relatedQueries,
+    page: pageNum,
+    total_results: totalResults,
   }
 }

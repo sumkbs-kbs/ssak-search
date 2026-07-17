@@ -57,25 +57,33 @@ async function generateWithWorkersAI(
     return generateExtractiveAnswer(query, results)
   }
 
-  const prompt = `You are a helpful search assistant. Based on the following search results, provide a concise and accurate answer to the query. Synthesize information from multiple sources. If the sources don't contain enough information, say so. Keep the answer under 300 words.
+  const prompt = `You are a helpful search assistant. Based on the following search results, provide a concise and accurate answer to the query.
+
+CRITICAL RULES:
+1. You MUST cite sources using inline references like [1], [2] at the end of each claim or sentence.
+2. The number in [N] must match the [Source N] labels below.
+3. Synthesize information from multiple sources when possible.
+4. If the sources don't contain enough information, explicitly say "The available sources do not provide sufficient information."
+5. Answer in the same language as the query.
+6. Keep the answer under 300 words. Start directly with the answer — no preamble.
 
 Query: ${query}
 
 Search Results:
 ${contextParts.join('\n\n---\n\n')}
 
-Answer:`
+Answer (with inline citations [1], [2], etc.):`
 
   // Use a fast text generation model
   const modelResponse = await ai.run('@cf/meta/llama-3.1-8b-instruct', {
     messages: [
       {
         role: 'system',
-        content: 'You are a search assistant that provides concise, accurate answers based on search results. Always answer in the same language as the query.',
+        content: 'You are a search assistant that provides concise, accurate answers with inline citations. Always cite sources as [1], [2] etc. Always answer in the same language as the query.',
       },
       { role: 'user', content: prompt },
     ],
-    max_tokens: 500,
+    max_tokens: 600,
     temperature: 0.3,
   })
 
@@ -157,7 +165,8 @@ function generateExtractiveAnswer(query: string, results: SearchResult[]): Searc
     }
   }
 
-  const answerText = unique.map((s) => s.text).join(' ')
+  // Build answer with inline citations [1], [2], etc.
+  const answerText = unique.map((s) => `${s.text} [${s.sourceIndex + 1}]`).join(' ')
 
   // Get unique source indices
   const sources = [...new Set(unique.map((s) => s.sourceIndex))]

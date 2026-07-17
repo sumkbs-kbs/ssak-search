@@ -36,6 +36,8 @@ export interface SearchRequest {
   chunks_per_source?: number
   /** Max number of tokens to include per result content */
   max_tokens?: number
+  /** Page number for pagination (1-based, default 1) */
+  page?: number
 }
 
 export interface SearchResultContent {
@@ -64,6 +66,28 @@ export interface SearchResult {
   domain: string
   /** Images found on the page */
   images?: string[]
+  /** Structured stock/financial data (when available from Naver Finance) */
+  stock_data?: StockData
+}
+
+/** Structured stock/financial data for search results */
+export interface StockData {
+  /** Stock name (e.g. "한화에어로스페이스") */
+  name: string
+  /** Ticker symbol (e.g. "012450") */
+  ticker: string
+  /** Exchange (e.g. "KOSPI", "KOSDAQ") */
+  exchange: string
+  /** Current price (raw number, e.g. 943000) */
+  price: number
+  /** Currency (e.g. "KRW") */
+  currency: string
+  /** Change amount (positive = up, negative = down) */
+  change: number
+  /** Change percentage (e.g. 1.51 for +1.51%) */
+  change_percent: number
+  /** Change direction */
+  direction: 'up' | 'down' | 'flat'
 }
 
 export interface SearchAnswer {
@@ -92,6 +116,10 @@ export interface SearchResponse {
   related_queries?: string[]
   /** Whether this response was served from cache */
   cached?: boolean
+  /** Current page number (1-based) */
+  page?: number
+  /** Total results found (before pagination) */
+  total_results?: number
 }
 
 // ============================================================

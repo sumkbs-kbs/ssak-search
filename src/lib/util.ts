@@ -114,8 +114,8 @@ function cjkBigrams(text: string): string[] {
   return bigrams
 }
 
-/** Compute a relevance score based on query term overlap + phrase matching bonus */
-export function computeScore(title: string, content: string, query: string): number {
+/** Compute a relevance score based on query term overlap + phrase matching + freshness */
+export function computeScore(title: string, content: string, query: string, publishedDate?: string): number {
   const queryTerms = query
     .toLowerCase()
     .split(/\s+/)
@@ -125,6 +125,23 @@ export function computeScore(title: string, content: string, query: string): num
 
   const titleLower = title.toLowerCase()
   const contentLower = content.toLowerCase()
+
+  // --- Freshness boost: recent content gets up to +0.05, decaying over 365 days ---
+  let freshnessBoost = 0
+  if (publishedDate) {
+    try {
+      const pubDate = new Date(publishedDate)
+      if (!isNaN(pubDate.getTime())) {
+        const daysOld = (Date.now() - pubDate.getTime()) / (1000 * 60 * 60 * 24)
+        if (daysOld < 365) {
+          // Exponential decay: full +0.05 at 0 days, ~0.02 at 30 days, ~0.005 at 180 days
+          freshnessBoost = 0.05 * Math.exp(-daysOld / 90)
+        }
+      }
+    } catch {
+      // Invalid date — no boost
+    }
+  }
 
   // --- CJK (Chinese/Japanese) special handling ---
   // CJK text has no spaces, so whitespace-splitting produces one huge "word" that
@@ -164,7 +181,7 @@ export function computeScore(title: string, content: string, query: string): num
         phraseBonusCJK = 0.12
       }
 
-      const rawScore = titleScoreCJK + contentScoreCJK + baseScoreCJK + phraseBonusCJK - crossLangPenalty
+      const rawScore = titleScoreCJK + contentScoreCJK + baseScoreCJK + phraseBonusCJK - crossLangPenalty + freshnessBoost
       return Math.min(Math.max(Math.round(rawScore * 100) / 100, 0), 0.99)
     }
     // If CJK bigrams couldn't be formed (e.g. single char query), fall through
@@ -210,7 +227,7 @@ export function computeScore(title: string, content: string, query: string): num
     }
   }
 
-  return Math.min(Math.round((titleScore + contentScore + baseScore + phraseBonus) * 100) / 100, 0.99)
+  return Math.min(Math.round((titleScore + contentScore + baseScore + phraseBonus + freshnessBoost) * 100) / 100, 0.99)
 }
 
 // ============================================================

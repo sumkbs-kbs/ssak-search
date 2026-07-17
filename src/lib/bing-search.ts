@@ -281,13 +281,35 @@ export async function bingNewsSearch(
         const authorMatch = tag.match(/data-author="([^"]+)"/)
         const author = authorMatch ? decodeEntities(authorMatch[1]) : ''
         const content = author ? `[${author}] ${title}` : title
+
+        // Try to extract real published date from newscard attributes or nearby text
+        let publishedDate: string | undefined
+        const dateMatch = tag.match(/data-published="([^"]+)"/) || tag.match(/data-date="([^"]+)"/)
+        if (dateMatch) {
+          try {
+            const parsed = new Date(decodeEntities(dateMatch[1]))
+            if (!isNaN(parsed.getTime())) publishedDate = parsed.toISOString()
+          } catch { /* ignore parse errors */ }
+        }
+        // Fallback: look for relative time patterns in the content after this tag
+        if (!publishedDate) {
+          const afterTag = html.slice(m.index + tag.length, m.index + tag.length + 500)
+          const relativeMatch = afterTag.match(/(\d+)\s*(minute|hour|day|week)s?\s*ago/i)
+          if (relativeMatch) {
+            const num = parseInt(relativeMatch[1], 10)
+            const unit = relativeMatch[2].toLowerCase()
+            const ms = unit === 'minute' ? num * 60_000 : unit === 'hour' ? num * 3_600_000 : unit === 'day' ? num * 86_400_000 : num * 604_800_000
+            publishedDate = new Date(Date.now() - ms).toISOString()
+          }
+        }
+
         results.push({
           title,
           url,
           content: truncateToTokens(content, 300),
-          score: computeScore(title, content, query),
+          score: computeScore(title, content, query, publishedDate),
           domain: extractDomain(url),
-          published_date: new Date().toISOString(),
+          published_date: publishedDate || new Date().toISOString(),
         })
       }
 

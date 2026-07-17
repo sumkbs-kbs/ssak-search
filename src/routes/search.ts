@@ -46,7 +46,7 @@ searchRoute.post('/', async (c) => {
     search_depth: body.search_depth === 'advanced' ? 'advanced' : 'basic',
     topic: body.topic && ['general', 'news', 'finance'].includes(body.topic) ? body.topic : 'general',
     max_results: maxResults,
-    include_answer: body.include_answer ?? false,
+    include_answer: body.include_answer ?? true,
     include_raw_content: body.include_raw_content ?? false,
     include_domains: body.include_domains,
     exclude_domains: body.exclude_domains,
@@ -84,7 +84,9 @@ searchRoute.get('/', async (c) => {
   const maxResultsParam = c.req.query('max_results') || c.req.query('limit')
   const maxResults = maxResultsParam ? Math.min(Math.max(parseInt(maxResultsParam, 10) || 10, 1), 20) : 10
 
-  const includeAnswer = c.req.query('include_answer') === 'true' || c.req.query('answer') === 'true'
+  // Default to true — users want answers, not just link lists
+  const includeAnswerParam = c.req.query('include_answer')
+  const includeAnswer = includeAnswerParam === undefined ? true : includeAnswerParam === 'true' || c.req.query('answer') === 'true'
   const includeRawContent = c.req.query('include_raw_content') === 'true'
 
   const request: SearchRequest = {

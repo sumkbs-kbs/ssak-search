@@ -216,6 +216,7 @@ export async function executeSearch(
   const bingRegion = chinese ? 'zh-CN' : undefined
   const bingTimeRange = toBingTimeRange(time_range)
   const isNews = topic === 'news' || queryType === 'news'
+  const isFinance = topic === 'finance' || queryType === 'financial'
 
   // Over-fetch so we have room for filtering and dedup
   // 3x multiplier ensures enough raw results after dedup + score filtering
@@ -236,7 +237,14 @@ export async function executeSearch(
   }
 
   // 1. Bing search (secondary) — always runs, but no longer forces mkt=ko-KR
-  if (isNews) {
+  if (isFinance && !korean) {
+    // For non-Korean financial queries, augment Bing with finance-specific terms
+    // to surface stock screener / market data pages.
+    tasks.push(
+      bingSearch(`${query} stock price market cap`, { maxResults: overFetch, timeRange: bingTimeRange, region: bingRegion }),
+    )
+    taskNames.push('bing-finance')
+  } else if (isNews) {
     // For news: use both Bing News endpoint and regular Bing for broader coverage
     tasks.push(
       bingNewsSearch(query, { maxResults: overFetch, timeRange: bingTimeRange, region: bingRegion }),
@@ -509,20 +517,41 @@ export async function executeSearch(
     }
   }
 
-  // --- Generate AI answer if requested ---
+  // --- Generate answer ---
+  // Strategy: For factual/short queries, try DDG Instant Answer first (curated
+  // Wikipedia abstracts — high precision, no API key). Then fall back to
+  // LLM/extractive summarization from the search results.
   let answer: SearchAnswer | undefined
-  if (include_answer && results.length > 0) {
-    answer = await generateAnswer(query, results, config.ai)
-  }
 
-  // --- Fallback answer from DDG Instant Answer (free, no key) ---
-  if (include_answer && !answer) {
-    const instantAnswer = await duckDuckGoInstantAnswer(query)
-    if (instantAnswer) {
-      answer = {
-        text: instantAnswer.abstract,
-        confidence: 0.5,
-        sources: [],
+  if (include_answer) {
+    // For factual queries (short, wh-questions), DDG Instant Answer is often
+    // the highest-quality free source. Try it first instead of last.
+    const queryType = detectQueryType(query)
+    if (queryType === 'factual' || queryType === 'general') {
+      const instantAnswer = await duckDuckGoInstantAnswer(query)
+      if (instantAnswer && instantAnswer.abstract.length > 50) {
+        answer = {
+          text: instantAnswer.abstract,
+          confidence: 0.6,
+          sources: [],
+        }
+      }
+    }
+
+    // If DDG didn't produce an answer, use LLM or extractive summarization.
+    if (!answer && results.length > 0) {
+      answer = await generateAnswer(query, results, config.ai)
+    }
+
+    // Last resort: DDG Instant Answer for non-factual queries too.
+    if (!answer) {
+      const instantAnswer = await duckDuckGoInstantAnswer(query)
+      if (instantAnswer) {
+        answer = {
+          text: instantAnswer.abstract,
+          confidence: 0.5,
+          sources: [],
+        }
       }
     }
   }

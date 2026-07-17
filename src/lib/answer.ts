@@ -192,12 +192,16 @@ function extractQueryTerms(query: string): string[] {
     .filter((t) => t.length > 1 && !stopWords.has(t))
 }
 
-/** Split text into sentences */
+/** Split text into sentences, handling both Western and CJK punctuation */
 function splitIntoSentences(text: string): string[] {
   // Handle common abbreviations to avoid false splits
   const protected_ = text.replace(/(\b(?:Mr|Mrs|Dr|Prof|Inc|Ltd|Corp|vs|etc|e\.g|i\.e|U\.S|U\.K)\.)/g, '$1\x00')
+  // Split on Western (. ! ?) + CJK (。！？) sentence endings.
+  // CJK text often has no spaces, so we split on the punctuation itself.
   const sentences = protected_
-    .split(/(?<=[.!?])\s+(?=[A-Z\u00C0-\u017F\uAC00-\uD7A3])/)
+    .split(/(?<=[.!?。！？])\s*(?=[A-Z\u00C0-\u017F\uAC00-\uD7A3\u4E00-\u9FFF])/)
+    // Also split on CJK punctuation even without following space/letter
+    .flatMap((s) => s.split(/(?<=[。！？])/))
     .map((s) => s.replace(/\x00/g, '.').trim())
     .filter((s) => s.length > 0)
   return sentences

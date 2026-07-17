@@ -72,7 +72,7 @@ export async function wikipediaSearch(
         title: page.title,
         url,
         content,
-        score: computeScore(page.title, excerpt, query) + 0.15, // Wikipedia authority boost
+        score: Math.min(computeScore(page.title, excerpt, query) + 0.15, 0.99), // Wikipedia authority boost (clamped)
         domain: `${language}.wikipedia.org`,
       })
     }
@@ -95,7 +95,7 @@ export async function wikipediaSearch(
               title: item.title,
               url: pageUrl,
               content: truncateToTokens(excerpt, 500),
-              score: computeScore(item.title, excerpt, query) + 0.15,
+              score: Math.min(computeScore(item.title, excerpt, query) + 0.15, 0.99),
               domain: `${language}.wikipedia.org`,
             })
           }
@@ -187,7 +187,7 @@ export async function githubSearch(
         title: `${repo.full_name}${stars}`,
         url: repo.html_url,
         content,
-        score: computeScore(repo.full_name, desc, query) + 0.1, // GitHub authority boost
+        score: Math.min(computeScore(repo.full_name, desc, query) + 0.1, 0.99), // GitHub authority boost (clamped)
         domain: 'github.com',
       })
     }
@@ -408,7 +408,7 @@ export async function arxivSearch(
         title,
         url,
         content,
-        score: computeScore(title, summary, query) + 0.12, // arXiv authority boost for academic
+        score: Math.min(computeScore(title, summary, query) + 0.12, 0.99), // arXiv authority boost (clamped)
         domain: 'arxiv.org',
         published_date: publishedDate,
       })
@@ -498,7 +498,10 @@ export function detectQueryType(query: string): QueryType {
 
   // News/current events keywords
   // Year numbers alone are news indicators only if no technical/financial keywords matched above
-  if (/\b(latest|news|today|2024|2025|2026|recent|breaking|update|updates|announce|announcement|launch|launched|release|released)\b/i.test(query)) {
+  // Current + previous year are dynamically included to avoid stale hardcoded years.
+  const _y = new Date().getFullYear()
+  const _yearPattern = `${_y}|${_y - 1}`
+  if (new RegExp(`\\b(latest|news|today|${_yearPattern}|recent|breaking|update|updates|announce|announcement|launch|launched|release|released)\\b`, 'i').test(query)) {
     return 'news'
   }
 

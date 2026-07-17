@@ -66,7 +66,6 @@ export async function extractWithHtmlRewriter(
   // We collect text pieces in order, with element type for structure
   const textPieces: TextPiece[] = []
   let currentElement: string | null = null
-  let skipDepth = 0
 
   class TextPiece {
     constructor(
@@ -84,22 +83,24 @@ export async function extractWithHtmlRewriter(
         }
       },
     })
-    // Skip non-content elements
-    .on('script, style, noscript, iframe, svg, nav, footer, header[role="banner"], aside, form', {
-      element() {
-        skipDepth++
+    // Skip non-content elements by removing them entirely from the stream.
+    // el.remove() removes the element AND all its children, so we don't need
+    // manual skipDepth tracking. This fixes the critical bug where skipDepth
+    // was only incremented (never decremented), causing all content after the
+    // first skipped element to be silently dropped.
+    .on('script, style, noscript, iframe, svg, nav, footer, header, aside, form', {
+      element(el) {
+        el.remove()
       },
     })
     // Main content elements - add line breaks for structure
     .on('h1, h2, h3, h4, h5, h6', {
       element(el) {
-        if (skipDepth === 0) {
-          currentElement = el.tagName
-          textPieces.push(new TextPiece('\n\n## ', el.tagName))
-        }
+        currentElement = el.tagName
+        textPieces.push(new TextPiece('\n\n## ', el.tagName))
       },
       text(t) {
-        if (skipDepth === 0 && t.text.trim()) {
+        if (t.text.trim()) {
           textPieces.push(new TextPiece(t.text, currentElement || 'h'))
           if (t.lastInTextNode) textPieces.push(new TextPiece('\n', 'br'))
         }
@@ -107,28 +108,24 @@ export async function extractWithHtmlRewriter(
     })
     .on('p, li, td, th, blockquote, dd, dt', {
       element(el) {
-        if (skipDepth === 0) {
-          currentElement = el.tagName
-          textPieces.push(new TextPiece('\n', el.tagName))
-        }
+        currentElement = el.tagName
+        textPieces.push(new TextPiece('\n', el.tagName))
       },
       text(t) {
-        if (skipDepth === 0 && t.text.trim()) {
+        if (t.text.trim()) {
           textPieces.push(new TextPiece(t.text, currentElement || 'p'))
         }
       },
     })
     .on('br', {
       element() {
-        if (skipDepth === 0) {
-          textPieces.push(new TextPiece('\n', 'br'))
-        }
+        textPieces.push(new TextPiece('\n', 'br'))
       },
     })
     // Catch-all for remaining text in body
     .on('body', {
       text(t) {
-        if (skipDepth === 0 && t.text.trim()) {
+        if (t.text.trim()) {
           // Avoid duplicating text already captured by specific handlers
           // Only add if current element is not a heading/p/li
           if (currentElement && !['h1','h2','h3','h4','h5','h6','p','li','td','th','blockquote','dd','dt'].includes(currentElement)) {
@@ -148,7 +145,7 @@ export async function extractWithHtmlRewriter(
     rewriter.on('img', {
       element(el) {
         const src = el.getAttribute('src') || el.getAttribute('data-src')
-        if (src && skipDepth === 0) {
+        if (src) {
           const absoluteUrl = resolveUrl(src, url)
           if (absoluteUrl) {
             pageContent.images.push(absoluteUrl)

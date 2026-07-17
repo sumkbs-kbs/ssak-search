@@ -111,7 +111,7 @@ function parseJinaJsonResponse(
 
   return json.data.map((item) => {
     const domain = extractDomain(item.url)
-    const snippet = truncateToTokens(item.content || item.description || '', 500)
+    const snippet = truncateToTokens(item.content || item.description || '', 800)
     const result: SearchResult = {
       title: item.title || domain || item.url,
       url: item.url,
@@ -154,7 +154,7 @@ function parseJinaTextResponse(
     const contentMatch = block.match(/(?:Content:|Description:)\s*([\s\S]+?)(?:\n(?:Title|URL|PublishedTime):|$)/i)
     const content = contentMatch ? contentMatch[1].trim() : block.replace(urlMatch[0], '').trim()
 
-    const snippet = truncateToTokens(content, 500)
+    const snippet = truncateToTokens(content, 800)
     const domain = extractDomain(url)
     const result: SearchResult = {
       title,

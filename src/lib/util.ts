@@ -96,15 +96,17 @@ export function truncateToTokens(text: string, maxTokens: number): string {
   return (lastSpace > maxChars * 0.5 ? truncated.slice(0, lastSpace) : truncated) + '…'
 }
 
-/** Check if a string contains CJK (Chinese/Japanese) characters (U+4E00–U+9FFF) */
+/** Check if a string contains CJK characters (Chinese/Japanese/Korean) */
 function hasCJK(text: string): boolean {
-  return /[\u4E00-\u9FFF]/.test(text)
+  // \u4E00-\u9FFF: CJK Unified Ideographs (Chinese/Japanese Kanji)
+  // \uAC00-\uD7A3: Hangul Syllables (Korean)
+  return /[\u4E00-\u9FFF\uAC00-\uD7A3]/.test(text)
 }
 
-/** Extract CJK bigrams (2-char substrings) from a CJK string for fuzzy matching */
+/** Extract CJK/Korean bigrams (2-char substrings) for fuzzy matching */
 function cjkBigrams(text: string): string[] {
-  // Extract only CJK characters, then form bigrams
-  const cjkOnly = text.replace(/[^\u4E00-\u9FFF]/g, '')
+  // Extract CJK ideographs and Hangul syllables, then form bigrams
+  const cjkOnly = text.replace(/[^\u4E00-\u9FFF\uAC00-\uD7A3]/g, '')
   const bigrams: string[] = []
   for (let i = 0; i < cjkOnly.length - 1; i++) {
     bigrams.push(cjkOnly.slice(i, i + 2))
@@ -140,7 +142,7 @@ export function computeScore(title: string, content: string, query: string): num
       }
       const titleScoreCJK = (titleBigramHits / queryBigrams.length) * 0.6
       const contentScoreCJK = Math.min(contentBigramHits / queryBigrams.length, 1) * 0.3
-      const baseScoreCJK = 0.1
+      const baseScoreCJK = 0.05
 
       // Cross-language penalty: if the query is CJK but the result title/content
       // contains NO CJK characters at all, the result is likely in a different language
@@ -177,11 +179,12 @@ export function computeScore(title: string, content: string, query: string): num
     if (titleLower.includes(term)) titleHits++
     if (contentLower.includes(term)) contentHits++
   }
-  // Title matches are weighted 3x, content 1x, normalized
+  // Title matches are weighted 2x (0.6 vs 0.3), normalized
   const titleScore = (titleHits / queryTerms.length) * 0.6
   const contentScore = Math.min(contentHits / queryTerms.length, 1) * 0.3
-  // Base score so results aren't too low
-  const baseScore = 0.1
+  // Base score: lowered from 0.1 to 0.05 so that results with zero query-term
+  // overlap don't automatically pass the Tier 1 threshold (0.10).
+  const baseScore = 0.05
 
   // Phrase matching bonus: if the full query (or a significant substring) appears
   // verbatim in the title, give extra weight. This disambiguates e.g.
@@ -349,7 +352,8 @@ export function generateRelatedQueries(query: string, resultTitles: string[]): s
   const isKorean = /[\uAC00-\uD7A3]/.test(baseQuery)
 
   // Detect financial/stock queries for specialized related queries
-  const isFinancial = /주가|주식|증권|코스피|코스닥|kospi|kosdaq|stock|price|finance|dividend|per|pbr|시세|목표주가|투자의견|실적|배당/i.test(baseQuery)
+  const isFinancial = /주가|주식|증권|코스피|코스닥|kospi|kosdaq|stock|price|finance|dividend|\bper\b|\bpbr\b|시세|목표주가|투자의견|실적|배당/i.test(baseQuery)
+  const currentYear = new Date().getFullYear().toString()
 
   // Generic question variants — use Korean templates for Korean queries
   const templates = isKorean
@@ -366,7 +370,7 @@ export function generateRelatedQueries(query: string, resultTitles: string[]): s
           `${baseQuery} 설명`,
           `${baseQuery} 최신`,
           `${baseQuery} 가이드`,
-          `${baseQuery} 2026`,
+          `${baseQuery} ${currentYear}`,
         ]
     : isFinancial
       ? [
@@ -381,7 +385,7 @@ export function generateRelatedQueries(query: string, resultTitles: string[]): s
           `${baseQuery} explained`,
           `best ${baseQuery}`,
           `${baseQuery} examples`,
-          `${baseQuery} 2026`,
+          `${baseQuery} ${currentYear}`,
         ]
   for (const t of templates) {
     if (t.toLowerCase() !== baseQuery.toLowerCase()) related.add(t)

@@ -14,6 +14,8 @@ import { Hono } from 'hono'
 import { cors } from 'hono/cors'
 import type { AppBindings, SearchRequest, SearchResponse, ErrorResponse } from '../types'
 import { executeSearch } from '../lib/orchestrator'
+import { cacheKey, getCached, setCached } from '../lib/cache'
+import { validateApiKey, checkClientRateLimit, getClientIp } from '../lib/auth'
 
 const searchRoute = new Hono<{ Bindings: AppBindings }>()
 
@@ -21,9 +23,35 @@ const searchRoute = new Hono<{ Bindings: AppBindings }>()
 searchRoute.use('/*', cors({
   origin: '*',
   allowMethods: ['GET', 'POST', 'OPTIONS'],
-  allowHeaders: ['Content-Type', 'Authorization'],
+  allowHeaders: ['Content-Type', 'Authorization', 'X-API-Key'],
   maxAge: 86400,
 }))
+
+// Auth + rate limit middleware
+searchRoute.use('/*', async (c, next) => {
+  // API key validation (skipped if SEARCH_API_KEY not set)
+  const authResult = validateApiKey(c.req.raw.headers, c.env.SEARCH_API_KEY)
+  if (!authResult.valid) {
+    return c.json<ErrorResponse>(
+      { detail: authResult.reason || 'Unauthorized', code: 'unauthorized' },
+      401,
+    )
+  }
+
+  // Per-client rate limiting
+  const clientIp = getClientIp(c.req.raw.headers)
+  const rateLimit = checkClientRateLimit(clientIp)
+  if (!rateLimit.allowed) {
+    return c.json<ErrorResponse>(
+      { detail: 'Rate limit exceeded. Try again later.', code: 'rate_limited' },
+      429,
+      { 'X-RateLimit-Remaining': '0', 'Retry-After': '60' },
+    )
+  }
+
+  c.header('X-RateLimit-Remaining', rateLimit.remaining.toString())
+  await next()
+})
 
 // POST /api/search - primary Tavily-compatible endpoint
 searchRoute.post('/', async (c) => {
@@ -36,6 +64,11 @@ searchRoute.post('/', async (c) => {
 
   if (!body.query || typeof body.query !== 'string' || body.query.trim().length === 0) {
     return c.json<ErrorResponse>({ detail: 'Query is required', code: 'missing_query' }, 400)
+  }
+
+  // Cap query length to prevent abuse
+  if (body.query.length > 2000) {
+    return c.json<ErrorResponse>({ detail: 'Query too long (max 2000 chars)', code: 'query_too_long' }, 400)
   }
 
   // Validate max_results
@@ -56,10 +89,25 @@ searchRoute.post('/', async (c) => {
   }
 
   try {
+    // Check cache first (skip for news/finance — freshness matters)
+    const key = cacheKey(request)
+    if (request.topic !== 'news' && request.topic !== 'finance') {
+      const cached = await getCached<SearchResponse>(key)
+      if (cached) {
+        return c.json<SearchResponse>({ ...cached, cached: true })
+      }
+    }
+
     const result = await executeSearch(request, {
       jinaApiKey: c.env.JINA_API_KEY,
       ai: c.env.AI,
     })
+
+    // Cache the result (async, non-blocking)
+    if (request.topic !== 'news' && request.topic !== 'finance') {
+      c.executionCtx.waitUntil(setCached(key, result, request.topic))
+    }
+
     return c.json<SearchResponse>(result)
   } catch (err) {
     console.error('Search error:', err)

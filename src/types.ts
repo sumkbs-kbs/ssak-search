@@ -90,6 +90,8 @@ export interface SearchResponse {
   fallback_used: boolean
   /** Suggested related queries */
   related_queries?: string[]
+  /** Whether this response was served from cache */
+  cached?: boolean
 }
 
 // ============================================================

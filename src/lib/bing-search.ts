@@ -85,11 +85,11 @@ export async function bingSearch(
   }
 
   // Bing mobile renders ~5 b_algo blocks per page regardless of count param.
-  // To get enough results, fetch multiple pages in parallel.
-  // Target = maxResults * 2 (over-fetch for dedup headroom), capped at 30.
-  const targetCount = Math.min(Math.max(maxResults * 2, 20), 50)
+  // Reduced from 6 to 3 max concurrent pages to avoid IP bans.
+  // The rate-limiter also enforces max 3 concurrent requests to www.bing.com.
+  const targetCount = Math.min(Math.max(maxResults * 2, 20), 30)
   const resultsPerPage = 5
-  const numPages = Math.min(Math.ceil(targetCount / resultsPerPage), 6)
+  const numPages = Math.min(Math.ceil(targetCount / resultsPerPage), 3)
 
   // Page offsets: 1, 6, 11, 16, 21, 26
   const pageOffsets: number[] = []

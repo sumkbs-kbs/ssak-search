@@ -1,0 +1,35 @@
+{
+  "name": "answer-sdk-ts",
+  "version": "0.1.0",
+  "description": "TypeScript SDK for the Answer Engine API — search, extract, and stream AI answers",
+  "license": "MIT",
+  "author": "Byungseok Kang <sumkbs@gmail.com>",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/mr.k/webapp",
+    "directory": "packages/answer-sdk-ts"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "typecheck": "tsc --noEmit",
+    "prepublishOnly": "npm run build"
+  },
+  "devDependencies": {
+    "typescript": "^5.8.0"
+  }
+}

@@ -1,0 +1,58 @@
+#!/usr/bin/env -S npx tsx
+/**
+ * Runtime Metrics Persistence Verification
+ * 
+ * Call this AFTER deployment to verify the ANALYTICS binding is working.
+ * Usage: npx tsx scripts/verify-metrics-persistence.ts https://your-domain.com
+ * 
+ * Exit codes: 0 = OK (persistence active), 1 = Not active, 2 = Error
+ */
+
+async function main() {
+  const url = process.argv[2] || 'http://localhost:8788'
+  const healthUrl = `${url.replace(/\/$/, '')}/api/metrics`
+  
+  try {
+    console.log(`🔍 Checking metrics persistence at: ${healthUrl}`)
+    
+    const response = await fetch(healthUrl, {
+      headers: { 'Accept': 'text/plain' },
+      signal: AbortSignal.timeout(10_000)
+    })
+    
+    if (!response.ok) {
+      console.error(`❌ FAIL: HTTP ${response.status} ${response.statusText}`)
+      process.exit(2)
+    }
+    
+    const text = await response.text()
+    
+    // Check for the persistence gauge
+    const persistenceMatch = text.match(/search_metrics_persistence\s+(\d+)/)
+    
+    if (!persistenceMatch) {
+      console.error('❌ FAIL: search_metrics_persistence metric not found in output')
+      console.error('   This usually means the ANALYTICS binding is not configured.')
+      process.exit(1)
+    }
+    
+    const value = parseInt(persistenceMatch[1], 10)
+    
+    if (value === 1) {
+      console.log('✅ PASS: Metrics persistence ACTIVE (search_metrics_persistence = 1)')
+      console.log('   Metrics will survive cold starts and are queryable via SQL API.')
+      process.exit(0)
+    } else {
+      console.log(`⚠️  WARN: Metrics persistence INACTIVE (search_metrics_persistence = ${value})`)
+      console.log('   Metrics are in-memory only (lost on cold start).')
+      console.log('   Configure Workers Analytics Engine binding in Cloudflare Dashboard.')
+      process.exit(1)
+    }
+    
+  } catch (err) {
+    console.error('❌ ERROR:', err instanceof Error ? err.message : String(err))
+    process.exit(2)
+  }
+}
+
+main()

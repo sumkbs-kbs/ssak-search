@@ -1,0 +1,138 @@
+name: Integration Tests
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'src/**'
+      - 'tests/integration/**'
+      - 'wrangler.jsonc'
+      - 'package.json'
+      - 'vitest.integration.config.ts'
+  workflow_dispatch:
+    inputs:
+      deploy_url:
+        description: 'Deployed API URL to test against (optional — defaults to local preview)'
+        required: false
+        default: ''
+      api_key:
+        description: 'API key for the target (if required)'
+        required: false
+        default: ''
+
+env:
+  NODE_VERSION: '20'
+  CI: 'true'
+
+jobs:
+  integration-tests:
+    name: Integration Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+        timeout-minutes: 3
+
+      - name: Build for integration test
+        if: github.event.inputs.deploy_url == ''
+        run: npm run build
+        timeout-minutes: 3
+
+      - name: Start local preview server
+        if: github.event.inputs.deploy_url == ''
+        id: preview
+        run: |
+          # Start wrangler pages dev in the background with nohup
+          nohup npx wrangler pages dev --port 8788 > wrangler.log 2>&1 &
+          echo $! > wrangler.pid
+          echo "preview_pid=$(cat wrangler.pid)" >> $GITHUB_OUTPUT
+
+          # Wait for the server to be ready
+          for i in $(seq 1 30); do
+            if curl -sf http://localhost:8788/api/health > /dev/null 2>&1; then
+              echo "Preview server ready on :8788"
+              echo "preview_url=http://localhost:8788" >> $GITHUB_OUTPUT
+              break
+            fi
+            sleep 2
+          done
+
+          if ! curl -sf http://localhost:8788/api/health > /dev/null 2>&1; then
+            echo "::error::Preview server failed to start"
+            cat wrangler.log || true
+            kill $(cat wrangler.pid) 2>/dev/null || true
+            exit 1
+          fi
+
+      - name: Set test target URL
+        id: target
+        run: |
+          if [ -n "${{ github.event.inputs.deploy_url }}" ]; then
+            echo "url=${{ github.event.inputs.deploy_url }}" >> $GITHUB_OUTPUT
+            echo "Testing against deployed URL: ${{ github.event.inputs.deploy_url }}"
+          else
+            echo "url=http://localhost:8788" >> $GITHUB_OUTPUT
+            echo "Testing against local preview: http://localhost:8788"
+          fi
+
+      - name: Run integration tests
+        id: tests
+        continue-on-error: true
+        run: |
+          npm run test:integration 2>&1
+        env:
+          TEST_BASE_URL: ${{ steps.target.outputs.url }}
+          TEST_API_KEY: ${{ github.event.inputs.api_key || '' }}
+
+      - name: Stop preview server
+        if: always()
+        run: |
+          if [ -f wrangler.pid ]; then
+            kill $(cat wrangler.pid) 2>/dev/null || true
+            rm -f wrangler.pid
+            echo "Preview server stopped"
+          fi
+
+      - name: Check test results
+        id: check
+        run: |
+          CONCLUSION="${{ steps.tests.conclusion }}"
+          if [ "$CONCLUSION" = "success" ]; then
+            echo "status=passed" >> $GITHUB_OUTPUT
+            echo "All integration tests passed."
+          else
+            echo "status=failed" >> $GITHUB_OUTPUT
+            echo "::warning::Integration tests failed!"
+          fi
+
+      - name: Fail workflow if tests failed
+        if: steps.check.outputs.status == 'failed'
+        run: |
+          echo "::error::Integration tests failed — check test output above for details."
+          exit 1
+
+      - name: Generate summary
+        if: always()
+        run: |
+          STATUS='✅ Passed'
+          if [ "${{ steps.check.outputs.status }}" = "failed" ]; then
+            STATUS='❌ Failed'
+          fi
+          echo "## 🔄 Integration Tests" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Item | Value |" >> $GITHUB_STEP_SUMMARY
+          echo "|------|-------|" >> $GITHUB_STEP_SUMMARY
+          echo "| **Status** | $STATUS |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Target** | ${{ steps.target.outputs.url }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Trigger** | ${{ github.event_name }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Timestamp** | $(date -u '+%Y-%m-%d %H:%M:%S UTC') |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY

@@ -1,0 +1,21 @@
+/**
+ * Local development config — used with:
+ *   npx wrangler pages dev dist/ --port 8788 -c wrangler.dev.jsonc
+ *
+ * This file enables the Durable Object binding that `wrangler pages deploy`
+ * rejects (Pages can't supply script_name). For local dev, the DO class
+ * resolves from _worker.js directly.
+ *
+ * Inherits all other bindings from wrangler.jsonc via merge.
+ */
+{
+  "name": "search-engine-api-dev",
+  "compatibility_date": "2026-07-10",
+  "pages_build_output_dir": "./dist",
+  "compatibility_flags": ["nodejs_compat"],
+  "durable_objects": {
+    "bindings": [
+      { "name": "RATE_LIMITER", "class_name": "RateLimiterDO" }
+    ]
+  }
+}

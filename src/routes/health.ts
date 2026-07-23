@@ -1,14 +1,59 @@
 /**
  * API Routes: /api/health and /api/metrics
  *
- * /api/health — Live backend probing + circuit breaker status
+ * /api/health — Live backend probing + circuit breaker status (cached 30s)
  * /api/metrics — Prometheus-format metrics for monitoring
+ *
+ * Two separate Hono apps so they can be mounted at distinct top-level paths
+ * (/api/health and /api/metrics) without route-shadowing each other.
  */
 
 import { Hono } from 'hono'
+import { logger, toError } from '../lib/logger'
 import { cors } from 'hono/cors'
 import type { AppBindings } from '../types'
 import { getBackendHealth } from '../lib/rate-limiter'
+import { getPrometheusMetrics, setMetricsEnv } from '../lib/metrics'
+import { getActiveClientCount } from '../lib/auth'
+import { braveHealthCheck } from '../lib/brave-search'
+import { alertBackendDown } from '../lib/slack-alert'
+import { IndexingPipeline } from '../lib/index/pipeline'
+
+// Cache health probe results for 30 seconds to prevent self-DoS.
+// Without this, every /api/health call hammers all 7 backends simultaneously.
+interface HealthData {
+  status: string
+  version: string
+  timestamp: string
+  backends: Record<string, unknown>
+  features: Record<string, boolean>
+  auth_required: boolean
+  index?: IndexHealthInfo
+}
+
+/** Index layer observability — surfaces Vectorize/D1 binding + corpus status. */
+interface IndexHealthInfo {
+  /** True when BOTH Vectorize and D1 bindings are attached at runtime. */
+  configured: boolean
+  vectorize_bound: boolean
+  d1_bound: boolean
+  /** Total unique documents in the index (0 when unpopulated). */
+  total_documents: number
+  /** Total chunks across all documents. */
+  total_chunks: number
+  /** 'empty' = configured but 0 docs, 'healthy' = has docs, 'degraded' = high failure ratio. */
+  index_health: 'healthy' | 'degraded' | 'empty'
+}
+
+let cachedHealth: { data: HealthData; timestamp: number } | null = null
+const HEALTH_CACHE_TTL = 30_000 // 30 seconds
+// Cap how long the index stats query may take — it hits D1 and must never
+// delay the health response beyond this even if D1 is slow/unreachable.
+const INDEX_STATS_TIMEOUT_MS = 2_000
+
+// NOTE: Canary queries (full executeSearch) REMOVED to prevent quota burn on health checks.
+// Parser regression detection should be done via separate scheduled workflow (GitHub Actions)
+// that runs against a dedicated test endpoint, not via /api/health which is called frequently.
 
 const healthRoute = new Hono<{ Bindings: AppBindings }>()
 
@@ -16,6 +61,7 @@ healthRoute.use('/*', cors({ origin: '*' }))
 
 // --- Live backend probes ---
 const BACKEND_PROBES: Record<string, { url: string; timeout: number }> = {
+  brave: { url: 'https://api.search.brave.com/res/v1/web/search?q=health&count=1', timeout: 3000 },
   bing: { url: 'https://www.bing.com/robots.txt', timeout: 3000 },
   naver: { url: 'https://search.naver.com/robots.txt', timeout: 3000 },
   wikipedia: { url: 'https://en.wikipedia.org/robots.txt', timeout: 3000 },
@@ -44,16 +90,94 @@ async function probeBackend(name: string, config: { url: string; timeout: number
       return { status: 'degraded', latency_ms: latency }
     }
     return { status: 'degraded', latency_ms: latency }
-  } catch {
+  } catch (err) {
+    logger.warn('Backend health check failed:', { error: toError(err) })
     return { status: 'down', latency_ms: Date.now() - start }
   }
 }
 
-// GET /api/health — live status with backend probing
+/**
+ * Probe the self-index (Vectorize + D1) layer.
+ *
+ * Returns configuration status plus corpus stats (document/chunk counts).
+ * Hard-capped at INDEX_STATS_TIMEOUT_MS so a slow/unreachable D1 never blocks
+ * the health response. Any failure degrades gracefully to `configured: false`.
+ */
+export async function probeIndexHealth(env: AppBindings): Promise<IndexHealthInfo> {
+  const vectorizeBound = !!env.VECTORIZE_INDEX
+  const d1Bound = !!env.SEARCH_INDEX_DB
+
+  if (!vectorizeBound || !d1Bound) {
+    return {
+      configured: false,
+      vectorize_bound: vectorizeBound,
+      d1_bound: d1Bound,
+      total_documents: 0,
+      total_chunks: 0,
+      index_health: 'empty',
+    }
+  }
+
+  // Race the stats query against a timeout — getIndexStats() issues D1 SQL.
+  const statsPromise = new IndexingPipeline(env).getIndexStats()
+  const timeoutPromise = new Promise<null>((resolve) =>
+    setTimeout(() => resolve(null), INDEX_STATS_TIMEOUT_MS),
+  )
+
+  try {
+    const stats = await Promise.race([statsPromise, timeoutPromise])
+    if (!stats) {
+      // Timed out — report configured but unknown corpus.
+      return {
+        configured: true,
+        vectorize_bound: true,
+        d1_bound: true,
+        total_documents: 0,
+        total_chunks: 0,
+        index_health: 'empty',
+      }
+    }
+
+    const totalDocs = stats.totalDocuments ?? 0
+    const totalChunks = stats.totalChunks ?? 0
+    return {
+      configured: true,
+      vectorize_bound: true,
+      d1_bound: true,
+      total_documents: totalDocs,
+      total_chunks: totalChunks,
+      index_health:
+        totalDocs === 0 ? 'empty' : stats.indexHealth === 'degraded' ? 'degraded' : 'healthy',
+    }
+  } catch (err) {
+    logger.warn('[Health] Index stats query failed:', { error: toError(err) })
+    return {
+      configured: true,
+      vectorize_bound: true,
+      d1_bound: true,
+      total_documents: 0,
+      total_chunks: 0,
+      index_health: 'empty',
+    }
+  }
+}
+
+// GET /api/health — live status with backend probing (cached 30s)
 healthRoute.get('/', async (c) => {
+  // Return cached result if fresh enough
+  const now = Date.now()
+  if (cachedHealth && now - cachedHealth.timestamp < HEALTH_CACHE_TTL) {
+    return c.json({ ...cachedHealth.data, cached: true })
+  }
+
   // Probe all backends in parallel (with short timeout)
   const probeResults = await Promise.all(
     Object.entries(BACKEND_PROBES).map(async ([name, config]) => {
+      // Brave requires auth header — use dedicated health check
+      if (name === 'brave') {
+        const result = await braveHealthCheck(c.env.BRAVE_API_KEY ?? '')
+        return [name, result] as const
+      }
       const result = await probeBackend(name, config)
       return [name, result] as const
     }),
@@ -63,9 +187,10 @@ healthRoute.get('/', async (c) => {
   let allHealthy = true
   let anyDegraded = false
 
+  // Fetch circuit breaker state ONCE (used by the loop AND the rate_limiter field)
+  const circuitHealth = await getBackendHealth(c.env)
+
   for (const [name, result] of probeResults) {
-    // Merge with circuit breaker state from rate-limiter
-    const circuitHealth = getBackendHealth()
     const hostKey = Object.keys(circuitHealth).find((h) => h.includes(name))
 
     backends[name] = {
@@ -73,16 +198,34 @@ healthRoute.get('/', async (c) => {
       latency_ms: result.latency_ms,
       circuit: hostKey ? circuitHealth[hostKey] : undefined,
     }
-    if (result.status === 'down') allHealthy = false
+    if (result.status === 'down') {
+      allHealthy = false
+      // Fire-and-forget Slack alert for backend failures
+      const webhookUrl = c.env.SLACK_WEBHOOK
+      if (webhookUrl) {
+        c.executionCtx.waitUntil(alertBackendDown(webhookUrl, name, result.latency_ms, result.status))
+      }
+    }
     if (result.status === 'degraded') anyDegraded = true
   }
 
   // Workers AI status
   backends['workers_ai'] = c.env.AI ? 'operational' : 'disabled'
 
+  // Canary check REMOVED — quota burn risk. Parser regression detection
+  // should run via separate scheduled workflow (see .github/workflows/monitor.yml)
+  // not on every /api/health call.
+
+  // --- Self-index (Vectorize + D1) status ---
+  // Probes binding presence + corpus size. Capped by INDEX_STATS_TIMEOUT_MS.
+  // Runs in parallel with backend probes below where possible, but kept here
+  // (after the parallel probe batch resolves) so a slow D1 never delays the
+  // backend status. Failure is non-fatal — index section degrades gracefully.
+  const indexInfo = await probeIndexHealth(c.env)
+
   const status = allHealthy ? (anyDegraded ? 'degraded' : 'ok') : 'partial_outage'
 
-  return c.json({
+  const healthData = {
     status,
     version: '2.0.0',
     timestamp: new Date().toISOString(),
@@ -96,14 +239,39 @@ healthRoute.get('/', async (c) => {
       korean_optimized: true,
       caching: true,
       rate_limiting: true,
+      rate_limiter_do: !!c.env.RATE_LIMITER,
+      analytics_engine: !!c.env.ANALYTICS,
+      self_index: indexInfo.configured,
     },
     auth_required: !!c.env.SEARCH_API_KEY,
-  })
+    index: indexInfo,
+    rate_limiter: {
+      mode: c.env.RATE_LIMITER ? 'durable_object' : 'in_memory_fallback',
+      hosts_tracked: Object.keys(circuitHealth).length,
+    },
+  }
+
+  // Cache for 30 seconds
+  cachedHealth = { data: healthData, timestamp: now }
+
+  return c.json(healthData)
 })
 
 // GET /api/metrics — Prometheus-format metrics
-healthRoute.get('/metrics', (c) => {
-  const circuitHealth = getBackendHealth()
+//
+// Mounted as a separate Hono app at `/api/metrics` (see src/index.tsx) so that
+// the route handler lives at `/` of metricsRoute, not at `/metrics` of healthRoute
+// (which previously shadowed it — `app.route('/api/metrics', healthRoute)` made
+// `/api/metrics` itself serve the `/` health JSON, and the actual Prometheus
+// handler was unreachable save at `/api/metrics/metrics`).
+const metricsRoute = new Hono<{ Bindings: AppBindings }>()
+
+metricsRoute.use('/*', cors({ origin: '*' }))
+
+metricsRoute.get('/', async (c) => {
+  // Set env so metrics module can access ANALYTICS binding
+  setMetricsEnv(c.env)
+  const circuitHealth = await getBackendHealth(c.env)
   const lines: string[] = [
     '# HELP search_backend_status Backend status (1=healthy, 0.5=degraded, 0=down)',
     '# TYPE search_backend_status gauge',
@@ -118,12 +286,38 @@ healthRoute.get('/metrics', (c) => {
   }
 
   lines.push('')
-  lines.push('# HELP search_client_states_active Active client IPs tracked')
+  const activeClients = getActiveClientCount()
+  lines.push('# HELP search_client_states_active Active client IPs tracked (per isolate, best-effort)')
   lines.push('# TYPE search_client_states_active gauge')
+  lines.push(`search_client_states_active ${activeClients}`)
+
+  // Append per-endpoint request/latency/error metrics
+  lines.push('')
+  lines.push(getPrometheusMetrics())
+
+  // --- Index layer metrics (sourced from the cached /api/health probe) ---
+  // We reuse the cached health index info rather than re-querying D1, so that
+  // /api/metrics (typically scraped every 15-30s) does not double the D1 load.
+  const cachedIndex = cachedHealth?.data.index
+  if (cachedIndex) {
+    lines.push('')
+    lines.push('# HELP search_index_documents_total Total documents in the self-index (Vectorize + D1)')
+    lines.push('# TYPE search_index_documents_total gauge')
+    lines.push(`search_index_documents_total ${cachedIndex.total_documents}`)
+    lines.push('# HELP search_index_chunks_total Total chunks in the self-index')
+    lines.push('# TYPE search_index_chunks_total gauge')
+    lines.push(`search_index_chunks_total ${cachedIndex.total_chunks}`)
+    lines.push('# HELP search_index_configured Whether the index layer is bound (1) or not (0)')
+    lines.push('# TYPE search_index_configured gauge')
+    lines.push(`search_index_configured ${cachedIndex.configured ? 1 : 0}`)
+  }
 
   return new Response(lines.join('\n'), {
-    headers: { 'Content-Type': 'text/plain; version=0.0.4' },
+    headers: {
+      'Content-Type': 'text/plain; version=0.0.4',
+      'Cache-Control': 'no-cache',
+    },
   })
 })
 
-export { healthRoute }
+export { healthRoute, metricsRoute }

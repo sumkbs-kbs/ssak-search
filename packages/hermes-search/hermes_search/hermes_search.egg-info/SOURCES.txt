@@ -1,0 +1,7 @@
+README.md
+pyproject.toml
+hermes_search/hermes_search.egg-info/PKG-INFO
+hermes_search/hermes_search.egg-info/SOURCES.txt
+hermes_search/hermes_search.egg-info/dependency_links.txt
+hermes_search/hermes_search.egg-info/requires.txt
+hermes_search/hermes_search.egg-info/top_level.txt

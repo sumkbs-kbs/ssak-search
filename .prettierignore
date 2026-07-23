@@ -1,0 +1,11 @@
+dist/
+.wrangler/
+coverage/
+node_modules/
+*.config.*
+ecosystem.config.cjs
+*.json
+*.yml
+*.yaml
+*.md
+*.snap

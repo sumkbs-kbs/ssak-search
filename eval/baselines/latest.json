@@ -1,0 +1,447 @@
+{
+  "timestamp": "2026-07-22T23:37:36.537Z",
+  "report": {
+    "timestamp": "2026-07-22T23:37:36.537Z",
+    "totalQueries": 10,
+    "passedQueries": 3,
+    "failedQueries": 7,
+    "passRate": 0.3,
+    "avgTimeMs": 0,
+    "avgResultCount": 2.1,
+    "backendCoverage": {
+      "bm25": 7,
+      "rrf": 1,
+      "integrated": 2
+    },
+    "latencyPercentiles": {
+      "p50": 0,
+      "p75": 0,
+      "p90": 0,
+      "p95": 0,
+      "p99": 0,
+      "max": 0,
+      "min": 0
+    },
+    "qps": {
+      "avgQps": 10000,
+      "totalQueries": 10,
+      "totalDurationMs": 0,
+      "byTag": {
+        "bm25": 7000,
+        "keyword": 1000,
+        "title-weight": 1000,
+        "korean": 1000,
+        "stop-words": 1000,
+        "partial": 1000,
+        "rrf": 1000,
+        "hybrid": 1000,
+        "tf-saturation": 1000,
+        "integration": 2000,
+        "pipeline": 1000,
+        "edge-case": 1000,
+        "long-doc": 1000
+      },
+      "peakQps": 100
+    },
+    "results": [
+      {
+        "query": {
+          "id": "bm25-exact-match",
+          "query": "quantum computing",
+          "topic": "general",
+          "minResults": 3,
+          "maxTimeMs": 500,
+          "tags": [
+            "bm25",
+            "keyword"
+          ],
+          "testDocs": [
+            {
+              "title": "Quantum Computing Explained",
+              "content": "Quantum computing uses qubits instead of classical bits. Quantum computers leverage superposition and entanglement to perform computations that would be infeasible for classical computers. This makes quantum computing a revolutionary approach to computing.",
+              "expectedMinBm25": 1,
+              "expectedMaxBm25": 10,
+              "expectedRank": 0
+            },
+            {
+              "title": "Classical Computing Basics",
+              "content": "Classical computing uses transistors and binary logic gates. Modern computers are based on the von Neumann architecture. CPUs process instructions sequentially.",
+              "expectedMinBm25": 0.5,
+              "expectedMaxBm25": 3,
+              "expectedRank": 1
+            },
+            {
+              "title": "Introduction to Machine Learning",
+              "content": "Machine learning is a subset of artificial intelligence that enables systems to learn and improve from experience without being explicitly programmed.",
+              "expectedMinBm25": 0,
+              "expectedMaxBm25": 1,
+              "expectedRank": 2
+            }
+          ],
+          "expectedTopBm25Min": 1,
+          "expectedTopBm25Max": 10
+        },
+        "response": null,
+        "resultCount": 3,
+        "responseTimeMs": 0,
+        "backends": [
+          "bm25"
+        ],
+        "passed": false,
+        "failures": [
+          "[Quantum Computing Explained] BM25 score 24.114 > expected max 10",
+          "[Classical Computing Basics] BM25 score 11.916 > expected max 3",
+          "Top BM25 score 24.114 > expected max 10"
+        ]
+      },
+      {
+        "query": {
+          "id": "bm25-title-weight",
+          "query": "React state management",
+          "topic": "general",
+          "minResults": 3,
+          "maxTimeMs": 500,
+          "tags": [
+            "bm25",
+            "title-weight"
+          ],
+          "testDocs": [
+            {
+              "title": "React State Management Best Practices",
+              "content": "This article covers React concepts and modern frontend development approaches for building user interfaces with components and hooks.",
+              "expectedMinBm25": 2,
+              "expectedMaxBm25": 12,
+              "expectedRank": 0
+            },
+            {
+              "title": "Frontend Development Guide",
+              "content": "React is a popular library for building user interfaces. State management in React applications can be handled with hooks like useState and useReducer. Redux is another option for managing React application state.",
+              "expectedMinBm25": 2,
+              "expectedMaxBm25": 12,
+              "expectedRank": 1
+            },
+            {
+              "title": "Backend Architecture Patterns",
+              "content": "Microservices architecture and serverless computing are transforming how we build scalable backend systems.",
+              "expectedMinBm25": 0,
+              "expectedMaxBm25": 0.5,
+              "expectedRank": 2
+            }
+          ],
+          "expectedTopBm25Min": 2,
+          "expectedTopBm25Max": 12
+        },
+        "response": null,
+        "resultCount": 3,
+        "responseTimeMs": 0,
+        "backends": [
+          "bm25"
+        ],
+        "passed": false,
+        "failures": [
+          "[React State Management Best Practices] BM25 score 33.844 > expected max 12",
+          "[Frontend Development Guide] BM25 score 31.230 > expected max 12",
+          "Top BM25 score 33.844 > expected max 12"
+        ]
+      },
+      {
+        "query": {
+          "id": "bm25-korean",
+          "query": "삼성전자 주가 전망",
+          "topic": "finance",
+          "minResults": 3,
+          "maxTimeMs": 500,
+          "tags": [
+            "bm25",
+            "korean"
+          ],
+          "testDocs": [
+            {
+              "title": "삼성전자 주가 전망 분석",
+              "content": "삼성전자의 주가 전망에 대해 분석합니다. 반도체 시장 호황으로 삼성전자의 실적이 개선될 것으로 예상됩니다. 전문가들은 삼성전자 목표주가를 상향 조정하고 있습니다.",
+              "expectedMinBm25": 2,
+              "expectedMaxBm25": 15,
+              "expectedRank": 0
+            },
+            {
+              "title": "국내 증시 동향",
+              "content": "코스피 지수가 상승세를 보이고 있습니다. 외국인 투자자들의 매수가 이어지고 있으며, 시장 전망은 긍정적입니다.",
+              "expectedMinBm25": 0.5,
+              "expectedMaxBm25": 5,
+              "expectedRank": 1
+            },
+            {
+              "title": "AI 반도체 산업 보고서",
+              "content": "인공지능 반도체 시장이 급성장하고 있습니다. 엔비디아와 AMD가 시장을 선도하고 있습니다.",
+              "expectedMinBm25": 0,
+              "expectedMaxBm25": 2,
+              "expectedRank": 2
+            }
+          ],
+          "expectedTopBm25Min": 2,
+          "expectedTopBm25Max": 15
+        },
+        "response": null,
+        "resultCount": 3,
+        "responseTimeMs": 0,
+        "backends": [
+          "bm25"
+        ],
+        "passed": false,
+        "failures": [
+          "[삼성전자 주가 전망 분석] BM25 score 0.000 < expected min 2",
+          "[국내 증시 동향] BM25 score 0.000 < expected min 0.5",
+          "Top BM25 score 0.000 < expected min 2"
+        ]
+      },
+      {
+        "query": {
+          "id": "bm25-stop-words",
+          "query": "the best way to learn programming in 2025",
+          "topic": "general",
+          "minResults": 2,
+          "maxTimeMs": 500,
+          "tags": [
+            "bm25",
+            "stop-words"
+          ],
+          "testDocs": [
+            {
+              "title": "Programming Learning Guide 2025",
+              "content": "The best way to learn programming in 2025 is through hands-on projects. Programming tutorials and coding bootcamps provide structured learning paths for beginners.",
+              "expectedMinBm25": 2,
+              "expectedMaxBm25": 15,
+              "expectedRank": 0
+            },
+            {
+              "title": "A Brief History of Computing",
+              "content": "The history of computing spans centuries, from the abacus to modern quantum computers. The field of computer science has evolved dramatically.",
+              "expectedMinBm25": 0,
+              "expectedMaxBm25": 2,
+              "expectedRank": 1
+            }
+          ]
+        },
+        "response": null,
+        "resultCount": 2,
+        "responseTimeMs": 0,
+        "backends": [
+          "bm25"
+        ],
+        "passed": false,
+        "failures": [
+          "[Programming Learning Guide 2025] BM25 score 53.762 > expected max 15"
+        ]
+      },
+      {
+        "query": {
+          "id": "bm25-partial-match",
+          "query": "serverless deploy",
+          "topic": "general",
+          "minResults": 2,
+          "maxTimeMs": 500,
+          "tags": [
+            "bm25",
+            "partial"
+          ],
+          "testDocs": [
+            {
+              "title": "Serverless Deployment Guide",
+              "content": "Learn how to deploy serverless applications on AWS Lambda and Cloudflare Workers. Serverless deployment eliminates infrastructure management while providing automatic scaling.",
+              "expectedMinBm25": 3,
+              "expectedMaxBm25": 15,
+              "expectedRank": 0
+            },
+            {
+              "title": "Docker Container Orchestration",
+              "content": "Docker containers and Kubernetes orchestration provide consistent deployment environments for microservices across development and production.",
+              "expectedMinBm25": 1,
+              "expectedMaxBm25": 8,
+              "expectedRank": 1
+            }
+          ]
+        },
+        "response": null,
+        "resultCount": 2,
+        "responseTimeMs": 0,
+        "backends": [
+          "bm25"
+        ],
+        "passed": false,
+        "failures": [
+          "[Serverless Deployment Guide] BM25 score 23.693 > expected max 15",
+          "[Docker Container Orchestration] BM25 score 9.281 > expected max 8"
+        ]
+      },
+      {
+        "query": {
+          "id": "rrf-rank-fusion",
+          "query": "RUST vs Go performance",
+          "topic": "general",
+          "minResults": 3,
+          "maxTimeMs": 500,
+          "tags": [
+            "rrf",
+            "hybrid"
+          ],
+          "testDocs": [
+            {
+              "title": "Rust vs Go Performance Benchmark",
+              "content": "Comparing Rust and Go performance benchmarks. Rust provides zero-cost abstractions and memory safety. Go offers goroutines for concurrency and fast compilation.",
+              "expectedMinBm25": 3,
+              "expectedMaxBm25": 15,
+              "expectedRank": 0
+            },
+            {
+              "title": "Go Programming Language Features",
+              "content": "Go is a statically typed language designed for simplicity and efficiency. Go performance is excellent for concurrent and network applications.",
+              "expectedMinBm25": 2,
+              "expectedMaxBm25": 12,
+              "expectedRank": 1
+            },
+            {
+              "title": "Rust Systems Programming",
+              "content": "Rust performance is comparable to C++ while providing memory safety guarantees. The Rust compiler optimizes aggressively for maximum performance.",
+              "expectedMinBm25": 1,
+              "expectedMaxBm25": 10,
+              "expectedRank": 2
+            }
+          ],
+          "expectedTopBm25Min": 3
+        },
+        "response": null,
+        "resultCount": 4,
+        "responseTimeMs": 0,
+        "backends": [
+          "rrf"
+        ],
+        "passed": true,
+        "failures": []
+      },
+      {
+        "query": {
+          "id": "bm25-tf-saturation",
+          "query": "database optimization",
+          "topic": "general",
+          "minResults": 2,
+          "maxTimeMs": 500,
+          "tags": [
+            "bm25",
+            "tf-saturation"
+          ],
+          "testDocs": [
+            {
+              "title": "Database Optimization: Advanced Query Tuning",
+              "content": "Database optimization requires understanding query plans and indexing strategies. Database optimization techniques include connection pooling and query optimization for database performance. Database optimization is critical for production systems. database optimization database optimization database optimization",
+              "expectedMinBm25": 3,
+              "expectedMaxBm25": 15,
+              "expectedRank": 0
+            },
+            {
+              "title": "Web Application Caching Strategies",
+              "content": "Redis caching and CDN optimization can dramatically improve web application performance. Database optimization is one piece of the puzzle.",
+              "expectedMinBm25": 1,
+              "expectedMaxBm25": 10,
+              "expectedRank": 1
+            }
+          ],
+          "expectedTopBm25Min": 3
+        },
+        "response": null,
+        "resultCount": 2,
+        "responseTimeMs": 0,
+        "backends": [
+          "bm25"
+        ],
+        "passed": false,
+        "failures": [
+          "[Database Optimization: Advanced Query Tuning] BM25 score 25.086 > expected max 15",
+          "[Web Application Caching Strategies] BM25 score 20.016 > expected max 10"
+        ]
+      },
+      {
+        "query": {
+          "id": "integrated-search-index",
+          "query": "machine learning tutorial",
+          "topic": "general",
+          "minResults": 0,
+          "maxTimeMs": 2000,
+          "tags": [
+            "integration",
+            "pipeline"
+          ]
+        },
+        "response": null,
+        "resultCount": 0,
+        "responseTimeMs": 0,
+        "backends": [
+          "integrated"
+        ],
+        "passed": true,
+        "failures": []
+      },
+      {
+        "query": {
+          "id": "integrated-empty-query",
+          "query": "",
+          "topic": "general",
+          "minResults": 0,
+          "maxTimeMs": 500,
+          "tags": [
+            "integration",
+            "edge-case"
+          ]
+        },
+        "response": null,
+        "resultCount": 0,
+        "responseTimeMs": 0,
+        "backends": [
+          "integrated"
+        ],
+        "passed": true,
+        "failures": []
+      },
+      {
+        "query": {
+          "id": "bm25-long-doc",
+          "query": "distributed systems consensus",
+          "topic": "general",
+          "minResults": 2,
+          "maxTimeMs": 500,
+          "tags": [
+            "bm25",
+            "long-doc"
+          ],
+          "testDocs": [
+            {
+              "title": "Understanding Distributed Systems Consensus Algorithms",
+              "content": "Consensus in distributed systems is a fundamental problem that has been studied extensively. The Paxos algorithm, first described by Leslie Lamport, provides a way for distributed systems to reach consensus even in the presence of failures. Raft is a more understandable alternative to Paxos that achieves consensus through leader election. Both consensus algorithms ensure that distributed systems can maintain consistency across nodes. Distributed systems require consensus for fault tolerance and reliability.",
+              "expectedMinBm25": 3,
+              "expectedMaxBm25": 15,
+              "expectedRank": 0
+            },
+            {
+              "title": "CAP Theorem Explained",
+              "content": "The CAP theorem states that distributed systems can only provide two of three guarantees: Consistency, Availability, and Partition Tolerance. This fundamental theorem guides the design of all distributed data systems.",
+              "expectedMinBm25": 1,
+              "expectedMaxBm25": 8,
+              "expectedRank": 1
+            }
+          ],
+          "expectedTopBm25Min": 3
+        },
+        "response": null,
+        "resultCount": 2,
+        "responseTimeMs": 0,
+        "backends": [
+          "bm25"
+        ],
+        "passed": false,
+        "failures": [
+          "[Understanding Distributed Systems Consensus Algorithms] BM25 score 36.821 > expected max 15",
+          "[CAP Theorem Explained] BM25 score 21.513 > expected max 8"
+        ]
+      }
+    ]
+  }
+}

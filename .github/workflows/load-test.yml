@@ -1,0 +1,326 @@
+name: Load Test (k6)
+
+on:
+  workflow_dispatch:
+    inputs:
+      target_url:
+        description: 'Target URL to load test'
+        required: true
+        default: 'https://search-engine-api.pages.dev'
+      api_key:
+        description: 'API key (if required)'
+        required: false
+        default: ''
+      vus:
+        description: 'Virtual Users'
+        required: true
+        default: '10'
+      duration:
+        description: 'Test duration (e.g., 30s, 1m, 5m)'
+        required: true
+        default: '30s'
+      save_baseline:
+        description: 'Save results as new baseline'
+        required: false
+        default: 'false'
+        type: boolean
+  schedule:
+    # Weekly load test — Sunday 03:00 UTC
+    - cron: '0 3 * * 0'
+
+env:
+  K6_VERSION: '0.57.0'
+  SLACK_WEBHOOK: ${{ secrets.ALERT_SLACK_WEBHOOK || '' }}
+
+jobs:
+  k6-load-test:
+    name: k6 Load Test
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install k6
+        run: |
+          curl -L -o k6.tar.gz "https://github.com/grafana/k6/releases/download/v${{ env.K6_VERSION }}/k6-v${{ env.K6_VERSION }}-linux-amd64.tar.gz"
+          tar xzf k6.tar.gz
+          sudo cp k6-v${{ env.K6_VERSION }}-linux-amd64/k6 /usr/local/bin/
+          rm -rf k6.tar.gz k6-v${{ env.K6_VERSION }}-linux-amd64/
+          k6 version
+
+      - name: Configure test parameters
+        id: config
+        run: |
+          TARGET_URL="${{ github.event.inputs.target_url || 'https://search-engine-api.pages.dev' }}"
+          VUS="${{ github.event.inputs.vus || '10' }}"
+          DURATION="${{ github.event.inputs.duration || '30s' }}"
+          API_KEY="${{ github.event.inputs.api_key || '' }}"
+          SAVE_BASELINE="${{ github.event.inputs.save_baseline || 'false' }}"
+
+          echo "target_url=$TARGET_URL" >> $GITHUB_OUTPUT
+          echo "vus=$VUS" >> $GITHUB_OUTPUT
+          echo "duration=$DURATION" >> $GITHUB_OUTPUT
+          echo "api_key=$API_KEY" >> $GITHUB_OUTPUT
+          echo "save_baseline=$SAVE_BASELINE" >> $GITHUB_OUTPUT
+
+          echo "=== Load Test Configuration ==="
+          echo "Target: $TARGET_URL"
+          echo "VUs: $VUS"
+          echo "Duration: $DURATION"
+          echo "Save baseline: $SAVE_BASELINE"
+          echo "================================"
+
+      - name: Load existing baseline
+        id: baseline
+        run: |
+          if [ -f ".k6-baseline.json" ]; then
+            echo "found=true" >> $GITHUB_OUTPUT
+            cat .k6-baseline.json
+            echo "Baseline loaded from .k6-baseline.json"
+          else
+            echo "found=false" >> $GITHUB_OUTPUT
+            echo "No baseline found — will create on save"
+          fi
+
+      - name: Run k6 load test
+        id: test
+        continue-on-error: true
+        timeout-minutes: 25
+        run: |
+          k6 run \
+            --vus ${{ steps.config.outputs.vus }} \
+            --duration ${{ steps.config.outputs.duration }} \
+            --summary-export summary.json \
+            --out json=load-test-results.json \
+            -e BASE_URL=${{ steps.config.outputs.target_url }} \
+            -e API_KEY=${{ steps.config.outputs.api_key }} \
+            -e VUS=${{ steps.config.outputs.vus }} \
+            -e DURATION=${{ steps.config.outputs.duration }} \
+            tests/k6/load-test.js 2>&1 | tee k6-output.log
+
+      - name: Parse baseline data from k6 output
+        id: parse
+        run: |
+          # Extract inline baseline JSON from k6 teardown
+          BASELINE_DATA=$(awk '/=== BASELINE_DATA_START ===/{flag=1; next} /=== BASELINE_DATA_END ===/{flag=0} flag' k6-output.log 2>/dev/null || echo "{}")
+          if [ -n "$BASELINE_DATA" ] && [ "$BASELINE_DATA" != "{}" ]; then
+            echo "$BASELINE_DATA" > .k6-current-results.json
+            echo "parsed=true" >> $GITHUB_OUTPUT
+            echo "Baseline data parsed from k6 output"
+          else
+            echo "parsed=false" >> $GITHUB_OUTPUT
+            echo "No baseline data in k6 output (teardown may not have run)"
+          fi
+
+      - name: Check and compare test results
+        id: check
+        run: |
+          if [ -f "summary.json" ]; then
+            echo "=== Summary Export ==="
+            cat summary.json
+
+            # Parse key metrics from k6 summary
+            REQ_DURATION_P95=$(jq -r '.metrics.http_req_duration?.p(95) // "N/A"' summary.json 2>/dev/null)
+            REQ_DURATION_AVG=$(jq -r '.metrics.http_req_duration?.avg // "N/A"' summary.json 2>/dev/null)
+            REQ_FAILED=$(jq -r '.metrics.http_req_failed?.rate // "N/A"' summary.json 2>/dev/null)
+
+            # Per-scenario metrics
+            SEARCH_P95=$(jq -r '.metrics.search_latency?.p(95) // "N/A"' summary.json 2>/dev/null)
+            SEARCH_FAILURES=$(jq -r '.metrics.search_failures?.rate // "N/A"' summary.json 2>/dev/null)
+            INDEX_SEARCH_P95=$(jq -r '.metrics.index_search_latency?.p(95) // "N/A"' summary.json 2>/dev/null)
+            INDEX_SEARCH_FAILURES=$(jq -r '.metrics.index_search_failures?.rate // "N/A"' summary.json 2>/dev/null)
+            SEARCH_ANSWER_P95=$(jq -r '.metrics.search_answer_latency?.p(95) // "N/A"' summary.json 2>/dev/null)
+            HEALTH_P95=$(jq -r '.metrics.health_latency?.p(95) // "N/A"' summary.json 2>/dev/null)
+            TOTAL_REQUESTS=$(jq -r '.metrics.http_reqs?.count // "N/A"' summary.json 2>/dev/null)
+
+            echo "p95_latency=$REQ_DURATION_P95" >> $GITHUB_OUTPUT
+            echo "avg_latency=$REQ_DURATION_AVG" >> $GITHUB_OUTPUT
+            echo "failure_rate=$REQ_FAILED" >> $GITHUB_OUTPUT
+            echo "search_p95=$SEARCH_P95" >> $GITHUB_OUTPUT
+            echo "search_failure_rate=$SEARCH_FAILURES" >> $GITHUB_OUTPUT
+            echo "index_search_p95=$INDEX_SEARCH_P95" >> $GITHUB_OUTPUT
+            echo "index_search_failure_rate=$INDEX_SEARCH_FAILURES" >> $GITHUB_OUTPUT
+            echo "search_answer_p95=$SEARCH_ANSWER_P95" >> $GITHUB_OUTPUT
+            echo "health_p95=$HEALTH_P95" >> $GITHUB_OUTPUT
+            echo "total_requests=$TOTAL_REQUESTS" >> $GITHUB_OUTPUT
+
+            # Evaluate thresholds with per-scenario granularity
+            THRESHOLDS_PASSED=true
+
+            # Overall thresholds
+            if [ "$(echo "$REQ_DURATION_P95 > 5000" | bc -l 2>/dev/null)" = "1" ]; then
+              echo "::warning::p95 latency ${REQ_DURATION_P95}ms exceeds overall threshold (5000ms)"
+              THRESHOLDS_PASSED=false
+            fi
+            if [ "$(echo "$REQ_FAILED > 0.05" | bc -l 2>/dev/null)" = "1" ]; then
+              echo "::warning::Failure rate ${REQ_FAILED} exceeds overall threshold (5%)"
+              THRESHOLDS_PASSED=false
+            fi
+
+            # Per-scenario thresholds
+            if [ "$SEARCH_P95" != "N/A" ] && [ "$(echo "$SEARCH_P95 > 8000" | bc -l 2>/dev/null)" = "1" ]; then
+              echo "::warning::Search p95 ${SEARCH_P95}ms exceeds threshold (8000ms)"
+              THRESHOLDS_PASSED=false
+            fi
+            if [ "$INDEX_SEARCH_P95" != "N/A" ] && [ "$(echo "$INDEX_SEARCH_P95 > 8000" | bc -l 2>/dev/null)" = "1" ]; then
+              echo "::warning::Index search p95 ${INDEX_SEARCH_P95}ms exceeds threshold (8000ms)"
+              THRESHOLDS_PASSED=false
+            fi
+            if [ "$SEARCH_FAILURES" != "N/A" ] && [ "$(echo "$SEARCH_FAILURES > 0.1" | bc -l 2>/dev/null)" = "1" ]; then
+              echo "::warning::Search failure rate ${SEARCH_FAILURES} exceeds threshold (10%)"
+              THRESHOLDS_PASSED=false
+            fi
+            if [ "$INDEX_SEARCH_FAILURES" != "N/A" ] && [ "$(echo "$INDEX_SEARCH_FAILURES > 0.1" | bc -l 2>/dev/null)" = "1" ]; then
+              echo "::warning::Index search failure rate ${INDEX_SEARCH_FAILURES} exceeds threshold (10%)"
+              THRESHOLDS_PASSED=false
+            fi
+
+            echo "thresholds_passed=$THRESHOLDS_PASSED" >> $GITHUB_OUTPUT
+
+            # Baseline comparison
+            echo "" > baseline_diff.md
+            BASELINE_REGRESSIONS=0
+            if [ -f ".k6-baseline.json" ] && [ "${{ steps.baseline.outputs.found }}" = "true" ]; then
+              BASELINE_P95=$(jq -r '.thresholds.http_req_duration_p95 // 5000' .k6-baseline.json 2>/dev/null)
+              if [ "$(echo "$REQ_DURATION_P95 > $BASELINE_P95 * 1.2" | bc -l 2>/dev/null)" = "1" ]; then
+                echo "- ⚠️ p95 latency regressed: baseline ${BASELINE_P95}ms → current ${REQ_DURATION_P95}ms (>20% increase)" >> baseline_diff.md
+                BASELINE_REGRESSIONS=$((BASELINE_REGRESSIONS + 1))
+              fi
+              echo "baseline_regressions=$BASELINE_REGRESSIONS" >> $GITHUB_OUTPUT
+            else
+              echo "baseline_regressions=0" >> $GITHUB_OUTPUT
+            fi
+
+            echo "p95=${REQ_DURATION_P95}ms | avg=${REQ_DURATION_AVG}ms | failures=${REQ_FAILED} | search_p95=${SEARCH_P95} | index_p95=${INDEX_SEARCH_P95} | requests=$TOTAL_REQUESTS"
+          else
+            echo "thresholds_passed=false" >> $GITHUB_OUTPUT
+            echo "baseline_regressions=0" >> $GITHUB_OUTPUT
+            echo "::error::k6 summary.json not found — test may have failed"
+          fi
+
+      - name: Save new baseline
+        if: steps.parse.outputs.parsed == 'true' && (steps.config.outputs.save_baseline == 'true' || github.event_name == 'schedule')
+        run: |
+          cp .k6-current-results.json .k6-baseline.json
+          echo "Baseline saved to .k6-baseline.json"
+          cat .k6-baseline.json | jq '.timestamp'
+
+      - name: Upload test results artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: k6-results
+          path: |
+            summary.json
+            load-test-results.json
+            .k6-current-results.json
+            baseline_diff.md
+          retention-days: 30
+
+      - name: Send Slack alert on regression
+        if: steps.check.outputs.thresholds_passed == 'false' && env.SLACK_WEBHOOK != ''
+        env:
+          SLACK_WEBHOOK: ${{ secrets.ALERT_SLACK_WEBHOOK }}
+        run: |
+          SEVERITY="warning"
+          COLOR="#ffa500"
+          if [ "$(echo "${{ steps.check.outputs.failure_rate }} > 0.2" | bc -l 2>/dev/null)" = "1" ]; then
+            SEVERITY="critical"
+            COLOR="#ff0000"
+          fi
+
+          BASELINE_DIFF=$(cat baseline_diff.md 2>/dev/null || echo "")
+          if [ -n "$BASELINE_DIFF" ]; then
+            REGRESSION_TEXT="*Baseline Regressions:*\n$BASELINE_DIFF"
+          else
+            REGRESSION_TEXT=""
+          fi
+
+          PAYLOAD=$(cat <<EOF
+          {
+            "text": "[k6 Load Test] ${SEVERITY} — Threshold violations detected",
+            "attachments": [{
+              "color": "${COLOR}",
+              "blocks": [
+                {
+                  "type": "section",
+                  "text": {
+                    "type": "mrkdwn",
+                    "text": "*k6 Load Test — ${SEVERITY}*"
+                  }
+                },
+                {
+                  "type": "section",
+                  "fields": [
+                    { "type": "mrkdwn", "text": "*Target*: ${{ steps.config.outputs.target_url }}" },
+                    { "type": "mrkdwn", "text": "*VUs*: ${{ steps.config.outputs.vus }}" },
+                    { "type": "mrkdwn", "text": "*Duration*: ${{ steps.config.outputs.duration }}" },
+                    { "type": "mrkdwn", "text": "*Total Requests*: ${{ steps.check.outputs.total_requests }}" },
+                    { "type": "mrkdwn", "text": "*p95*: ${{ steps.check.outputs.p95_latency }}ms" },
+                    { "type": "mrkdwn", "text": "*Failure Rate*: ${{ steps.check.outputs.failure_rate }}" },
+                    { "type": "mrkdwn", "text": "*Search p95*: ${{ steps.check.outputs.search_p95 }}ms" },
+                    { "type": "mrkdwn", "text": "*Index Search p95*: ${{ steps.check.outputs.index_search_p95 }}ms" }
+                  ]
+                },
+                $(if [ -n "$REGRESSION_TEXT" ]; then echo "{
+                  \"type\": \"section\",
+                  \"text\": {
+                    \"type\": \"mrkdwn\",
+                    \"text\": \"$REGRESSION_TEXT\"
+                  }
+                },"; fi)
+                {
+                  "type": "context",
+                  "elements": [
+                    {
+                      "type": "mrkdwn",
+                      "text": "Ran at $(date -u '+%Y-%m-%d %H:%M:%S UTC') | <https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}|View Action>"
+                    }
+                  ]
+                }
+              ]
+            }]
+          }
+          EOF
+          )
+
+          curl -sf -X POST -H 'Content-Type: application/json' -d "$PAYLOAD" "$SLACK_WEBHOOK" || echo "Slack notification failed"
+
+      - name: Fail on threshold violation
+        if: steps.check.outputs.thresholds_passed == 'false'
+        run: |
+          echo "::error::k6 load test thresholds violated. Review results above."
+          exit 1
+
+      - name: Generate summary
+        if: always()
+        run: |
+          STATUS='✅ Passed'
+          if [ "${{ steps.check.outputs.thresholds_passed }}" = "false" ]; then
+            STATUS='❌ Failed'
+          fi
+
+          REGRESSION_STATUS='✅ No regressions'
+          if [ "${{ steps.check.outputs.baseline_regressions }}" -gt "0" ]; then
+            REGRESSION_STATUS='⚠️ Regressions detected'
+          fi
+
+          echo "## 🚀 k6 Load Test Results" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Metric | Value | Threshold | Status |" >> $GITHUB_STEP_SUMMARY
+          echo "|--------|-------|-----------|--------|" >> $GITHUB_STEP_SUMMARY
+          echo "| **Target URL** | ${{ steps.config.outputs.target_url }} | — | — |" >> $GITHUB_STEP_SUMMARY
+          echo "| **VUs** | ${{ steps.config.outputs.vus }} | — | — |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Duration** | ${{ steps.config.outputs.duration }} | — | — |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Total Requests** | ${{ steps.check.outputs.total_requests }} | — | — |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Overall p95** | ${{ steps.check.outputs.p95_latency }}ms | <5000ms | $STATUS |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Avg Latency** | ${{ steps.check.outputs.avg_latency }}ms | — | — |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Overall Failure Rate** | ${{ steps.check.outputs.failure_rate }} | <5% | $STATUS |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Search p95** | ${{ steps.check.outputs.search_p95 }}ms | <8000ms | $STATUS |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Search Failure Rate** | ${{ steps.check.outputs.search_failure_rate }} | <10% | $STATUS |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Index Search p95** | ${{ steps.check.outputs.index_search_p95 }}ms | <8000ms | $STATUS |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Index Search Failures** | ${{ steps.check.outputs.index_search_failure_rate }} | <10% | $STATUS |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Search Answer p95** | ${{ steps.check.outputs.search_answer_p95 }}ms | <15000ms | $STATUS |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Baseline Regression** | ${{ steps.check.outputs.baseline_regressions }} | 0 | $REGRESSION_STATUS |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "_Trigger: ${{ github.event_name }} | Timestamp: $(date -u '+%Y-%m-%d %H:%M:%S UTC')_" >> $GITHUB_STEP_SUMMARY

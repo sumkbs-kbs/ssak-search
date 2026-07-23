@@ -1,0 +1,40 @@
+# ============================================================
+# Webapp — Docker Image (Local Development Only)
+# Runs the search engine webapp via wrangler pages dev
+# ============================================================
+#
+# Build prerequisite: npm run build (dist/ 디렉토리 필요)
+# Production: Cloudflare Pages 직접 배포 (docker 불필요)
+
+FROM node:22-slim AS base
+
+WORKDIR /app
+
+# Install CA certificates for external TLS connections
+RUN apt-get update -qq && apt-get install -y -qq ca-certificates --no-install-recommends && rm -rf /var/lib/apt/lists/*
+
+# Copy package files and install all dependencies (wrangler in devDependencies)
+COPY package.json package-lock.json ./
+RUN npm install
+
+# Copy pre-built dist (must run 'npm run build' locally first)
+COPY dist/ ./dist/
+COPY wrangler.jsonc ./
+
+# Expose the preview port
+EXPOSE 8788
+
+# Health check (use curl, not wget — slim image has curl)
+HEALTHCHECK --interval=30s --timeout=10s --start-period=15s --retries=3 \
+  CMD curl -f http://localhost:8788/ || exit 1
+
+# Run wrangler pages dev (SIDECAR_URL should be passed at runtime)
+# NOTE: wrangler pages dev는 Cloudflare Workers 시뮬레이터로 개발용입니다.
+# --ip 0.0.0.0으로 Docker 외부에서 접근 가능
+# Run wrangler pages dev (SIDECAR_URL + SEARXNG_URL are passed at runtime)
+# --binding VAR=$VAR forwards Docker env vars to the Worker runtime
+CMD exec npx wrangler pages dev --port 8788 --ip 0.0.0.0 \
+  --binding "SIDECAR_URL=${SIDECAR_URL}" \
+  --binding "SEARXNG_URL=${SEARXNG_URL}" \
+  --binding "OLLAMA_BASE_URL=${OLLAMA_BASE_URL}" \
+  dist

@@ -1,0 +1,47 @@
+{
+  "_comment": "Gold-standard relevant domains for NDCG/MRR/Precision@10 computation. Each entry maps an eval query ID to a list of domains that are considered relevant (substring match on hostname). This is a reasonable baseline — authoritative domains expected for each query — not an exhaustive human-judged qrels corpus. Queries not listed here simply skip ranking metrics.",
+  "_matching": "Domain matching is substring-based on the hostname (e.g. 'wikipedia.org' matches 'en.wikipedia.org'). Grade is binary: relevant=1, irrelevant=0.",
+
+  "kr-stock-01": { "relevantDomains": ["finance.naver.com", "investing.com", "samsung.com"] },
+  "kr-stock-02": { "relevantDomains": ["finance.naver.com", "kakao.com", "investing.com"] },
+  "kr-stock-03": { "relevantDomains": ["finance.naver.com", "naver.com", "investing.com"] },
+  "kr-stock-04": { "relevantDomains": ["finance.naver.com", "hyundai.com", "investing.com"] },
+  "kr-stock-05": { "relevantDomains": ["finance.naver.com", "investing.com", "krx.co.kr"] },
+
+  "kr-tech-01": { "relevantDomains": ["react.dev", "developer.mozilla.org", "github.com"] },
+  "kr-tech-02": { "relevantDomains": ["typescriptlang.org", "developer.mozilla.org"] },
+  "kr-tech-03": { "relevantDomains": ["docker.com", "docs.docker.com", "github.com"] },
+  "kr-tech-04": { "relevantDomains": ["nextjs.org", "vercel.com", "developer.mozilla.org"] },
+  "kr-tech-05": { "relevantDomains": ["aws.amazon.com", "amazon.com"] },
+
+  "kr-general-03": { "relevantDomains": ["wikipedia.org", "mayoclinic.org", "nih.gov"] },
+
+  "en-stock-01": { "relevantDomains": ["finance.yahoo.com", "nasdaq.com", "apple.com", "investing.com"] },
+  "en-stock-02": { "relevantDomains": ["finance.yahoo.com", "nasdaq.com", "tesla.com", "sec.gov"] },
+  "en-stock-03": { "relevantDomains": ["finance.yahoo.com", "nasdaq.com", "nvidia.com"] },
+  "en-stock-04": { "relevantDomains": ["coindesk.com", "coinmarketcap.com", "investing.com"] },
+  "en-stock-05": { "relevantDomains": ["finance.yahoo.com", "s&Pglobal.com", "investing.com"] },
+
+  "en-tech-01": { "relevantDomains": ["developers.cloudflare.com", "cloudflare.com"] },
+  "en-tech-02": { "relevantDomains": ["react.dev", "developer.mozilla.org", "github.com"] },
+  "en-tech-03": { "relevantDomains": ["rust-lang.org", "go.dev", "github.com"] },
+  "en-tech-04": { "relevantDomains": ["kubernetes.io", "github.com"] },
+  "en-tech-05": { "relevantDomains": ["nodejs.org", "developer.mozilla.org"] },
+
+  "en-tech-07": { "relevantDomains": ["python.org", "github.com"] },
+  "en-tech-09": { "relevantDomains": ["postgresql.org", "github.com"] },
+  "en-tech-10": { "relevantDomains": ["redis.io", "github.com"] },
+
+  "en-factual-01": { "relevantDomains": ["wikipedia.org", "britannica.com"] },
+  "en-factual-02": { "relevantDomains": ["wikipedia.org", "britannica.com"] },
+  "en-factual-03": { "relevantDomains": ["wikipedia.org", "britannica.com"] },
+
+  "en-academic-01": { "relevantDomains": ["arxiv.org", "scholar.google.com", "doi.org"] },
+  "en-academic-02": { "relevantDomains": ["arxiv.org", "scholar.google.com", "nature.com"] },
+
+  "en-news-01": { "relevantDomains": ["reuters.com", "bbc.com", "apnews.com"] },
+  "en-news-02": { "relevantDomains": ["reuters.com", "bloomberg.com", "cnbc.com"] },
+
+  "cn-tech-01": { "relevantDomains": ["developer.mozilla.org", "github.com"] },
+  "jp-tech-01": { "relevantDomains": ["developer.mozilla.org", "github.com"] }
+}

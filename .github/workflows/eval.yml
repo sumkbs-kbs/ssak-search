@@ -1,0 +1,127 @@
+name: Evaluation
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'src/**'
+      - 'eval/**'
+      - 'package.json'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'src/**'
+      - 'eval/**'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Query tag filter (e.g., korean, english, financial, news). Leave empty for all.'
+        required: false
+        default: ''
+      save_baseline:
+        description: 'Save results as new baseline (main branch only)'
+        required: false
+        default: 'false'
+        type: boolean
+
+env:
+  NODE_VERSION: '20'
+  SLACK_WEBHOOK: ${{ secrets.ALERT_SLACK_WEBHOOK || '' }}
+
+jobs:
+  eval:
+    name: Search Quality Evaluation
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+        timeout-minutes: 3
+
+      - name: Determine run mode
+        id: config
+        run: |
+          TAG_FLAG=""
+          if [ -n "${{ github.event.inputs.tag }}" ]; then
+            TAG_FLAG="--tag ${{ github.event.inputs.tag }}"
+          fi
+
+          SAVE_FLAG=""
+          if [ "${{ github.ref }}" = "refs/heads/main" ] && [ "${{ github.event_name }}" != "pull_request" ]; then
+            if [ "${{ github.event.inputs.save_baseline }}" = "true" ] || [ "${{ github.event_name }}" = "push" ]; then
+              SAVE_FLAG="--save"
+            fi
+          fi
+
+          echo "tag_flag=$TAG_FLAG" >> $GITHUB_OUTPUT
+          echo "save_flag=$SAVE_FLAG" >> $GITHUB_OUTPUT
+
+          echo "=== Eval Configuration ==="
+          echo "Tag filter: ${TAG_FLAG:-all}"
+          echo "Save baseline: ${SAVE_FLAG:+yes}${SAVE_FLAG:-no}"
+
+      - name: Run evaluation
+        id: eval
+        continue-on-error: true
+        timeout-minutes: 12
+        run: |
+          npm run eval:ci:slack -- ${{ steps.config.outputs.tag_flag }} ${{ steps.config.outputs.save_flag }} 2>&1
+
+      - name: Upload eval results artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: eval-results
+          path: eval-results.json
+          retention-days: 90
+          if-no-files-found: ignore
+
+      - name: Commit updated baseline
+        if: >
+          github.ref == 'refs/heads/main' &&
+          github.event_name != 'pull_request' &&
+          (github.event.inputs.save_baseline == 'true' || github.event_name == 'push')
+        run: |
+          if [ -f "eval/baselines/latest.json" ]; then
+            git config user.name "github-actions[bot]"
+            git config user.email "github-actions[bot]@users.noreply.github.com"
+            git add eval/baselines/latest.json
+            git diff --cached --quiet || git commit -m "chore: update eval baseline [skip ci]"
+            git push
+            echo "Baseline updated and committed"
+          fi
+
+      - name: Check results
+        id: check
+        run: |
+          OUTCOME="${{ steps.eval.outcome }}"
+          if [ "$OUTCOME" = "success" ]; then
+            echo "status=passed" >> $GITHUB_OUTPUT
+            echo "All eval queries passed with no regressions."
+          else
+            echo "status=failed" >> $GITHUB_OUTPUT
+            echo "::warning::Eval detected failures or regressions!"
+          fi
+
+      - name: Send Slack alert on regression
+        if: steps.check.outputs.status == 'failed' && env.SLACK_WEBHOOK != ''
+        env:
+          SLACK_WEBHOOK: ${{ secrets.ALERT_SLACK_WEBHOOK }}
+        run: |
+          echo "Sending Slack alert for eval regression..."
+          echo "Slack webhook configured — alert would be sent via eval/runner's built-in notification."
+          echo "See eval-results artifact for detailed report."
+
+      - name: Fail workflow on eval failure
+        if: steps.check.outputs.status == 'failed'
+        run: |
+          echo "::error::Search quality evaluation failed — check the report above for details."
+          exit 1

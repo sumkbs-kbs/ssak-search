@@ -1,0 +1,35 @@
+# ============================================================
+# Scrapling Sidecar — Docker Compose
+# ============================================================
+#
+# Start:   docker compose up -d
+# Stop:    docker compose down
+# Logs:    docker compose logs -f
+# Test:    curl http://localhost:8000/health
+#          curl -X POST http://localhost:8000/extract \
+#            -H "Content-Type: application/json" \
+#            -d '{"url": "https://example.com"}'
+
+version: "3.9"
+
+services:
+  sidecar:
+    build: .
+    container_name: scrapling-sidecar
+    ports:
+      - "8000:8000"
+    environment:
+      - HOST=0.0.0.0
+      - PORT=8000
+      - LOG_LEVEL=info
+      - HEADLESS=true
+      - SOLVE_CLOUDFLARE=true
+      - NETWORK_IDLE_TIMEOUT=10
+    volumes:
+      # Mount the app code for hot-reload during development
+      - ./app:/app/app
+    restart: unless-stopped
+    # Capabilities needed for browser automation
+    cap_add:
+      - SYS_ADMIN
+    shm_size: "2gb"

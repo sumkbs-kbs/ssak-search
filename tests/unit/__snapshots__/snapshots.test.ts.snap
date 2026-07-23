@@ -1,0 +1,81 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`Parser Snapshot Tests (P0-2: Regression Prevention) > parseBingHtml > parses standard mobile results correctly > bing-parser-output 1`] = `
+[
+  {
+    "content": "Quantum computing is a type of computation that harnesses the collective properties of quantum states, such as superposition, interference, and entanglement, to perform calculations.",
+    "domain": "en.wikipedia.org",
+    "score": 0.99,
+    "title": "Quantum computing - Wikipedia",
+    "url": "https://en.wikipedia.org/wiki/Quantum_computing",
+  },
+  {
+    "content": "Quantum computers make most of the world's existing encryption obsolete. IBM Quantum leads the world in quantum computing hardware and software.",
+    "domain": "ibm.com",
+    "score": 0.99,
+    "title": "What Is Quantum Computing? - IBM",
+    "url": "https://www.ibm.com/quantum-computing/what-is-quantum-computing",
+  },
+  {
+    "content": "Google's Sycamore processor completed a computation in 200 seconds that would take the world's fastest supercomputer 10,000 years.",
+    "domain": "nature.com",
+    "score": 0.35,
+    "title": "Quantum supremacy using a programmable superconducting processor",
+    "url": "https://www.nature.com/articles/s41586-019-1666-5",
+  },
+  {
+    "content": "Azure Quantum is a full-stack, open cloud ecosystem that gives you access to a diverse set of quantum hardware, software, and solutions.",
+    "domain": "microsoft.com",
+    "score": 0.92,
+    "title": "Microsoft Azure Quantum - Quantum Computing Platform",
+    "url": "https://www.microsoft.com/en-us/quantum",
+  },
+  {
+    "content": "John Preskill's overview of quantum computing in the NISQ era. Discusses near-term applications and long-term prospects.",
+    "domain": "arxiv.org",
+    "score": 0.99,
+    "title": "Quantum Computing in the NISQ era and beyond - arXiv",
+    "url": "https://arxiv.org/abs/2301.00001",
+  },
+]
+`;
+
+exports[`Parser Snapshot Tests (P0-2: Regression Prevention) > parseDuckDuckGoHtml > parses standard DDG HTML results > ddg-parser-output 1`] = `
+[
+  {
+    "content": "Quantum computing is a type of computation that harnesses the collective properties of quantum states...",
+    "domain": "en.wikipedia.org",
+    "score": 0.99,
+    "title": "Quantum computing - Wikipedia",
+    "url": "https://en.wikipedia.org/wiki/Quantum_computing",
+  },
+  {
+    "content": "What Is Quantum Computing? - IBM Quantum computers make most of the world's existing encryption obsolete...",
+    "domain": "ibm.com",
+    "score": 0.99,
+    "title": "What Is Quantum Computing? | IBM",
+    "url": "https://www.ibm.com/quantum-computing/what-is-quantum-computing",
+  },
+  {
+    "content": "Quantum supremacy using a programmable superconducting processor - Google's Sycamore processor...",
+    "domain": "nature.com",
+    "score": 0.5,
+    "title": "Quantum supremacy using a programmable superconducting processor",
+    "url": "https://www.nature.com/articles/s41586-019-1666-5",
+  },
+  {
+    "content": "Microsoft Azure Quantum - Quantum Computing Platform - Azure Quantum is a full-stack, open cloud ecosystem...",
+    "domain": "microsoft.com",
+    "score": 0.99,
+    "title": "Microsoft Azure Quantum - Quantum Computing Platform",
+    "url": "https://www.microsoft.com/en-us/quantum",
+  },
+  {
+    "content": "Quantum Computing in the NISQ era and beyond - John Preskill's overview of quantum computing...",
+    "domain": "arxiv.org",
+    "score": 0.99,
+    "title": "Quantum Computing in the NISQ era and beyond - arXiv",
+    "url": "https://arxiv.org/abs/2301.00001",
+  },
+]
+`;

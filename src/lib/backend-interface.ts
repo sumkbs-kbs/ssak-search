@@ -10,8 +10,9 @@
  * by implementing this interface and registering in BACKEND_REGISTRY.
  */
 
-import type { SearchResult, ImageResult } from '../types'
+import type { SearchResult } from '../types'
 
+import { logger } from './logger'
 export interface BackendSearchOptions {
   maxResults?: number
   timeoutMs?: number
@@ -56,7 +57,7 @@ class BackendRegistry {
 
   register(backend: SearchBackend): void {
     if (this.backends.has(backend.name)) {
-      console.warn(`Backend "${backend.name}" is already registered — overwriting`)
+      logger.warn(`Backend "${backend.name}" is already registered — overwriting`)
     }
     this.backends.set(backend.name, backend)
   }
@@ -78,7 +79,7 @@ class BackendRegistry {
     return this.all().filter((b) => {
       try {
         return b.shouldUse(query, queryType, language)
-      } catch {
+      } catch (err) {
         return false
       }
     })

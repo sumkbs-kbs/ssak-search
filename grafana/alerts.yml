@@ -1,0 +1,189 @@
+# Alerting Rules for Search Engine API
+# Prometheus-compatible alert rules
+#
+# Usage:
+#   Include in prometheus.yml under rule_files:
+#     rule_files:
+#       - "grafana/alerts.yml"
+#
+# Reference: MONITORING_GUIDE.md
+
+groups:
+  - name: search-engine-api
+    interval: 60s
+    rules:
+
+      # ============================================================
+      # Availability SLO Alerts
+      # ============================================================
+
+      - alert: BackendDown
+        expr: search_backend_status < 0.5
+        for: 5m
+        labels:
+          severity: critical
+          team: search-engine
+        annotations:
+          summary: "Backend {{ $labels.host }} is down"
+          description: "Backend {{ $labels.host }} has been unavailable for more than 5 minutes (status: {{ $value }})"
+          runbook: "Check /api/health endpoint. Investigate backend provider status page. Consider fallback routing."
+
+      - alert: BackendDegraded
+        expr: search_backend_status < 1 and search_backend_status >= 0.5
+        for: 10m
+        labels:
+          severity: warning
+          team: search-engine
+        annotations:
+          summary: "Backend {{ $labels.host }} is degraded"
+          description: "Backend {{ $labels.host }} is responding with partial availability (status: {{ $value }})"
+          runbook: "Check backend provider status. Verify rate limits haven't been exceeded."
+
+      - alert: CircuitBreaker
+        expr: search_backend_circuit_tripped == 1
+        for: 1m
+        labels:
+          severity: critical
+          team: search-engine
+        annotations:
+          summary: "Circuit breaker tripped for {{ $labels.host }}"
+          description: "Backend {{ $labels.host }} circuit breaker is open. Requests are being blocked."
+          runbook: "The circuit breaker will automatically half-open after the configured timeout. Check for backend recovery."
+
+      - alert: HighErrorRate
+        expr: search_error_ratio > 0.01
+        for: 5m
+        labels:
+          severity: warning
+          team: search-engine
+        annotations:
+          summary: "High error rate on search endpoint"
+          description: "Search endpoint error ratio is {{ $value | humanizePercentage }} (threshold: 1%)"
+          runbook: "Check recent API changes, backend provider status, and error logs."
+
+      - alert: CriticalErrorRate
+        expr: search_error_ratio > 0.05
+        for: 2m
+        labels:
+          severity: critical
+          team: search-engine
+        annotations:
+          summary: "Critical error rate on search endpoint"
+          description: "Search endpoint error ratio is {{ $value | humanizePercentage }} (threshold: 5%) — possible outage"
+          runbook: "PAGE IMMEDIATELY. Check all backends and recent deployments."
+
+      # ============================================================
+      # Latency SLO Alerts
+      # ============================================================
+
+      - alert: HighLatency
+        expr: search_latency_seconds{quantile="0.95"} > 8
+        for: 5m
+        labels:
+          severity: warning
+          team: search-engine
+        annotations:
+          summary: "High p95 latency on search endpoint"
+          description: "Search p95 latency is {{ $value }}s (threshold: 8s)"
+          runbook: "Check backend response times. Identify slowest backend from Grafana latency panel."
+
+      - alert: CriticalLatency
+        expr: search_latency_seconds{quantile="0.99"} > 15
+        for: 3m
+        labels:
+          severity: critical
+          team: search-engine
+        annotations:
+          summary: "Critical p99 latency on search endpoint"
+          description: "Search p99 latency is {{ $value }}s (threshold: 15s)"
+          runbook: "PAGE. Investigate all backends. Consider throttling or circuit breaker."
+
+      # ============================================================
+      # Error Budget Alerts
+      # ============================================================
+
+      - alert: ErrorBudgetBurningFast
+        expr: |
+          (
+            rate(search_errors_total[1h])
+            /
+            (rate(search_requests_total[1h]) or vector(1))
+            /
+            (1 - 0.999)
+          ) > 10
+        for: 5m
+        labels:
+          severity: warning
+          team: search-engine
+        annotations:
+          summary: "Error budget burning fast (10x burn rate)"
+          description: "Error budget burn rate is {{ $value }}x over 1 hour. Budget will exhaust quickly at this rate."
+
+      - alert: ErrorBudgetExhausted
+        expr: |
+          (1 - (rate(search_errors_total[30d]) / (rate(search_requests_total[30d]) or vector(1))) - 0.999)
+          /
+          (1 - 0.999) * 100 < 10
+        for: 5m
+        labels:
+          severity: critical
+          team: search-engine
+        annotations:
+          summary: "Error budget nearly exhausted (under 10%)"
+          description: "Error budget remaining: {{ $value }}%"
+
+      # ============================================================
+      # Cache Performance Alerts
+      # ============================================================
+
+      - alert: LowCacheHitRate
+        expr: cache_hit_ratio < 0.3
+        for: 15m
+        labels:
+          severity: warning
+          team: search-engine
+        annotations:
+          summary: "Low cache hit rate"
+          description: "Cache hit ratio is {{ $value | humanizePercentage }} (threshold: 30%)"
+          runbook: "Check cache TTL configuration. Verify KV binding is active."
+
+      # ============================================================
+      # Quota / Resource Alerts
+      # ============================================================
+
+      - alert: HighSubrequestUsage
+        expr: search_client_states_active > 100
+        for: 5m
+        labels:
+          severity: warning
+          team: search-engine
+        annotations:
+          summary: "High concurrent client count"
+          description: "Active clients: {{ $value }}. May exceed Workers subrequest quota."
+          runbook: "Check usage patterns. Consider enabling rate limiting or upgrading plan."
+
+      - alert: MetricsPersistenceDown
+        expr: search_metrics_persistence == 0
+        for: 30m
+        labels:
+          severity: warning
+          team: search-engine
+        annotations:
+          summary: "Metrics persistence is inactive"
+          description: "Analytics Engine binding not detected. Metrics are in-memory only."
+          runbook: "Configure Analytics Engine binding in Cloudflare dashboard. See MONITORING_GUIDE.md §7."
+
+      # ============================================================
+      # No Data Alerts (require Thanos or recording rules for production)
+      # ============================================================
+
+      - alert: ScrapeMissing
+        expr: up{job="search-engine-api"} == 0
+        for: 5m
+        labels:
+          severity: critical
+          team: search-engine
+        annotations:
+          summary: "Prometheus scrape target is down"
+          description: "Cannot reach {{ $labels.instance }} — /api/metrics may be returning errors"
+          runbook: "Check if the Worker is deployed. Verify /api/metrics endpoint returns 200."

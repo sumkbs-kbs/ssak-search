@@ -10,7 +10,8 @@
  *   <a class="result__snippet" href="DIRECT_URL">Snippet text</a>
  */
 
-import type { SearchResult } from '../types'
+import type { SearchResult, ImageResult, Env } from '../types'
+import { logger, toError } from './logger'
 import { fetchWithTimeout, extractDomain, stripHtml, decodeEntities, computeScore, truncateToTokens } from './util'
 
 const DDG_HTML_URL = 'https://html.duckduckgo.com/html/'
@@ -20,6 +21,7 @@ export interface DuckDuckGoOptions {
   maxResults?: number
   timeoutMs?: number
   region?: string
+  env?: Env
 }
 
 const BROWSER_UA =
@@ -33,7 +35,7 @@ export async function duckDuckGoSearch(
   query: string,
   opts: DuckDuckGoOptions = {},
 ): Promise<SearchResult[]> {
-  const { maxResults = 10, timeoutMs = 15000, region = 'wt-wt' } = opts
+  const { maxResults = 10, timeoutMs = 15000, region = 'wt-wt', env } = opts
 
   // Build form data - URLSearchParams handles UTF-8 encoding
   const params = new URLSearchParams()
@@ -51,6 +53,7 @@ export async function duckDuckGoSearch(
 
   try {
     const response = await fetchWithTimeout(
+      env,
       DDG_HTML_URL,
       {
         method: 'POST',
@@ -73,7 +76,7 @@ export async function duckDuckGoSearch(
       results = parseDuckDuckGoHtml(html, query, maxResults)
     }
   } catch (err) {
-    console.warn('DDG HTML search failed:', err)
+    logger.warn('DDG HTML search failed:', { error: toError(err) })
   }
 
   // Fallback: DuckDuckGo Lite endpoint
@@ -84,7 +87,7 @@ export async function duckDuckGoSearch(
     try {
       results = await duckDuckGoLiteSearch(query, opts)
     } catch (err) {
-      console.warn('DDG lite search also failed:', err)
+      logger.warn('DDG lite search also failed:', { error: toError(err) })
     }
   }
 
@@ -96,43 +99,47 @@ async function duckDuckGoLiteSearch(
   query: string,
   opts: DuckDuckGoOptions = {},
 ): Promise<SearchResult[]> {
-  const { maxResults = 10, timeoutMs = 15000, region = 'wt-wt' } = opts
+  const { maxResults = 10, timeoutMs = 15000, region = 'wt-wt', env } = opts
 
   const params = new URLSearchParams()
   params.append('q', query)
   params.append('kl', region)
   params.append('df', '')
 
-  const response = await fetchWithTimeout(
-    `${DDG_LITE_URL}?${params.toString()}`,
-    {
-      method: 'GET',
-      headers: {
-        'User-Agent': BROWSER_UA,
-        Accept: 'text/html,application/xhtml+xml',
-        'Accept-Language': 'en-US,en;q=0.9,ko;q=0.8',
-        Referer: 'https://lite.duckduckgo.com/',
+const response = await fetchWithTimeout(
+      env,
+      `${DDG_LITE_URL}?${params.toString()}`,
+      {
+        method: 'GET',
+        headers: {
+          'User-Agent': BROWSER_UA,
+          Accept: 'text/html,application/xhtml+xml',
+          'Accept-Language': 'en-US,en;q=0.9,ko;q=0.8',
+          Referer: 'https://lite.duckduckgo.com/',
+        },
       },
-    },
-    timeoutMs,
-  )
+      timeoutMs,
+    )
 
-  // 202 = anti-bot challenge (response.ok is true for 2xx, but no results inside)
-  if (response.status !== 200) {
-    throw new Error(`DuckDuckGo lite search failed: ${response.status}`)
+    // 202 = anti-bot challenge (response.ok is true for 2xx, but no results inside)
+    if (response.status !== 200) {
+      throw new Error(`DuckDuckGo lite search failed: ${response.status}`)
+    }
+
+const html = await response.text()
+    return parseDuckDuckGoLiteHtml(html, query, maxResults)
   }
 
-  const html = await response.text()
-  return parseDuckDuckGoLiteHtml(html, query, maxResults)
-}
+  // 202 = anti-bot challenge (response.ok is true for 2xx, but no results inside)
 
 /**
  * Parse DuckDuckGo HTML results page.
  * DDG HTML results:
  *   <a class="result__a" href="https://example.com">Title</a>
  *   <a class="result__snippet" href="https://example.com">Snippet</a>
+ * EXPORTED FOR TESTING — parser regression detection
  */
-function parseDuckDuckGoHtml(html: string, query: string, maxResults: number): SearchResult[] {
+export function parseDuckDuckGoHtml(html: string, query: string, maxResults: number): SearchResult[] {
   const results: SearchResult[] = []
 
   // Extract all result__a links (title + URL)
@@ -171,7 +178,7 @@ function parseDuckDuckGoHtml(html: string, query: string, maxResults: number): S
 }
 
 /** Parse DDG Lite HTML format (different structure from html endpoint) */
-function parseDuckDuckGoLiteHtml(html: string, query: string, maxResults: number): SearchResult[] {
+export function parseDuckDuckGoLiteHtml(html: string, query: string, maxResults: number): SearchResult[] {
   const results: SearchResult[] = []
 
   // Lite format: results in <a class="result-link" href="..."> tags
@@ -237,7 +244,8 @@ function decodeDdgUrl(rawUrl: string): string {
     // Protocol-relative URL
     if (/^\/\//.test(rawUrl)) return `https:${rawUrl}`
     return ''
-  } catch {
+  } catch (err) {
+    logger.warn('DuckDuckGo URL decode failed:', { error: toError(err) })
     return ''
   }
 }
@@ -249,6 +257,7 @@ function decodeDdgUrl(rawUrl: string): string {
 export async function duckDuckGoInstantAnswer(
   query: string,
   timeoutMs = 10000,
+  env?: Env,
 ): Promise<{ abstract: string; source: string; url: string } | null> {
   const params = new URLSearchParams({
     q: query,
@@ -259,6 +268,7 @@ export async function duckDuckGoInstantAnswer(
 
   try {
     const response = await fetchWithTimeout(
+      env,
       `https://api.duckduckgo.com/?${params.toString()}`,
       { headers: { Accept: 'application/json' } },
       timeoutMs,
@@ -272,8 +282,10 @@ export async function duckDuckGoInstantAnswer(
         url: json.AbstractURL || '',
       }
     }
+
     return null
-  } catch {
+  } catch (err) {
+    logger.warn('DuckDuckGo Instant Answer failed:', { error: toError(err) })
     return null
   }
 }
@@ -285,3 +297,92 @@ interface DDGInstantAnswerResponse {
   Heading: string
   RelatedTopics: unknown[]
 }
+
+/**
+ * DuckDuckGo Image Search (HTML endpoint)
+ * Uses DuckDuckGo's image search HTML page.
+ * No API key required, but may have anti-bot measures.
+ */
+export async function duckDuckGoImageSearch(
+  query: string,
+  opts: { maxResults?: number; timeoutMs?: number; env?: Env } = {},
+): Promise<ImageResult[]> {
+  const { maxResults = 10, timeoutMs = 10000, env } = opts
+  const results: ImageResult[] = []
+
+  try {
+    const params = new URLSearchParams({
+      q: query,
+      iax: 'images',
+      ia: 'images',
+    })
+    const response = await fetchWithTimeout(
+      env,
+      `https://duckduckgo.com/?${params.toString()}`,
+      {
+        method: 'GET',
+        headers: {
+          'User-Agent': BROWSER_UA,
+          Accept: 'text/html',
+          'Accept-Language': 'en-US,en;q=0.9',
+        },
+      },
+      timeoutMs,
+    )
+
+    if (!response.ok) return results
+
+    const html = await response.text()
+
+    // Parse DDG image results - look for image tiles
+    // Pattern: <a class="result-image" href="...">
+    const imgRegex = /<a[^>]*class="result-image"[^>]*href="([^"]+)"[^>]*>\s*<img[^>]*src="([^"]+)"[^>]*alt="([^"]*)"[^>]*>/gi
+    let match: RegExpExecArray | null
+    while ((match = imgRegex.exec(html)) !== null && results.length < maxResults) {
+      const url = match[1]
+      const thumbnail = match[2]
+      const title = match[3] || query
+
+      if (url && /^https?:\/\//i.test(url)) {
+        results.push({
+          url,
+          title: title || query,
+          content: `Image from DuckDuckGo`,
+          score: 0.65,
+          source: 'duckduckgo',
+          thumbnail,
+          domain: 'duckduckgo.com',
+        })
+      }
+    }
+
+    // Fallback: look for image tiles in the v2 layout
+    if (results.length === 0) {
+      const tileRegex = /<div[^>]*class="[^"]*tile[^"]*"[^>]*>\s*<a[^>]*href="([^"]+)"[^>]*>\s*<img[^>]*src="([^"]+)"[^>]*alt="([^"]*)"[^>]*>/gi
+      let tileMatch: RegExpExecArray | null
+      while ((tileMatch = tileRegex.exec(html)) !== null && results.length < maxResults) {
+        const url = tileMatch[1]
+        const thumbnail = tileMatch[2]
+        const title = tileMatch[3] || query
+
+        if (url && /^https?:\/\//i.test(url)) {
+          results.push({
+            url,
+            title: title || query,
+            content: `Image from DuckDuckGo`,
+            score: 0.6,
+            source: 'duckduckgo',
+            thumbnail,
+            domain: 'duckduckgo.com',
+          })
+        }
+      }
+    }
+  } catch (err) {
+    logger.warn('DuckDuckGo image search failed:', { error: toError(err) })
+  }
+
+  return results
+}
+
+export { type DDGInstantAnswerResponse }

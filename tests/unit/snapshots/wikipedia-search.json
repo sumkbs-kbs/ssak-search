@@ -1,0 +1,54 @@
+{
+  "query": {
+    "searchinfo": {
+      "totalhits": 12345
+    },
+    "search": [
+      {
+        "ns": 0,
+        "title": "Quantum computing",
+        "pageid": 12345,
+        "size": 123456,
+        "wordcount": 1234,
+        "snippet": "Quantum computing is a type of computation that harnesses the collective properties of quantum states, such as superposition, interference, and entanglement, to perform calculations.",
+        "timestamp": "2024-01-15T10:30:00Z"
+      },
+      {
+        "ns": 0,
+        "title": "Quantum supremacy",
+        "pageid": 23456,
+        "size": 98765,
+        "wordcount": 890,
+        "snippet": "Quantum supremacy is the goal of demonstrating that a programmable quantum device can solve a problem that no classical computer can solve in any feasible amount of time.",
+        "timestamp": "2024-01-10T14:20:00Z"
+      },
+      {
+        "ns": 0,
+        "title": "Quantum algorithm",
+        "pageid": 34567,
+        "size": 87654,
+        "wordcount": 765,
+        "snippet": "A quantum algorithm is an algorithm that runs on a realistic model of quantum computation, the most commonly used being the quantum circuit model of computation.",
+        "timestamp": "2024-01-05T09:15:00Z"
+      },
+      {
+        "ns": 0,
+        "title": "Quantum error correction",
+        "pageid": 45678,
+        "size": 76543,
+        "wordcount": 654,
+        "snippet": "Quantum error correction is a set of techniques to protect quantum information from errors due to decoherence and other quantum noise.",
+        "timestamp": "2024-01-01T12:00:00Z"
+      },
+      {
+        "ns": 0,
+        "title": "Quantum entanglement",
+        "pageid": 56789,
+        "size": 65432,
+        "wordcount": 543,
+        "snippet": "Quantum entanglement is a physical phenomenon that occurs when pairs or groups of particles are generated, interact, or share spatial proximity in a way that the quantum state of each particle cannot be described independently.",
+        "timestamp": "2023-12-28T16:45:00Z"
+      }
+    ]
+  }
+}

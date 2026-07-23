@@ -1,34 +1,156 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
-  "name": "webapp",
+  "name": "search-engine-api",
   "compatibility_date": "2026-07-10",
   "pages_build_output_dir": "./dist",
   "compatibility_flags": [
     "nodejs_compat"
-  ]
-  // "vars": {
-  //   "MY_VAR": "my-variable"
+  ],
+  // ── Phase 1: Self-index activation checklist ────────────────────────
+  // The index layer (Vectorize + D1) is fully implemented in code but only
+  // activates when both bindings resolve to real resources at runtime.
+  // Status is visible at GET /api/health (index.configured + total_documents).
+  //
+  // Activation steps:
+  //   1. Vectorize index (below) — create in Dashboard or via CLI:
+  //        npx wrangler vectorize create search-engine-dense \
+  //          --dimensions 768 --metric cosine
+  //   2. D1 database (below) — create and capture the real UUID:
+  //        npx wrangler d1 create search-engine-index
+  //      Replace database_id: "auto" with the printed UUID.
+  //   3. Deploy, then initialize the D1 schema:
+  //        curl -X POST https://your.domain/api/index/init
+  //   4. Seed the corpus (Wikipedia/GitHub/TechDocs + eval queries):
+  //        npm run seed:index -- --api-url=https://your.domain --all
+  //   5. Verify in /api/health: index.configured=true, total_documents > 0
+  //
+  // Without these, searchIndex()/hybridSearch() return [] and every query
+  // falls back to live scraping (no millisecond response, no resilience).
+  // ────────────────────────────────────────────────────────────────────
+
+  // Vectorize index for dense vector search:
+  // Cloudflare Dashboard → Workers & Pages → Vectorize → Create index
+  // (name: search-engine-dense, dimensions: 768, metric: cosine)
+  //
+  // remote:true lets `wrangler pages dev` (local dev) talk to the REAL remote
+  // Vectorize index — Vectorize does not support local simulation, so without
+  // this flag local dev gets "not supported" and indexing/search no-ops.
+  // Production deploys are unaffected (they always use the remote index).
+  "vectorize": [ { "binding": "VECTORIZE_INDEX", "index_name": "search-engine-dense", "remote": true } ],
+  // D1 database — create via Dashboard or CLI and set the real UUID:
+  //   npx wrangler d1 create search-engine-index
+  //   npx wrangler d1 list   (to look up the id)
+  // "auto" only works for local dev; production needs a concrete database_id.
+  // Then run schema: curl -X POST https://your.domain/api/index/init
+  //
+  // remote:true makes `wrangler pages dev` (local dev) talk to the REAL remote
+  // D1 database. This is REQUIRED when Vectorize is also remote:true — otherwise
+  // Vectorize (remote) returns chunk IDs that the local D1 doesn't know about,
+  // and every search silently returns 0 results. Production deploys are
+  // unaffected (always remote).
+  "d1_databases": [ { "binding": "SEARCH_INDEX_DB", "database_name": "search-engine-index", "database_id": "74e4966f-2496-491f-afbc-f26ffd109f25", "remote": true } ],
+  // Queue binding for async indexing (Phase 2.2):
+  // Cloudflare Dashboard → Workers & Pages → Queues → Create queue
+  // (name: search-index-queue)
+  // "queues": [ { "binding": "INDEX_QUEUE", "queue": "search-index-queue" } ],
+// Durable Object binding for rate limiting + circuit breaker.
+  //
+  // IMPORTANT — Pages deploy vs local dev:
+  // `wrangler pages deploy` REJECTS both `exports` and durable_objects bindings
+  // without a `script_name` (Pages auto-generates the Worker name). So:
+  //
+  //   - For PRODUCTION: the DO binding must be configured via Cloudflare
+  //     Dashboard → Pages → search-engine-api → Settings → Functions
+  //     → Durable Objects → Add (name: RATE_LIMITER, class: RateLimiterDO).
+  //     The block below is commented out so `pages deploy` succeeds.
+  //
+  //   - For LOCAL dev (`wrangler pages dev`): uncomment the block below.
+  //     Local dev resolves the DO class from _worker.js without script_name.
+  //     Without it, rate-limiter.ts falls back to per-isolate in-memory mode.
+  //
+  // "durable_objects": {
+  //   "bindings": [
+  //     { "name": "RATE_LIMITER", "class_name": "RateLimiterDO" }
+  //   ]
   // },
-  // "kv_namespaces": [
-  //   {
-  //     "binding": "MY_KV_NAMESPACE",
-  //     "id": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
-  //   }
-  // ],
-  // "r2_buckets": [
-  //   {
-  //     "binding": "MY_BUCKET",
-  //     "bucket_name": "my-bucket"
-  //   }
-  // ],
-  // "d1_databases": [
-  //   {
-  //     "binding": "MY_DB",
-  //     "database_name": "my-database",
-  //     "database_id": ""
-  //   }
-  // ],
-  // "ai": {
-  //   "binding": "AI"
-  // }
+  //
+  // KV namespace for cross-restart cache persistence (Phase 5):
+  // Hot queries persist across isolates and restarts (30 min TTL).
+  // Cache.ts tier 2: Cache API miss → KV lookup → KV miss → live search.
+  // Without this binding, cache is Cache API + in-memory only (per-isolate).
+  //
+  "kv_namespaces": [ { "binding": "CACHE_KV", "id": "1f5b3825e6a240a5b500d0f2faed15a8" } ],
+  //
+  // Conversational Threads DO (Phase 1.2) — multi-turn chat with context awareness:
+  // Cloudflare Dashboard → Pages → search-engine-api → Settings → Functions
+  // → Durable Objects → Add binding (name: THREAD_DO, class: ThreadDO).
+  // Without this binding, POST /api/chat returns 501 with setup guidance.
+  // "durable_objects": { "bindings": [ ... ] },
+  //
+  // Saved Pages DO (Phase 2.1) — research report storage and sharing:
+  // Cloudflare Dashboard → Pages → search-engine-api → Settings → Functions
+  // → Durable Objects → Add binding (name: PAGES_DO, class: PagesDO).
+  // Without this binding, POST/GET/PUT/DELETE /api/pages returns 501 with setup guidance.
+  // "durable_objects": { "bindings": [ ... ] },
+  //
+  // R2 bucket for file uploads (Phase 2.2):
+  // Cloudflare Dashboard → R2 → Create bucket (e.g. "search-engine-uploads")
+  // Then → Pages → search-engine-api → Settings → Bindings → R2 → Add binding
+  // (name: UPLOAD_BUCKET, bucket: search-engine-uploads).
+  // Without this binding, POST/GET /api/upload returns 501 with setup guidance.
+  // "r2_buckets": [ { "binding": "UPLOAD_BUCKET", "bucket_name": "search-engine-uploads" } ],
+  //
+  // Library / Collections DO (Phase 2.3) — saved search collections:
+  // Cloudflare Dashboard → Pages → search-engine-api → Settings → Functions
+  // → Durable Objects → Add binding (name: LIBRARY_DO, class: LibraryDO).
+  // Without this binding, /api/library returns 501 with setup guidance.
+  // "durable_objects": { "bindings": [ ... ] },
+  //
+  // User Profile DO (Phase 3.2) — personalized preferences and domain visit tracking:
+  // Cloudflare Dashboard → Pages → search-engine-api → Settings → Functions
+  // → Durable Objects → Add binding (name: USER_PROFILE_DO, class: UserProfileDO).
+  // Without this binding, /api/profile returns 501 with setup guidance.
+  // "durable_objects": { "bindings": [ ... ] },
+  // Workers Analytics Engine binding configured via Cloudflare Dashboard:
+  // 1. Cloudflare Dashboard → Workers & Pages → Analytics → Create dataset
+  //    (e.g. name: SEARCH_API_METRICS)
+  // 2. Pages → search-engine-api → Settings → Bindings
+  //    → Workers Analytics Engine Datasets → "Add binding"
+  //    - Variable name: ANALYTICS
+  //    - Dataset: (dataset from step 1)
+  // 3. Save & Redeploy
+  //
+  // Without this binding, metrics are per-isolate only (lost on cold start).
+  // With binding, every request writes a data point that survives isolate restart
+  // and can be queried via SQL API or visualized in Grafana.
+  //
+  // Sentry DSN (Phase 0.5) — error tracking and APM:
+  // 1. Create a Sentry account at https://sentry.io/
+  // 2. Create a new Cloudflare Workers project
+  // 3. Copy the DSN from Settings → Client Keys (DSN)
+  // 4. Set as Pages secret:
+  //    npx wrangler pages secret put SENTRY_DSN
+  // Without SENTRY_DSN, Sentry is a no-op (no errors, no traces).
+  // tracesSampleRate=0.1 by default (10% of requests get performance traces).
+  // 
+  // Scrapling Sidecar URL (Python FastAPI + Scrapling service for dynamic pages):
+  // - Local dev: SIDECAR_URL=http://localhost:8000
+  // - Production: npx wrangler pages secret put SIDECAR_URL
+  // Without this, extractor.ts skips the sidecar fallback (uses Jina + HTMLRewriter only).
+  // Install: see sidecar/README.md for Docker setup.
+  //
+  // Environment name (optional, default: 'production'):
+  // npx wrangler pages secret put ENVIRONMENT
+  //
+  // For source maps in Sentry:
+  // 1. Enable upload_source_maps in wrangler.jsonc or use @sentry/wizard
+  // 2. npx @sentry/wizard@latest -i sourcemaps
+  //
+  // Logpush Job (for audit log retention beyond 7-day Live Tail):
+  // 1. Cloudflare Dashboard → Logs & Analytics → Logs → Logpush → Add job
+  //    Dataset: Workers logs (script_name="search-engine-api" OR field filter for audit events)
+  // 2. Destination: R2 bucket OR HTTP endpoint (Datadog/Splunk/SIEM)
+  // 3. Save → Activate (logs stream immediately)
+  //
+  // For multi-region deployment strategy, see AUDIT.md § "Multi-Region Strategy".
 }

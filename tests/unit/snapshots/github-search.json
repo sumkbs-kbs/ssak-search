@@ -1,0 +1,56 @@
+{
+  "total_count": 5678,
+  "incomplete_results": false,
+  "items": [
+    {
+      "name": "qiskit",
+      "full_name": "Qiskit/qiskit-terra",
+      "html_url": "https://github.com/Qiskit/qiskit-terra",
+      "description": "Qiskit is an open-source SDK for working with quantum computers at the level of pulses, circuits, and algorithms.",
+      "stargazers_count": 4500,
+      "language": "Python",
+      "updated_at": "2024-01-15T10:30:00Z",
+      "topics": ["quantum-computing", "quantum-algorithms", "ibm"]
+    },
+    {
+      "name": "cirq",
+      "full_name": "quantumlib/Cirq",
+      "html_url": "https://github.com/quantumlib/Cirq",
+      "description": "Cirq is a Python library for writing, manipulating, and optimizing quantum circuits and running them against quantum computers and simulators.",
+      "stargazers_count": 3200,
+      "language": "Python",
+      "updated_at": "2024-01-14T15:45:00Z",
+      "topics": ["quantum-computing", "google", "quantum-circuits"]
+    },
+    {
+      "name": "pennylane",
+      "full_name": "XanaduAI/pennylane",
+      "html_url": "https://github.com/XanaduAI/pennylane",
+      "description": "PennyLane is a cross-platform Python library for differentiable programming of quantum computers.",
+      "stargazers_count": 2800,
+      "language": "Python",
+      "updated_at": "2024-01-13T09:20:00Z",
+      "topics": ["quantum-machine-learning", "differentiable-programming", "quantum-computing"]
+    },
+    {
+      "name": "qsharp",
+      "full_name": "microsoft/qsharp-runtime",
+      "html_url": "https://github.com/microsoft/qsharp-runtime",
+      "description": "Q# runtime components for quantum program execution.",
+      "stargazers_count": 1100,
+      "language": "C#",
+      "updated_at": "2024-01-12T14:10:00Z",
+      "topics": ["quantum-computing", "qsharp", "microsoft"]
+    },
+    {
+      "name": "silq",
+      "full_name": "eth-sri/silq",
+      "html_url": "https://github.com/eth-sri/silq",
+      "description": "Silq is a high-level quantum programming language with a strong static type system.",
+      "stargazers_count": 900,
+      "language": "Rust",
+      "updated_at": "2024-01-11T11:30:00Z",
+      "topics": ["quantum-programming-language", "quantum-computing", "type-system"]
+    }
+  ]
+}

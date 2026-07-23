@@ -1,0 +1,2685 @@
+openapi: "3.1.0"
+info:
+  title: Self-Contained Search Engine API
+  description: |
+    Tavily-compatible AI search engine — no API keys required for backends.
+
+    Scrapes Bing mobile, Naver mobile, Wikipedia, GitHub, HackerNews, Reddit,
+    arXiv, DuckDuckGo, and YouTube. Provides structured search results with
+    optional AI-generated answer, content extraction, deep research,
+    conversational chat, product search, and more.
+
+    **Features:**
+    - 🇰🇷 Korean-optimized (Naver primary backend, stock card parsing)
+    - 🌐 CJK support (bigram matching, mkt=zh-CN, Chinese query cleaning)
+    - 🔒 SSRF-protected extract endpoint
+    - 🤖 AI-powered search, research, and chat
+    - 📊 Adaptive quality thresholds (3-tier minScore)
+    - ⚡ Response caching with page-aware keys
+    - 🛡️ Circuit-breaker per backend + per-IP rate limiting
+    - 🔌 OpenAI-compatible /v1/chat/completions endpoint
+  version: "2.0.0"
+  contact:
+    name: Byungseok Kang
+    email: sumkbs@gmail.com
+  license:
+    name: MIT
+    url: https://github.com/mr.k/webapp/blob/main/LICENSE
+
+servers:
+  - url: https://webapp.pages.dev
+    description: Production
+  - url: http://localhost:8788
+    description: Local development
+
+paths:
+  # ====================================================================
+  # API Root
+  # ====================================================================
+  /api:
+    get:
+      summary: API root — list available endpoints
+      operationId: apiRoot
+      tags:
+        - General
+      responses:
+        "200":
+          description: Endpoint listing with version info
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  name:
+                    type: string
+                  version:
+                    type: string
+                  description:
+                    type: string
+                  endpoints:
+                    type: object
+                    additionalProperties:
+                      type: object
+                      properties:
+                        method:
+                          type: array
+                          items:
+                            type: string
+                        path:
+                          type: string
+                        description:
+                          type: string
+
+  # ====================================================================
+  # Search
+  # ====================================================================
+  /api/search:
+    get:
+      summary: Search the web (simplified GET interface)
+      description: |
+        Simplified GET interface for quick testing and curl-ability.
+        Supports the same parameters as POST, passed as query strings.
+      operationId: searchGet
+      tags:
+        - Search
+      parameters:
+        - name: query
+          in: query
+          description: The search query
+          required: true
+          schema:
+            type: string
+            maxLength: 2000
+            example: "삼성전자 주가"
+        - name: q
+          in: query
+          description: Alias for query
+          schema:
+            type: string
+        - name: max_results
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 20
+            default: 10
+        - name: limit
+          in: query
+          description: Alias for max_results
+          schema:
+            type: integer
+        - name: search_depth
+          in: query
+          schema:
+            type: string
+            enum: [basic, advanced]
+            default: basic
+        - name: topic
+          in: query
+          schema:
+            type: string
+            enum: [general, news, finance]
+            default: general
+        - name: include_answer
+          in: query
+          schema:
+            type: boolean
+            default: true
+        - name: answer
+          in: query
+          description: Alias for include_answer
+          schema:
+            type: boolean
+        - name: include_raw_content
+          in: query
+          schema:
+            type: boolean
+            default: false
+        - name: time_range
+          in: query
+          schema:
+            type: string
+            enum: [day, week, month, year]
+        - name: sort_by
+          in: query
+          schema:
+            type: string
+            enum: [relevance, date]
+            default: relevance
+        - name: page
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 10
+            default: 1
+        - name: focus
+          in: query
+          schema:
+            type: string
+            enum: [all, academic, news, writing, video, social, finance, math]
+            default: all
+          description: Focus mode to specialize search for a specific domain
+        - name: include_domains
+          in: query
+          description: Comma-separated list of allowed domains (max 20)
+          schema:
+            type: string
+        - name: exclude_domains
+          in: query
+          description: Comma-separated list of excluded domains (max 20)
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Successful search response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SearchResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "500":
+          $ref: "#/components/responses/InternalError"
+      security:
+        - ApiKeyAuth: []
+
+    post:
+      summary: Search the web (primary endpoint)
+      description: |
+        Full-featured search endpoint compatible with Tavily's API.
+        Returns structured search results with optional AI-generated answer,
+        images, knowledge graph, and pagination metadata.
+      operationId: searchPost
+      tags:
+        - Search
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SearchRequest"
+      responses:
+        "200":
+          description: Successful search response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SearchResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "413":
+          description: Request body too large (max 64KB)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "500":
+          $ref: "#/components/responses/InternalError"
+      security:
+        - ApiKeyAuth: []
+
+  /api/search/stream:
+    get:
+      summary: Stream search results and AI answer (SSE)
+      description: |
+        Server-Sent Events endpoint that sends search results immediately,
+        then streams the AI answer word-by-word for a typewriter effect.
+      operationId: searchStream
+      tags:
+        - Search
+      parameters:
+        - name: query
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: q
+          in: query
+          description: Alias for query
+          schema:
+            type: string
+        - name: max_results
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 20
+            default: 10
+        - name: limit
+          in: query
+          description: Alias for max_results
+          schema:
+            type: integer
+        - name: search_depth
+          in: query
+          schema:
+            type: string
+            enum: [basic, advanced]
+            default: basic
+        - name: topic
+          in: query
+          schema:
+            type: string
+            enum: [general, news, finance]
+            default: general
+      responses:
+        "200":
+          description: SSE stream
+          content:
+            text/event-stream:
+              schema:
+                type: string
+      security:
+        - ApiKeyAuth: []
+
+  # ====================================================================
+  # Extract
+  # ====================================================================
+  /api/extract:
+    get:
+      summary: Extract content from URLs (GET)
+      operationId: extractGet
+      tags:
+        - Extract
+      parameters:
+        - name: urls
+          in: query
+          description: Comma-separated list of URLs to extract (max 20)
+          required: true
+          schema:
+            type: string
+        - name: include_images
+          in: query
+          schema:
+            type: boolean
+            default: false
+      responses:
+        "200":
+          description: Successful extraction
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ExtractResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "500":
+          $ref: "#/components/responses/InternalError"
+      security:
+        - ApiKeyAuth: []
+
+    post:
+      summary: Extract content from URLs (primary)
+      description: |
+        Extract clean markdown content from one or more URLs.
+        Uses Jina Reader API if JINA_API_KEY is configured, otherwise
+        falls back to HTMLRewriter-based extraction.
+        SSRF-protected: private/loopback/link-local IPs blocked.
+      operationId: extractPost
+      tags:
+        - Extract
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ExtractRequest"
+      responses:
+        "200":
+          $ref: "#/components/responses/ExtractSuccess"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "413":
+          description: Request body too large (max 64KB)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "500":
+          $ref: "#/components/responses/InternalError"
+      security:
+        - ApiKeyAuth: []
+
+  # ====================================================================
+  # Images
+  # ====================================================================
+  /api/images:
+    get:
+      summary: Search images (GET)
+      operationId: imageSearchGet
+      tags:
+        - Images
+      parameters:
+        - name: query
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: q
+          in: query
+          description: Alias for query
+          schema:
+            type: string
+        - name: max_results
+          in: query
+          schema:
+            type: integer
+            default: 10
+            maximum: 50
+        - name: size
+          in: query
+          schema:
+            type: string
+            enum: [small, medium, large, wallpaper]
+        - name: color
+          in: query
+          schema:
+            type: string
+            enum: [color, monochrome, red, orange, yellow, green, blue, purple, pink, brown, black, white, gray]
+        - name: type
+          in: query
+          schema:
+            type: string
+            enum: [photo, clipart, gif, transparent, line]
+      responses:
+        "200":
+          description: Image search results
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  query:
+                    type: string
+                  images:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/ImageResult"
+                  response_time_ms:
+                    type: integer
+      security:
+        - ApiKeyAuth: []
+
+    post:
+      summary: Search images (POST)
+      operationId: imageSearchPost
+      tags:
+        - Images
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [query]
+              properties:
+                query:
+                  type: string
+                max_results:
+                  type: integer
+                  default: 10
+                size:
+                  type: string
+                color:
+                  type: string
+                type:
+                  type: string
+      responses:
+        "200":
+          description: Image search results
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  query:
+                    type: string
+                  images:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/ImageResult"
+                  response_time_ms:
+                    type: integer
+      security:
+        - ApiKeyAuth: []
+
+  # ====================================================================
+  # News
+  # ====================================================================
+  /api/news:
+    get:
+      summary: Search news (GET)
+      operationId: newsSearchGet
+      tags:
+        - News
+      parameters:
+        - name: query
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: max_results
+          in: query
+          schema:
+            type: integer
+            default: 10
+        - name: source
+          in: query
+          schema:
+            type: string
+            enum: [all, bing, hackernews, reddit]
+            default: all
+      responses:
+        "200":
+          description: News search results
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NewsResponse"
+      security:
+        - ApiKeyAuth: []
+
+    post:
+      summary: Search news (POST)
+      operationId: newsSearchPost
+      tags:
+        - News
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [query]
+              properties:
+                query:
+                  type: string
+                max_results:
+                  type: integer
+                  default: 10
+                source:
+                  type: string
+                  enum: [all, bing, hackernews, reddit]
+                  default: all
+      responses:
+        "200":
+          description: News search results
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NewsResponse"
+      security:
+        - ApiKeyAuth: []
+
+  /api/news/trending:
+    get:
+      summary: Get trending news
+      operationId: newsTrending
+      tags:
+        - News
+      responses:
+        "200":
+          description: Trending news
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  articles:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/NewsArticle"
+
+  # ====================================================================
+  # Research (Multi-step Deep Research)
+  # ====================================================================
+  /api/research:
+    get:
+      summary: Deep research (GET)
+      description: |
+        Multi-step deep research that decomposes complex queries into
+        sub-queries, executes them, and synthesizes a comprehensive answer.
+      operationId: researchGet
+      tags:
+        - Research
+      parameters:
+        - name: query
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: depth
+          in: query
+          schema:
+            type: string
+            enum: [quick, deep]
+            default: quick
+          description: "quick=3 sub-queries, deep=6 sub-queries"
+        - name: max_sources
+          in: query
+          schema:
+            type: integer
+            default: 15
+      responses:
+        "200":
+          description: Research report with synthesized answer
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ResearchResponse"
+      security:
+        - ApiKeyAuth: []
+
+    post:
+      summary: Deep research (POST)
+      operationId: researchPost
+      tags:
+        - Research
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [query]
+              properties:
+                query:
+                  type: string
+                depth:
+                  type: string
+                  enum: [quick, deep]
+                  default: quick
+                max_sources:
+                  type: integer
+                  default: 15
+      responses:
+        "200":
+          description: Research report with synthesized answer
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ResearchResponse"
+      security:
+        - ApiKeyAuth: []
+
+  # ====================================================================
+  # Chat (Conversational Threads)
+  # ====================================================================
+  /api/chat:
+    post:
+      summary: Multi-turn conversational chat with context-aware research
+      description: |
+        Start or continue a conversation thread. If thread_id is provided,
+        the conversation context is maintained. Each turn performs research
+        based on the conversation history.
+      operationId: chatPost
+      tags:
+        - Chat
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ChatRequest"
+      responses:
+        "200":
+          description: Chat response with answer and sources
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ChatResponse"
+        "501":
+          description: THREAD_DO binding not configured
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+      security:
+        - ApiKeyAuth: []
+
+  # ====================================================================
+  # Suggest (Autocomplete)
+  # ====================================================================
+  /api/suggest:
+    get:
+      summary: Search query autocomplete suggestions
+      description: |
+        Returns query autocomplete suggestions from DuckDuckGo with
+        Bing Suggest as fallback.
+      operationId: suggestGet
+      tags:
+        - Search
+      parameters:
+        - name: q
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Autocomplete suggestions
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  query:
+                    type: string
+                  suggestions:
+                    type: array
+                    items:
+                      type: string
+                  response_time_ms:
+                    type: integer
+
+  # ====================================================================
+  # Canary (Parser Regression Detection)
+  # ====================================================================
+  /api/canary:
+    get:
+      summary: Parser regression detection
+      description: |
+        Runs real search queries against each backend and validates
+        that result extraction is working correctly.
+        Requires HEALTH_CANARY_ENABLED=true environment variable.
+        Rate-limited to 1 request per 5 minutes.
+      operationId: canaryGet
+      tags:
+        - Monitoring
+      responses:
+        "200":
+          description: Canary check results
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                  results:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        backend:
+                          type: string
+                        ok:
+                          type: boolean
+                        result_count:
+                          type: integer
+                        error:
+                          type: string
+                  response_time_ms:
+                    type: integer
+
+  # ====================================================================
+  # Health & Metrics
+  # ====================================================================
+  /api/health:
+    get:
+      summary: Service health status
+      description: |
+        Returns live health status of all backends with latency measurements.
+        Results are cached for 30 seconds.
+      operationId: healthCheck
+      tags:
+        - Monitoring
+      responses:
+        "200":
+          description: Health status
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthResponse"
+
+  /api/metrics:
+    get:
+      summary: Prometheus-format metrics
+      description: |
+        Returns Prometheus-format metrics for scraping.
+      operationId: metricsGet
+      tags:
+        - Monitoring
+      responses:
+        "200":
+          description: Prometheus metrics text
+          content:
+            "text/plain; version=0.0.4":
+              schema:
+                type: string
+
+  /api/monitor:
+    get:
+      summary: SLO monitor report
+      description: |
+        Returns SLO compliance report including error budget,
+        alert evaluations, and cache metrics.
+      operationId: monitorGet
+      tags:
+        - Monitoring
+      responses:
+        "200":
+          description: SLO monitor report
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  health:
+                    type: string
+                  uptime_ratio:
+                    type: number
+                  slos:
+                    type: object
+                    properties:
+                      availability:
+                        type: object
+                        properties:
+                          target:
+                            type: number
+                          current:
+                            type: number
+                          error_budget_remaining:
+                            type: number
+                      cache_hit_rate:
+                        type: object
+                        properties:
+                          target:
+                            type: number
+                          current:
+                            type: number
+                  alerts:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        type:
+                          type: string
+                        severity:
+                          type: string
+                        message:
+                          type: string
+                  backends:
+                    type: object
+                    additionalProperties:
+                      $ref: "#/components/schemas/BackendHealth"
+
+  /api/usage:
+    get:
+      summary: API usage statistics
+      description: |
+        Returns request volume, error rates, and subrequest count statistics.
+      operationId: usageGet
+      tags:
+        - Monitoring
+      responses:
+        "200":
+          description: Usage statistics
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  total_requests:
+                    type: integer
+                  total_errors:
+                    type: integer
+                  avg_search_subrequests:
+                    type: number
+                  tracked_since:
+                    type: string
+                    format: date-time
+
+  # ====================================================================
+  # Saved Pages
+  # ====================================================================
+  /api/pages:
+    get:
+      summary: List saved pages
+      operationId: pagesList
+      tags:
+        - Pages
+      responses:
+        "200":
+          description: List of saved pages
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  pages:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/PageData"
+        "501":
+          description: PAGES_DO binding not configured
+      security:
+        - ApiKeyAuth: []
+
+    post:
+      summary: Create a saved page
+      operationId: pagesCreate
+      tags:
+        - Pages
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreatePageRequest"
+      responses:
+        "200":
+          description: Created page
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PageData"
+        "501":
+          description: PAGES_DO binding not configured
+      security:
+        - ApiKeyAuth: []
+
+  /api/pages/{id}:
+    get:
+      summary: Get a saved page by ID
+      operationId: pagesGet
+      tags:
+        - Pages
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Page data
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PageData"
+        "404":
+          description: Page not found
+        "501":
+          description: PAGES_DO binding not configured
+      security:
+        - ApiKeyAuth: []
+
+    put:
+      summary: Update a saved page
+      operationId: pagesUpdate
+      tags:
+        - Pages
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdatePageRequest"
+      responses:
+        "200":
+          description: Updated page
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PageData"
+      security:
+        - ApiKeyAuth: []
+
+    delete:
+      summary: Delete a saved page
+      operationId: pagesDelete
+      tags:
+        - Pages
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Deletion confirmation
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  deleted:
+                    type: boolean
+      security:
+        - ApiKeyAuth: []
+
+  # ====================================================================
+  # Upload
+  # ====================================================================
+  /api/upload:
+    get:
+      summary: List uploaded files
+      operationId: uploadList
+      tags:
+        - Upload
+      responses:
+        "200":
+          description: List of uploaded files
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  files:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/UploadedFile"
+        "501":
+          description: UPLOAD_BUCKET binding not configured
+      security:
+        - ApiKeyAuth: []
+
+    post:
+      summary: Upload a file for AI analysis
+      description: |
+        Upload TXT, MD, or PDF files for AI-powered summarization
+        and key point extraction.
+      operationId: uploadCreate
+      tags:
+        - Upload
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                file:
+                  type: string
+                  format: binary
+                question:
+                  type: string
+                  description: Optional specific question about the file
+      responses:
+        "200":
+          description: Upload successful with AI summary
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UploadResponse"
+        "501":
+          description: UPLOAD_BUCKET binding not configured
+      security:
+        - ApiKeyAuth: []
+
+  # ====================================================================
+  # Library (Collections)
+  # ====================================================================
+  /api/library:
+    get:
+      summary: List collections
+      operationId: libraryList
+      tags:
+        - Library
+      responses:
+        "200":
+          description: List of collections
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  collections:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/LibraryCollection"
+        "501":
+          description: LIBRARY_DO binding not configured
+      security:
+        - ApiKeyAuth: []
+
+    post:
+      summary: Create a collection or add item
+      operationId: libraryCreate
+      tags:
+        - Library
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              oneOf:
+                - $ref: "#/components/schemas/CreateCollectionRequest"
+                - $ref: "#/components/schemas/CreateItemRequest"
+      responses:
+        "200":
+          description: Created collection or item
+        "501":
+          description: LIBRARY_DO binding not configured
+      security:
+        - ApiKeyAuth: []
+
+  # ====================================================================
+  # Council (Multi-model Comparison)
+  # ====================================================================
+  /api/council:
+    get:
+      summary: List available council models
+      operationId: councilList
+      tags:
+        - Council
+      responses:
+        "200":
+          description: List of available models
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  models:
+                    type: array
+                    items:
+                      type: string
+      security:
+        - ApiKeyAuth: []
+
+    post:
+      summary: Compare responses from multiple AI models
+      description: |
+        Send one query to multiple LLMs and compare responses side-by-side.
+        Supported providers: Workers AI, OpenAI, Anthropic.
+      operationId: councilPost
+      tags:
+        - Council
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [query]
+              properties:
+                query:
+                  type: string
+                models:
+                  type: array
+                  items:
+                    type: string
+                  description: Specific models to query (default: all available)
+      responses:
+        "200":
+          description: Multi-model comparison results
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  query:
+                    type: string
+                  responses:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        model:
+                          type: string
+                        provider:
+                          type: string
+                        content:
+                          type: string
+                        latency_ms:
+                          type: integer
+                  response_time_ms:
+                    type: integer
+      security:
+        - ApiKeyAuth: []
+
+  # ====================================================================
+  # Profile
+  # ====================================================================
+  /api/profile:
+    get:
+      summary: Get user profile and preferences
+      operationId: profileGet
+      tags:
+        - Profile
+      responses:
+        "200":
+          description: User profile data
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserProfile"
+        "501":
+          description: USER_PROFILE_DO binding not configured
+      security:
+        - ApiKeyAuth: []
+
+    post:
+      summary: Create or update user profile
+      operationId: profileUpdate
+      tags:
+        - Profile
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                user_id:
+                  type: string
+                preferences:
+                  $ref: "#/components/schemas/UserPreferences"
+      responses:
+        "200":
+          description: Updated profile
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserProfile"
+      security:
+        - ApiKeyAuth: []
+
+  # ====================================================================
+  # Video (YouTube Search)
+  # ====================================================================
+  /api/video:
+    get:
+      summary: Search YouTube videos (GET)
+      operationId: videoSearchGet
+      tags:
+        - Video
+      parameters:
+        - name: query
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: max_results
+          in: query
+          schema:
+            type: integer
+            default: 5
+        - name: include_transcript
+          in: query
+          schema:
+            type: boolean
+            default: false
+      responses:
+        "200":
+          description: Video search results
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  query:
+                    type: string
+                  videos:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/VideoResult"
+                  response_time_ms:
+                    type: integer
+      security:
+        - ApiKeyAuth: []
+
+    post:
+      summary: Search YouTube videos (POST)
+      operationId: videoSearchPost
+      tags:
+        - Video
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [query]
+              properties:
+                query:
+                  type: string
+                max_results:
+                  type: integer
+                  default: 5
+                include_transcript:
+                  type: boolean
+                  default: false
+      responses:
+        "200":
+          description: Video search results
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  query:
+                    type: string
+                  videos:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/VideoResult"
+                  response_time_ms:
+                    type: integer
+      security:
+        - ApiKeyAuth: []
+
+  # ====================================================================
+  # Products
+  # ====================================================================
+  /api/products:
+    get:
+      summary: Search software products (GET)
+      description: |
+        Search Product Hunt and G2 for software products and reviews.
+      operationId: productsGet
+      tags:
+        - Products
+      parameters:
+        - name: query
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: max_results
+          in: query
+          schema:
+            type: integer
+            default: 5
+      responses:
+        "200":
+          description: Product search results
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  query:
+                    type: string
+                  products:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        name:
+                          type: string
+                        tagline:
+                          type: string
+                        url:
+                          type: string
+                        source:
+                          type: string
+                        rating:
+                          type: number
+                  response_time_ms:
+                    type: integer
+      security:
+        - ApiKeyAuth: []
+
+    post:
+      summary: Search software products (POST)
+      operationId: productsPost
+      tags:
+        - Products
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [query]
+              properties:
+                query:
+                  type: string
+                max_results:
+                  type: integer
+                  default: 5
+      responses:
+        "200":
+          description: Product search results
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  query:
+                    type: string
+                  products:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        name:
+                          type: string
+                        tagline:
+                          type: string
+                        url:
+                          type: string
+                        source:
+                          type: string
+                        rating:
+                          type: number
+                  response_time_ms:
+                    type: integer
+      security:
+        - ApiKeyAuth: []
+
+  # ====================================================================
+  # Spaces (Workspaces)
+  # ====================================================================
+  /api/spaces:
+    get:
+      summary: List spaces/workspaces
+      operationId: spacesList
+      tags:
+        - Spaces
+      responses:
+        "200":
+          description: List of spaces
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  spaces:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/SpaceData"
+        "501":
+          description: SPACE_DO binding not configured
+      security:
+        - ApiKeyAuth: []
+
+    post:
+      summary: Create a space/workspace
+      operationId: spacesCreate
+      tags:
+        - Spaces
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateSpaceRequest"
+      responses:
+        "200":
+          description: Created space
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SpaceData"
+        "501":
+          description: SPACE_DO binding not configured
+      security:
+        - ApiKeyAuth: []
+
+  /api/spaces/{id}:
+    get:
+      summary: Get a space by ID
+      operationId: spacesGet
+      tags:
+        - Spaces
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Space data
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SpaceData"
+      security:
+        - ApiKeyAuth: []
+
+    put:
+      summary: Update a space
+      operationId: spacesUpdate
+      tags:
+        - Spaces
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateSpaceRequest"
+      responses:
+        "200":
+          description: Updated space
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SpaceData"
+      security:
+        - ApiKeyAuth: []
+
+    delete:
+      summary: Delete a space
+      operationId: spacesDelete
+      tags:
+        - Spaces
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Deletion confirmation
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  deleted:
+                    type: boolean
+      security:
+        - ApiKeyAuth: []
+
+  # ====================================================================
+  # API Keys management
+  # ====================================================================
+  /api/keys:
+    get:
+      summary: List API keys
+      operationId: keysList
+      tags:
+        - Keys
+      responses:
+        "200":
+          description: List of API keys
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  keys:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        key_id:
+                          type: string
+                        name:
+                          type: string
+                        scopes:
+                          type: array
+                          items:
+                            type: string
+                        created_at:
+                          type: number
+                        last_used:
+                          type: number
+        "501":
+          description: API_KEY_DO binding not configured
+      security:
+        - ApiKeyAuth: []
+
+    post:
+      summary: Create a new API key
+      operationId: keysCreate
+      tags:
+        - Keys
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name:
+                  type: string
+                scopes:
+                  type: array
+                  items:
+                    type: string
+                  description: "e.g. search, extract, research"
+      responses:
+        "200":
+          description: Created API key
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  key_id:
+                    type: string
+                  key:
+                    type: string
+                  name:
+                    type: string
+                  scopes:
+                    type: array
+                    items:
+                      type: string
+        "501":
+          description: API_KEY_DO binding not configured
+      security:
+        - ApiKeyAuth: []
+
+    delete:
+      summary: Revoke an API key
+      operationId: keysDelete
+      tags:
+        - Keys
+      parameters:
+        - name: key_id
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Key revoked
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  revoked:
+                    type: boolean
+      security:
+        - ApiKeyAuth: []
+
+  # ====================================================================
+  # OpenAI-compatible API
+  # ====================================================================
+  /v1/models:
+    get:
+      summary: List available models (OpenAI-compatible)
+      description: |
+        Returns a list of available models in OpenAI-compatible format.
+        Models: search-engine, search-engine-deep, research-engine.
+      operationId: openaiModels
+      tags:
+        - OpenAI
+      responses:
+        "200":
+          description: Model list in OpenAI format
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  object:
+                    type: string
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: string
+                        object:
+                          type: string
+                        created:
+                          type: integer
+                        owned_by:
+                          type: string
+      security:
+        - ApiKeyAuth: []
+
+  /v1/chat/completions:
+    post:
+      summary: Chat completions (OpenAI-compatible)
+      description: |
+        OpenAI-compatible chat completions endpoint that wraps the
+        search engine's capabilities. Supports three models:
+        - `search-engine`: Basic web search with answer
+        - `search-engine-deep`: Advanced search with deeper analysis
+        - `research-engine`: Multi-step deep research
+      operationId: openaiChat
+      tags:
+        - OpenAI
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [messages]
+              properties:
+                model:
+                  type: string
+                  enum: [search-engine, search-engine-deep, research-engine]
+                  default: search-engine
+                messages:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      role:
+                        type: string
+                        enum: [user, assistant, system]
+                      content:
+                        type: string
+                max_tokens:
+                  type: integer
+                  default: 2000
+                stream:
+                  type: boolean
+                  default: false
+                temperature:
+                  type: number
+                  default: 0.7
+      responses:
+        "200":
+          description: OpenAI-compatible chat response
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: string
+                  object:
+                    type: string
+                  created:
+                    type: integer
+                  model:
+                    type: string
+                  choices:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        index:
+                          type: integer
+                        message:
+                          type: object
+                          properties:
+                            role:
+                              type: string
+                            content:
+                              type: string
+                          required: [role, content]
+                        finish_reason:
+                          type: string
+                  usage:
+                    type: object
+                    properties:
+                      prompt_tokens:
+                        type: integer
+                      completion_tokens:
+                        type: integer
+                      total_tokens:
+                        type: integer
+      security:
+        - ApiKeyAuth: []
+
+  # ====================================================================
+  # UI Pages
+  # ====================================================================
+  /:
+    get:
+      summary: Search dashboard
+      tags:
+        - UI
+      responses:
+        "200":
+          description: HTML dashboard page
+          content:
+            text/html:
+              schema:
+                type: string
+
+  /chat:
+    get:
+      summary: Conversational chat page
+      tags:
+        - UI
+      responses:
+        "200":
+          description: HTML chat page
+          content:
+            text/html:
+              schema:
+                type: string
+
+  /docs:
+    get:
+      summary: API documentation page
+      tags:
+        - UI
+      responses:
+        "200":
+          description: HTML documentation page with interactive API reference
+          content:
+            text/html:
+              schema:
+                type: string
+
+  /status:
+    get:
+      summary: System status page
+      tags:
+        - UI
+      responses:
+        "200":
+          description: HTML status page with backend health and SLO metrics
+          content:
+            text/html:
+              schema:
+                type: string
+
+  /usage:
+    get:
+      summary: Usage statistics dashboard
+      tags:
+        - UI
+      responses:
+        "200":
+          description: HTML usage dashboard
+          content:
+            text/html:
+              schema:
+                type: string
+
+  /spaces:
+    get:
+      summary: Spaces workspace management page
+      tags:
+        - UI
+      responses:
+        "200":
+          description: HTML spaces management page
+          content:
+            text/html:
+              schema:
+                type: string
+
+  /page/{id}:
+    get:
+      summary: View a saved research page
+      tags:
+        - UI
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: HTML page view
+          content:
+            text/html:
+              schema:
+                type: string
+
+  /openapi.yaml:
+    get:
+      summary: OpenAPI specification
+      tags:
+        - UI
+      responses:
+        "200":
+          description: OpenAPI YAML specification
+          content:
+            text/yaml:
+              schema:
+                type: string
+
+# ====================================================================
+# Components
+# ====================================================================
+components:
+  securitySchemes:
+    ApiKeyAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: API key
+      description: |
+        Optional API key authentication. Set `SEARCH_API_KEY` secret to enable.
+        Send as `Authorization: Bearer <key>` or `X-API-Key: <key>` header.
+
+  schemas:
+    # --- Search ---
+    SearchRequest:
+      type: object
+      required: [query]
+      properties:
+        query:
+          type: string
+          maxLength: 2000
+          example: "what is quantum computing"
+        search_depth:
+          type: string
+          enum: [basic, advanced]
+          default: basic
+        topic:
+          type: string
+          enum: [general, news, finance]
+          default: general
+        max_results:
+          type: integer
+          minimum: 1
+          maximum: 20
+          default: 10
+        include_answer:
+          type: boolean
+          default: false
+        include_raw_content:
+          type: boolean
+          default: false
+        include_domains:
+          type: array
+          items:
+            type: string
+          maxItems: 20
+        exclude_domains:
+          type: array
+          items:
+            type: string
+          maxItems: 20
+        time_range:
+          type: string
+          enum: [day, week, month, year]
+        sort_by:
+          type: string
+          enum: [relevance, date]
+          default: relevance
+        focus:
+          type: string
+          enum: [all, academic, news, writing, video, social, finance, math]
+          default: all
+        page:
+          type: integer
+          minimum: 1
+          maximum: 10
+          default: 1
+        max_tokens:
+          type: integer
+          default: 4000
+          maximum: 8000
+
+    SearchResponse:
+      type: object
+      properties:
+        query:
+          type: string
+        answer:
+          $ref: "#/components/schemas/SearchAnswer"
+        results:
+          type: array
+          items:
+            $ref: "#/components/schemas/SearchResult"
+        response_time_ms:
+          type: integer
+        backend:
+          type: string
+        fallback_used:
+          type: boolean
+        related_queries:
+          type: array
+          items:
+            type: string
+        cached:
+          type: boolean
+        page:
+          type: integer
+        page_size:
+          type: integer
+        total_results:
+          type: integer
+        total_pages:
+          type: integer
+        images:
+          type: array
+          items:
+            $ref: "#/components/schemas/ImageResult"
+        knowledge_graph:
+          $ref: "#/components/schemas/KnowledgeGraph"
+        subrequest_estimate:
+          type: integer
+
+    SearchAnswer:
+      type: object
+      properties:
+        text:
+          type: string
+        confidence:
+          type: number
+          format: float
+          minimum: 0
+          maximum: 1
+        sources:
+          type: array
+          items:
+            type: integer
+
+    SearchResult:
+      type: object
+      properties:
+        title:
+          type: string
+        url:
+          type: string
+          format: uri
+        content:
+          type: string
+        score:
+          type: number
+          format: float
+          minimum: 0
+          maximum: 1
+        raw_content:
+          type: string
+        published_date:
+          type: string
+          format: date-time
+          nullable: true
+        author:
+          type: string
+          nullable: true
+        domain:
+          type: string
+        images:
+          type: array
+          items:
+            type: string
+        stock_data:
+          $ref: "#/components/schemas/StockData"
+        rich_snippet:
+          $ref: "#/components/schemas/RichSnippet"
+
+    StockData:
+      type: object
+      properties:
+        name:
+          type: string
+        ticker:
+          type: string
+        exchange:
+          type: string
+        price:
+          type: number
+        currency:
+          type: string
+        change:
+          type: number
+        change_percent:
+          type: number
+        direction:
+          type: string
+          enum: [up, down, flat]
+
+    RichSnippet:
+      type: object
+      properties:
+        type:
+          type: string
+          enum: [rating, price, faq, article, breadcrumb]
+        rating:
+          type: number
+        review_count:
+          type: integer
+        price:
+          type: string
+        author:
+          type: string
+        reading_time_min:
+          type: integer
+
+    ImageResult:
+      type: object
+      properties:
+        url:
+          type: string
+          format: uri
+        title:
+          type: string
+        source:
+          type: string
+        width:
+          type: integer
+        height:
+          type: integer
+        thumbnail:
+          type: string
+        content:
+          type: string
+        score:
+          type: number
+        domain:
+          type: string
+
+    KnowledgeGraph:
+      type: object
+      properties:
+        title:
+          type: string
+        description:
+          type: string
+        url:
+          type: string
+          format: uri
+        image:
+          type: string
+          format: uri
+        type:
+          type: string
+          enum: [person, organization, place, concept]
+        facts:
+          type: object
+          additionalProperties:
+            type: string
+
+    # --- Extract ---
+    ExtractRequest:
+      type: object
+      required: [urls]
+      properties:
+        urls:
+          oneOf:
+            - type: string
+              format: uri
+            - type: array
+              items:
+                type: string
+                format: uri
+              maxItems: 20
+          description: URL(s) to extract (max 20)
+        include_images:
+          type: boolean
+          default: false
+        max_tokens:
+          type: integer
+          default: 8000
+          maximum: 16000
+
+    ExtractResponse:
+      type: object
+      properties:
+        results:
+          type: array
+          items:
+            $ref: "#/components/schemas/ExtractedContent"
+        failed_results:
+          type: array
+          items:
+            $ref: "#/components/schemas/ExtractedContent"
+        response_time_ms:
+          type: integer
+
+    ExtractedContent:
+      type: object
+      properties:
+        url:
+          type: string
+          format: uri
+        title:
+          type: string
+        raw_content:
+          type: string
+        images:
+          type: array
+          items:
+            type: string
+        rich_snippet:
+          $ref: "#/components/schemas/RichSnippet"
+        success:
+          type: boolean
+        error:
+          type: string
+
+    # --- Health ---
+    HealthResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [ok, degraded, partial_outage]
+        version:
+          type: string
+        timestamp:
+          type: string
+          format: date-time
+        backends:
+          type: object
+          additionalProperties:
+            type: object
+            properties:
+              status:
+                type: string
+                enum: [operational, degraded, down, disabled, unknown]
+              latency_ms:
+                type: integer
+        features:
+          type: object
+          additionalProperties:
+            type: boolean
+        notes:
+          type: array
+          items:
+            type: string
+        auth_required:
+          type: boolean
+
+    BackendHealth:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [healthy, degraded, down]
+        failures:
+          type: integer
+        inflight:
+          type: integer
+        tripped:
+          type: boolean
+
+    # --- News ---
+    NewsResponse:
+      type: object
+      properties:
+        query:
+          type: string
+        articles:
+          type: array
+          items:
+            $ref: "#/components/schemas/NewsArticle"
+        response_time_ms:
+          type: integer
+        source:
+          type: string
+
+    NewsArticle:
+      type: object
+      properties:
+        title:
+          type: string
+        url:
+          type: string
+        content:
+          type: string
+        score:
+          type: number
+        domain:
+          type: string
+        published_date:
+          type: string
+          format: date-time
+        author:
+          type: string
+
+    # --- Research ---
+    ResearchResponse:
+      type: object
+      properties:
+        query:
+          type: string
+        answer:
+          type: string
+        sources:
+          type: array
+          items:
+            type: object
+            properties:
+              title:
+                type: string
+              url:
+                type: string
+        sub_queries:
+          type: array
+          items:
+            type: string
+        depth:
+          type: string
+        response_time_ms:
+          type: integer
+        quality_estimate:
+          type: string
+
+    # --- Chat ---
+    ChatRequest:
+      type: object
+      required: [query]
+      properties:
+        query:
+          type: string
+        thread_id:
+          type: string
+          description: Existing thread ID to continue conversation
+        depth:
+          type: string
+          enum: [quick, deep]
+          default: quick
+        max_sources:
+          type: integer
+          default: 15
+        focus:
+          type: string
+          enum: [all, academic, news, writing, video, social, finance, math]
+
+    ChatResponse:
+      type: object
+      properties:
+        thread_id:
+          type: string
+        answer:
+          type: string
+        sources:
+          type: array
+          items:
+            type: object
+            properties:
+              title:
+                type: string
+              url:
+                type: string
+        message_count:
+          type: integer
+        response_time_ms:
+          type: integer
+
+    # --- Pages ---
+    PageData:
+      type: object
+      properties:
+        id:
+          type: string
+        title:
+          type: string
+        query:
+          type: string
+        answer:
+          type: string
+        sources:
+          type: array
+          items:
+            type: object
+            properties:
+              title:
+                type: string
+              url:
+                type: string
+        sub_queries:
+          type: array
+          items:
+            type: string
+        depth:
+          type: string
+        created_at:
+          type: number
+        updated_at:
+          type: number
+
+    CreatePageRequest:
+      type: object
+      required: [title, query, answer, sources]
+      properties:
+        title:
+          type: string
+        query:
+          type: string
+        answer:
+          type: string
+        sources:
+          type: array
+          items:
+            type: object
+            properties:
+              title:
+                type: string
+              url:
+                type: string
+        sub_queries:
+          type: array
+          items:
+            type: string
+        depth:
+          type: string
+        quality_estimate:
+          type: string
+        response_time_ms:
+          type: integer
+
+    UpdatePageRequest:
+      type: object
+      properties:
+        title:
+          type: string
+        answer:
+          type: string
+        sources:
+          type: array
+          items:
+            type: object
+            properties:
+              title:
+                type: string
+              url:
+                type: string
+        sub_queries:
+          type: array
+          items:
+            type: string
+        quality_estimate:
+          type: string
+
+    # --- Upload ---
+    UploadResponse:
+      type: object
+      properties:
+        file_id:
+          type: string
+        filename:
+          type: string
+        content_type:
+          type: string
+        file_size:
+          type: integer
+        summary:
+          type: string
+        key_points:
+          type: array
+          items:
+            type: string
+        uploaded_at:
+          type: number
+
+    UploadedFile:
+      type: object
+      properties:
+        file_id:
+          type: string
+        filename:
+          type: string
+        content_type:
+          type: string
+        file_size:
+          type: integer
+        uploaded_at:
+          type: number
+
+    # --- Library ---
+    LibraryCollection:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        description:
+          type: string
+        item_count:
+          type: integer
+        created_at:
+          type: number
+        updated_at:
+          type: number
+
+    CreateCollectionRequest:
+      type: object
+      required: [name]
+      properties:
+        name:
+          type: string
+        description:
+          type: string
+
+    CreateItemRequest:
+      type: object
+      required: [collection_id, query]
+      properties:
+        collection_id:
+          type: string
+        query:
+          type: string
+        answer:
+          type: string
+        sources:
+          type: array
+          items:
+            type: object
+            properties:
+              title:
+                type: string
+              url:
+                type: string
+        tags:
+          type: array
+          items:
+            type: string
+
+    # --- Profile ---
+    UserProfile:
+      type: object
+      properties:
+        user_id:
+          type: string
+        preferences:
+          $ref: "#/components/schemas/UserPreferences"
+        recently_visited_domains:
+          type: array
+          items:
+            type: object
+            properties:
+              domain:
+                type: string
+              count:
+                type: integer
+              last_visited:
+                type: number
+        created_at:
+          type: number
+        updated_at:
+          type: number
+
+    UserPreferences:
+      type: object
+      properties:
+        language:
+          type: string
+        focus_mode:
+          type: string
+          enum: [all, academic, news, writing, video, social, finance, math]
+        theme:
+          type: string
+          enum: [light, dark, system]
+        max_sources:
+          type: integer
+        exclude_domains:
+          type: array
+          items:
+            type: string
+
+    # --- Video ---
+    VideoResult:
+      type: object
+      properties:
+        title:
+          type: string
+        url:
+          type: string
+        video_id:
+          type: string
+        channel:
+          type: string
+        duration:
+          type: string
+        views:
+          type: integer
+        published_date:
+          type: string
+        thumbnail:
+          type: string
+        transcript:
+          type: string
+
+    # --- Spaces ---
+    SpaceData:
+      type: object
+      properties:
+        id:
+          type: string
+        user_id:
+          type: string
+        name:
+          type: string
+        description:
+          type: string
+        instructions:
+          type: string
+        focus_mode:
+          type: string
+        files:
+          type: array
+          items:
+            type: object
+            properties:
+              name:
+                type: string
+              file_key:
+                type: string
+              mime_type:
+                type: string
+              size:
+                type: integer
+              uploaded_at:
+                type: number
+        created_at:
+          type: number
+        updated_at:
+          type: number
+
+    CreateSpaceRequest:
+      type: object
+      required: [name]
+      properties:
+        name:
+          type: string
+        description:
+          type: string
+        instructions:
+          type: string
+        focus_mode:
+          type: string
+
+    UpdateSpaceRequest:
+      type: object
+      properties:
+        name:
+          type: string
+        description:
+          type: string
+        instructions:
+          type: string
+        focus_mode:
+          type: string
+
+    # --- Error ---
+    ErrorResponse:
+      type: object
+      properties:
+        detail:
+          type: string
+        code:
+          type: string
+        query:
+          type: string
+
+  responses:
+    BadRequest:
+      description: Bad request
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    Unauthorized:
+      description: API key required or invalid
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    RateLimited:
+      description: Rate limit exceeded (30 req/min per IP)
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+      headers:
+        Retry-After:
+          schema:
+            type: integer
+            example: 60
+    InternalError:
+      description: Internal server error
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    ExtractSuccess:
+      description: Successful extraction
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ExtractResponse"
+
+tags:
+  - name: General
+    description: General API info
+  - name: Search
+    description: Web search endpoints
+  - name: Extract
+    description: Content extraction from URLs
+  - name: Images
+    description: Image search
+  - name: News
+    description: News search
+  - name: Research
+    description: Multi-step deep research
+  - name: Chat
+    description: Conversational chat
+  - name: Monitoring
+    description: Health, metrics, and monitoring
+  - name: Pages
+    description: Saved research pages
+  - name: Upload
+    description: File upload and analysis
+  - name: Library
+    description: Search collections library
+  - name: Council
+    description: Multi-model AI comparison
+  - name: Profile
+    description: User profiles and preferences
+  - name: Video
+    description: YouTube video search
+  - name: Products
+    description: Software product search
+  - name: Spaces
+    description: Workspaces and projects
+  - name: Keys
+    description: API key management
+  - name: OpenAI
+    description: OpenAI-compatible API endpoints
+  - name: UI
+    description: Dashboard and documentation pages

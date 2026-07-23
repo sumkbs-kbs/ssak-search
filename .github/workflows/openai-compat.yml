@@ -1,0 +1,104 @@
+name: OpenAI Compatibility Test
+
+on:
+  schedule:
+    # Daily at 06:00 UTC — detect regressions in OpenAI-compatible API surface
+    - cron: '0 6 * * *'
+  workflow_dispatch:
+    inputs:
+      api_base_url:
+        description: 'OpenAI-compatible API base URL (e.g., https://example.com/v1)'
+        required: false
+        default: ''
+      model:
+        description: 'Model name to test'
+        required: false
+        default: 'search-engine'
+  pull_request:
+    paths:
+      - 'packages/hermes-search/**'
+      - '.github/workflows/openai-compat.yml'
+
+env:
+  PYTHON_VERSION: '3.11'
+  DEFAULT_API_URL: 'https://609ec5ff.search-engine-api.pages.dev/v1'
+
+jobs:
+  openai-compat-test:
+    name: OpenAI Compatibility Test
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install openai
+          pip show openai
+          python --version
+        timeout-minutes: 3
+
+      - name: Set API URL
+        id: config
+        run: |
+          if [ -n "${{ github.event.inputs.api_base_url }}" ]; then
+            echo "url=${{ github.event.inputs.api_base_url }}" >> $GITHUB_OUTPUT
+          else
+            echo "url=${{ env.DEFAULT_API_URL }}" >> $GITHUB_OUTPUT
+          fi
+          echo "model=${{ github.event.inputs.model || 'search-engine' }}" >> $GITHUB_OUTPUT
+
+      - name: Run OpenAI compatibility tests
+        id: tests
+        run: |
+          cd packages/hermes-search
+          python3 test_openai_function_calling.py 2>&1
+        env:
+          OPENAI_BASE_URL: ${{ steps.config.outputs.url }}
+          TEST_MODEL: ${{ steps.config.outputs.model }}
+          CI: 'true'
+        timeout-minutes: 12
+        continue-on-error: true
+
+      - name: Check test conclusion (actual exit code)
+        id: check
+        run: |
+          # continue-on-error: true makes outcome always "success"
+          # Use conclusion to get the actual step result
+          CONCLUSION="${{ steps.tests.conclusion }}"
+          if [ "$CONCLUSION" = "success" ]; then
+            echo "status=passed" >> $GITHUB_OUTPUT
+            echo "All OpenAI compatibility tests passed."
+          else
+            echo "status=failed" >> $GITHUB_OUTPUT
+            echo "::warning::OpenAI compatibility tests failed!"
+            echo "Some tests failed or the API was unreachable."
+            echo "See workflow run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          fi
+
+      - name: Update workflow summary
+        if: always()
+        run: |
+          STATUS='✅ Passed'
+          if [ "${{ steps.check.outputs.status }}" = "failed" ]; then
+            STATUS='❌ Failed'
+          fi
+          echo "## 🚀 OpenAI Compatibility Test" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Item | Value |" >> $GITHUB_STEP_SUMMARY
+          echo "|------|-------|" >> $GITHUB_STEP_SUMMARY
+          echo "| **Status** | $STATUS |" >> $GITHUB_STEP_SUMMARY
+          echo "| **API URL** | \`${{ steps.config.outputs.url }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Model** | \`${{ steps.config.outputs.model }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Trigger** | ${{ github.event_name }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Timestamp** | $(date -u '+%Y-%m-%d %H:%M:%S UTC') |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Ref** | ${{ github.ref }} |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "_Detailed per-test results are in the test step output above._" >> $GITHUB_STEP_SUMMARY

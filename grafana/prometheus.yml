@@ -1,0 +1,90 @@
+# Prometheus Scrape Configuration
+# For: Search Engine API — Cloudflare Workers
+# Endpoint: /api/metrics (Prometheus text format)
+#
+# Usage:
+#   prometheus --config.file=grafana/prometheus.yml
+#
+# Grafana data source:
+#   URL: http://localhost:9090
+#   Type: Prometheus
+
+global:
+  scrape_interval: 60s      # How often to scrape targets
+  scrape_timeout: 15s       # Timeout for each scrape request
+  evaluation_interval: 60s  # How often to evaluate rules
+
+# Alerting configuration
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets:
+          # - alertmanager:9093
+
+# Rule files (optional)
+rule_files:
+  - "grafana/alerts.yml"
+
+scrape_configs:
+  # ============================================================
+  # Main Search Engine API
+  # ============================================================
+  - job_name: 'search-engine-api'
+    metrics_path: '/api/metrics'
+    scheme: https
+    static_configs:
+      - targets:
+          - 'search-engine-api.pages.dev'
+        labels:
+          service: 'search-engine-api'
+          environment: 'production'
+          team: 'search-engine'
+
+    # Note: All metrics are kept for the Grafana dashboard.
+    # No metric_relabel_configs — the dashboard needs search_*, extract_*,
+    # cache_*, and search_client_states_active metrics.
+
+    # Basic auth (if SEARCH_API_KEY is set)
+    # basic_auth:
+    #   username: 'api-key'
+    #   password: 'your-api-key'
+
+  # ============================================================
+  # Staging environment (if available)
+  # ============================================================
+  - job_name: 'search-engine-api-staging'
+    metrics_path: '/api/metrics'
+    scheme: https
+    static_configs:
+      - targets:
+          - 'staging.search-engine-api.pages.dev'
+        labels:
+          service: 'search-engine-api'
+          environment: 'staging'
+          team: 'search-engine'
+    scrape_interval: 120s
+    scrape_timeout: 15s
+
+# ============================================================
+# Alerting Rules (create a separate file and reference above)
+# ============================================================
+# Example alert rules — see MONITORING_GUIDE.md for full list
+#
+# groups:
+#   - name: search-engine-api
+#     rules:
+#       - alert: BackendDown
+#         expr: search_backend_status < 0.5
+#         for: 5m
+#         labels:
+#           severity: critical
+#         annotations:
+#           summary: "Backend {{ $labels.host }} is down"
+#
+#       - alert: HighErrorRate
+#         expr: search_error_ratio > 0.01
+#         for: 5m
+#         labels:
+#           severity: warning
+#         annotations:
+#           summary: "High error rate on search endpoint"

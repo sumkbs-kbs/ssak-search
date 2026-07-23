@@ -9,7 +9,7 @@
  *   X-Return-Format: markdown
  */
 
-import type { SearchResult, SearchRequest } from '../types'
+import type { SearchResult, SearchRequest, Env } from '../types'
 import { fetchWithTimeout, extractDomain, parseDate, truncateToTokens, computeScore } from './util'
 
 const JINA_SEARCH_BASE = 'https://s.jina.ai/'
@@ -20,6 +20,7 @@ export interface JinaSearchOptions {
   includeRawContent?: boolean
   maxTokens?: number
   timeoutMs?: number
+  env?: Env
 }
 
 /**
@@ -37,6 +38,7 @@ export async function jinaSearch(
     includeRawContent = false,
     maxTokens = 4000,
     timeoutMs = 20000,
+    env,
   } = opts
 
   // Build the search URL with query parameters
@@ -55,7 +57,12 @@ export async function jinaSearch(
     headers['Authorization'] = `Bearer ${apiKey}`
   }
 
-  const response = await fetchWithTimeout(searchUrl, { headers }, timeoutMs)
+  const response = await fetchWithTimeout(
+    env,
+    searchUrl,
+    { headers },
+    timeoutMs,
+  )
 
   if (!response.ok) {
     throw new Error(`Jina search failed: ${response.status} ${response.statusText}`)
@@ -178,9 +185,9 @@ function parseJinaTextResponse(
  */
 export async function jinaExtract(
   url: string,
-  opts: { apiKey?: string; includeImages?: boolean; maxTokens?: number; timeoutMs?: number } = {},
+  opts: { apiKey?: string; includeImages?: boolean; maxTokens?: number; timeoutMs?: number; env?: Env } = {},
 ): Promise<{ title: string; content: string; images?: string[] }> {
-  const { apiKey, includeImages = false, maxTokens = 8000, timeoutMs = 20000 } = opts
+  const { apiKey, includeImages = false, maxTokens = 8000, timeoutMs = 20000, env } = opts
 
   const readerUrl = `https://r.jina.ai/${url}`
   const headers: Record<string, string> = {
@@ -197,7 +204,12 @@ export async function jinaExtract(
     headers['X-Retain-Images'] = 'none'
   }
 
-  const response = await fetchWithTimeout(readerUrl, { headers }, timeoutMs)
+  const response = await fetchWithTimeout(
+    env,
+    readerUrl,
+    { headers },
+    timeoutMs,
+  )
 
   if (!response.ok) {
     throw new Error(`Jina reader failed: ${response.status}`)

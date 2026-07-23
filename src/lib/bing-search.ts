@@ -20,7 +20,8 @@
  *   </li>
  */
 
-import type { SearchResult, ImageResult } from '../types'
+import type { SearchResult, ImageResult, Env } from '../types'
+import { logger, toError } from './logger'
 import { fetchWithTimeout, extractDomain, stripHtml, decodeEntities, computeScore, truncateToTokens } from './util'
 
 const BING_SEARCH_URL = 'https://www.bing.com/search'
@@ -33,6 +34,7 @@ export interface BingSearchOptions {
   timeoutMs?: number
   region?: string // e.g. 'en-US', 'ko-KR', 'wt-WT'
   timeRange?: 'day' | 'week' | 'month' | 'year'
+  env?: Env
 }
 
 /**
@@ -43,7 +45,7 @@ export async function bingSearch(
   query: string,
   opts: BingSearchOptions = {},
 ): Promise<SearchResult[]> {
-  const { maxResults = 10, timeoutMs = 15000, region, timeRange } = opts
+  const { maxResults = 10, timeoutMs = 15000, region, timeRange, env } = opts
 
   // Build URL parameters for a given page offset
   const buildParams = (first: number): URLSearchParams => {
@@ -101,6 +103,7 @@ export async function bingSearch(
   const fetchPage = async (first: number): Promise<SearchResult[]> => {
     try {
       const response = await fetchWithTimeout(
+        env,
         `${BING_SEARCH_URL}?${buildParams(first).toString()}`,
         { method: 'GET', headers: fetchHeaders },
         timeoutMs,
@@ -110,7 +113,7 @@ export async function bingSearch(
         return parseBingHtml(html, query, targetCount)
       }
     } catch (err) {
-      console.warn(`Bing page first=${first} failed:`, err)
+      logger.warn(`Bing page first=${first} failed:`, { error: toError(err) })
     }
     return []
   }
@@ -136,7 +139,7 @@ export async function bingSearch(
  * Parse Bing search results from HTML.
  * Extracts b_algo result blocks containing title, URL, and snippet.
  */
-function parseBingHtml(html: string, query: string, maxResults: number): SearchResult[] {
+export function parseBingHtml(html: string, query: string, maxResults: number): SearchResult[] {
   const results: SearchResult[] = []
 
   // Extract all b_algo result blocks
@@ -153,10 +156,10 @@ function parseBingHtml(html: string, query: string, maxResults: number): SearchR
 
     // Extract main result link from b_algoheader
     // Pattern: <div class="b_algoheader">...<a href="URL" ...>TITLE</a>
-    const headerMatch = block.match(
-      /<div class="b_algoheader">\s*<a[^>]*href="([^"]+)"[^>]*>([\s\S]*?)<\/a>/i,
-    )
-    if (!headerMatch) continue
+    const headerMatch = block.match( // b_algoheader is class-stable; allow attribute suffix per HTML5 flexibility,
+                                      // e.g., future-proof vs <div class="b_algoheader something_else"> without breaking existing structure.
+      /<div class="b_algoheader[^"]*">\s*<a[^>]*href="([^"]+)"[^>]*>([\s\S?]?)<\/a>/i, )
+    if (!headerMatch) { logger.warn('bing block parse failed — selector drift; skipping result', { index: results.length }) ; continue } 
 
     let url = headerMatch[1]
     // Skip Bing-internal links
@@ -168,7 +171,8 @@ function parseBingHtml(html: string, query: string, maxResults: number): SearchR
     if (uddgMatch) {
       try {
         url = decodeURIComponent(uddgMatch[1])
-      } catch {
+      } catch (err) {
+        logger.warn('Bing URL decode failed:', { error: toError(err) })
         // keep original
       }
     }
@@ -220,6 +224,62 @@ function parseBingHtml(html: string, query: string, maxResults: number): SearchR
 }
 
 /**
+ * Parse Bing News search results HTML.
+ * Extracts newscard divs using data-url / data-title attributes.
+ * Falls back to itemlink parsing if no newscards found.
+ * EXPORTED FOR TESTING — parser regression canary
+ */
+export function parseBingNewsHtml(html: string, query: string, maxResults: number): SearchResult[] {
+  const results: SearchResult[] = []
+
+  // Strategy 1: Parse newscard divs using data-url / data-title attributes
+  const newscardRegex = /<div[^>]*class="newscard[^"]*"[^>]*/gi
+  let m: RegExpExecArray | null
+  while ((m = newscardRegex.exec(html)) !== null && results.length < maxResults) {
+    const tag = m[0]
+    const urlMatch = tag.match(/data-url="([^"]+)"/) || tag.match(/\burl="([^"]+)"/)
+    const titleMatch = tag.match(/data-title="([^"]+)"/)
+    if (!urlMatch || !titleMatch) continue
+    const url = decodeEntities(urlMatch[1])
+    const title = decodeEntities(titleMatch[1])
+    if (!url || !/^https?:\/\//i.test(url)) continue
+    if (!title || title.length < 5) continue
+    const authorMatch = tag.match(/data-author="([^"]+)"/)
+    const author = authorMatch ? decodeEntities(authorMatch[1]) : ''
+    const content = author ? `[${author}] ${title}` : title
+
+    results.push({
+      title,
+      url,
+      content: truncateToTokens(content, 300),
+      score: computeScore(title, content, query),
+      domain: extractDomain(url),
+    })
+  }
+
+  // Strategy 2: <a class="title itemlink"> links
+  if (results.length === 0) {
+    const itemlinkRegex = /<a[^>]*class="[^"]*\bitemlink\b[^"]*"[^>]*href="([^"]+)"[^>]*>([\s\S]*?)<\/a>/gi
+    let m2: RegExpExecArray | null
+    while ((m2 = itemlinkRegex.exec(html)) !== null && results.length < maxResults) {
+      const url = m2[1]
+      const title = decodeEntities(stripHtml(m2[2])).trim()
+      if (!url || !/^https?:\/\//i.test(url)) continue
+      if (!title || title.length < 5) continue
+      results.push({
+        title,
+        url,
+        content: title,
+        score: computeScore(title, title, query),
+        domain: extractDomain(url),
+      })
+    }
+  }
+
+  return results
+}
+
+/**
  * Bing News search via Bing's news endpoint.
  * Returns recent news articles for a query.
  *
@@ -231,7 +291,7 @@ export async function bingNewsSearch(
   query: string,
   opts: BingSearchOptions = {},
 ): Promise<SearchResult[]> {
-  const { maxResults = 10, timeoutMs = 15000 } = opts
+  const { maxResults = 10, timeoutMs = 15000, env } = opts
 
   const params = new URLSearchParams()
   params.append('q', query)
@@ -247,6 +307,7 @@ export async function bingNewsSearch(
 
   try {
     const response = await fetchWithTimeout(
+      env,
       `https://www.bing.com/news/search?${params.toString()}`,
       {
         method: 'GET',
@@ -289,7 +350,9 @@ export async function bingNewsSearch(
           try {
             const parsed = new Date(decodeEntities(dateMatch[1]))
             if (!isNaN(parsed.getTime())) publishedDate = parsed.toISOString()
-          } catch { /* ignore parse errors */ }
+          } catch (err) {
+            // ignore parse errors
+          }
         }
         // Fallback: look for relative time patterns in the content after this tag
         if (!publishedDate) {
@@ -338,7 +401,7 @@ export async function bingNewsSearch(
       }
     }
   } catch (err) {
-    console.warn('Bing news search failed:', err)
+    logger.warn('Bing news search failed:', { error: toError(err) })
   }
 
   return results
@@ -348,71 +411,107 @@ export async function bingNewsSearch(
  * Bing Image Search (mobile endpoint, no API key).
  * Returns image results with thumbnails.
  */
+/**
+ * Bing Image Search (mobile endpoint, no API key).
+ * Returns image results with thumbnails.
+ */
 export async function bingImageSearch(
   query: string,
-  opts: { maxResults?: number; timeoutMs?: number } = {},
+  opts: { maxResults?: number; timeoutMs?: number; env?: Env } = {},
 ): Promise<ImageResult[]> {
-  const { maxResults = 8, timeoutMs = 8000 } = opts
+  const { maxResults = 8, timeoutMs = 8000, env } = opts
   const results: ImageResult[] = []
 
-  try {
-    const params = new URLSearchParams({
-      q: query,
-      first: '1',
-      count: String(maxResults),
-      form: 'HDRSC2',
-    })
-    const response = await fetchWithTimeout(
-      `${BING_SEARCH_URL}/images/search?${params.toString()}`,
-      {
-        method: 'GET',
-        headers: {
-          'User-Agent': MOBILE_UA,
-          Accept: 'text/html',
-          'Accept-Language': 'en-US,en;q=0.9,ko;q=0.8',
+  // Try multiple Bing image search endpoints for better reliability
+  const endpoints = [
+    // Standard mobile images search
+    `${BING_SEARCH_URL}/images/search?q=${encodeURIComponent(query)}&first=1&count=${maxResults}&form=HDRSC2`,
+    // Alternative mobile images search
+    `${BING_SEARCH_URL}/images/search?q=${encodeURIComponent(query)}&first=1&count=${maxResults}&form=IRFLTR`,
+    // Simple search
+    `${BING_SEARCH_URL}/images/search?q=${encodeURIComponent(query)}&count=${maxResults}`,
+  ]
+
+  for (const url of endpoints) {
+    try {
+      const response = await fetchWithTimeout(
+        env,
+        url,
+        {
+          method: 'GET',
+          headers: {
+            'User-Agent': MOBILE_UA,
+            Accept: 'text/html',
+            'Accept-Language': 'en-US,en;q=0.9,ko;q=0.8',
+          },
         },
-      },
-      timeoutMs,
-    )
-    if (!response.ok) return results
+        timeoutMs,
+      )
 
-    const html = await response.text()
+      if (!response.ok) continue
 
-    // Parse Bing image results — <a class="iusc" m="{JSON}">
-    const iuscRegex = /<a[^>]*class="iusc"[^>]*m="([^"]+)"/gi
-    let match: RegExpExecArray | null
-    while ((match = iuscRegex.exec(html)) !== null && results.length < maxResults) {
-      try {
-        const rawJson = decodeEntities(match[1]).replace(/&quot;/g, '"')
-        const data = JSON.parse(rawJson) as Record<string, unknown>
-        const url = (data.murl as string) || (data.imgurl as string)
-        const title = (data.t as string) || ''
-        const thumbnail = (data.turl as string) || undefined
-        const width = data.mw ? parseInt(String(data.mw), 10) : undefined
-        const height = data.mh ? parseInt(String(data.mh), 10) : undefined
+      const html = await response.text()
 
-        if (url && /^https?:\/\//i.test(url)) {
-          results.push({ url, title: title || extractDomain(url), source: extractDomain(url), thumbnail, width, height })
-        }
-      } catch {
-        // Skip malformed entries
+      // Check if we got a bot detection page
+      if (html.includes('robot') || html.includes('captcha') || html.includes('unusual traffic') || html.length < 1000) {
+        continue
       }
-    }
 
-    // Fallback: parse mimg <img> tags
-    if (results.length === 0) {
-      const imgRegex = /<img[^>]*class="[^"]*mimg[^"]*"[^>]*src="([^"]+)"[^>]*>/gi
-      let imgMatch: RegExpExecArray | null
-      while ((imgMatch = imgRegex.exec(html)) !== null && results.length < maxResults) {
-        const src = imgMatch[1]
-        if (src && !src.includes('data:') && /^https?:\/\//i.test(src)) {
-          results.push({ url: src, title: query, source: extractDomain(src), thumbnail: src })
+      // Parse Bing image results — <a class="iusc" m="{JSON}">
+      const iuscRegex = /<a[^>]*class="iusc"[^>]*m="([^"]+)"/gi
+      let match: RegExpExecArray | null
+      while ((match = iuscRegex.exec(html)) !== null && results.length < maxResults) {
+        try {
+          const rawJson = decodeEntities(match[1]).replace(/"/g, '"')
+          const data = JSON.parse(rawJson) as Record<string, unknown>
+          const imgUrl = (data.murl as string) || (data.imgurl as string)
+          const title = (data.t as string) || ''
+          const thumbnail = (data.turl as string) || undefined
+          const width = data.mw ? parseInt(String(data.mw), 10) : undefined
+          const height = data.mh ? parseInt(String(data.mh), 10) : undefined
+
+          if (imgUrl && /^https?:\/\//i.test(imgUrl)) {
+            results.push({
+              url: imgUrl,
+              title: title || extractDomain(imgUrl),
+              source: extractDomain(imgUrl),
+              thumbnail,
+              width,
+              height,
+              score: 0.7,
+              content: `Image from ${extractDomain(imgUrl)}`,
+            })
+          }
+        } catch (err) {
+          // Skip malformed entries
         }
       }
+
+      // Fallback: parse mimg <img> tags
+      if (results.length === 0) {
+        const imgRegex = /<img[^>]*class="[^"]*mimg[^"]*"[^>]*src="([^"]+)"[^>]*>/gi
+        let imgMatch: RegExpExecArray | null
+        while ((imgMatch = imgRegex.exec(html)) !== null && results.length < maxResults) {
+          const src = imgMatch[1]
+          if (src && !src.includes('data:') && /^https?:\/\//i.test(src)) {
+            results.push({
+              url: src,
+              title: query,
+              source: extractDomain(src),
+              thumbnail: src,
+              score: 0.6,
+              content: `Image result for "${query}"`,
+            })
+          }
+        }
+      }
+
+      if (results.length > 0) break // Success, stop trying endpoints
+    } catch (err) {
+      logger.warn('Bing image search endpoint failed:', { error: toError(err) })
     }
-  } catch (err) {
-    console.warn('Bing image search failed:', err)
   }
 
   return results
 }
+

@@ -18,7 +18,8 @@
  *   3. Stock/financial queries return structured price data
  */
 
-import type { SearchResult, StockData } from '../types'
+import type { SearchResult, StockData, Env } from '../types'
+import { logger, toError } from './logger'
 import { fetchWithTimeout, extractDomain, stripHtml, decodeEntities, computeScore, truncateToTokens } from './util'
 
 const NAVER_SEARCH_URL = 'https://m.search.naver.com/search.naver'
@@ -29,6 +30,7 @@ const MOBILE_UA =
 export interface NaverSearchOptions {
   maxResults?: number
   timeoutMs?: number
+  env?: Env
 }
 
 /**
@@ -39,7 +41,7 @@ export async function naverSearch(
   query: string,
   opts: NaverSearchOptions = {},
 ): Promise<SearchResult[]> {
-  const { maxResults = 15, timeoutMs = 12000 } = opts
+  const { maxResults = 15, timeoutMs = 12000, env } = opts
   const results: SearchResult[] = []
   const seenUrls = new Set<string>()
 
@@ -50,6 +52,7 @@ export async function naverSearch(
     params.append('sm', 'mtb_hty.top')
 
     const response = await fetchWithTimeout(
+      env,
       `${NAVER_SEARCH_URL}?${params.toString()}`,
       {
         method: 'GET',
@@ -88,7 +91,7 @@ export async function naverSearch(
       if (results.length >= maxResults) break
     }
   } catch (err) {
-    console.warn('Naver search failed:', err)
+    logger.warn('Naver search failed:', { error: toError(err) })
   }
 
   return results.slice(0, maxResults)
@@ -104,8 +107,9 @@ export async function naverSearch(
  *   <strong class="item_name">한화에어로스페이스</strong>
  *   <span class="stock_ref">012450<span class="exchange_name">KOSPI</span></span>
  *   Price: <span class="stock_price">943,000</span> 원 상승 14,000 (1.51%)
+ * EXPORTED FOR TESTING — parser regression detection
  */
-function parseStockCard(html: string, query: string): SearchResult[] {
+export function parseStockCard(html: string, query: string): SearchResult[] {
   const results: SearchResult[] = []
 
   // Find the stock_top block
@@ -113,6 +117,9 @@ function parseStockCard(html: string, query: string): SearchResult[] {
   if (!stockBlockMatch) return results
 
   const block = stockBlockMatch[1]
+
+  // Strip HTML from block for text-based regex matching
+  const blockText = stripHtml(block)
 
   // Extract stock name
   const nameMatch = block.match(/<strong[^>]*class="[^"]*item_name[^"]*"[^>]*>([\s\S]*?)<\/strong>/i)
@@ -132,17 +139,19 @@ function parseStockCard(html: string, query: string): SearchResult[] {
   }
 
   // Extract price — look for patterns like "943,000 원" or "943,000원"
-  const priceMatch = block.match(/([\d,]+)\s*원/) || html.match(/"price"\s*:\s*"([\d,]+)"/)
+  const priceMatch = blockText.match(/([\d,]+)\s*원/) || html.match(/"price"\s*:\s*"([\d,]+)"/)
   const price = priceMatch ? priceMatch[1] : ''
 
   // Extract change amount and percentage — "상승 14,000 (1.51%)" or "하락 14,000 (-1.51%)"
-  const changeMatch = block.match(/(상승|하락|보합)\s*([\d,]+)\s*\(([-+]?\d+\.?\d*)%\)/) ||
-    html.match(/(상승|하락|보합)\s*([\d,]+)\s*\(([-+]?\d+\.?\d*)%\)/)
+  // Also handle arrow characters: ▲ (up), ▼ (down), → (flat)
+  const changeMatch = blockText.match(/(상승|하락|보합|▲|▼|→)\s*([\d,]+)\s*\(([-+]?\d+\.?\d*)%\)/) ||
+    html.match(/(상승|하락|보합|▲|▼|→)\s*([\d,]+)\s*\(([-+]?\d+\.?\d*)%\)/)
   let changeDir = ''
   let changeAmt = ''
   let changePct = ''
   if (changeMatch) {
-    changeDir = changeMatch[1]
+    const dir = changeMatch[1]
+    changeDir = dir === '▲' ? '상승' : dir === '▼' ? '하락' : dir === '→' ? '보합' : dir
     changeAmt = changeMatch[2]
     changePct = changeMatch[3]
   }
@@ -252,8 +261,33 @@ const NAVER_CONTENT_SUBDOMAINS = [
 /**
  * Parse all <a href="..."> links from Naver's HTML, extract title + surrounding text.
  * Filters out Naver navigation links and keeps content links.
+ * EXPORTED FOR TESTING — parser regression detection
  */
-function parseLinks(html: string, query: string, maxResults: number): SearchResult[] {
+/**
+ * Parse Naver's integrated search results from HTML.
+ * EXPORTED FOR TESTING — parser regression detection
+ */
+export function parseNaverSearchHtml(html: string, query: string, maxResults: number): SearchResult[] {
+  return parseLinks(html, query, maxResults)
+}
+
+/**
+ * Parse Naver stock card HTML.
+ * EXPORTED FOR TESTING — parser regression detection
+ */
+export function parseStockCardHtml(html: string, query: string): SearchResult[] {
+  return parseStockCard(html, query)
+}
+
+/**
+ * Parse Naver links from HTML (alias for parseLinks).
+ * EXPORTED FOR TESTING — parser regression detection
+ */
+export function parseNaverLinksHtml(html: string, query: string, maxResults: number): SearchResult[] {
+  return parseLinks(html, query, maxResults)
+}
+
+export function parseLinks(html: string, query: string, maxResults: number): SearchResult[] {
   const results: SearchResult[] = []
   const seenUrls = new Set<string>()
 
@@ -281,7 +315,8 @@ function parseLinks(html: string, query: string, maxResults: number): SearchResu
     if (redirectMatch && /where\.naver|rd\.naver|cr\.naver/i.test(url)) {
       try {
         url = decodeURIComponent(redirectMatch[1])
-      } catch {
+      } catch (err) {
+        logger.warn('Naver URL decode failed:', { error: toError(err) })
         // keep original
       }
     }

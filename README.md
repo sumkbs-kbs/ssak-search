@@ -167,11 +167,33 @@ DuckDuckGo의 html 엔드포인트가 HTTP 202(anti-bot) 반환 시 lite 엔드�
   "response_time_ms": 2940,
   "backend": "naver+bing+wikipedia+hackernews",
   "fallback_used": false,
-  "related_queries": ["삼성전자 주가 전망", "삼성전자 주가 분석", ...]
+  "related_queries": ["삼성전자 주가 전망", "삼성전자 주가 분석", ...],
+  "page": 1,
+  "page_size": 10,
+  "total_results": 27,
+  "total_pages": 3,
+  "images": [
+    {
+      "url": "https://.../samsung-logo.png",
+      "title": "삼성전자",
+      "source": "naver.com",
+      "width": 200,
+      "height": 80,
+      "thumbnail": "https://.../thumb.png"
+    }
+  ],
+  "knowledge_graph": {
+    "title": "삼성전자",
+    "description": "대한민국의 전자제품 제조 기업",
+    "url": "https://ko.wikipedia.org/wiki/삼성전자",
+    "image": "https://upload.wikimedia.org/...",
+    "type": "organization"
+  }
 }
 ```
 
 > `include_answer=true` 시 `answer` 필드에 AI 요약 반환 (Workers AI 우선 → 추출 요약 폴백)
+> `page` / `page_size` / `total_results` / `total_pages` 필드는 페이지네이션을 위해 항상 포함됩니다.
 
 ### POST /api/extract
 ```json
@@ -183,6 +205,47 @@ DuckDuckGo의 html 엔드포인트가 HTTP 202(anti-bot) 반환 시 lite 엔드�
 
 ### GET /api/health
 서비스 상태 및 백엔드 가용성 확인 (naver, bing, bing-news, ddg, wikipedia, github, hackernews, reddit, arxiv, jina)
+
+### POST /api/images (또는 GET /api/images)
+```json
+{
+  "query": "검색어",
+  "max_results": 10,
+  "size": "medium",
+  "color": "color",
+  "type": "photo"
+}
+```
+
+### POST /api/news (또는 GET /api/news)
+```json
+{
+  "query": "검색어",
+  "max_results": 10,
+  "source": "all"
+}
+```
+- `source`: `all`, `bing`, `hackernews`, `reddit` 중 선택
+- `/api/news/trending`: 실시간 트렌딩 뉴스
+
+### GET /api/canary
+Parser 회귀 감지 — 각 백엔드에 실제 검색 쿼리를 실행하여 결과 추출 정상 여부 확인
+- `HEALTH_CANARY_ENABLED=true` 환경 변수 필요
+- 5분당 1회 레이트 리밋
+
+### GET /api/suggest?q=검색어
+검색어 자동완성 제안 (DuckDuckGo → Bing Suggest 폴백)
+
+### POST /api/research (또는 GET /api/research)
+멀티스텝 딥 리서치 — 복잡한 쿼리를 하위 쿼리로 분해하여 종합적인 답변 생성
+```json
+{
+  "query": "양자 컴퓨팅의 현재와 미래",
+  "depth": "quick",
+  "max_sources": 15
+}
+```
+- `depth`: `quick` (3개 하위 쿼리) 또는 `deep` (6개 하위 쿼리)
 
 ## 한국어 검색 최적화
 
@@ -204,6 +267,29 @@ DuckDuckGo의 html 엔드포인트가 HTTP 202(anti-bot) 반환 시 lite 엔드�
 - **한국어 + 금융**: `{쿼리} 전망`, `{쿼리} 분석`, `{쿼리} 실적`, `{쿼리} 목표주가`
 - **한국어 + 일반**: `{쿼리} 정리`, `{쿼리} 설명`, `{쿼리} 최신`, `{쿼리} 가이드`
 - 한국어 불용어 40+ 추가
+
+## OpenAI 호환 API (/v1/chat/completions)
+
+OpenAI SDK로 직접 검색 엔진을 호출할 수 있습니다:
+
+```python
+from openai import OpenAI
+
+client = OpenAI(
+    base_url="https://YOUR_DOMAIN/v1",
+    api_key="your-api-key"  # 생략 가능 (open 모드)
+)
+
+response = client.chat.completions.create(
+    model="search-engine",  # search-engine, search-engine-deep, research-engine
+    messages=[
+        {"role": "user", "content": "최신 AI 기술 트렌드는?"}
+    ],
+    max_tokens=2000
+)
+
+print(response.choices[0].message.content)
+```
 
 ## Hermes Agent 통합 (Tavily 호환)
 
@@ -243,23 +329,101 @@ for r in results["results"]:
 
 ```
 src/
-├── index.tsx              # 메인 Hono 앱 진입점 (라우팅: /api/search, /api/extract, /api/health)
-├── types.ts               # SearchResult, SearchResponse 등 타입 정의
-├── routes/
-│   ├── search.ts          # /api/search 엔드포인트 (GET + POST)
-│   ├── extract.ts         # /api/extract 엔드포인트
-│   └── health.ts          # /api/health 엔드포인트
-└── lib/
-    ├── orchestrator.ts    # 멀티백엔드 병렬 검색 오케스트레이션 (547줄)
-    ├── naver-search.ts    # Naver 모바일 검색 — 한국어 PRIMARY (317줄)
-    ├── bing-search.ts     # Bing 모바일 웹 + 뉴스 스크래핑 (323줄)
-    ├── duckduckgo.ts      # DuckDuckGo 폴백 — 202 fail-fast (287줄)
-    ├── specialized.ts     # 쿼리 타입 감지 + Wikipedia/GitHub/HN/Reddit/arXiv (549줄)
-    ├── answer.ts          # AI 답변 생성 (Workers AI + 추출 요약) (231줄)
-    ├── extractor.ts       # 콘텐츠 추출 (115줄)
-    ├── html-rewriter.ts   # HTML 정제 (229줄)
-    ├── jina-search.ts     # Jina Reader 콘텐츠 추출 (236줄)
-    └── util.ts            # 점수 계산, CJK 바이그램, 연관 검색어 등 (442줄)
+├── index.tsx               # 메인 Hono 앱 진입점 (라우팅)
+├── types.ts                # 전역 타입 정의
+├── renderer.tsx            # Hono JSX 렌더러
+├── components/             # Phase 1.1 — 재사용 가능 UI 컴포넌트 (Hono JSX)
+│   ├── Layout.tsx          #   공통 레이아웃 (헤더, i18n, ARIA, PWA)
+│   ├── SearchBar.tsx       #   검색 입력 컴포넌트
+│   ├── ResultCard.tsx      #   검색 결과 카드
+│   ├── AnswerCard.tsx      #   AI 답변 카드 (인라인 인용)
+│   ├── SourceCard.tsx      #   출처 카드
+│   ├── StatsBar.tsx        #   통계 표시줄
+│   ├── TabNav.tsx          #   탭 네비게이션
+│   ├── ProgressBar.tsx     #   진행률 표시줄
+│   └── Icon.tsx            #   인라인 SVG 아이콘
+├── routes/                 # Phase 1 — API 엔드포인트 (21개)
+│   ├── search.ts           #   /api/search (GET+POST)
+│   ├── extract.ts          #   /api/extract
+│   ├── health.ts           #   /api/health + /api/metrics
+│   ├── usage.ts            #   /api/usage (Phase 3.3)
+│   ├── images.ts           #   /api/images
+│   ├── news.ts             #   /api/news + /api/news/trending
+│   ├── research.ts         #   /api/research (Phase 1.3)
+│   ├── chat.ts             #   /api/chat (Phase 1.2)
+│   ├── suggest.ts          #   /api/suggest
+│   ├── pages.ts            #   /api/pages (Phase 2.1)
+│   ├── upload.ts           #   /api/upload (Phase 2.2)
+│   ├── library.ts          #   /api/library (Phase 2.3)
+│   ├── council.ts          #   /api/council
+│   ├── profile.ts          #   /api/profile (Phase 3.2)
+│   ├── video.ts            #   /api/video (Phase 3.1)
+│   ├── products.ts         #   /api/products
+│   ├── spaces.ts           #   /api/spaces (Phase 3.3)
+│   ├── keys.ts             #   /api/keys (Phase 1.2)
+│   ├── monitor.ts          #   /api/monitor (Phase 3.1)
+│   ├── openai.ts           #   /v1/chat/completions (Phase 3.3)
+│   └── canary.ts           #   /api/canary
+├── pages/                  # Phase 1.1 — SSR 페이지
+│   ├── dashboard.tsx       #   / — 검색 대시보드
+│   ├── chat.tsx            #   /chat — 채팅 페이지
+│   ├── docs.ts             #   /docs — API 문서 페이지
+│   ├── status.tsx          #   /status — 시스템 상태 (Phase 3.1)
+│   ├── usage.tsx           #   /usage — 사용량 대시보드 (Phase 3.3)
+│   ├── spaces.tsx          #   /spaces — Spaces 관리 (Phase 3.3)
+│   └── page-view.ts        #   /page/:id — 페이지 조회 (Phase 2.1)
+├── lib/                    # 핵심 로직
+│   ├── orchestrator.ts     #   멀티백엔드 병렬 검색 오케스트레이션
+│   ├── naver-search.ts     #   Naver 모바일 검색 — 한국어 PRIMARY
+│   ├── bing-search.ts      #   Bing 모바일 웹 + 뉴스 스크래핑
+│   ├── duckduckgo.ts       #   DuckDuckGo 폴백
+│   ├── specialized.ts      #   쿼리 타입 감지 + 전문화 백엔드
+│   ├── answer.ts           #   AI 답변 생성 (Workers AI + 추출 요약)
+│   ├── extractor.ts        #   콘텐츠 추출
+│   ├── html-rewriter.ts    #   HTML 정제
+│   ├── jina-search.ts      #   Jina Reader 콘텐츠 추출
+│   ├── research.ts         #   멀티스텝 딥 리서치 (Phase 1.3)
+│   ├── yahoo-finance-search.ts  # 야후 파이낸스 (Phase 1.3)
+│   ├── product-search.ts   #   Product Hunt + G2 검색
+│   ├── youtube-search.ts   #   YouTube 검색 (Phase 3.1)
+│   ├── free-image-search.ts #   무료 이미지 검색
+│   ├── searxng-search.ts   #   SearXNG 검색 (Phase 1.3)
+│   ├── google-scholar.ts   #   Google Scholar 검색 (Phase 1.3)
+│   ├── rich-snippets.ts    #   리치 스니펫 파싱 (Phase 1.3)
+│   ├── agentic/            #   에이전틱 검색 시스템 (Phase 1.3)
+│   │   ├── classifier.ts   #     쿼리 분류기
+│   │   ├── planner.ts      #     검색 계획 수립
+│   │   ├── executor.ts     #     계획 실행
+│   │   ├── synthesizer.ts  #     결과 합성
+│   │   ├── quality-gate.ts #     품질 검증
+│   │   ├── search-tools.ts #     검색 도구
+│   │   └── index.ts        #     모듈 진입점
+│   ├── index/              #   인덱싱 시스템 (Phase 2)
+│   │   ├── embedding.ts    #     임베딩 생성
+│   │   ├── chunker.ts      #     텍스트 청킹
+│   │   ├── pipeline.ts     #     인덱싱 파이프라인
+│   │   ├── scheduler.ts    #     스케줄러
+│   │   ├── types.ts        #     인덱스 타입
+│   │   └── index.ts        #     모듈 진입점
+│   ├── auth.ts             #   인증 (Phase 1.2)
+│   ├── cache.ts            #   캐싱 (Phase 2.1)
+│   ├── metrics.ts          #   메트릭 (Phase 3.1)
+│   ├── logger.ts           #   구조화 로깅 (Phase 3.1)
+│   ├── audit.ts            #   감사 로그 (Phase 3.2)
+│   ├── rate-limiter.ts     #   레이트 리미터
+│   ├── util.ts             #   점수 계산, CJK 바이그램, 연관 검색어 등
+│   ├── backend-interface.ts #   백엔드 인터페이스
+│   ├── security-headers.ts #   CSP/보안 헤더 (Phase 3.2)
+│   ├── security-middleware.ts # 보안 미들웨어 (Phase 3.2)
+│   ├── i18n.ts             #   국제화 (Phase 2.2)
+│   ├── translations.ts     #   번역 데이터 (Phase 2.2)
+│   ├── pages-do.ts         #   Durable Object: Pages (Phase 2.1)
+│   ├── thread-do.ts        #   Durable Object: Threads (Phase 1.2)
+│   ├── library-do.ts       #   Durable Object: Library (Phase 2.3)
+│   ├── user-profile-do.ts  #   Durable Object: Profiles (Phase 3.2)
+│   ├── space-do.ts         #   Durable Object: Spaces (Phase 3.3)
+│   ├── rate-limiter-do.ts  #   Durable Object: Rate Limiter
+│   └── api-key-do.ts       #   Durable Object: API Keys (Phase 1.2)
 ```
 
 ## 실행
@@ -299,6 +463,21 @@ Cloudflare Pages 배포 준비 완료. 두 가지 배포 경로 지원:
 
 ## 주요 수정 이력
 
+### v2.0.0 — 프로덕션 준비 (2026-07-18)
+- **SSRF 보호** — `/api/extract` 입력 검증 + `assertSafeFetchUrl()`로
+  사설 IP/메타데이터/비-http(s) scheme/credentials-in-URL 거부
+- **캐시 키에 page 추가** — 페이지네이션 오염(P0-1) 수정
+- **`/api/metrics` 라우팅 분리** — Prometheus 노출 정상화
+- **입력 크기 제한** — body 64KB, domain arrays 20개, extract URLs 20개, page 1-10
+- **`total_pages` / `page_size` 응답 필드 추가**
+- **Vitest 테스트 인프라** — 84개 단위 테스트 (cacheKey, SSRF, auth, extractor)
+- **TypeScript strict + `@cloudflare/workers-types`** — `npm run typecheck` 0 에러
+- **LICENSE / SECURITY.md / CONTRIBUTING.md / CHANGELOG.md 추가**
+- **회로 open 시 직접 fetch 폴백 제거** — IP 밴 유발 잠재 경로 차단
+- **한국어 NFC 정규화 + ZWSP/NBSP 제거** — 캐시 단편화 해결
+- **`sort_by=date` score blend** — 최신 spam이 고품질 결과 누르는 현상 수정
+- **adaptive threshold floor** — 10-result default에서 tier-3 spam 유입 차단
+
 ### 10/10 PERFECT 달성 (2026-07-16)
 - **적응형 3단계 minScore** (0.10 → 0.05 → 0.01) — 결과 풍족도 보장
 - **위키백과 CJK 타임아웃 12초 + 최대 10결과** — 비결정적 실패 해결
@@ -318,4 +497,180 @@ Cloudflare Pages 배포 준비 완료. 두 가지 배포 경로 지원:
 - financial 쿼리 타입 추가 — 주가/주식/실적/목표주가 키워드 감지
 
 ---
-*Last updated: 2026-07-16*
+
+## 프로덕션 배포 가이드
+
+### 1. 인증 키 설정 (선택)
+
+`SEARCH_API_KEY`를 설정하면 모든 `/api/search` 및 `/api/extract` 요청이
+`Authorization: Bearer <key>` 또는 `X-API-Key: <key>` 헤더를 요구합니다.
+
+```bash
+# Wrangler CLI에서 시크릿 설정 (평문 vars 아님)
+npx wrangler pages secret put SEARCH_API_KEY
+# 프롬프트에서 키 입력 → 암호화되어 Cloudflare에 저장
+```
+
+미설정 시 open 모드로 동작(인증 없이 접근 허용). 공개 배포 시 반드시 설정하세요.
+
+### 2. Workers AI 바인딩 (선택)
+
+`answer` 필드에 AI 요약을 제공하려면 Workers AI 바인딩이 필요합니다.
+
+`wrangler.jsonc`:
+```jsonc
+{
+  "ai": {
+    "binding": "AI"
+  }
+}
+```
+
+Cloudflare 대시보드 → Pages → Settings → Functions → AI binding 활성화.
+
+### 3. Jina API 키 (선택)
+
+`/api/extract`에 Jina Reader 우선 사용하려면 `JINA_API_KEY` 설정. 미설정 시
+HTMLRewriter 폴백으로 동작하므로 기능은 유지됩니다.
+
+```bash
+npx wrangler pages secret put JINA_API_KEY
+```
+
+### 4. 로컬 개발 환경
+
+```bash
+npm install
+npm run typecheck           # 0 에러 게이트
+npm test                   # 단위 테스트
+npm run build              # dist/_worker.js 산출
+npm run preview            # wrangler pages dev (http://localhost:8788)
+```
+
+### 5. SLA / 한계
+
+- **Rate limit**: per-IP 30 req/min. Cloudflare Workers는 isolate 메모리로
+  관리되므로 cross-isolate 정확한 적용은 보장되지 않습니다. 고트래픽
+  환경에서는 Cloudflare "Rate Limiting Rules" 또는 Durable Object로
+  이관하세요.
+- **Subrequest quota**: 무료 Pages 50 subrequest/요청, 유료 1,000.
+  단일 `/api/search` 요청당 ~27 subrequest 소모 (Bing 6페이지 + 백엔드 팬아웃).
+  동시 사용자 ~2명부터 무료 quota 초과 가능.
+- **HTML 스크래핑**: Bing/Naver 마크업 변경 시 즉시 0건 회귀 가능.
+  `/api/health`는 reachability만 점검하므로 parser-level 회귀는 별도
+  알림 필요.
+- **Monitoring**: `/api/metrics` (Prometheus) 스크랩으로 회로 차단기 상태
+  추적 가능.
+
+### 6. 프로덕션 설정 가이드 (중요)
+
+#### Durable Object Binding (RATE_LIMITER)
+
+Without this binding, rate limiting and circuit breaker are per-isolate best-effort
+(in-memory fallback). The API works, but rate limits are not enforced across
+concurrent requests. To enable cross-isolate coordination:
+
+1. Go to https://dash.cloudflare.com/ → **Pages** → `search-engine-api` → **Settings** → **Functions**
+2. Scroll to **Durable Objects** → **Add binding**
+3. **Namespace name**: `RATE_LIMITER` (must match the binding name in code)
+4. **Class name**: `RateLimiterDO` (must match `export { RateLimiterDO }` in `src/index.tsx`)
+5. **Save & Redeploy** — the next deployment will use the DO for coordination
+
+**Verify the binding is active:**
+```bash
+# The /api/health endpoint now includes:
+#   features.rate_limiter_do: true/false
+#   rate_limiter.mode: "durable_object" | "in_memory_fallback"
+
+# Run the verification script:
+bash scripts/verify-do-binding.sh
+```
+
+**Local dev**: `wrangler.jsonc` already has the RATE_LIMITER DO binding uncommented.
+Run `npm run build && npm run preview` to test with DO in local dev mode.
+
+#### Slack Alert Webhook (Monitor Workflow)
+
+The `.github/workflows/monitor.yml` workflow checks `/api/health` every 15 min and
+sends Slack alerts when backends are down or latency exceeds thresholds.
+
+1. Create a Slack webhook URL in your Slack workspace:
+   - Slack App → **Incoming Webhooks** → **Add New Webhook** → pick channel
+2. Copy the webhook URL (looks like `https://hooks.slack.com/services/T.../B.../...`)
+3. Go to your GitHub repo → **Settings** → **Secrets and variables** → **Actions**
+4. Add **New repository secret**:
+   - **Name**: `ALERT_SLACK_WEBHOOK`
+   - **Value**: the webhook URL from step 2
+5. Without this secret, alerts are skipped (health checks still run and report
+   in the Actions log).
+
+#### GitHub Secrets / Pages Variables Required for CI/CD
+
+| Secret / Variable | Required for | Source |
+|--------|-------------|--------|
+| `CLOUDFLARE_API_TOKEN` | Deploy workflow | Cloudflare API Tokens (Permissions: Workers, Pages) |
+| `CLOUDFLARE_ACCOUNT_ID` | Deploy workflow | Cloudflare Dashboard → Account ID |
+| `ALERT_SLACK_WEBHOOK` | Monitor workflow (optional) | Slack Incoming Webhook |
+| `SEARCH_API_KEY` | API auth (Pages secret) | `wrangler pages secret put SEARCH_API_KEY` |
+| `JINA_API_KEY` | Better extraction (Pages secret, optional) | `wrangler pages secret put JINA_API_KEY` |
+| `CACHE_TTL_GENERAL` | Cache TTL for general queries (Pages variable, seconds, default 1800) | Pages → Settings → Variables |
+| `CACHE_TTL_NEWS` | Cache TTL for news/finance (Pages variable, seconds, default 300) | Pages → Settings → Variables |
+| `HEALTH_CANARY_ENABLED` | Parser regression detection (`true` to enable, default off) | Pages → Settings → Variables |
+
+> **Note**: `SEARCH_API_KEY` and `JINA_API_KEY` must be set as **Pages Secrets** (encrypted), not Variables. `CACHE_TTL_*` can be Variables.
+
+#### Workers Analytics Engine Binding (메트릭 영속성)
+
+기본 상태에서는 `/api/metrics`의 카운터가 **아이솔레이트별 인메모리**로만 저장되어 콜드스타트 시 리셋됩니다. 검색/추출 메트릭을 크로스 아이솔레이트 + 재시작 후에도 유지하려면 **Workers Analytics Engine** 데이터셋을 바인딩하세요:
+
+1. Cloudflare Dashboard → **Workers & Pages** → **Analytics** → **Create dataset**
+2. Name: `SEARCH_API_METRICS` (또는 원하는 이름)
+3. Dataset ID 복사
+4. Cloudflare Dashboard → **Pages** → `search-engine-api` → **Settings** → **Bindings** → **Workers Analytics Engine Datasets** → "Add binding"
+5. **Variable name**: `ANALYTICS`
+6. **Dataset**: 위에서 생성한 데이터셋
+7. **Save**
+
+8. 모듈 레벨 메트릭은 자동으로 영속됩니다. Prometheus 메트릭 endpoint (`/api/metrics`)는 현재 인메모리 카운터를 표시하지만, Analytics Engine에 기록된 데이터는 SQL API로 별도 쿼리할 수 있습니다.
+
+**Analytics Engine SQL API 쿼리 예시** (Cloudflare Dashboard → Analytics → 해당 데이터셋 → SQL Editor):
+```sql
+-- 시간대별 요청 수
+SELECT
+  blob1 AS endpoint,
+  COUNT(*) AS request_count
+FROM SEARCH_API_METRICS
+WHERE timestamp > NOW() - INTERVAL '1' HOUR
+GROUP BY blob1
+
+-- p99 지연시간
+SELECT
+  blob1 AS endpoint,
+  APPROX_QUANTILE(doubles[1], 0.99) AS p99_latency_seconds
+FROM SEARCH_API_METRICS
+WHERE timestamp > NOW() - INTERVAL '24' HOUR
+GROUP BY blob1
+```
+
+`/api/metrics`의 `search_metrics_persistence` 게이지는 Analytics Engine이 설정되어 있으면 1, 없으면 0을 반환합니다.
+
+### 7. 보안 가이드
+
+- **SSRF 보호**: `/api/extract`는 `assertSafeFetchUrl`로 사설 IP, 메타데이터,
+  비-http(s) scheme, credentials-in-URL을 거부합니다.
+- **감사 로그** (Phase 2 예정): 모든 요청/응답을 Cloudflare Logpush 또는 Analytics Engine으로 JSON 로깅
+- **취약점 신고**: SECURITY.md의 프라이빗 신고 경로 이용 (공개 issue 금지).
+- **위협 모델**: SECURITY.md 참조.
+
+### 8. SLO / 운영 가이드
+
+상세한 SLO 정의, 알림 규칙, 대시보드 패널, 런북은 **[SLO.md](SLO.md)** 참조.
+
+### 9. 감사 로그 / Logpush 가이드
+
+보안 이벤트(인증 실패, 레이트 리밋 초과, SSRF 시도 등)는 `audit: 'true'` 플래그가 포함된 구조화 JSON으로 출력됩니다. **Cloudflare Logpush**를 사용해 R2/Datadog/Splunk으로 자동 송출:
+- 설정 방법, Datadog/Splunk 통합, Grafana 쿼리 예제는 **[AUDIT.md](AUDIT.md)** 참조
+- 초기 7일간은 Cloudflare Dashboard → **Live Tail**에서 `AUDIT_SECURITY:` 필터로 즉시 확인 가능 (설정 불필요)
+
+---
+*Last updated: 2026-07-18 (v3.0.0)*

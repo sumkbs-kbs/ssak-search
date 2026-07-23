@@ -1,0 +1,152 @@
+name: Monitor
+
+on:
+  schedule:
+    - cron: '*/15 * * * *'
+  workflow_dispatch:
+    inputs:
+      target_url:
+        description: 'API URL to check (default: production)'
+        required: false
+        default: 'https://search-engine-api.pages.dev'
+
+env:
+  TARGET_URL: ${{ github.event.inputs.target_url || 'https://search-engine-api.pages.dev' }}
+  SLACK_WEBHOOK: ${{ secrets.ALERT_SLACK_WEBHOOK || '' }}
+
+jobs:
+  health-check:
+    name: Health Check + SLO
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Check /api/health
+        id: health
+        run: |
+          START=$(date +%s%N)
+          RESPONSE=$(curl -sf --max-time 15 "${{ env.TARGET_URL }}/api/health" 2>&1) || true
+          END=$(date +%s%N)
+          LATENCY_MS=$(( (END - START) / 1000000 ))
+
+          STATUS=$(echo "$RESPONSE" | jq -r '.status // "error"' 2>/dev/null || echo "error")
+          DOWN=$(echo "$RESPONSE" | jq '[.backends[] | select(. == "down")] | length' 2>/dev/null || echo 0)
+          DEGRADED=$(echo "$RESPONSE" | jq '[.backends[] | select(. == "degraded")] | length' 2>/dev/null || echo 0)
+
+          echo "status=$STATUS" >> $GITHUB_OUTPUT
+          echo "latency=$LATENCY_MS" >> $GITHUB_OUTPUT
+          echo "down_backends=$DOWN" >> $GITHUB_OUTPUT
+          echo "degraded_backends=$DEGRADED" >> $GITHUB_OUTPUT
+          echo "Status: $STATUS | Latency: ${LATENCY_MS}ms | Down: $DOWN | Degraded: $DEGRADED"
+
+      - name: Check /api/monitor (SLO report)
+        id: monitor
+        continue-on-error: true
+        run: |
+          MONITOR=$(curl -sf --max-time 10 "${{ env.TARGET_URL }}/api/monitor" 2>&1) || echo '{}'
+          SLOS=$(echo "$MONITOR" | jq -r '.slos // empty' 2>/dev/null || echo "{}")
+          ALERTS=$(echo "$MONITOR" | jq -r '.alerts // empty' 2>/dev/null || echo "[]")
+          echo "slos=$SLOS" >> $GITHUB_OUTPUT
+          echo "alerts=$ALERTS" >> $GITHUB_OUTPUT
+
+          HEALTH=$(echo "$MONITOR" | jq -r '.health // "error"' 2>/dev/null || echo "error")
+          echo "health=$HEALTH" >> $GITHUB_OUTPUT
+          echo "=== SLO Report ==="
+          echo "Health: $HEALTH"
+          echo "Alerts: $(echo "$ALERTS" | jq -r '. | length' 2>/dev/null || echo 0)"
+
+      - name: Determine alert severity
+        id: severity
+        run: |
+          STATUS="${{ steps.health.outputs.status }}"
+          DOWN="${{ steps.health.outputs.down_backends }}"
+          LATENCY="${{ steps.health.outputs.latency }}"
+
+          SEVERITY="none"
+          COLOR="#36a64f"
+
+          if [ "$STATUS" = "error" ] || [ "$DOWN" -gt 1 ]; then
+            SEVERITY="critical"
+            COLOR="#ff0000"
+          elif [ "$DOWN" -gt 0 ]; then
+            SEVERITY="warning"
+            COLOR="#ffa500"
+          elif [ "$LATENCY" -gt 10000 ]; then
+            SEVERITY="warning"
+            COLOR="#ffa500"
+          elif [ "$STATUS" = "degraded" ]; then
+            SEVERITY="info"
+            COLOR="#ffff00"
+          fi
+
+          echo "severity=$SEVERITY" >> $GITHUB_OUTPUT
+          echo "color=$COLOR" >> $GITHUB_OUTPUT
+
+      - name: Send Slack alert
+        if: steps.severity.outputs.severity != 'none' && env.SLACK_WEBHOOK != ''
+        env:
+          SLACK_WEBHOOK: ${{ secrets.ALERT_SLACK_WEBHOOK }}
+        run: |
+          SEVERITY="${{ steps.severity.outputs.severity }}"
+          STATUS="${{ steps.health.outputs.status }}"
+          LATENCY="${{ steps.health.outputs.latency }}"
+          DOWN="${{ steps.health.outputs.down_backends }}"
+          DEGRADED="${{ steps.health.outputs.degraded_backends }}"
+          COLOR="${{ steps.severity.outputs.color }}"
+          TIMESTAMP=$(date -u +%s)
+          ALERTS="${{ steps.monitor.outputs.alerts }}"
+
+          ALERT_TEXT=""
+          if [ -n "$ALERTS" ] && [ "$ALERTS" != "[]" ]; then
+            ALERT_TEXT=$(echo "$ALERTS" | jq -r '.[0].message // ""')
+          fi
+
+          PAYLOAD=$(cat <<EOF
+          {
+            "text": "[${SEVERITY}] Search Engine API — Health Alert",
+            "attachments": [
+              {
+                "color": "${COLOR}",
+                "blocks": [
+                  {
+                    "type": "section",
+                    "text": {
+                      "type": "mrkdwn",
+                      "text": "*Search Engine API — ${SEVERITY}*"
+                    }
+                  },
+                  {
+                    "type": "section",
+                    "fields": [
+                      { "type": "mrkdwn", "text": "*Status*: ${STATUS}" },
+                      { "type": "mrkdwn", "text": "*Latency*: ${LATENCY}ms" },
+                      { "type": "mrkdwn", "text": "*Down Backends*: ${DOWN}" },
+                      { "type": "mrkdwn", "text": "*Degraded*: ${DEGRADED}" }
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+          EOF
+          )
+
+          if [ -n "$ALERT_TEXT" ]; then
+            PAYLOAD=$(echo "$PAYLOAD" | jq ".attachments[0].blocks += [{\"type\": \"section\", \"text\": {\"type\": \"mrkdwn\", \"text\": \"*Alert*: ${ALERT_TEXT}\"}}]")
+          fi
+
+          curl -sf -X POST -H 'Content-Type: application/json' -d "$PAYLOAD" "$SLACK_WEBHOOK" || echo "Slack notification failed"
+
+      - name: Log healthy check
+        if: steps.severity.outputs.severity == 'none'
+        run: echo "All systems operational — no alert sent"
+
+      - name: GitHub Summary
+        if: always()
+        run: |
+          echo "## Monitor Report — $(date -u)" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "- **Target**: ${{ env.TARGET_URL }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Status**: ${{ steps.health.outputs.status }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Latency**: ${{ steps.health.outputs.latency }}ms" >> $GITHUB_STEP_SUMMARY
+          echo "- **Down Backends**: ${{ steps.health.outputs.down_backends }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **SLO Health**: ${{ steps.monitor.outputs.health }}" >> $GITHUB_STEP_SUMMARY

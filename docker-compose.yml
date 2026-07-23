@@ -1,0 +1,128 @@
+# ============================================================
+# Scrapling Sidecar + Webapp — 통합 Docker Compose
+# ============================================================
+#
+# 원클릭 실행:
+#   docker compose up -d --build
+#
+# 서비스 확인:
+#   curl http://localhost:8788/           # Webapp (검색 대시보드)
+#   curl http://localhost:8000/health     # Sidecar (헬스 체크)
+#   curl http://localhost:8788/api/search?q=hello  # 검색 API
+#
+# 로그 확인:
+#   docker compose logs -f sidecar
+#   docker compose logs -f webapp
+#
+# 중단:
+#   docker compose down
+#
+# 주의:
+# - [필수] webapp 빌드: 먼저 로컬에서 'npm run build' 실행 후 docker compose 실행
+# - sidecar는 Scrapling 브라우저(Chromium) 포함으로 약 2GB 메모리 사용
+# - OLLAMA_BASE_URL: Docker Desktop(macOS/Windows)은 host.docker.internal,
+#   Linux는 host network 필요 (http://172.17.0.1:11434)
+
+services:
+  # ============================================================
+  # Scrapling Sidecar — Python FastAPI + Scrapling
+  # ============================================================
+  sidecar:
+    build:
+      context: ./sidecar
+      dockerfile: Dockerfile
+    container_name: scrapling-sidecar
+    ports:
+      - "8000:8000"
+    environment:
+      - HOST=0.0.0.0
+      - PORT=8000
+      - LOG_LEVEL=info
+      - HEADLESS=true
+      - SOLVE_CLOUDFLARE=true
+    restart: unless-stopped
+    # Browser automation requires these
+    cap_add:
+      - SYS_ADMIN
+    shm_size: "2gb"
+    networks:
+      - search-net
+    healthcheck:
+      test: ["CMD", "python", "-c", "import httpx; httpx.get('http://localhost:8000/health').raise_for_status()"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+
+  # ============================================================
+  # SearXNG — 자체 호스팅 메타서치 엔진
+  # DuckDuckGo 스크래핑을 SearXNG로 대체 (ToS-safe)
+  # ============================================================
+  searxng:
+    image: searxng/searxng:latest
+    container_name: searxng
+    ports:
+      - "8080:8080"
+    environment:
+      - SEARXNG_BASE_URL=http://localhost:8080
+      - SEARXNG_SECRET=${SEARXNG_SECRET:-changeme-secret-key-for-local-dev}
+    volumes:
+      # Bind mount: settings.yml with 777 perms (solves UID permission issue with named volumes)
+      - ./searxng/settings.yml:/etc/searxng/settings.yml:ro
+      # Cache volume
+      - searxng-cache:/var/cache/searxng:rw
+    restart: unless-stopped
+    cap_drop:
+      - ALL
+    cap_add:
+      - CHOWN
+      - SETGID
+      - SETUID
+    networks:
+      - search-net
+    healthcheck:
+      test: ["CMD", "curl", "-f", "-o", "/dev/null", "-s", "--max-time", "5", "http://localhost:8080/"]
+      interval: 30s
+      timeout: 15s
+      retries: 5
+      start_period: 20s
+
+  # ============================================================
+  # Webapp — Cloudflare Workers (wrangler pages dev)
+  # ============================================================
+  webapp:
+    build:
+      context: .
+      dockerfile: Dockerfile.webapp
+    container_name: search-webapp
+    ports:
+      - "8788:8788"
+    environment:
+      # Connect to sidecar via Docker internal network
+      - SIDECAR_URL=http://sidecar:8000
+      # Connect to SearXNG (replaces DuckDuckGo scraping)
+      - SEARXNG_URL=http://searxng:8080
+      # Optional: Ollama local LLM
+      - OLLAMA_BASE_URL=${OLLAMA_BASE_URL:-http://host.docker.internal:11434}
+    depends_on:
+      sidecar:
+        condition: service_healthy
+      searxng:
+        condition: service_started
+    restart: unless-stopped
+    networks:
+      - search-net
+    healthcheck:
+      # Use curl (node:22-slim has curl, not wget)
+      test: ["CMD", "curl", "-f", "-o", "/dev/null", "-s", "--max-time", "5", "http://localhost:8788/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+
+volumes:
+  searxng-cache:
+
+networks:
+  search-net:
+    driver: bridge

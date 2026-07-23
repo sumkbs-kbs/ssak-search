@@ -1,0 +1,106 @@
+name: Deploy
+
+on:
+  workflow_run:
+    workflows: ["CI"]
+    types:
+      - completed
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: "Deploy to environment"
+        required: true
+        default: "staging"
+        type: choice
+        options:
+          - staging
+          - production
+
+env:
+  NODE_VERSION: "20"
+  PROJECT_NAME: "webapp"
+
+jobs:
+  deploy-staging:
+    name: Deploy to Cloudflare Pages (Staging)
+    if: >
+      (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success') ||
+      (github.event_name == 'workflow_dispatch' && inputs.environment == 'staging')
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    environment:
+      name: staging
+      url: https://staging.webapp.pages.dev
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download CI artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: worker-bundle
+          path: dist/
+        continue-on-error: true
+
+      - name: Setup Node (if artifact not found)
+        if: failure()
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: "npm"
+
+      - name: Install dependencies (if artifact not found)
+        if: failure()
+        run: npm ci
+
+      - name: Build (if artifact not found)
+        if: failure()
+        run: npm run build
+
+      - name: Deploy to Pages (Staging)
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: pages deploy dist/ --project-name=${{ env.PROJECT_NAME }} --branch=staging
+
+  deploy-production:
+    name: Deploy to Cloudflare Pages (Production)
+    if: github.event_name == 'workflow_dispatch' && inputs.environment == 'production'
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    environment:
+      name: production
+      url: https://webapp.pages.dev
+    needs: [deploy-staging]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download CI artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: worker-bundle
+          path: dist/
+        continue-on-error: true
+
+      - name: Setup Node (if artifact not found)
+        if: failure()
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: "npm"
+
+      - name: Install dependencies (if artifact not found)
+        if: failure()
+        run: npm ci
+
+      - name: Build (if artifact not found)
+        if: failure()
+        run: npm run build
+
+      - name: Deploy to Pages (Production)
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: pages deploy dist/ --project-name=${{ env.PROJECT_NAME }} --branch=main

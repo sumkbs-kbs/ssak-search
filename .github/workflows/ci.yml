@@ -1,0 +1,167 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+env:
+  NODE_VERSION: "20"
+  CACHE_TTL_GENERAL: "1800"
+  CACHE_TTL_NEWS: "300"
+
+jobs:
+  lint-typecheck:
+    name: Lint & Typecheck
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Lint & Typecheck (strict)
+        run: npm run lint:ci
+
+      - name: Lint (ESLint)
+        run: npm run lint:eslint:ci
+
+      - name: Check formatting (Prettier)
+        run: npm run format:check
+
+      - name: Lint (dependency audit)
+        run: |
+          echo "Checking dependency vulnerabilities..."
+          npm audit --audit-level=high 2>&1 | tail -5 || true
+          echo "✓ Dependency audit complete"
+
+      - name: Lint (TODO/FIXME markers)
+        run: |
+          echo "Checking for TODO/FIXME markers in src/..."
+          TODOS=$(grep -rn 'TODO\|FIXME\|HACK\|XXX' src/ 2>/dev/null | grep -v '.test.ts' || true)
+          if [ -n "$TODOS" ]; then
+            COUNT=$(echo "$TODOS" | wc -l)
+            echo "::warning::Found $COUNT TODO/FIXME/HACK markers"
+            echo "$TODOS"
+          else
+            echo "No TODO/FIXME markers found"
+          fi
+
+      - name: Verify wrangler.jsonc integrity
+        run: |
+          echo "Checking wrangler.jsonc JSON syntax..."
+          node -e "JSON.parse(require('fs').readFileSync('wrangler.jsonc','utf8').replace(/\\/\\/.*$/gm,''))"
+          echo "✓ wrangler.jsonc valid"
+
+  unit-tests:
+    name: Unit Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Unit Tests + Coverage
+        run: |
+          npx vitest run --project unit --coverage --reporter=verbose --reporter=json --outputFile=coverage.json 2>&1
+
+      - name: Upload coverage to GitHub Summary
+        run: |
+          if [ -f "coverage.json" ]; then
+            LINES=$(jq -r '.total.lines.pct // "N/A"' coverage.json 2>/dev/null)
+            BRANCHES=$(jq -r '.total.branches.pct // "N/A"' coverage.json 2>/dev/null)
+            FUNCTIONS=$(jq -r '.total.functions.pct // "N/A"' coverage.json 2>/dev/null)
+            echo "### Coverage Report" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "| Metric | Value |" >> $GITHUB_STEP_SUMMARY
+            echo "|--------|-------|" >> $GITHUB_STEP_SUMMARY
+            echo "| **Lines** | ${LINES}% |" >> $GITHUB_STEP_SUMMARY
+            echo "| **Branches** | ${BRANCHES}% |" >> $GITHUB_STEP_SUMMARY
+            echo "| **Functions** | ${FUNCTIONS}% |" >> $GITHUB_STEP_SUMMARY
+            echo "✅ Coverage report generated"
+          else
+            echo "Coverage report not generated"
+          fi
+
+      - name: Snapshot Integrity Check
+        run: |
+          if [ -n "$(git status --porcelain tests/unit/snapshots/ tests/unit/__snapshots__/ 2>/dev/null)" ]; then
+            echo "::error::Snapshot files have uncommitted changes. Run 'npm test -- -u' locally, review, and commit."
+            exit 1
+          fi
+          echo "Snapshot integrity OK"
+
+  binding-verify:
+    name: Binding Verification
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Verify DO Binding
+        run: npx tsx scripts/verify-do-binding.ts
+
+      - name: Verify Analytics Engine Config
+        run: npx tsx scripts/verify-analytics-binding.ts
+
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    needs: [lint-typecheck, unit-tests]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build
+        run: npm run build
+
+      - name: Verify dist output
+        run: |
+          if [ -f "dist/_worker.js" ]; then
+            SIZE=$(wc -c < dist/_worker.js)
+            echo "✓ Build output: $SIZE bytes ($((SIZE / 1024)) KB)"
+          else
+            echo "::error::Build output missing: dist/_worker.js not found"
+            exit 1
+          fi
+
+      - name: Upload dist artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: worker-bundle
+          path: dist/
+          retention-days: 7

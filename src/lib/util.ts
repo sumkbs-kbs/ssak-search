@@ -2,6 +2,9 @@
  * Shared utility functions for the search engine
  */
 
+import type { Env } from '../types'
+
+import { logger, toError } from './logger'
 // ============================================================
 // Domain Authority Map
 // ============================================================
@@ -45,17 +48,213 @@ export function extractDomain(url: string): string {
   try {
     const u = new URL(url)
     return u.hostname.replace(/^www\./, '')
-  } catch {
+  } catch (err) {
+    logger.warn('URL parsing failed:', { error: toError(err) })
     return ''
   }
 }
 
-/** Normalize a URL (add https:// if missing) */
+/** Normalize a URL (add https:// if missing). Rejects non-http(s) schemes. */
 export function normalizeUrl(url: string): string {
   const trimmed = url.trim()
   if (/^https?:\/\//i.test(trimmed)) return trimmed
   if (/^\/\//.test(trimmed)) return `https:${trimmed}`
+  // Reject anything that looks like another scheme (file://, javascript:, data:, etc.)
+  // by prefixing with https:// — only allow bare host/path forms.
+  if (/^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(trimmed)) {
+    throw new Error(`Unsupported URL scheme: ${trimmed}`)
+  }
   return `https://${trimmed}`
+}
+
+/**
+ * Check whether a URL points at a private / loopback / link-local / reserved
+ * address that must not be fetched server-side (SSRF protection).
+ *
+ * Returns true if the URL is SAFE to fetch (public hostname), false otherwise.
+ * Hostnames are matched as strings — this is best-effort and does NOT resolve
+ * DNS, so an attacker who controls DNS for "evil.com" → 127.0.0.1 can still
+ * probe us. Cloudflare's fetch already blocks most private egress by default,
+ * but this is the application-layer gate.
+ */
+export function isPublicHostname(hostname: string): boolean {
+  const host = hostname.toLowerCase().replace(/^\[|\]$/g, '') // strip IPv6 brackets
+
+  // IPv4 in decimal/hex/octet forms (parse defensively)
+  const ipv4Match = host.match(/^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/)
+  if (ipv4Match) {
+    const octets = ipv4Match.slice(1).map((o) => parseInt(o, 10))
+    if (octets.some((n) => n > 255)) return false // malformed
+    const [a, b] = octets
+    if (a === 0) return false // 0.0.0.0/8
+    if (a === 10) return false // 10.0.0.0/8
+    if (a === 127) return false // 127.0.0.0/8
+    if (a === 169 && b === 254) return false // 169.254.0.0/16 link-local + AWS/GCP metadata
+    if (a === 172 && b >= 16 && b <= 31) return false // 172.16.0.0/12
+    if (a === 192 && b === 168) return false // 192.168.0.0/16
+    if (a === 100 && b >= 64 && b <= 127) return false // 100.64.0.0/10 CGNAT
+    if (a >= 224) return false // 224.0.0.0/4 multicast + 240.0.0.0/4 reserved
+    return true
+  }
+
+  // IPv6 — block all reserved ranges
+  if (host.includes(':')) {
+    // ::1 loopback, fc00::/7 unique-local, fe80::/10 link-local, :: unspecified
+    if (host === '::' || host === '::1') return false
+    if (/^fc/.test(host) || /^fd/.test(host)) return false // ULA
+    if (/^fe[89ab]/i.test(host)) return false // link-local
+    if (/^ff/i.test(host)) return false // multicast
+    // IPv4-mapped IPv6 — Cloudflare's URL parser may emit decimal "::ffff:127.0.0.1"
+    // OR hex "::ffff:7f00:1" form. Strip the prefix and recurse on the mapped IPv4.
+    const v4mapped = host.match(/^::ffff:((?:\d{1,3}\.){3}\d{1,3})$/i)
+    if (v4mapped) return isPublicHostname(v4mapped[1])
+    const v4hex = host.match(/^::ffff:([0-9a-f]{1,4}):([0-9a-f]{1,4})$/i)
+    if (v4hex) {
+      const hi = parseInt(v4hex[1], 16)
+      const lo = parseInt(v4hex[2], 16)
+      const a = (hi >> 8) & 0xff
+      const b = hi & 0xff
+      const c = (lo >> 8) & 0xff
+      const d = lo & 0xff
+      return isPublicHostname(`${a}.${b}.${c}.${d}`)
+    }
+    return true
+  }
+
+  // Hostnames that look like internal infrastructure
+  if (
+    host === 'localhost' ||
+    host.endsWith('.localhost') ||
+    host === 'metadata.google.internal' || // GCP metadata
+    host === 'metadata.aws.internal' ||
+    host.endsWith('.internal') ||
+    host.endsWith('.local')
+  ) {
+    return false
+  }
+
+  return true
+}
+
+// DNS-over-HTTPS resolution cache (short TTL to prevent stale DNS rebinding)
+// Key: hostname, Value: { ips: string[], expires: number }
+const dnsCache = new Map<string, { ips: string[]; expires: number }>()
+const DNS_CACHE_TTL_MS = 30_000 // 30 seconds — short to limit rebinding window
+
+/**
+ * Resolve a hostname via DNS-over-HTTPS and validate all resolved IPs are public.
+ * Uses Cloudflare's 1.1.1.1 DoH endpoint (https://1.1.1.1/dns-query).
+ * 
+ * FAIL-OPEN on network/DNS errors (Cloudflare Workers already blocks private egress).
+ * FAIL-CLOSED only if resolution succeeds AND any resolved IP is private/internal.
+ */
+async function resolveAndValidateHostname(hostname: string): Promise<void> {
+  const now = Date.now()
+  const cached = dnsCache.get(hostname)
+  if (cached && cached.expires > now) {
+    // Re-validate cached IPs (defense in depth)
+    for (const ip of cached.ips) {
+      if (!isPublicHostname(ip)) {
+        throw new Error(`Cached DNS resolution for ${hostname} includes private IP: ${ip}`)
+      }
+    }
+    return
+  }
+
+  try {
+    // Use Cloudflare DoH (GET with accept: application/dns-json)
+    // Query both A (IPv4) and AAAA (IPv6) records
+    const [aResp, aaaaResp] = await Promise.allSettled([
+      fetch(`https://1.1.1.1/dns-query?name=${encodeURIComponent(hostname)}&type=A`, {
+        headers: { accept: 'application/dns-json' },
+        cf: { cacheTtl: 0 }, // bypass Cloudflare cache for DoH
+      }),
+      fetch(`https://1.1.1.1/dns-query?name=${encodeURIComponent(hostname)}&type=AAAA`, {
+        headers: { accept: 'application/dns-json' },
+        cf: { cacheTtl: 0 },
+      }),
+    ])
+
+    const allIps: string[] = []
+    // Cloudflare DoH returns a JSON `Status` field (RFC 1035 RCODE). 3 === NXDOMAIN.
+    let definitiveNxdomain = true
+    for (const resp of [aResp, aaaaResp]) {
+      if (resp.status !== 'fulfilled' || !resp.value.ok) {
+        // Network/HTTP failure on any leg means we cannot authoritatively prove non-existence → must fail-open.
+        definitiveNxdomain = false
+        continue
+      }
+
+      const data = await resp.value.json() as { Answer?: { data: string; type: number }[]; Status?: number }
+      // A DNS NXDOMAIN is signaled by RCODE 3 in "Status", independent of the presence/absence of an "Answer" section.
+      definitiveNxdomain = definitiveNxdomain && typeof data.Status === 'number' && data.Status === 3
+
+      if (data.Answer) {
+        for (const ans of data.Answer) {
+          // Answer type 1 = A (IPv4), 28 = AAAA (IPv6)
+          if ((ans.type === 1 || ans.type === 28) && ans.data) allIps.push(ans.data)
+        }
+      }
+    }
+
+    // Hard block: every DNS leg must have *authoritatively* returned NXDOMAIN. This is the only safe fail-closed path — an empty body without a clear RCODE 3 (e.g., NOERROR/NODATA transient blip) stays fail-open per existing policy.
+    if (allIps.length === 0 && definitiveNxdomain) {
+      throw new Error(`SSRF: domain ${hostname} definitively NXDOMAIN — blocked (fail-closed)`)
+    } else if (allIps.length === 0) {
+      logger.warn(`[SSRF] DNS resolution returned no A/AAAA records for ${hostname} — allowing (transient, fail-open)`)
+      return // transient/non-committal empty response → fail-open. Cloudflare Workers fetch blocks private egress regardless.
+    }
+
+    // Validate every resolved IP — THIS IS THE SECURITY GATE
+    for (const ip of allIps) {
+      if (!isPublicHostname(ip)) {
+        throw new Error(`DNS resolution for ${hostname} returned private/internal IP: ${ip}`)
+      }
+    }
+
+    // Cache successful resolution
+    dnsCache.set(hostname, { ips: allIps, expires: now + DNS_CACHE_TTL_MS })
+
+    // Evict stale entries periodically
+    if (dnsCache.size > 500) {
+      for (const [key, val] of dnsCache) {
+        if (val.expires <= now) dnsCache.delete(key)
+      }
+    }
+  } catch (err) {
+    if (err instanceof Error && err.message.includes('private')) throw err // genuine private-IP exposure via DNS → always surface as hard SSRF rejection.
+    if (err instanceof Error && /definitively NXDOMAIN/.test(err.message)) throw err // authoritative non-existence → fail CLOSED. Surfacing this prevents DNS-rebinding bypass where a forged "phantom" hostname silently resolves then pivots to private space mid-request.
+    logger.warn(`[SSRF] DNS resolution failed for ${hostname}, failing open: ${toError(err)}`) // transient/network-only failure (timeout, DoH unreachable) → fail-open; Cloudflare Workers fetch egress is itself sandboxed per-worker.
+  }
+}
+
+/**
+ * Validate that a URL is safe to fetch server-side.
+ * Rejects non-http(s) schemes, private/tracking IPs, and malformed URLs.
+ * Throws on rejection — caller should treat as extract failure.
+ * 
+ * Now includes DNS-over-HTTPS resolution + IP validation to prevent DNS rebinding attacks.
+ */
+export async function assertSafeFetchUrl(url: string): Promise<void> {
+  let parsed: URL
+  try {
+    parsed = new URL(url)
+  } catch (err) {
+    throw new Error(`Invalid URL: ${url}`)
+  }
+  if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+    throw new Error(`Unsupported scheme: ${parsed.protocol}`)
+  }
+  if (parsed.username || parsed.password) {
+    // Reject credentials-in-URL — they're a smuggler vector for internal services.
+    throw new Error('Credentials in URL are not allowed')
+  }
+  // First check hostname string (fast path for IP literals and known internal hostnames)
+  if (!isPublicHostname(parsed.hostname)) {
+    throw new Error(`Blocked hostname (SSRF guard): ${parsed.hostname}`)
+  }
+  // Then resolve via DoH and validate resolved IPs (prevents DNS rebinding)
+  await resolveAndValidateHostname(parsed.hostname)
 }
 
 /** Check if a URL matches any of the domain filters (include/exclude) */
@@ -175,7 +374,7 @@ export function computeScore(title: string, content: string, query: string, publ
           freshnessBoost = 0.05 * Math.exp(-daysOld / 90)
         }
       }
-    } catch {
+    } catch (err) {
       // Invalid date — no boost
     }
   }
@@ -362,7 +561,8 @@ export function parseDate(dateStr: string | undefined): string | undefined {
     const d = new Date(dateStr)
     if (isNaN(d.getTime())) return undefined
     return d.toISOString()
-  } catch {
+  } catch (err) {
+    logger.warn('Date parsing failed:', { error: toError(err) })
     return undefined
   }
 }
@@ -385,71 +585,161 @@ export function timeRangeToDays(range: string | undefined): number | undefined {
 
 /** Fetch with timeout */
 export async function fetchWithTimeout(
+  env: Env | undefined,
   url: string,
   init: RequestInit = {},
   timeoutMs = 15000,
 ): Promise<Response> {
-  const controller = new AbortController()
-  const timeoutId = setTimeout(() => controller.abort(), timeoutMs)
-  try {
-    const response = await fetch(url, {
-      ...init,
-      signal: controller.signal,
-    })
-    return response
-  } finally {
-    clearTimeout(timeoutId)
+  // Route through the rate limiter / circuit breaker for all backend fetches.
+  // This ensures per-host concurrency limits and automatic circuit tripping
+  // on consecutive failures, preventing IP bans.
+  const { rateLimitedFetch, canRequest } = await import('./rate-limiter')
+
+  // If the circuit is open OR concurrency is saturated for this host, do NOT
+  // fall back to a direct fetch — that would defeat the circuit breaker and
+  // could trip an IP ban from the upstream. Surface a 503 upstream error
+  // instead so callers can treat it as a backend failure.
+  if (!await canRequest(env ?? {}, url)) {
+    throw new Error(`Upstream unavailable (circuit open or at capacity): ${url}`)
   }
+
+  const limited = await rateLimitedFetch(env ?? {}, url, init, timeoutMs)
+  if (limited !== null) return limited
+
+  // Defensive: rateLimitedFetch returning null after canRequest passed is
+  // unexpected (race with another concurrent acquire). Bail with a 503 rather
+  // than silently bypassing the breaker.
+  throw new Error(`Rate limiter rejected (capacity race): ${url}`)
 }
 
-/** Generate related queries from the original query and results */
+/** Generate enhanced related queries from the original query and results */
 export function generateRelatedQueries(query: string, resultTitles: string[]): string[] {
   const related = new Set<string>()
   const baseQuery = query.trim()
   const isKorean = /[\uAC00-\uD7A3]/.test(baseQuery)
 
-  // Detect financial/stock queries for specialized related queries
+  // Detect query subtypes for specialized templates
   const isFinancial = /주가|주식|증권|코스피|코스닥|kospi|kosdaq|stock|price|finance|dividend|\bper\b|\bpbr\b|시세|목표주가|투자의견|실적|배당/i.test(baseQuery)
+  const isHowTo = /^(?:how|하는|사용|설치|방법)/i.test(baseQuery)
+  const isWhatIs = /^(?:what|what is|what are|who|who is|whose|which)/i.test(baseQuery)
+  const isComparison = /\b(?:vs|vs\.|versus|대비|비교|차이)/i.test(baseQuery)
+  const isQuestion = /[?？]$|^(?:why|when|where|how|does|can|should|would|could)/i.test(baseQuery)
+  const isTech = /\b(?:api|sdk|framework|library|language|compiler|runtime|protocol|standard|typescript|rust|python|javascript|react|node|docker|kubernetes)\b/i.test(baseQuery)
+  const isNewsQuery = /^(?:news|latest|breaking|update|headlines)|(?:news|update)$/i.test(baseQuery)
+
   const currentYear = new Date().getFullYear().toString()
 
-  // Generic question variants — use Korean templates for Korean queries
-  const templates = isKorean
-    ? isFinancial
-      ? [
-          `${baseQuery} 전망`,
-          `${baseQuery} 분석`,
-          `${baseQuery} 실적`,
-          `${baseQuery} 목표주가`,
-          `${baseQuery} 배당`,
-        ]
-      : [
-          `${baseQuery} 정리`,
-          `${baseQuery} 설명`,
-          `${baseQuery} 최신`,
-          `${baseQuery} 가이드`,
-          `${baseQuery} ${currentYear}`,
-        ]
-    : isFinancial
-      ? [
-          `${baseQuery} forecast`,
-          `${baseQuery} analysis`,
-          `${baseQuery} earnings`,
-          `${baseQuery} price target`,
-          `${baseQuery} dividend`,
-        ]
-      : [
-          `${baseQuery} guide`,
-          `${baseQuery} explained`,
-          `best ${baseQuery}`,
-          `${baseQuery} examples`,
-          `${baseQuery} ${currentYear}`,
-        ]
+  // Build context-aware templates based on query type
+  const templates: string[] = []
+
+  if (isKorean) {
+    if (isFinancial) {
+      templates.push(
+        `${baseQuery} 전망`,
+        `${baseQuery} 분석`,
+        `${baseQuery} 실적`,
+        `${baseQuery} 목표주가`,
+        `${baseQuery} 배당`,
+        `${baseQuery} 차트`,
+        `${baseQuery} 투자`,
+      )
+    } else if (isHowTo) {
+      templates.push(
+        `${baseQuery} 단계별`,
+        `${baseQuery} 예제`,
+        `${baseQuery} 팁`,
+        `${baseQuery} ${currentYear}`,
+        `${baseQuery} 문제해결`,
+      )
+    } else if (isComparison) {
+      templates.push(
+        `${baseQuery} 장단점`,
+        `${baseQuery} 대안`,
+        `${baseQuery} 리뷰`,
+        `${baseQuery} 추천`,
+      )
+    } else {
+      templates.push(
+        `${baseQuery} 정리`,
+        `${baseQuery} 설명`,
+        `${baseQuery} 최신`,
+        `${baseQuery} 가이드`,
+        `${baseQuery} ${currentYear}`,
+        `무엇인가 ${baseQuery}`,
+      )
+    }
+  } else {
+    if (isFinancial) {
+      templates.push(
+        `${baseQuery} forecast`,
+        `${baseQuery} analysis`,
+        `${baseQuery} earnings`,
+        `${baseQuery} price target`,
+        `${baseQuery} dividend`,
+        `${baseQuery} stock chart`,
+      )
+    } else if (isHowTo) {
+      templates.push(
+        `${baseQuery} step by step`,
+        `${baseQuery} examples`,
+        `${baseQuery} best practices`,
+        `${baseQuery} troubleshooting`,
+        `${baseQuery} ${currentYear}`,
+      )
+    } else if (isWhatIs) {
+      templates.push(
+        `${baseQuery} definition`,
+        `${baseQuery} explained`,
+        `${baseQuery} examples`,
+        `${baseQuery} history`,
+        `types of ${baseQuery.replace(/^(?:what|who|which)\s+(?:is|are|was|were)?\s*/i, '')}`,
+      )
+    } else if (isComparison) {
+      templates.push(
+        `${baseQuery} comparison`,
+        `${baseQuery} pros and cons`,
+        `${baseQuery} alternatives`,
+        `${baseQuery} review`,
+      )
+    } else if (isTech && !isNewsQuery) {
+      templates.push(
+        `${baseQuery} documentation`,
+        `${baseQuery} tutorial`,
+        `${baseQuery} getting started`,
+        `${baseQuery} api reference`,
+        `${baseQuery} vs`,
+        `${baseQuery} best practices`,
+      )
+    } else if (isNewsQuery || isQuestion) {
+      templates.push(
+        `${baseQuery} update`,
+        `${baseQuery} latest news`,
+        `${baseQuery} analysis`,
+        `${baseQuery} timeline`,
+        `impact of ${baseQuery}`,
+      )
+    } else {
+      // Default templates with question-based alternatives
+      templates.push(
+        `${baseQuery} guide`,
+        `${baseQuery} explained`,
+        `what is ${baseQuery}`,
+        `best ${baseQuery}`,
+        `${baseQuery} examples`,
+        `${baseQuery} ${currentYear}`,
+        `${baseQuery} vs`,
+        `how does ${baseQuery} work`,
+      )
+    }
+  }
+
   for (const t of templates) {
     if (t.toLowerCase() !== baseQuery.toLowerCase()) related.add(t)
   }
 
-  // Extract keywords from top result titles
+  // Extract keywords from top result titles — enhanced with bigram detection
   const topWords = new Map<string, number>()
+  const topBigrams = new Map<string, number>()
   for (const title of resultTitles.slice(0, 5)) {
     const words = title
       .toLowerCase()
@@ -457,22 +747,41 @@ export function generateRelatedQueries(query: string, resultTitles: string[]): s
       .filter((w) => w.length > 1 && !isStopWord(w))
       .map((w) => w.replace(/[^\p{L}\p{N}]/gu, ''))
       .filter((w) => w.length > 0)
-    for (const w of words) {
-      topWords.set(w, (topWords.get(w) ?? 0) + 1)
+    for (let i = 0; i < words.length; i++) {
+      topWords.set(words[i], (topWords.get(words[i]) ?? 0) + 1)
+      // Bigrams
+      if (i < words.length - 1) {
+        const bigram = `${words[i]} ${words[i + 1]}`
+        topBigrams.set(bigram, (topBigrams.get(bigram) ?? 0) + 1)
+      }
     }
   }
+
+  // Add keyword-based expansions (from frequent terms in titles)
   const topKeywords = [...topWords.entries()]
     .sort((a, b) => b[1] - a[1])
-    .slice(0, 3)
+    .slice(0, 4)
     .map(([w]) => w)
 
   for (const kw of topKeywords) {
-    if (!baseQuery.toLowerCase().includes(kw)) {
+    if (!baseQuery.toLowerCase().includes(kw) && related.size < 10) {
       related.add(`${baseQuery} ${kw}`)
     }
   }
 
-  return [...related].slice(0, 5)
+  // Add bigram-based suggestions (more specific than single words)
+  const topBigramList = [...topBigrams.entries()]
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 2)
+    .map(([b]) => b)
+
+  for (const bg of topBigramList) {
+    if (!baseQuery.toLowerCase().includes(bg) && related.size < 10) {
+      related.add(`${baseQuery} ${bg}`)
+    }
+  }
+
+  return [...related].slice(0, 8)
 }
 
 const STOP_WORDS = new Set([
@@ -500,4 +809,93 @@ const STOP_WORDS = new Set([
 
 function isStopWord(word: string): boolean {
   return STOP_WORDS.has(word.toLowerCase())
+}
+
+/**
+ * Map ISO 3166-1 alpha-2 country code to a Bing mkt (market) BCP 47 tag.
+ * Falls back to the language derived from country, or en-US as default.
+ */
+export function countryToBingMkt(country: string): string {
+  const map: Record<string, string> = {
+    KR: 'ko-KR',
+    CN: 'zh-CN',
+    TW: 'zh-TW',
+    HK: 'zh-HK',
+    JP: 'ja-JP',
+    FR: 'fr-FR',
+    DE: 'de-DE',
+    IT: 'it-IT',
+    ES: 'es-ES',
+    PT: 'pt-PT',
+    BR: 'pt-BR',
+    RU: 'ru-RU',
+    NL: 'nl-NL',
+    PL: 'pl-PL',
+    SE: 'sv-SE',
+    NO: 'nb-NO',
+    DK: 'da-DK',
+    FI: 'fi-FI',
+    TR: 'tr-TR',
+    AR: 'es-AR',
+    MX: 'es-MX',
+    IN: 'en-IN',
+    GB: 'en-GB',
+    AU: 'en-AU',
+    CA: 'en-CA',
+    US: 'en-US',
+  }
+  return map[country.toUpperCase()] || `${countryToLanguageTag(country)}-${country.toUpperCase()}`
+}
+
+/**
+ * Map ISO 3166-1 alpha-2 country code to a BCP 47 language tag (language part only).
+ * Uses the most common/official language for each country.
+ */
+export function countryToLanguageTag(country: string): string {
+  const map: Record<string, string> = {
+    KR: 'ko',
+    CN: 'zh',
+    TW: 'zh',
+    HK: 'zh',
+    JP: 'ja',
+    FR: 'fr',
+    DE: 'de',
+    IT: 'it',
+    ES: 'es',
+    PT: 'pt',
+    BR: 'pt',
+    RU: 'ru',
+    NL: 'nl',
+    PL: 'pl',
+    SE: 'sv',
+    NO: 'nb',
+    DK: 'da',
+    FI: 'fi',
+    TR: 'tr',
+    AR: 'es',
+    MX: 'es',
+    GB: 'en',
+    US: 'en',
+    AU: 'en',
+    CA: 'en',
+    IN: 'hi',
+    SG: 'en',
+    MY: 'ms',
+    TH: 'th',
+    VN: 'vi',
+    ID: 'id',
+    PH: 'tl',
+    SA: 'ar',
+    AE: 'ar',
+    IL: 'he',
+    GR: 'el',
+    CZ: 'cs',
+    HU: 'hu',
+    RO: 'ro',
+    UA: 'uk',
+    AT: 'de',
+    CH: 'de',
+    BE: 'nl',
+  }
+  return map[country.toUpperCase()] || 'en'
 }

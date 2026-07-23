@@ -13,47 +13,98 @@
  *   4. DuckDuckGo HTML search (regular backend for non-Korean, non-news)
  *      — provides independent result diversity + abundance boost
  *   5. Merge → deduplicate by URL+title → re-rank by combined score
- *   6. DDG emergency fallback (only if all above return nothing)
- *   7. Jina Reader enrichment for top results (advanced depth, no key)
- *   8. Answer generation: Workers AI → extractive summary → DDG Instant Answer
+ *   6. Hybrid Search (BM25 + Vectorize RRF): if Vectorize/D1 has indexed content, return instantly
+ *   7. DDG emergency fallback (only if all above return nothing)
+ *   8. Jina Reader enrichment for top results (advanced depth, no key)
+ *   9. Answer generation: Workers AI → extractive summary → DDG Instant Answer
  */
 
+import { logger, toError } from './logger'
 import type {
   SearchRequest,
   SearchResponse,
   SearchResult,
   SearchAnswer,
   ImageResult,
+  KnowledgeGraph,
+  Env,
+  FocusMode,
 } from '../types'
-import { bingSearch, bingNewsSearch, bingImageSearch } from './bing-search'
-import { naverSearch } from './naver-search'
+import { searchAllFreeImageSources } from './free-image-search'
 import {
-  wikipediaSearch,
-  githubSearch,
-  hackerNewsSearch,
-  redditSearch,
-  arxivSearch,
   duckDuckGoInstantAnswer,
   detectQueryType,
   getSourcesForQueryType,
-  getKnowledgeGraph,
 } from './specialized'
-import { duckDuckGoSearch } from './duckduckgo'
 import { extractContent } from './extractor'
 import { generateAnswer } from './answer'
+import { buildKnowledgePanel, matchImagesToResults } from './knowledge-panel'
+import { hybridSearch } from './retrieval'
 import {
-  domainMatches,
-  computeScore,
   generateRelatedQueries,
-  timeRangeToDays,
   truncateToTokens,
+  countryToBingMkt,
+  countryToLanguageTag,
 } from './util'
+import { type AgenticSearchOptions, executeAgenticSearch } from './agentic'
+import { recordAgenticPipeline } from './metrics'
+// Phase 2: decomposed search modules
+import type { SearchContext, BackendTask } from './search/context'
+import { buildBackendTasks } from './search/strategies'
+import { fanoutBackends } from './search/fanout'
+import { emergencyFallback } from './search/fallback'
+import { applyRankingPipeline } from './search/ranking'
+
+// ============================================================
+// Phase 2.4: Isolate-level in-memory result cache
+// Catches repeated queries within the same isolate without
+// requiring any Cloudflare binding (Cache API or KV).
+// TTL: 120s for general, 30s for news/finance.
+// ============================================================
+interface CacheEntry {
+  response: SearchResponse
+  expiresAt: number
+}
+const MEMORY_CACHE = new Map<string, CacheEntry>()
+const MEMORY_CACHE_TTL_GENERAL = 120_000  // 2 minutes
+const MEMORY_CACHE_TTL_NEWS = 30_000      // 30 seconds
+
+function getMemoryCacheKey(request: SearchRequest): string {
+  // Fast deterministic key: all fields that affect search results
+  const includeSorted = request.include_domains ? [...request.include_domains].sort().join(',') : ''
+  const excludeSorted = request.exclude_domains ? [...request.exclude_domains].sort().join(',') : ''
+  return `${request.query}|${request.topic}|${request.max_results}|${request.search_depth}|${request.time_range ?? ''}|${request.sort_by}|${request.country ?? ''}|${request.language ?? ''}|${request.focus ?? 'all'}|${request.page ?? 1}|ia=${request.include_answer ? 1 : 0}|inc=${includeSorted}|exc=${excludeSorted}`
+}
+
+function getFromMemoryCache(key: string): SearchResponse | undefined {
+  const entry = MEMORY_CACHE.get(key)
+  if (entry && entry.expiresAt > Date.now()) {
+    return entry.response
+  }
+  if (entry) {
+    MEMORY_CACHE.delete(key) // Expired — clean up
+  }
+  return undefined
+}
+
+function setInMemoryCache(key: string, response: SearchResponse, isNewsOrFinance: boolean): void {
+  const ttl = isNewsOrFinance ? MEMORY_CACHE_TTL_NEWS : MEMORY_CACHE_TTL_GENERAL
+  MEMORY_CACHE.set(key, { response, expiresAt: Date.now() + ttl })
+
+  // Prevent unbounded growth: evict oldest entries if > 500
+  if (MEMORY_CACHE.size > 500) {
+    const oldest = MEMORY_CACHE.entries().next().value
+    if (oldest) MEMORY_CACHE.delete(oldest[0])
+  }
+}
 
 export interface OrchestratorConfig {
   /** Jina API key (optional — Reader works without it, Search does not) */
   jinaApiKey?: string
   /** Cloudflare Workers AI binding (optional) */
   ai?: Ai
+  /** Cloudflare Env for Durable Object rate limiter */
+  env?: Env
 }
 
 // ============================================================
@@ -101,10 +152,11 @@ function normalizeUrlForDedup(url: string): string {
     // Remove common tracking params
     const trackingParams = ['utm_source', 'utm_medium', 'utm_campaign', 'utm_term', 'utm_content', 'gclid', 'fbclid', 'ref', 'ref_src']
     trackingParams.forEach((p) => u.searchParams.delete(p))
-    let path = u.pathname.replace(/\/+$/, '') // strip trailing slashes
+    const path = u.pathname.replace(/\/+$/, '') // strip trailing slashes
     const search = u.search ? u.search : ''
     return `${u.hostname.toLowerCase()}${path}${search}`.toLowerCase()
-  } catch {
+  } catch (err) {
+    logger.warn('URL normalization failed:', { error: toError(err) })
     return url.toLowerCase().replace(/^https?:\/\//, '').replace(/\/+$/, '')
   }
 }
@@ -187,6 +239,13 @@ export async function executeSearch(
   config: OrchestratorConfig,
 ): Promise<SearchResponse> {
   const startTime = Date.now()
+  const { env } = config
+
+  // ── 1. Cache check ──
+  const memCacheKey = getMemoryCacheKey(request)
+  const memCached = getFromMemoryCache(memCacheKey)
+  if (memCached) return memCached
+
   const {
     query,
     search_depth = 'basic',
@@ -202,398 +261,221 @@ export async function executeSearch(
     page = 1,
   } = request
 
-  // --- Detect query characteristics ---
-  const queryType = detectQueryType(query)
-  const sources = getSourcesForQueryType(queryType)
-  const korean = isKoreanQuery(query)
-  const wikiLang = detectWikiLanguage(query)
-  // IMPORTANT: Do NOT set mkt=ko-KR for Bing when called from US datacenter IPs.
-  // Bing's mkt=ko-KR from a US IP returns garbage results (e.g. Denver shopping malls
-  // for Korean stock queries). Without mkt, Bing auto-detects Korean query text and
-  // returns correct results (Google Finance, Naver Finance, Investing.com, etc.).
-  //
-  // EXCEPTION: Chinese (CJK) queries MUST use mkt=zh-CN. Without it, Bing from a US IP
-  // returns completely irrelevant results (e.g. Reddit Hannah_OwO spam for "量子计算").
-  // With mkt=zh-CN, Bing returns proper Chinese results (zhihu, baike.baidu, 36kr, etc.).
-  const chinese = isChineseQuery(query)
-  const bingRegion = chinese ? 'zh-CN' : undefined
-  const bingTimeRange = toBingTimeRange(time_range)
-  const isNews = topic === 'news' || queryType === 'news'
-  const isFinance = topic === 'finance' || queryType === 'financial'
+  // ── 2. Build SearchContext ──
+  const ctx = await buildSearchContext(request, config)
+  const { isNews, isFinance, effectiveWikiLang, entityHints } = ctx
 
-  // Over-fetch so we have room for filtering and dedup
-  // 3x multiplier ensures enough raw results after dedup + score filtering
-  const overFetch = Math.max(max_results * 3, 30)
-
-  // --- Build parallel search tasks ---
-  const tasks: Promise<SearchResult[]>[] = []
-  const taskNames: string[] = []
-
-  // 0. Naver search (PRIMARY for Korean queries) — runs FIRST and gets highest priority
-  //    Naver is the dominant Korean search engine with far superior Korean content,
-  //    especially for stock/financial/news queries. Stock cards return real-time prices.
-  if (korean) {
-    tasks.push(
-      naverSearch(query, { maxResults: overFetch }),
-    )
-    taskNames.push('naver')
-  }
-
-  // 1. Bing search (secondary) — always runs, but no longer forces mkt=ko-KR
-  if (isFinance && !korean) {
-    // For non-Korean financial queries, augment Bing with finance-specific terms
-    // to surface stock screener / market data pages.
-    tasks.push(
-      bingSearch(`${query} stock price market cap`, { maxResults: overFetch, timeRange: bingTimeRange, region: bingRegion }),
-    )
-    taskNames.push('bing-finance')
-  } else if (isNews) {
-    // For news: use both Bing News endpoint and regular Bing for broader coverage
-    tasks.push(
-      bingNewsSearch(query, { maxResults: overFetch, timeRange: bingTimeRange, region: bingRegion }),
-    )
-    taskNames.push('bing-news')
-    tasks.push(
-      bingSearch(query, { maxResults: Math.max(max_results, 10), timeRange: bingTimeRange, region: bingRegion }),
-    )
-    taskNames.push('bing')
-  } else {
-    tasks.push(
-      bingSearch(query, { maxResults: overFetch, timeRange: bingTimeRange, region: bingRegion }),
-    )
-    taskNames.push('bing')
-
-    // For Chinese queries: also search with the cleaned query (without question particles)
-    // "什么是量子计算" → Bing search for "量子计算" returns different/better results
-    // This doubles the Bing result pool for CJK queries where Bing is the primary backend
-    if (chinese) {
-      const cleanedQuery = cleanChineseQuery(query)
-      if (cleanedQuery !== query && cleanedQuery.length > 0) {
-        tasks.push(
-          bingSearch(cleanedQuery, { maxResults: overFetch, timeRange: bingTimeRange, region: bingRegion }),
-        )
-        taskNames.push('bing-cleaned')
-      }
-    }
-  }
-
-  // 2. Wikipedia (factual / academic / general) — increased from 3→5
-  if (sources.useWikipedia) {
-    // For Chinese queries, strip question particles (什么是...) before Wikipedia search
-    // Also increase maxResults for CJK queries since Bing often returns fewer relevant CJK results.
-    // CJK queries get higher timeout (12s vs 8s default) because zh.wikipedia.org can be
-    // intermittently slow from sandbox IPs — this reliability boost is critical since
-    // Wikipedia results are the primary abundance source for CJK queries.
-    const wikiQuery = isChineseQuery(query) ? cleanChineseQuery(query) : query
-    const wikiMax = isChineseQuery(query) ? 10 : 5
-    const wikiTimeout = isChineseQuery(query) ? 12000 : 8000
-    tasks.push(wikipediaSearch(wikiQuery, { maxResults: wikiMax, language: wikiLang, timeoutMs: wikiTimeout }))
-    taskNames.push('wikipedia')
-  }
-
-  // 3. GitHub (technical) — increased from 3→8
-  if (sources.useGitHub) {
-    tasks.push(githubSearch(query, { maxResults: 8 }))
-    taskNames.push('github')
-  }
-
-  // 4. HackerNews (technical / news / general) — increased from 4→8
-  if (sources.useHackerNews) {
-    tasks.push(hackerNewsSearch(query, { maxResults: 8, timeRange: bingTimeRange }))
-    taskNames.push('hackernews')
-  }
-
-  // 5. Reddit (news) — increased from 3→5
-  if (sources.useReddit) {
-    tasks.push(redditSearch(query, { maxResults: 5, timeRange: bingTimeRange }))
-    taskNames.push('reddit')
-  }
-
-  // 5b. arXiv (academic) — research papers, no API key required
-  if (sources.useArxiv) {
-    tasks.push(arxivSearch(query, { maxResults: 8 }))
-    taskNames.push('arxiv')
-  }
-
-  // 6. DuckDuckGo as REGULAR backend (not just emergency fallback)
-  //    DDG provides independent result diversity — different ranking than Bing,
-  //    different sources, and helps fill gaps when Bing/Bing-News underperforms.
-  //    Skip for Korean queries (Naver already covers Korean well, and DDG's
-  //    Korean results are sparse). Skip for news queries (Bing-News + HN + Reddit
-  //    already cover news comprehensively).
-  //    Skip for Chinese queries: DDG HTML endpoint returns HTTP 202 (anti-bot)
-  //    from sandbox IPs, wasting time on timeout with zero results.
-  //
-  //    Timeout reduced from 12000 → 5000ms. DDG from sandbox IPs consistently
-  //    returns 202 anti-bot challenges, so the html fetch fails fast and lite
-  //    is skipped (see duckduckgo.ts fail-fast logic). At 5s, even if DDG hangs
-  //    it only blocks one Promise for 5s, not 24s.
-  if (!korean && !isNews && !chinese) {
-    tasks.push(
-      duckDuckGoSearch(query, {
-        maxResults: Math.max(max_results, 10),
-        timeoutMs: 5000,
-      }),
-    )
-    taskNames.push('duckduckgo')
-  }
-
-  // --- Run image search in parallel (separate from text results) ---
+  // ── 3. Start image search (fire-and-forget, parallel with text backends) ──
   let imageResults: ImageResult[] = []
-  let knowledgeGraph: { title: string; description: string; url?: string; image?: string; type?: string; facts?: Record<string, string> } | null = null
+  let knowledgeGraph: KnowledgeGraph | null = null
+  const imagePromise = searchAllFreeImageSources(query, { maxResults: 8, env })
+    .then((res) => { imageResults = res })
+    .catch((err) => { logger.warn('Image search failed (non-critical):', { error: err.message || String(err) }) })
 
-  if (!chinese) {
-    try {
-      const [imgs, kg] = await Promise.all([
-        bingImageSearch(query, { maxResults: 8, timeoutMs: 8000 }),
-        // Knowledge graph only for factual/general queries (not news/technical)
-        (queryType === 'factual' || queryType === 'general')
-          ? getKnowledgeGraph(query, wikiLang)
-          : Promise.resolve(null),
-      ])
-      imageResults = imgs
-      knowledgeGraph = kg
-    } catch {
-      // Image/KG failure is non-critical
-    }
+  // ── 4. Build backend tasks: self-index + strategy-selected backends ──
+  const tasks: BackendTask[] = []
+
+  // Self-index hybrid search (always runs when available, non-news/finance)
+  if (env?.VECTORIZE_INDEX && env?.SEARCH_INDEX_DB && !isNews && !isFinance) {
+    tasks.push({
+      name: 'self-index',
+      run: async () => {
+        try {
+          const idxResults = await hybridSearch(env, query, {
+            maxResults: max_results * 2,
+            language: ctx.bingLang || effectiveWikiLang,
+          })
+          return idxResults.map((r) => ({
+            title: r.title,
+            url: r.url,
+            content: r.content,
+            score: Math.min(r.score, 0.95),
+            domain: r.domain,
+            published_date: r.publishedDate,
+            raw_content: r.content,
+          } as SearchResult))
+        } catch (err) {
+          logger.warn('[Orchestrator] Self-index search failed:', { error: toError(err) })
+          return []
+        }
+      },
+    })
   }
 
-  // --- Run all text searches in parallel ---
-  const settled = await Promise.allSettled(tasks)
-  const resultSets: SearchResult[][] = []
-  const usedBackends: string[] = []
+  // Strategy-selected backends
+  tasks.push(...buildBackendTasks(ctx))
 
-  for (let i = 0; i < settled.length; i++) {
-    if (settled[i].status === 'fulfilled' && settled[i].value.length > 0) {
-      resultSets.push(settled[i].value)
-      usedBackends.push(taskNames[i])
-    }
-  }
+  // ── 5. Fan-out with progressive timeout collection ──
+  const { resultSets, usedBackends } = await fanoutBackends(tasks, max_results)
+  const backendCount = usedBackends.length
 
-  // --- Merge & deduplicate ---
+  // ── 6. Merge & deduplicate ──
   let results = mergeAndDeduplicate(resultSets)
 
-  // --- Emergency fallback: DDG HTML (only if DDG wasn't already run as regular backend) ---
-  let fallbackUsed = false
-  const ddgAlreadyRan = usedBackends.includes('duckduckgo')
-  if (results.length === 0 && !ddgAlreadyRan) {
-    fallbackUsed = true
-    try {
-      const ddgResults = await duckDuckGoSearch(query, {
-        maxResults: overFetch,
-        timeoutMs: 5000,
-      })
-      if (ddgResults.length > 0) {
-        results = ddgResults
-        usedBackends.push('duckduckgo')
-      }
-    } catch (err) {
-      console.warn('DDG emergency fallback also failed:', err)
-    }
-  }
+  // ── 7. Emergency fallback (self-index → SearXNG → DDG) ──
+  const fallback = await emergencyFallback(ctx, results, usedBackends)
+  results = fallback.results
+  const usedBackendsWithFallback = fallback.usedBackends
+  const fallbackUsed = fallback.fallbackUsed
+  const backend = usedBackendsWithFallback.length > 0 ? usedBacksWithFallback(usedBackendsWithFallback) : 'failed'
 
-  // Determine backend label
-  const backend = usedBackends.length > 0 ? usedBackends.join('+') : 'failed'
+  // ── 8. Ranking pipeline (filter → recompute → boost → sort → threshold) ──
+  results = await applyRankingPipeline(results, ctx)
 
-  // --- Apply domain filters ---
-  if (include_domains && include_domains.length > 0) {
-    results = results.filter((r) => domainMatches(r.url, include_domains))
-  }
-  if (exclude_domains && exclude_domains.length > 0) {
-    results = results.filter((r) => !domainMatches(r.url, exclude_domains))
-  }
-
-  // --- Apply time range filter ---
-  const daysBack = timeRangeToDays(time_range)
-  if (daysBack) {
-    const cutoff = Date.now() - daysBack * 24 * 60 * 60 * 1000
-    results = results.filter((r) => {
-      if (!r.published_date) return true // Keep results without dates
-      const d = new Date(r.published_date)
-      return !isNaN(d.getTime()) && d.getTime() >= cutoff
-    })
-  }
-
-  // --- Recompute scores with full query context + freshness + authority ---
-  results = results.map((r) => ({
-    ...r,
-    score: computeScore(r.title, r.content, query, r.published_date, r.url),
-  }))
-
-  // --- Sort results ---
-  if (sort_by === 'date') {
-    results = results.sort((a, b) => {
-      const dateA = a.published_date ? new Date(a.published_date).getTime() : 0
-      const dateB = b.published_date ? new Date(b.published_date).getTime() : 0
-      return dateB - dateA
-    })
-  } else if (isNews) {
-    // For news: blend date and relevance (recent + relevant first)
-    results = results.sort((a, b) => {
-      const dateA = a.published_date ? new Date(a.published_date).getTime() : 0
-      const dateB = b.published_date ? new Date(b.published_date).getTime() : 0
-      const dateDiff = dateB - dateA
-      const scoreDiff = b.score - a.score
-      // Date matters more for news, but score still counts
-      return dateDiff * 0.0000001 + scoreDiff
-    })
-  } else {
-    // Relevance sort (descending)
-    results = results.sort((a, b) => b.score - a.score)
-  }
-
-  // --- Adaptive minimum quality threshold ---
-  // Remove irrelevant results (score near zero) to prevent noise. But ensure
-  // ABUNDANCE: if high-quality results are scarce, progressively relax the
-  // threshold so we still return up to max_results when possible.
-  //
-  // Tier 1 (0.10): standard quality — most relevant results pass
-  // Tier 2 (0.05): relaxed — picks up CJK results with partial content match
-  //               (title non-CJK but content has CJK — still somewhat relevant)
-  // Tier 3 (0.01): last resort — keeps anything above zero (filters out only
-  //               completely irrelevant 0.000-score results like English spam
-  //               for a Chinese query)
-  //
-  // This fixes the non-deterministic TEST 9 issue: when Wikipedia intermittently
-  // fails, Bing alone produces ~5 results at 0.10 threshold. The adaptive
-  // relaxation picks up additional borderline-but-relevant results to reach 10.
-  const minScoreHigh = 0.10
-  const minScoreLow = 0.01
-
-  let filtered = results.filter((r) => r.score >= minScoreHigh)
-  if (filtered.length < max_results) {
-    // Not enough high-quality results — relax to tier 2 (0.05)
-    const tier2 = results.filter((r) => r.score >= 0.05)
-    if (tier2.length > filtered.length) {
-      filtered = tier2
-    }
-    // Still not enough — relax to tier 3 (0.01), keeping anything > 0
-    if (filtered.length < max_results) {
-      const tier3 = results.filter((r) => r.score >= minScoreLow)
-      if (tier3.length > filtered.length) {
-        filtered = tier3
-      }
-    }
-  }
-  if (filtered.length >= Math.min(3, max_results)) {
-    results = filtered
-  }
-
-  // --- Limit to requested count ---
-  results = results.slice(0, max_results)
-
-  // --- Enrichment for advanced search depth ---
+  // ── 9. Enrichment (advanced depth) ──
   if (search_depth === 'advanced' && results.length > 0) {
-    // Strategy 1: If results already have raw_content, extend snippets
     for (const r of results.slice(0, 3)) {
       if (r.content.length < 200 && r.raw_content) {
         r.content = truncateToTokens(r.raw_content, 800)
       }
     }
-
-    // Strategy 2: Fetch full content for top 3 results (no API key needed — uses Jina Reader + HTMLRewriter)
-    if (!include_raw_content) {
-      const topUrls = results.slice(0, 3).filter((r) => !r.raw_content).map((r) => r.url)
-      if (topUrls.length > 0) {
-        try {
-          const extracted = await extractContent(topUrls, {
-            maxTokens: 800,
-            timeoutMs: 12000,
-            jinaApiKey: config.jinaApiKey, // Optional — Reader works without key
-          })
-          for (const ex of extracted) {
-            const matchIdx = results.findIndex((r) => r.url === ex.url)
-            if (matchIdx >= 0 && ex.success && ex.raw_content) {
-              // Extend the snippet with extracted content
-              if (results[matchIdx].content.length < 200) {
-                results[matchIdx].content = truncateToTokens(ex.raw_content, 800)
-              }
-              results[matchIdx].raw_content = include_raw_content ? ex.raw_content : undefined
+    const needExtraction = results.slice(0, 3).filter((r) => !r.raw_content).map((r) => r.url)
+    if (needExtraction.length > 0) {
+      try {
+        const extracted = await extractContent(needExtraction, {
+          maxTokens: 800, timeoutMs: 12000, jinaApiKey: config.jinaApiKey,
+        })
+        for (const ex of extracted) {
+          const matchIdx = results.findIndex((r) => r.url === ex.url)
+          if (matchIdx >= 0 && ex.success && ex.raw_content) {
+            if (results[matchIdx].content.length < 200) {
+              results[matchIdx].content = truncateToTokens(ex.raw_content, 800)
             }
+            if (include_raw_content) results[matchIdx].raw_content = ex.raw_content
           }
-        } catch (err) {
-          console.warn('Content enrichment failed:', err)
         }
+      } catch (err) {
+        logger.warn('Content enrichment failed:', { error: toError(err) })
       }
     }
   }
 
-  // --- Include raw content if requested ---
+  // ── 9b. Include raw content for remaining results (if requested) ──
   if (include_raw_content && results.length > 0) {
     const urlsNeedingContent = results.filter((r) => !r.raw_content).map((r) => r.url)
     if (urlsNeedingContent.length > 0) {
       try {
         const extracted = await extractContent(urlsNeedingContent, {
-          maxTokens: max_tokens,
-          timeoutMs: 15000,
-          jinaApiKey: config.jinaApiKey,
+          maxTokens: max_tokens, timeoutMs: 15000, jinaApiKey: config.jinaApiKey,
         })
         for (const ex of extracted) {
           const matchIdx = results.findIndex((r) => r.url === ex.url)
-          if (matchIdx >= 0 && ex.success) {
-            results[matchIdx].raw_content = ex.raw_content
-          }
+          if (matchIdx >= 0 && ex.success) results[matchIdx].raw_content = ex.raw_content
         }
       } catch (err) {
-        console.warn('Raw content extraction failed:', err)
+        logger.warn('Raw content extraction failed:', { error: toError(err) })
       }
     }
   }
 
-  // --- Generate answer ---
-  // Strategy: For factual/short queries, try DDG Instant Answer first (curated
-  // Wikipedia abstracts — high precision, no API key). Then fall back to
-  // LLM/extractive summarization from the search results.
+  // ── 10. Answer generation ──
   let answer: SearchAnswer | undefined
 
-  if (include_answer) {
-    // For factual queries (short, wh-questions), DDG Instant Answer is often
-    // the highest-quality free source. Try it first instead of last.
-    const queryType = detectQueryType(query)
-    if (queryType === 'factual' || queryType === 'general') {
+  // 10a. Agentic Pipeline (Pro mode)
+  if (search_depth === 'advanced' && include_answer && config.ai && results.length >= 3) {
+    try {
+      logger.info('[Orchestrator] Running Agentic Pipeline (Pro mode)', { query, resultCount: results.length })
+      const agenticOptions: AgenticSearchOptions = {
+        query, mode: 'pro', maxResults: max_results, includeAnswer: true,
+        searchDepth: 'advanced', topic, timeRange: time_range, sortBy: sort_by,
+        page, includeDomains: include_domains, excludeDomains: exclude_domains,
+        classifierConfig: { autoThreshold: 0.6, useAI: true },
+      }
+      const agentic = await executeAgenticSearch(agenticOptions, {
+        ai: config.ai, env: config.env, jinaApiKey: config.jinaApiKey,
+      })
+      if (agentic) {
+        if (agentic.results && agentic.results.length > results.length) {
+          results = agentic.results
+        }
+        if (agentic.answer) answer = agentic.answer
+        recordAgenticPipeline({
+          planSteps: agentic.plan?.steps?.length ?? 0,
+          qualityGatePassed: agentic.qualityGate?.passed ?? false,
+          synthesisConfidence: agentic.answer?.confidence,
+        })
+      }
+    } catch (err) {
+      logger.warn('[Orchestrator] Agentic pipeline failed, falling back to standard search:', { error: toError(err) })
+    }
+  }
+
+  // 10b. Standard answer fallback
+  if (include_answer && !answer) {
+    const answerQueryType = detectQueryType(query, entityHints)
+    if (answerQueryType === 'factual' || answerQueryType === 'general') {
       const instantAnswer = await duckDuckGoInstantAnswer(query)
       if (instantAnswer && instantAnswer.abstract.length > 50) {
-        answer = {
-          text: instantAnswer.abstract,
-          confidence: 0.6,
-          sources: [],
-        }
+        answer = { text: instantAnswer.abstract, confidence: 0.6, sources: [] }
       }
     }
-
-    // If DDG didn't produce an answer, use LLM or extractive summarization.
     if (!answer && results.length > 0) {
-      answer = await generateAnswer(query, results, config.ai)
+      answer = await generateAnswer(query, results, config.ai, config.env, ctx.spaceFileContext)
     }
-
-    // Last resort: DDG Instant Answer for non-factual queries too.
     if (!answer) {
       const instantAnswer = await duckDuckGoInstantAnswer(query)
       if (instantAnswer) {
-        answer = {
-          text: instantAnswer.abstract,
-          confidence: 0.5,
-          sources: [],
-        }
+        answer = { text: instantAnswer.abstract, confidence: 0.5, sources: [] }
       }
     }
   }
 
-  // --- Generate related queries ---
-  const relatedQueries = generateRelatedQueries(
-    query,
-    results.map((r) => r.title),
-  )
+  // ── 11. Reranking (advanced depth, non-news/finance) ──
+  if (config.ai && !isNews && !isFinance && results.length >= 3 && search_depth === 'advanced') {
+    try {
+      const { rerankSearchResultsRaw } = await import('./retrieval/reranker')
+      const rerankResult = await rerankSearchResultsRaw(query, results.slice(0, 15), config.env, {
+        maxInputs: 10,
+      })
+      if (rerankResult.applied) results = rerankResult.results
+    } catch (err) {
+      logger.warn('[Orchestrator] Reranking failed (non-critical):', { error: toError(err) })
+    }
+  }
 
+  // ── 12. MMR Diversity Filter ──
+  if (results.length > max_results * 1.5) {
+    try {
+      const { applyDiversityFilter } = await import('./retrieval/diversity')
+      results = applyDiversityFilter(results, query, max_results * 2)
+    } catch (err) {
+      logger.warn('[Orchestrator] MMR failed (non-critical):', { error: toError(err) })
+    }
+  }
+
+  // ── 13. Knowledge Panel ──
+  if (!knowledgeGraph && results.length >= 3) {
+    try {
+      const kg = await buildKnowledgePanel(query, results.slice(0, 10), { language: effectiveWikiLang, env })
+      if (kg) knowledgeGraph = kg
+    } catch (err) {
+      logger.warn('[Orchestrator] Knowledge panel build failed (non-critical):', { error: toError(err) })
+    }
+  }
+
+  // ── 14. Await images + match to results ──
+  await imagePromise
+  if (imageResults.length > 0 && results.length > 0) {
+    try {
+      results = matchImagesToResults(results, imageResults)
+    } catch (err) {
+      logger.warn('[Orchestrator] Image matching failed (non-critical):', { error: toError(err) })
+    }
+  }
+
+  // ── 15. Related queries ──
+  const relatedQueries = generateRelatedQueries(query, results.map((r) => r.title))
+
+  // ── 16. Pagination + response ──
   const responseTimeMs = Date.now() - startTime
-
-  // --- Pagination ---
   const totalResults = results.length
   const pageNum = Math.max(1, page)
-  const startIndex = (pageNum - 1) * max_results
-  const paginatedResults = results.slice(startIndex, startIndex + max_results)
+  const pageSize = max_results
+  const startIndex = (pageNum - 1) * pageSize
+  const paginatedResults = results.slice(startIndex, startIndex + pageSize)
+  const totalPages = Math.ceil(totalResults / pageSize)
 
-  return {
+  const searchResponse: SearchResponse = {
     query,
     answer,
     results: paginatedResults,
@@ -602,8 +484,108 @@ export async function executeSearch(
     fallback_used: fallbackUsed,
     related_queries: relatedQueries,
     page: pageNum,
+    page_size: pageSize,
     total_results: totalResults,
+    total_pages: totalPages,
     images: imageResults.length > 0 ? imageResults : undefined,
     knowledge_graph: knowledgeGraph || undefined,
+    subrequest_estimate: backendCount * 2,
   }
+
+  setInMemoryCache(memCacheKey, searchResponse, isNews || isFinance)
+  return searchResponse
+}
+
+// ============================================================
+// SearchContext builder — normalizes request params into ctx
+// ============================================================
+
+async function buildSearchContext(
+  request: SearchRequest,
+  config: OrchestratorConfig,
+): Promise<SearchContext> {
+  const { env } = config
+  const query = request.query
+
+  // Entity hints
+  let entityHints: SearchContext['entityHints'] | undefined
+  try {
+    const { extractEntityHints } = await import('./understanding/entity-extractor')
+    entityHints = extractEntityHints(query)
+  } catch {
+    // Understanding module not available — use pure regex fallback
+  }
+
+  const queryType = detectQueryType(query, entityHints)
+  const sources = getSourcesForQueryType(queryType)
+  const korean = isKoreanQuery(query)
+  const wikiLang = detectWikiLanguage(query)
+  const chinese = isChineseQuery(query)
+
+  // Space context (Phase 3.3b)
+  let spaceFileContext = ''
+  const spaceId = request.space_id
+  if (spaceId && env?.SPACE_DO) {
+    try {
+      const { getSpaceStub } = await import('./space-do')
+      const stub = getSpaceStub(env)
+      const spaceCtx = await stub.getSpaceContext(spaceId)
+      if (spaceCtx) {
+        if (spaceCtx.instructions) spaceFileContext = spaceCtx.instructions
+        if (spaceCtx.fileContext && spaceCtx.fileContext !== 'No files in this space.') {
+          spaceFileContext = spaceFileContext
+            ? `${spaceFileContext}\n\nAvailable files:\n${spaceCtx.fileContext}`
+            : `Available files:\n${spaceCtx.fileContext}`
+        }
+      }
+    } catch (err) {
+      logger.warn('Space context fetch failed (non-critical):', { error: toError(err) })
+    }
+  }
+
+  // Localization
+  const { country, language } = request
+  const bingRegion = language ? language
+    : country ? countryToBingMkt(country)
+    : chinese ? 'zh-CN' : undefined
+  const bingLang = language || (country ? countryToLanguageTag(country) : undefined)
+  const wikiOverrideLang = language || (country ? countryToLanguageTag(country) : undefined)
+  const effectiveWikiLang = wikiOverrideLang || wikiLang
+  const bingTimeRange = toBingTimeRange(request.time_range)
+
+  const isNews = request.topic === 'news' || queryType === 'news'
+  const isFinance = request.topic === 'finance' || queryType === 'financial'
+
+  const focus: FocusMode = (request as SearchRequest & { focus?: FocusMode }).focus || 'all'
+  const hasExplicitFocus = focus !== 'all'
+
+  const maxResults = request.max_results ?? 10
+  const overFetch = Math.max(maxResults * 3, 30)
+
+  return {
+    query, request, env,
+    korean, chinese, queryType, sources, entityHints,
+    isNews, isFinance, focus, hasExplicitFocus, overFetch, maxResults,
+    bingLang, bingRegion, bingTimeRange, effectiveWikiLang,
+    spaceFileContext,
+  }
+}
+
+/** Helper: join backend names for the response label. */
+function usedBacksWithFallback(usedBackends: string[]): string {
+  return usedBackends.join('+')
+}
+// ============================================================
+// Internal helpers — exported for unit testing
+// ============================================================
+
+export {
+  isKoreanQuery,
+  isChineseQuery,
+  detectWikiLanguage,
+  cleanChineseQuery,
+  normalizeUrlForDedup,
+  normalizeTitleForDedup,
+  mergeAndDeduplicate,
+  toBingTimeRange,
 }

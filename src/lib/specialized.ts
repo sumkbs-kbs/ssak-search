@@ -12,8 +12,9 @@
  * especially for factual, technical, and academic queries.
  */
 
-import type { SearchResult } from '../types'
-import { fetchWithTimeout, extractDomain, stripHtml, decodeEntities, computeScore, truncateToTokens, simplifyQuery } from './util'
+import type { SearchResult, Env } from '../types'
+import { logger, toError } from './logger'
+import { fetchWithTimeout, extractDomain, stripHtml, decodeEntities, computeScore, truncateToTokens, simplifyQuery, timeRangeToDays, parseDate } from './util'
 
 // ============================================================
 // Wikipedia REST API
@@ -26,9 +27,9 @@ import { fetchWithTimeout, extractDomain, stripHtml, decodeEntities, computeScor
  */
 export async function wikipediaSearch(
   query: string,
-  opts: { maxResults?: number; timeoutMs?: number; language?: string } = {},
+  opts: { maxResults?: number; timeoutMs?: number; language?: string; env?: Env } = {},
 ): Promise<SearchResult[]> {
-  const { maxResults = 5, timeoutMs = 8000, language = 'en' } = opts
+  const { maxResults = 5, timeoutMs = 8000, language = 'en', env } = opts
   const results: SearchResult[] = []
 
   // Wikipedia REST API can return HTTP 429 (rate limit) under rapid sequential calls.
@@ -42,9 +43,14 @@ export async function wikipediaSearch(
 
     let response: Response | null = null
     for (let attempt = 0; attempt <= maxRetries; attempt++) {
-      response = await fetchWithTimeout(searchUrl, {
-        headers: { Accept: 'application/json', 'User-Agent': 'SearchAPI/1.0 (contact@example.com)' },
-      }, timeoutMs)
+      response = await fetchWithTimeout(
+        env,
+        searchUrl,
+        {
+          headers: { Accept: 'application/json', 'User-Agent': 'SearchAPI/1.0 (contact@example.com)' },
+        },
+        timeoutMs,
+      )
 
       if (response.ok) break
       if (response.status === 429 && attempt < maxRetries) {
@@ -82,9 +88,14 @@ export async function wikipediaSearch(
     if (results.length === 0) {
       try {
         const actionUrl = `https://${language}.wikipedia.org/w/api.php?action=query&list=search&srsearch=${encodeURIComponent(query)}&format=json&srlimit=${maxResults}&srprop=snippet`
-        const actionRes = await fetchWithTimeout(actionUrl, {
-          headers: { Accept: 'application/json', 'User-Agent': 'SearchAPI/1.0 (contact@example.com)' },
-        }, timeoutMs)
+        const actionRes = await fetchWithTimeout(
+          env,
+          actionUrl,
+          {
+            headers: { Accept: 'application/json', 'User-Agent': 'SearchAPI/1.0 (contact@example.com)' },
+          },
+          timeoutMs,
+        )
         if (actionRes.ok) {
           const actionData = await actionRes.json() as { query?: { search?: { title: string; snippet: string }[] } }
           for (const item of actionData.query?.search || []) {
@@ -100,12 +111,12 @@ export async function wikipediaSearch(
             })
           }
         }
-      } catch {
-        // Action API also failed — give up silently
+      } catch (err) {
+        logger.warn('Wikipedia Action API fallback failed:', { error: toError(err) })
       }
     }
   } catch (err) {
-    console.warn('Wikipedia search failed:', err)
+    logger.warn('Wikipedia search failed:', { error: toError(err) })
   }
 
   return results
@@ -118,12 +129,18 @@ export async function wikipediaSummary(
   title: string,
   language = 'en',
   timeoutMs = 8000,
+  env?: Env,
 ): Promise<{ title: string; extract: string; url: string } | null> {
   try {
     const url = `https://${language}.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(title.replace(/ /g, '_'))}`
-    const response = await fetchWithTimeout(url, {
-      headers: { Accept: 'application/json', 'User-Agent': 'SearchAPI/1.0 (contact@example.com)' },
-    }, timeoutMs)
+    const response = await fetchWithTimeout(
+      env,
+      url,
+      {
+        headers: { Accept: 'application/json', 'User-Agent': 'SearchAPI/1.0 (contact@example.com)' },
+      },
+      timeoutMs,
+    )
     if (!response.ok) return null
     const data = await response.json() as { title: string; extract: string; content_urls?: { desktop?: { page?: string } } }
     return {
@@ -131,7 +148,8 @@ export async function wikipediaSummary(
       extract: data.extract || '',
       url: data.content_urls?.desktop?.page || `https://${language}.wikipedia.org/wiki/${encodeURIComponent(title)}`,
     }
-  } catch {
+  } catch (err) {
+    logger.warn('Wikipedia REST API failed:', { error: toError(err) })
     return null
   }
 }
@@ -146,9 +164,9 @@ export async function wikipediaSummary(
  */
 export async function githubSearch(
   query: string,
-  opts: { maxResults?: number; timeoutMs?: number } = {},
+  opts: { maxResults?: number; timeoutMs?: number; env?: Env } = {},
 ): Promise<SearchResult[]> {
-  const { maxResults = 8, timeoutMs = 8000 } = opts
+  const { maxResults = 8, timeoutMs = 8000, env } = opts
   const results: SearchResult[] = []
 
   try {
@@ -163,14 +181,18 @@ export async function githubSearch(
       per_page: String(Math.min(maxResults, 30)),
     })
     const url = `https://api.github.com/search/repositories?${params}`
-    const response = await fetchWithTimeout(url, {
-      headers: {
-        Accept: 'application/vnd.github.v3+json',
-        'User-Agent': 'SearchAPI/1.0',
+    const response = await fetchWithTimeout(
+      env,
+      url,
+      {
+        headers: {
+          Accept: 'application/vnd.github.v3+json',
+          'User-Agent': 'SearchAPI/1.0',
+        },
       },
-    }, timeoutMs)
+      timeoutMs,
+    )
 
-    if (!response.ok) return results
     const data = await response.json() as { items?: { full_name: string; description: string | null; html_url: string; stargazers_count: number; language: string | null; topics?: string[] }[] }
 
     for (const repo of data.items || []) {
@@ -192,7 +214,7 @@ export async function githubSearch(
       })
     }
   } catch (err) {
-    console.warn('GitHub search failed:', err)
+    logger.warn('GitHub search failed:', { error: toError(err) })
   }
 
   return results
@@ -208,9 +230,9 @@ export async function githubSearch(
  */
 export async function hackerNewsSearch(
   query: string,
-  opts: { maxResults?: number; timeoutMs?: number; timeRange?: string } = {},
+  opts: { maxResults?: number; timeoutMs?: number; timeRange?: string; env?: Env } = {},
 ): Promise<SearchResult[]> {
-  const { maxResults = 8, timeoutMs = 8000, timeRange } = opts
+  const { maxResults = 8, timeoutMs = 8000, timeRange, env } = opts
   const results: SearchResult[] = []
 
   try {
@@ -232,9 +254,12 @@ export async function hackerNewsSearch(
     }
 
     const url = `https://hn.algolia.com/api/v1/search?${params}`
-    const response = await fetchWithTimeout(url, {
-      headers: { Accept: 'application/json' },
-    }, timeoutMs)
+    const response = await fetchWithTimeout(
+      env,
+      url,
+      { headers: { Accept: 'application/json', 'User-Agent': 'SearchAPI/1.0' } },
+      timeoutMs,
+    )
 
     if (!response.ok) return results
     const data = await response.json() as { hits?: { title: string; url: string; points: number; num_comments: number; objectID: string; created_at: string }[] }
@@ -264,7 +289,7 @@ export async function hackerNewsSearch(
       })
     }
   } catch (err) {
-    console.warn('HackerNews search failed:', err)
+    logger.warn('HackerNews search failed:', { error: toError(err) })
   }
 
   return results
@@ -280,9 +305,9 @@ export async function hackerNewsSearch(
  */
 export async function redditSearch(
   query: string,
-  opts: { maxResults?: number; timeoutMs?: number; timeRange?: string } = {},
+  opts: { maxResults?: number; timeoutMs?: number; timeRange?: string; env?: Env } = {},
 ): Promise<SearchResult[]> {
-  const { maxResults = 5, timeoutMs = 8000, timeRange } = opts
+  const { maxResults = 5, timeoutMs = 8000, timeRange, env } = opts
   const results: SearchResult[] = []
 
   try {
@@ -299,12 +324,17 @@ export async function redditSearch(
     }
 
     const url = `https://www.reddit.com/search.json?${params}`
-    const response = await fetchWithTimeout(url, {
-      headers: {
-        Accept: 'application/json',
-        'User-Agent': 'SearchAPI/1.0 (contact@example.com)',
+    const response = await fetchWithTimeout(
+      env,
+      url,
+      {
+        headers: {
+          Accept: 'application/json',
+          'User-Agent': 'SearchAPI/1.0 (contact@example.com)',
+        },
       },
-    }, timeoutMs)
+      timeoutMs,
+    )
 
     if (!response.ok) return results
     const data = await response.json() as { data?: { children?: { data: { title: string; url: string; selftext: string; subreddit: string; score: number; num_comments: number; permalink: string } }[] } }
@@ -332,7 +362,7 @@ export async function redditSearch(
       })
     }
   } catch (err) {
-    console.warn('Reddit search failed:', err)
+    logger.warn('Reddit search failed:', { error: toError(err) })
   }
 
   return results
@@ -355,9 +385,9 @@ export async function redditSearch(
  */
 export async function arxivSearch(
   query: string,
-  opts: { maxResults?: number; timeoutMs?: number } = {},
+  opts: { maxResults?: number; timeoutMs?: number; env?: Env } = {},
 ): Promise<SearchResult[]> {
-  const { maxResults = 8, timeoutMs = 10000 } = opts
+  const { maxResults = 8, timeoutMs = 10000, env } = opts
   const results: SearchResult[] = []
 
   try {
@@ -371,9 +401,12 @@ export async function arxivSearch(
       sortOrder: 'descending',
     })
     const url = `https://export.arxiv.org/api/query?${params.toString()}`
-    const response = await fetchWithTimeout(url, {
-      headers: { Accept: 'application/xml, application/atom+xml' },
-    }, timeoutMs)
+    const response = await fetchWithTimeout(
+      env,
+      url,
+      { headers: { Accept: 'application/xml, application/atom+xml' } },
+      timeoutMs,
+    )
 
     if (!response.ok) return results
     const xml = await response.text()
@@ -414,7 +447,7 @@ export async function arxivSearch(
       })
     }
   } catch (err) {
-    console.warn('arXiv search failed:', err)
+    logger.warn('arXiv search failed:', { error: toError(err) })
   }
 
   return results
@@ -432,6 +465,7 @@ export async function arxivSearch(
 export async function duckDuckGoInstantAnswer(
   query: string,
   timeoutMs = 8000,
+  env?: Env,
 ): Promise<{ abstract: string; source: string; url: string } | null> {
   try {
     const params = new URLSearchParams({
@@ -441,6 +475,7 @@ export async function duckDuckGoInstantAnswer(
       skip_disambig: '1',
     })
     const response = await fetchWithTimeout(
+      env,
       `https://api.duckduckgo.com/?${params}`,
       { headers: { Accept: 'application/json' } },
       timeoutMs,
@@ -456,7 +491,8 @@ export async function duckDuckGoInstantAnswer(
       }
     }
     return null
-  } catch {
+  } catch (err) {
+    logger.warn('DuckDuckGo Instant Answer API failed:', { error: toError(err) })
     return null
   }
 }
@@ -475,30 +511,50 @@ interface DDGInstantAnswerResponse {
 
 /**
  * Detect the type of a search query to determine which specialized sources to use.
+ *
+ * Phase 1.3: Added optional entities parameter for entity-aware routing.
+ * Pass entity information from the understanding module to refine query type.
  */
 export type QueryType = 'technical' | 'factual' | 'financial' | 'news' | 'academic' | 'general'
 
-export function detectQueryType(query: string): QueryType {
+export function detectQueryType(
+  query: string,
+  entities?: { organizations: string[]; technologies: string[]; products: string[]; people: string[] },
+): QueryType {
   const lower = query.toLowerCase()
+  const trimmed = query.trim()
+
+  // Extracted entity hints for refined classification
+  const hasOrg = entities ? entities.organizations.length > 0 : false
+  const hasTech = entities ? entities.technologies.length > 0 : false
+  const hasProduct = entities ? entities.products.length > 0 : false
+  const hasPerson = entities ? entities.people.length > 0 : false
 
   // Financial / stock keywords (Korean + English + Chinese)
   // Must be checked BEFORE news because stock queries often contain year numbers
-  // \b word boundaries on short English terms (per, pbr, roe, eps) to prevent
-  // false matches in words like "operator", "perform", "paper", "experience"
-  if (/주가|주식|증권|코스피|코스닥|kospi|kosdaq|시세|변동률|상한가|하한가|목표주가|투자의견|실적|배당|주주|공시|기업분석|리서치|\bper\b|\bpbr\b|\broe\b|\beps\b|시가총액|거래량|시장가|주봉|일봉|월봉|\bchart\b|\bfinance\b|\bfinancial\b|\bstock\b|\bprice\b|\bshare\b|\bshares\b|\bdividend\b|market\s?cap|\btrading\b|\bipo\b|공모가/i.test(query)) {
+  // Phase 1.3: If known organization is detected + financial context keywords → financial
+  const isFinancialPattern = /주가|주식|증권|코스피|코스닥|kospi|kosdaq|시세|변동률|상한가|하한가|목표주가|투자의견|실적|배당|주주|공시|기업분석|리서치|\bper\b|\bpbr\b|\broe\b|\beps\b|시가총액|거래량|시장가|주봉|일봉|월봉|\bchart\b|\bfinance\b|\bfinancial\b|\bstock\b|\bprice\b|\bshare\b|\bshares\b|\bdividend\b|market\s?cap|\btrading\b|\bipo\b|공모가/i.test(query)
+
+  if (isFinancialPattern) {
+    return 'financial'
+  }
+
+  // Phase 1.3: Organization-only queries with financial context
+  // e.g. "삼성전자 실적", "TSMC earnings"
+  if (hasOrg && /실적|실적발표|earnings|revenue|profit|분기/i.test(query)) {
     return 'financial'
   }
 
   // Technical keywords (expanded for accurate detection)
-  // Covers: tutorial/learning, cloud infra, languages, frameworks, tools, concepts
-  // Checked BEFORE news so that "React 2025" or "D1 tutorial 2025" → technical, not news
-  if (/\b(tutorial|tutorials|guide|guides|docs|documentation|example|examples|walkthrough|how\s?to|github|code|coding|programming|api|apis|framework|frameworks|library|libraries|sdk|cli|npm|pip|cargo|yarn|pnpm|docker|kubernetes|react|vue|angular|svelte|nextjs|next\.js|nuxt|express|fastify|hono|django|flask|rails|spring|laravel|python|javascript|typescript|rust|golang|java|kotlin|swift|ruby|php|sql|database|sqlite|postgres|postgresql|mysql|mongodb|redis|graphql|rest|grpc|serverless|cloudflare|workers?|lambda|aws|azure|gcp|vercel|netlify|edge|deploy|deployment|git|webpack|vite|rollup|esbuild|eslint|prettier|jest|vitest|tailwind|bootstrap|html|css|node|deno|bun|oauth|jwt|cors|websocket|devtools)\b/i.test(query)) {
+  // Phase 1.3: If entity extraction found technology entities → boost confidence
+  const isTechnicalPattern = /\b(tutorial|tutorials|guide|guides|docs|documentation|example|examples|walkthrough|how\s?to|github|code|coding|programming|api|apis|framework|frameworks|library|libraries|sdk|cli|npm|pip|cargo|yarn|pnpm|docker|kubernetes|react|vue|angular|svelte|nextjs|next\.js|nuxt|express|fastify|hono|django|flask|rails|spring|laravel|python|javascript|typescript|rust|golang|java|kotlin|swift|ruby|php|sql|database|sqlite|postgres|postgresql|mysql|mongodb|redis|graphql|rest|grpc|serverless|cloudflare|workers?|lambda|aws|azure|gcp|vercel|netlify|edge|deploy|deployment|git|webpack|vite|rollup|esbuild|eslint|prettier|jest|vitest|tailwind|bootstrap|html|css|node|deno|bun|oauth|jwt|cors|websocket|devtools)\b/i.test(query)
+
+  if (isTechnicalPattern || hasTech) {
     return 'technical'
   }
 
   // News/current events keywords
   // Year numbers alone are news indicators only if no technical/financial keywords matched above
-  // Current + previous year are dynamically included to avoid stale hardcoded years.
   const _y = new Date().getFullYear()
   const _yearPattern = `${_y}|${_y - 1}`
   if (new RegExp(`\\b(latest|news|today|${_yearPattern}|recent|breaking|update|updates|announce|announcement|launch|launched|release|released)\\b`, 'i').test(query)) {
@@ -506,13 +562,17 @@ export function detectQueryType(query: string): QueryType {
   }
 
   // Academic keywords
+  // Phase 1.3: If entities include known academic concepts + academic keywords → boost
   if (/\b(research|paper|study|theory|analysis|survey|journal|arxiv|academic|science|physics|biology|medicine)\b/i.test(query)) {
     return 'academic'
   }
 
   // Factual - short queries that look like entity lookups
-  // Includes Chinese question patterns: 什么是/什麼是 (what is), 什么是 (what)
-  if (query.trim().split(/\s+/).length <= 4 && (/\b(what|who|when|where|definition|meaning|is|are|was|were)\b/i.test(lower) || /什么是|什麼是|什么叫|什麼叫/.test(query))) {
+  // Phase 1.3: Enhanced with entity detection
+  const isShortQuery = trimmed.split(/\s+/).length <= 4
+  const isQuestionPattern = /\b(what|who|when|where|definition|meaning|is|are|was|were)\b/i.test(lower) || /什么是|什麼是|什么叫|什麼叫/.test(query)
+
+  if (isShortQuery && (isQuestionPattern || hasOrg || hasProduct || hasPerson)) {
     return 'factual'
   }
 
@@ -528,26 +588,27 @@ export function getSourcesForQueryType(type: QueryType): {
   useHackerNews: boolean
   useReddit: boolean
   useArxiv: boolean
+  useGoogleScholar: boolean
 } {
   switch (type) {
     case 'technical':
-      return { useWikipedia: false, useGitHub: true, useHackerNews: true, useReddit: false, useArxiv: false }
+      return { useWikipedia: false, useGitHub: true, useHackerNews: true, useReddit: false, useArxiv: false, useGoogleScholar: false }
     case 'factual':
       // Factual: Wikipedia for definitions + HackerNews for discussions/explanations
       // HackerNews boosts result count for "what is X" queries with community explanations
-      return { useWikipedia: true, useGitHub: false, useHackerNews: true, useReddit: false, useArxiv: false }
+      return { useWikipedia: true, useGitHub: false, useHackerNews: true, useReddit: false, useArxiv: false, useGoogleScholar: false }
     case 'financial':
       // Financial queries: Wikipedia for company background + HackerNews for stock discussion/news.
       // HN provides stock market discussions, earnings analysis, and investor commentary
       // that Bing stock-card results don't cover — boosts result count to 10+.
-      return { useWikipedia: true, useGitHub: false, useHackerNews: true, useReddit: false, useArxiv: false }
+      return { useWikipedia: true, useGitHub: false, useHackerNews: true, useReddit: false, useArxiv: false, useGoogleScholar: false }
     case 'news':
-      return { useWikipedia: false, useGitHub: false, useHackerNews: true, useReddit: true, useArxiv: false }
+      return { useWikipedia: false, useGitHub: false, useHackerNews: true, useReddit: true, useArxiv: false, useGoogleScholar: false }
     case 'academic':
-      // Academic: Wikipedia + arXiv for research papers
-      return { useWikipedia: true, useGitHub: false, useHackerNews: false, useReddit: false, useArxiv: true }
+      // Academic: Wikipedia + arXiv for research papers + Google Scholar
+      return { useWikipedia: true, useGitHub: false, useHackerNews: false, useReddit: false, useArxiv: true, useGoogleScholar: true }
     default:
-      return { useWikipedia: true, useGitHub: false, useHackerNews: true, useReddit: false, useArxiv: false }
+      return { useWikipedia: true, useGitHub: false, useHackerNews: true, useReddit: false, useArxiv: false, useGoogleScholar: false }
   }
 }
 
@@ -560,45 +621,239 @@ export function getSourcesForQueryType(type: QueryType): {
  * Returns a KnowledgeGraph object with title, description, image, and key facts,
  * or null if no entity is found.
  */
+/**
+ * Get Wikidata entity ID from a Wikipedia page title.
+ */
+async function wikipediaToWikidataId(title: string, language = 'en'): Promise<string | null> {
+  try {
+    const url = `https://${language}.wikipedia.org/w/api.php?action=query&prop=pageprops&titles=${encodeURIComponent(title)}&format=json&redirects=1`
+    const resp = await fetch(url, { headers: { 'User-Agent': 'SearchAPI/1.0' } })
+    if (!resp.ok) return null
+    const data = await resp.json() as Record<string, unknown>
+    const pages = (data.query as Record<string, unknown>)?.pages as Record<string, Record<string, unknown>> | undefined
+    if (!pages) return null
+    for (const page of Object.values(pages)) {
+      const props = page.pageprops as Record<string, string> | undefined
+      if (props?.wikibase_item) return props.wikibase_item
+    }
+    return null
+  } catch (err) {
+    logger.warn('Wikipedia Wikidata lookup failed:', { error: toError(err) })
+    return null
+  }
+}
+
+/**
+ * Fetch Wikidata entity and extract interesting facts.
+ */
+async function wikidataEntityFacts(wikidataId: string): Promise<{ type?: string; facts: Record<string, string>; image?: string } | null> {
+  try {
+    const url = `https://www.wikidata.org/wiki/Special:EntityData/${wikidataId}.json`
+    const resp = await fetch(url, { headers: { 'User-Agent': 'SearchAPI/1.0' } })
+    if (!resp.ok) return null
+    const data = await resp.json() as Record<string, unknown>
+    const entities = data.entities as Record<string, Record<string, unknown>>
+    const entity = entities?.[wikidataId] as Record<string, unknown> | undefined
+    if (!entity) return null
+
+    const claims = entity.claims as Record<string, { mainsnak: { datavalue?: { value?: unknown } }; rank?: string }[]> | undefined
+    if (!claims) return null
+
+    const facts: Record<string, string> = {}
+    let type: string | undefined
+    let image: string | undefined
+
+    // Instance of (P31) → determine KG type
+    const instanceOf = claims.P31?.[0]?.mainsnak?.datavalue?.value as Record<string, unknown> | undefined
+    const instanceId = instanceOf?.id as string | undefined
+    if (instanceId) {
+      if (['Q5', 'Q215627', 'Q95074', 'Q811430'].includes(instanceId)) type = 'person'
+      else if (['Q43229', 'Q4830453', 'Q6881511'].includes(instanceId)) type = 'organization'
+      else if (['Q486972', 'Q515', 'Q5107', 'Q3957'].includes(instanceId)) type = 'place'
+      else if (['Q7725634', 'Q188451', 'Q11424'].includes(instanceId)) type = 'concept'
+      else type = 'concept'
+    }
+
+    // Helper to get label from claim
+    const claimValue = (claimId: string): string | undefined => {
+      const claim = claims[claimId]?.[0]
+      if (!claim) return undefined
+      const val = claim.mainsnak?.datavalue?.value
+      if (typeof val === 'string') return val
+      if (val && typeof val === 'object') {
+        const v = val as Record<string, unknown>
+        return (v.label || v.text || v.id || v.time || '') as string
+      }
+      return undefined
+    }
+
+    // Map claim IDs to human-readable labels
+    const CLAIM_MAP: Record<string, string> = {
+      P569: 'Born',
+      P570: 'Died',
+      P571: 'Founded',
+      P576: 'Dissolved',
+      P577: 'Publication date',
+      P856: 'Website',
+      P112: 'Founder',
+      P488: 'Chairperson',
+      P169: 'CEO',
+      P127: 'Owner',
+      P159: 'Headquarters',
+      P17: 'Country',
+      P1082: 'Population',
+      P2046: 'Area',
+      P2048: 'Height',
+      P2049: 'Width',
+      P2079: 'Production',
+      P2131: 'Revenue',
+      P2403: 'Net profit',
+      P2295: 'Net income',
+      P414: 'Stock exchange',
+      P1454: 'Legal form',
+      P452: 'Industry',
+      P1056: 'Product',
+      P1416: 'Award received',
+    }
+
+    for (const [claimId, label] of Object.entries(CLAIM_MAP)) {
+      const val = claimValue(claimId)
+      if (val) facts[label] = val
+    }
+
+    // Image (P18)
+    const imageClaim = claims.P18?.[0]?.mainsnak?.datavalue?.value as string | undefined
+    if (imageClaim) {
+      image = `https://commons.wikimedia.org/wiki/Special:FilePath/${encodeURIComponent(imageClaim.replace(/\s+/g, '_'))}`
+    }
+
+    return Object.keys(facts).length > 0 || type ? { type, facts, image } : null
+  } catch (err) {
+    logger.warn('Wikidata entity fetch failed:', { error: toError(err) })
+    return null
+  }
+}
+
+/**
+ * Fetch Wikipedia infobox HTML snippet and extract key-value pairs.
+ */
+async function wikipediaInfobox(query: string, language = 'en'): Promise<Record<string, string> | null> {
+  try {
+    // Use the Action API to get the page HTML
+    const url = `https://${language}.wikipedia.org/w/api.php?action=parse&page=${encodeURIComponent(query)}&prop=text&section=0&format=json&redirects=1`
+    const resp = await fetch(url, { headers: { 'User-Agent': 'SearchAPI/1.0' } })
+    if (!resp.ok) return null
+    const data = await resp.json() as Record<string, unknown>
+    const parseData = data.parse as Record<string, unknown> | undefined
+    const text = parseData?.text as Record<string, unknown> | undefined
+    const html = text?.['*'] as string | undefined
+    if (!html) return null
+
+    // Match infobox table rows: <th>label</th><td>value</td>
+    const facts: Record<string, string> = {}
+    const infoboxRegex = /<th[^>]*class="infobox-label"[^>]*>(.*?)<\/th>\s*<td[^>]*class="infobox-data"[^>]*>(.*?)<\/td>/gi
+    let match: RegExpExecArray | null
+    while ((match = infoboxRegex.exec(html)) !== null) {
+      const label = stripHtml(match[1]).trim()
+      const value = stripHtml(match[2]).trim()
+      if (label && value && label.length < 50 && value.length < 200) {
+        facts[label] = value
+      }
+    }
+
+    // Fallback: older infobox format
+    if (Object.keys(facts).length === 0) {
+      const oldRegex = /<tr>\s*<th[^>]*>(.*?)<\/th>\s*<td[^>]*>(.*?)<\/td>\s*<\/tr>/gi
+      let m2: RegExpExecArray | null
+      while ((m2 = oldRegex.exec(html)) !== null) {
+        const label = stripHtml(m2[1]).trim()
+        const value = stripHtml(m2[2]).trim()
+        if (label && value && label.length < 50 && value.length < 200 && !label.includes('<')) {
+          facts[label] = value
+        }
+      }
+    }
+
+    return Object.keys(facts).length > 0 ? facts : null
+  } catch (err) {
+    logger.warn('Wikipedia infobox parsing failed:', { error: toError(err) })
+    return null
+  }
+}
+
+/**
+ * Wikipedia → Wikidata → Infobox Knowledge Graph
+ *
+ * Combines three data sources for rich entity information:
+ * 1. Wikipedia summary (description, image)
+ * 2. Wikidata entity (structured facts, entity type, logo)
+ * 3. Wikipedia infobox (detailed key-value pairs)
+ */
 export async function getKnowledgeGraph(
   query: string,
   language = 'en',
+  env?: Env,
 ): Promise<{ title: string; description: string; url?: string; image?: string; type?: string; facts?: Record<string, string> } | null> {
   try {
-    // Try the Wikipedia summary API directly with the query
+    // Phase 1: Get Wikipedia summary (primary source of truth)
     const summaryUrl = `https://${language}.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(query.replace(/\s+/g, '_'))}`
-    const response = await fetchWithTimeout(summaryUrl, {
-      headers: { Accept: 'application/json', 'User-Agent': 'SearchAPI/1.0 (contact@example.com)' },
-    }, 6000)
+    const summaryResp = await fetchWithTimeout(
+      env,
+      summaryUrl,
+      { headers: { Accept: 'application/json', 'User-Agent': 'SearchAPI/1.0 (contact@example.com)' } },
+      6000,
+    )
 
-    if (!response.ok) return null
-    const data = await response.json() as Record<string, unknown>
+    if (!summaryResp.ok) return null
+    const summary = await summaryResp.json() as Record<string, unknown>
 
     // Wikipedia returns type: "standard" for real articles, "disambiguation" for ambiguous
-    if (data.type === 'disambiguation' || !data.extract) return null
+    if (summary.type === 'disambiguation' || !summary.extract) return null
 
-    const title = data.title as string
-    const extract = data.extract as string
-    const pageUrl = (data.content_urls as { desktop?: { page?: string } })?.desktop?.page
-    const thumbnail = (data.thumbnail as { source?: string })?.source
-    const description = data.description as string | undefined
+    const title = summary.title as string
+    const extract = summary.extract as string
+    const pageUrl = (summary.content_urls as { desktop?: { page?: string } })?.desktop?.page
+    const thumbnail = (summary.thumbnail as { source?: string })?.source
+    const description = summary.description as string | undefined
 
-    // Build facts from available metadata
+    // Phase 2: Get Wikidata ID → richer facts (run in parallel with infobox)
+    const wikidataId = await wikipediaToWikidataId(title, language)
+
+    const [wd, infobox] = await Promise.all([
+      wikidataId ? wikidataEntityFacts(wikidataId) : Promise.resolve(null),
+      wikipediaInfobox(title, language),
+    ])
+
+    // Merge facts: Wikidata structured data + Wikipedia infobox
     const facts: Record<string, string> = {}
+    if (wd?.facts) Object.assign(facts, wd.facts)
+    if (infobox) {
+      for (const [key, value] of Object.entries(infobox)) {
+        // Wikidata takes precedence for overlapping keys
+        if (!facts[key]) facts[key] = value
+      }
+    }
+    // Always include description
     if (description) facts['Description'] = description
+
+    const image = wd?.image || thumbnail
+    const type = wd?.type ?? (
+      description?.toLowerCase().includes('company') ? 'organization'
+        : description?.toLowerCase().includes('person') ? 'person'
+        : description?.toLowerCase().includes('city') || description?.toLowerCase().includes('country') ? 'place'
+        : 'concept'
+    )
 
     return {
       title,
       description: extract.slice(0, 400),
       url: pageUrl || `https://${language}.wikipedia.org/wiki/${encodeURIComponent(title)}`,
-      image: thumbnail,
-      type: description?.toLowerCase().includes('company') ? 'organization'
-        : description?.toLowerCase().includes('person') ? 'person'
-        : description?.toLowerCase().includes('city') || description?.toLowerCase().includes('country') ? 'place'
-        : 'concept',
+      image,
+      type,
       facts: Object.keys(facts).length > 0 ? facts : undefined,
     }
-  } catch {
+  } catch (err) {
+    logger.warn('Wikipedia knowledge graph fetch failed:', { error: toError(err) })
     return null
   }
 }

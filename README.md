@@ -673,4 +673,71 @@ GROUP BY blob1
 - 초기 7일간은 Cloudflare Dashboard → **Live Tail**에서 `AUDIT_SECURITY:` 필터로 즉시 확인 가능 (설정 불필요)
 
 ---
-*Last updated: 2026-07-18 (v3.0.0)*
+
+## 프로덕션 설정 가이드 (Phase 1-6 완료 후)
+
+### 1. Cloudflare Dashboard 필수 설정
+
+| 바인딩 | 방법 | 효과 |
+|--------|------|------|
+| **Workers AI** (`AI`) | Pages → Settings → Functions → AI 바인딩 → Add | 답변 생성(Pro 모드), 임베딩(프로덕션), reranking 활성화 |
+| **Durable Object** (`RATE_LIMITER`) | Pages → Settings → Functions → Durable Objects → Add (class: RateLimiterDO) | 크로스-아이솔레이트 레이트 리밋 + 서킷 브레이커 |
+| **Durable Object** (`THREAD_DO`) | Pages → Settings → Functions → Durable Objects → Add (class: ThreadDO) | `/api/chat` 멀티턴 대화 활성화 |
+
+### 2. 인덱스 재시드 (단일 임베딩 공간)
+
+프로덕션 Vectorize에 Workers AI 벡터와 Ollama 벡터가 섞여 있으면 검색 품질이 저하됩니다.
+Workers AI 바인딩 추가 후 인덱스를 재시드하세요:
+
+```bash
+# 1. Workers AI 바인딩이 활성화된 상태에서 배포
+npm run build && npx wrangler pages deploy dist/ --project-name=search-engine-api --branch=main --commit-dirty=true
+
+# 2. 스키마 재초기화 (기존 데이터 유지)
+curl -X POST https://search-engine-api.pages.dev/api/index/init
+
+# 3. 전체 재시드 (Workers AI 임베딩으로 통일)
+npm run seed:index -- --api-url=https://search-engine-api.pages.dev --static --batch-size=3 --concurrency=1
+
+# 4. 검증: total_documents와 index_health 확인
+curl https://search-engine-api.pages.dev/api/health | jq '.index'
+```
+
+### 3. 로컬 개발 환경
+
+```bash
+# 임베딩 모델 다운로드 (최초 1회)
+ollama pull nomic-embed-text
+
+# 로컬 서버 시작 (Ollama 임베딩 사용)
+npx wrangler pages dev dist/ --port 8788
+
+# 로컬 D1 스키마 초기화 + 시드
+curl -X POST http://localhost:8788/api/index/init
+npm run seed:index -- --api-url=http://localhost:8788 --all
+```
+
+### 상태 확인 체크리스트
+
+```bash
+# 1. Workers AI 활성화 여부
+curl -s https://search-engine-api.pages.dev/api/health | jq '.backends.workers_ai'
+# 기대값: "operational" (미설정 시 "disabled")
+
+# 2. 인덱스 문서 수
+curl -s https://search-engine-api.pages.dev/api/health | jq '.index.total_documents'
+# 기대값: 100+
+
+# 3. 검색 동작
+curl -s -X POST https://search-engine-api.pages.dev/api/search \
+  -H 'Content-Type: application/json' \
+  -d '{"query":"react hooks","max_results":3}' | jq '.backend, .total_results'
+# 기대값: 백엔드 조합, 5+ 결과
+
+# 4. 인덱스 검색 (임베딩 정상 여부)
+curl -s "https://search-engine-api.pages.dev/api/index/search?query=javascript&top_k=3" | jq '.results_count'
+# 기대값: 1+ (0이면 임베딩 불일치 — 재시드 필요)
+```
+
+---
+*Last updated: 2026-07-24 (v4.0.0 — Phase 1-6 complete)*

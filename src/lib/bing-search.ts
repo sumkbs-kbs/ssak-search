@@ -158,7 +158,7 @@ export function parseBingHtml(html: string, query: string, maxResults: number): 
     // Pattern: <div class="b_algoheader">...<a href="URL" ...>TITLE</a>
     const headerMatch = block.match( // b_algoheader is class-stable; allow attribute suffix per HTML5 flexibility,
                                       // e.g., future-proof vs <div class="b_algoheader something_else"> without breaking existing structure.
-      /<div class="b_algoheader[^"]*">\s*<a[^>]*href="([^"]+)"[^>]*>([\s\S?]?)<\/a>/i, )
+      /<div class="b_algoheader[^"]*">\s*<a[^>]*href="([^"]+)"[^>]*>([\s\S]*?)<\/a>/i, )
     if (!headerMatch) { logger.warn('bing block parse failed — selector drift; skipping result', { index: results.length }) ; continue } 
 
     let url = headerMatch[1]

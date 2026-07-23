@@ -32,16 +32,16 @@
   "en-tech-09": { "relevantDomains": ["postgresql.org", "github.com"] },
   "en-tech-10": { "relevantDomains": ["redis.io", "github.com"] },
 
-  "en-factual-01": { "relevantDomains": ["wikipedia.org", "britannica.com"] },
-  "en-factual-02": { "relevantDomains": ["wikipedia.org", "britannica.com"] },
-  "en-factual-03": { "relevantDomains": ["wikipedia.org", "britannica.com"] },
+  "en-fact-01": { "relevantDomains": ["wikipedia.org", "britannica.com"] },
+  "en-fact-02": { "relevantDomains": ["wikipedia.org", "britannica.com"] },
+  "en-fact-03": { "relevantDomains": ["wikipedia.org", "britannica.com"] },
 
-  "en-academic-01": { "relevantDomains": ["arxiv.org", "scholar.google.com", "doi.org"] },
-  "en-academic-02": { "relevantDomains": ["arxiv.org", "scholar.google.com", "nature.com"] },
+  "en-acad-01": { "relevantDomains": ["arxiv.org", "scholar.google.com", "doi.org"] },
+  "en-acad-02": { "relevantDomains": ["arxiv.org", "scholar.google.com", "nature.com"] },
 
   "en-news-01": { "relevantDomains": ["reuters.com", "bbc.com", "apnews.com"] },
   "en-news-02": { "relevantDomains": ["reuters.com", "bloomberg.com", "cnbc.com"] },
 
-  "cn-tech-01": { "relevantDomains": ["developer.mozilla.org", "github.com"] },
-  "jp-tech-01": { "relevantDomains": ["developer.mozilla.org", "github.com"] }
+  "zh-tech-01": { "relevantDomains": ["developer.mozilla.org", "github.com"] },
+  "ja-tech-01": { "relevantDomains": ["developer.mozilla.org", "github.com"] }
 }

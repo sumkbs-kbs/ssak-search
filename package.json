@@ -66,7 +66,7 @@
     "@hono/vite-build": "^1.11.1",
     "@hono/vite-dev-server": "^0.26.1",
     "@types/node": "^26.1.1",
-    "@vitest/coverage-v8": "^4.1.0",
+    "@vitest/coverage-v8": "^4.1.10",
     "ai": "^7.0.34",
     "comment-json": "^5.0.0",
     "eslint": "^9.39.5",

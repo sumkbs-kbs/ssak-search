@@ -11,7 +11,7 @@
  */
 
 import { Hono } from 'hono'
-import { logger, toError } from '../lib/logger'
+import { logger, toError, getRequestId } from '../lib/logger'
 import { cors } from 'hono/cors'
 import type { AppBindings, SearchRequest, SearchResponse, ErrorResponse, FocusMode } from '../types'
 import { executeSearch } from '../lib/orchestrator'
@@ -215,6 +215,7 @@ searchRoute.post('/', async (c) => {
       ai: c.env.AI,
       env: c.env,
       subrequestTracker: tracker,
+      requestId: getRequestId(c.req.raw.headers),
     })
 
     // Add subrequest estimate header for quota monitoring
@@ -348,6 +349,7 @@ searchRoute.get('/', async (c) => {
       ai: c.env.AI,
       env: c.env,
       subrequestTracker: tracker,
+      requestId: getRequestId(c.req.raw.headers),
     })
 
     // Cache the result if it's worth reusing (same logic as POST route)
@@ -472,6 +474,7 @@ searchRoute.get('/stream', async (c) => {
           ai: c.env.AI,
           env: c.env,
           subrequestTracker: tracker,
+          requestId: getRequestId(c.req.raw.headers),
         })
 
         const subrequestEstimate = (result as SearchResponse & { subrequest_estimate?: number }).subrequest_estimate ?? 0

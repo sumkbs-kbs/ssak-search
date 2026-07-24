@@ -322,6 +322,7 @@ describe('Logger', () => {
           status: 200,
           headers: new Headers(),
         },
+        set: vi.fn(),
       }
 
       await middleware(mockContext, async () => {
@@ -354,6 +355,7 @@ describe('Logger', () => {
             get: vi.fn(() => null),
           },
         },
+        set: vi.fn(),
       }
 
       await middleware(mockContext, async () => {})
@@ -374,6 +376,7 @@ describe('Logger', () => {
           status: 500,
           headers: new Response().headers,
         },
+        set: vi.fn(),
       }
 
       await expect(

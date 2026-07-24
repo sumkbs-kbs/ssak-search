@@ -87,6 +87,39 @@ CREATE INDEX IF NOT EXISTS idx_documents_status ON documents(status);
 CREATE INDEX IF NOT EXISTS idx_documents_next_index ON documents(next_index_at);
 
 -- ============================================================
+-- Full-text search index (FTS5) — replaces LIKE '%term%' full scans.
+--
+-- The documents_fts virtual table is a "contentless-ish" external-content
+-- FTS5 index over documents(title). We index title because content lives in
+-- Vectorize (chunks), not D1 — D1 only stores metadata. Triggers keep the
+-- FTS index in sync with INSERT/UPDATE/DELETE on documents so the index
+-- pipeline doesn't need to know about FTS.
+--
+-- Query side uses MATCH with bm25() ranking instead of LIKE — this turns a
+-- full table scan into an indexed lookup and lets SQLite compute real BM25
+-- relevance at query time (see hybrid-search.ts:searchD1FTS5).
+-- ============================================================
+
+CREATE VIRTUAL TABLE IF NOT EXISTS documents_fts USING fts5(
+  title,
+  content='documents',
+  content_rowid='rowid',
+  tokenize='unicode61'
+);
+
+-- Sync triggers: keep documents_fts aligned with documents.
+CREATE TRIGGER IF NOT EXISTS documents_ai_fts AFTER INSERT ON documents BEGIN
+  INSERT INTO documents_fts(rowid, title) VALUES (new.rowid, new.title);
+END;
+CREATE TRIGGER IF NOT EXISTS documents_ad_fts AFTER DELETE ON documents BEGIN
+  INSERT INTO documents_fts(documents_fts, rowid, title) VALUES('delete', old.rowid, old.title);
+END;
+CREATE TRIGGER IF NOT EXISTS documents_au_fts AFTER UPDATE ON documents BEGIN
+  INSERT INTO documents_fts(documents_fts, rowid, title) VALUES('delete', old.rowid, old.title);
+  INSERT INTO documents_fts(rowid, title) VALUES (new.rowid, new.title);
+END;
+
+-- ============================================================
 -- Refresh Schedule Table
 -- ============================================================
 

@@ -166,6 +166,14 @@ export function createLoggingMiddleware(opts: LoggingOptions = {}) {
       ...baseContext,
     })
 
+    // Publish the request-scoped logger onto the Hono context so downstream
+    // handlers and the orchestrator can log WITH the requestId attached.
+    // Without this, every logger.warn/info in src/lib/* emits with no request
+    // correlation — production debugging required manually grepping by time.
+    // Stash both the logger and the bare requestId for cheap access.
+    c.set('logger', requestLogger)
+    c.set('requestId', requestId)
+
     requestLogger.info('Request started')
 
     try {

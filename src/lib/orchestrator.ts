@@ -69,11 +69,30 @@ const MEMORY_CACHE = new Map<string, CacheEntry>()
 const MEMORY_CACHE_TTL_GENERAL = 120_000  // 2 minutes
 const MEMORY_CACHE_TTL_NEWS = 30_000      // 30 seconds
 
+/**
+ * Single-flight map: in-flight executeSearch promises keyed by memory cache
+ * key. When N concurrent requests miss the cache for the same key, only the
+ * first runs the fan-out — the rest await the same promise. This prevents
+ * cache-stampede thundering herds on hot queries whose cache just expired.
+ * Entries are deleted on settle so the map stays bounded.
+ */
+const INFLIGHT_SEARCHES = new Map<string, Promise<SearchResponse>>()
+
 function getMemoryCacheKey(request: SearchRequest): string {
-  // Fast deterministic key: all fields that affect search results
+  // Fast deterministic key: all fields that affect search results.
+  // The query MUST be canonicalized the SAME way as cache.ts:cacheKey does —
+  // otherwise Tier 0 (memory) and Tier 1/2 (Cache API / KV) fragment into
+  // separate key spaces for the same logical query, defeating the cache.
+  // See canonicalCacheQuery() in cache.ts for the shared implementation.
+  const canonicalQuery = request.query
+    .trim()
+    .normalize('NFC')
+    .replace(/[\u200B-\u200D\uFEFF\u00A0]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .toLowerCase()
   const includeSorted = request.include_domains ? [...request.include_domains].sort().join(',') : ''
   const excludeSorted = request.exclude_domains ? [...request.exclude_domains].sort().join(',') : ''
-  return `${request.query}|${request.topic}|${request.max_results}|${request.search_depth}|${request.time_range ?? ''}|${request.sort_by}|${request.country ?? ''}|${request.language ?? ''}|${request.focus ?? 'all'}|${request.page ?? 1}|ia=${request.include_answer ? 1 : 0}|inc=${includeSorted}|exc=${excludeSorted}`
+  return `${canonicalQuery}|${request.topic}|${request.max_results}|${request.search_depth}|${request.time_range ?? ''}|${request.sort_by}|${request.country ?? ''}|${request.language ?? ''}|${request.focus ?? 'all'}|${request.page ?? 1}|ia=${request.include_answer ? 1 : 0}|inc=${includeSorted}|exc=${excludeSorted}`
 }
 
 function getFromMemoryCache(key: string): SearchResponse | undefined {
@@ -112,6 +131,12 @@ export interface OrchestratorConfig {
    * backward compat (tests, library reuse) — when omitted, no shedding occurs.
    */
   subrequestTracker?: { budgetExhausted(): boolean; count: number }
+  /**
+   * Request ID for log correlation. When set, orchestrator log lines embed
+   * this id so a single request's backend fan-out, fallbacks, and answer
+   * generation can be traced end-to-end in Logpush.
+   */
+  requestId?: string
 }
 
 // ============================================================
@@ -264,10 +289,38 @@ export async function executeSearch(
   const startTime = Date.now()
   const { env } = config
 
+  // Request-scoped logger. When a requestId flows in from the route handler
+  // (sourced from x-request-id / cf-ray), every orchestrator log line carries
+  // it — making a single request's fan-out/fallback/answer traceable end-to-end
+  // in Logpush instead of requiring time-window grepping.
+  const log = config.requestId
+    ? logger.child({ requestId: config.requestId, query: request.query })
+    : logger
+
   // ── 1. Cache check ──
   const memCacheKey = getMemoryCacheKey(request)
   const memCached = getFromMemoryCache(memCacheKey)
-  if (memCached) return memCached
+  if (memCached) {
+    log.debug('search cache hit (memory)')
+    return memCached
+  }
+
+  // ── 1b. Single-flight: if another request is already running this exact
+  // search, await its promise instead of launching a duplicate fan-out. This
+  // is the cache-stampede guard — N concurrent misses for a hot query collapse
+  // into one backend fan-out. The wrapper deletes the map entry on settle so
+  // the structure can't grow unbounded.
+  const inflight = INFLIGHT_SEARCHES.get(memCacheKey)
+  if (inflight) {
+    log.debug('search single-flight: awaiting in-flight request')
+    return inflight
+  }
+
+  // Register THIS execution as the single-flight for this key. We wrap the
+  // rest of the function in a try/finally so the entry is ALWAYS removed,
+  // whether we return normally or throw — otherwise a single failure would
+  // permanently wedge that query.
+  const execution = (async (): Promise<SearchResponse> => {
 
   const {
     query,
@@ -293,7 +346,7 @@ export async function executeSearch(
   let knowledgeGraph: KnowledgeGraph | null = null
   const imagePromise = searchAllFreeImageSources(query, { maxResults: 8, env })
     .then((res) => { imageResults = res })
-    .catch((err) => { logger.warn('Image search failed (non-critical):', { error: err.message || String(err) }) })
+    .catch((err) => { log.warn('Image search failed (non-critical):', { error: err.message || String(err) }) })
 
   // ── 4. Build backend tasks: self-index + strategy-selected backends ──
   const tasks: BackendTask[] = []
@@ -318,7 +371,7 @@ export async function executeSearch(
             raw_content: r.content,
           } as SearchResult))
         } catch (err) {
-          logger.warn('[Orchestrator] Self-index search failed:', { error: toError(err) })
+          log.warn('[Orchestrator] Self-index search failed:', { error: toError(err) })
           return []
         }
       },
@@ -371,7 +424,7 @@ export async function executeSearch(
           }
         }
       } catch (err) {
-        logger.warn('Content enrichment failed:', { error: toError(err) })
+        log.warn('Content enrichment failed:', { error: toError(err) })
       }
     }
   }
@@ -389,7 +442,7 @@ export async function executeSearch(
           if (matchIdx >= 0 && ex.success) results[matchIdx].raw_content = ex.raw_content
         }
       } catch (err) {
-        logger.warn('Raw content extraction failed:', { error: toError(err) })
+        log.warn('Raw content extraction failed:', { error: toError(err) })
       }
     }
   }
@@ -409,7 +462,7 @@ export async function executeSearch(
   if (search_depth === 'advanced' && include_answer && config.ai && results.length >= 3
       && !config.subrequestTracker?.budgetExhausted()) {
     try {
-      logger.info('[Orchestrator] Running Agentic Pipeline (Pro mode)', { query, resultCount: results.length })
+      log.info('[Orchestrator] Running Agentic Pipeline (Pro mode)', { query, resultCount: results.length })
       const agenticOptions: AgenticSearchOptions = {
         query, mode: 'pro', maxResults: max_results, includeAnswer: true,
         searchDepth: 'advanced', topic, timeRange: time_range, sortBy: sort_by,
@@ -431,7 +484,7 @@ export async function executeSearch(
         })
       }
     } catch (err) {
-      logger.warn('[Orchestrator] Agentic pipeline failed, falling back to standard search:', { error: toError(err) })
+      log.warn('[Orchestrator] Agentic pipeline failed, falling back to standard search:', { error: toError(err) })
     }
   }
 
@@ -462,7 +515,7 @@ export async function executeSearch(
         }
       }
     })().catch((err) => {
-      logger.warn('[Orchestrator] Answer generation failed (non-critical):', { error: toError(err) })
+      log.warn('[Orchestrator] Answer generation failed (non-critical):', { error: toError(err) })
     }))
   }
 
@@ -472,13 +525,13 @@ export async function executeSearch(
       const kg = await buildKnowledgePanel(query, results.slice(0, 10), { language: effectiveWikiLang, env })
       if (kg) knowledgeGraph = kg
     })().catch((err) => {
-      logger.warn('[Orchestrator] Knowledge panel build failed (non-critical):', { error: toError(err) })
+      log.warn('[Orchestrator] Knowledge panel build failed (non-critical):', { error: toError(err) })
     }))
   }
 
   // Task C: Image search await (already started at step 3)
   parallelTasks.push(imagePromise.catch((err) => {
-    logger.warn('Image search failed (non-critical):', { error: err.message || String(err) })
+    log.warn('Image search failed (non-critical):', { error: err.message || String(err) })
   }))
 
   // Wait for all independent tasks to complete
@@ -493,7 +546,7 @@ export async function executeSearch(
       })
       if (rerankResult.applied) results = rerankResult.results
     } catch (err) {
-      logger.warn('[Orchestrator] Reranking failed (non-critical):', { error: toError(err) })
+      log.warn('[Orchestrator] Reranking failed (non-critical):', { error: toError(err) })
     }
   }
 
@@ -503,7 +556,7 @@ export async function executeSearch(
       const { applyDiversityFilter } = await import('./retrieval/diversity')
       results = applyDiversityFilter(results, query, max_results * 2)
     } catch (err) {
-      logger.warn('[Orchestrator] MMR failed (non-critical):', { error: toError(err) })
+      log.warn('[Orchestrator] MMR failed (non-critical):', { error: toError(err) })
     }
   }
 
@@ -512,7 +565,7 @@ export async function executeSearch(
     try {
       results = matchImagesToResults(results, imageResults)
     } catch (err) {
-      logger.warn('[Orchestrator] Image matching failed (non-critical):', { error: toError(err) })
+      log.warn('[Orchestrator] Image matching failed (non-critical):', { error: toError(err) })
     }
   }
 
@@ -550,6 +603,13 @@ export async function executeSearch(
 
   setInMemoryCache(memCacheKey, searchResponse, isNews || isFinance)
   return searchResponse
+  })()
+
+  // Register and await. The .finally clears the slot regardless of outcome.
+  INFLIGHT_SEARCHES.set(memCacheKey, execution)
+  return execution.finally(() => {
+    INFLIGHT_SEARCHES.delete(memCacheKey)
+  })
 }
 
 // ============================================================

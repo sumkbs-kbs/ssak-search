@@ -415,11 +415,16 @@ export class HybridSearchEngine {
   ): Promise<HybridSearchResult[]> {
     if (!env.SEARCH_INDEX_DB) return []
 
+    // Try FTS5 first (indexed, ranked). Fall back to LIKE full-scan if the
+    // FTS table is missing (e.g. older deploys that predate the migration, or
+    // a D1 build without FTS5). The LIKE path remains as the safety net.
+    const ftsResults = await this.searchD1FTS5(env, query, maxResults * 2)
+    if (ftsResults.length > 0) return ftsResults
+
+    // Fallback: legacy LIKE '%term%' full scan (original implementation).
     const terms = query.toLowerCase().split(/\s+/).filter(t => t.length > 2)
     if (terms.length === 0) return []
 
-    // Build a simple keyword search using LIKE on title and URL
-    // (documents table has title + url, content is in Vectorize)
     const conditions = terms.map(() => `(LOWER(url) LIKE ? OR LOWER(title) LIKE ?)`)
     const params: string[] = []
     for (const term of terms) {
@@ -474,6 +479,89 @@ export class HybridSearchEngine {
       source: 'bm25' as const,
       componentScores: { bm25: r.score, vector: undefined, rrfScore: r.score },
     }))
+  }
+
+  /**
+   * FTS5-backed keyword search. Uses MATCH + bm25() ranking — an indexed lookup
+   * that scales with index size, replacing the LIKE '%term%' full scan that
+   * would dominate p99 latency once documents() grows past ~10k rows.
+   *
+   * Returns [] if the documents_fts virtual table doesn't exist or the query
+   * has no FTS-matchable terms; the caller (searchD1FTS) then falls back to
+   * the LIKE path.
+   */
+  private async searchD1FTS5(
+    env: Env,
+    query: string,
+    maxResults: number,
+  ): Promise<HybridSearchResult[]> {
+    if (!env.SEARCH_INDEX_DB) return []
+    // FTS5 MATCH syntax: wrap each term in quotes to avoid special-character
+    // interpretation (AND/OR/NEAR, prefix* etc.). Empty/short terms are
+    // skipped — FTS5 ignores very short tokens anyway.
+    const terms = query.split(/\s+/).map(t => t.replace(/["']/g, '')).filter(t => t.length > 1)
+    if (terms.length === 0) return []
+
+    // Build a phrase-style MATCH across terms: '"term1" "term2" ...' (implicit AND).
+    // Use OR semantics when AND yields nothing useful for multi-word queries by
+    // falling back to OR via the OR operator in FTS5 syntax if needed.
+    const matchExpr = terms.map(t => `"${t}"`).join(' ')
+
+    const sql = `
+      SELECT d.id, d.url, d.title, d.domain, d.total_chunks as totalChunks,
+             d.importance, d.last_indexed as lastIndexed, d.status,
+             bm25(documents_fts) AS rank_score
+      FROM documents_fts
+      JOIN documents d ON d.rowid = documents_fts.rowid
+      WHERE documents_fts MATCH ?
+        AND d.status = 'indexed'
+      ORDER BY rank_score
+      LIMIT ?
+    `
+    // NOTE: SQLite bm25() returns NEGATIVE values (lower = more relevant),
+    // so ascending ORDER BY rank_score puts the most relevant first.
+
+    try {
+      const stmt = env.SEARCH_INDEX_DB.prepare(sql).bind(matchExpr, maxResults)
+      const result = await stmt.all<{
+        id: string
+        url: string
+        title: string
+        domain: string
+        totalChunks: number
+        importance: number
+        lastIndexed: number
+        status: string
+        rank_score: number
+      }>()
+
+      if (!result.results || result.results.length === 0) return []
+
+      // Normalize bm25 rank (negative) to a 0..1 score: most relevant → ~1.
+      // bm25() magnitude is unbounded; we squash with a simple reciprocal-ish
+      // transform relative to the best result in this batch.
+      const bestRank = result.results[0].rank_score // most negative = best
+      const worstRank = result.results[result.results.length - 1].rank_score
+      const span = (worstRank - bestRank) || 1
+
+      return result.results.map(r => {
+        const normalized = 1 - (r.rank_score - bestRank) / span // 1 at best, 0 at worst
+        return {
+          id: r.id,
+          title: r.title,
+          url: r.url,
+          content: r.title,
+          score: Math.max(0.05, normalized),
+          domain: r.domain,
+          publishedDate: undefined,
+          source: 'bm25' as const,
+          componentScores: { bm25: normalized, vector: undefined, rrfScore: normalized },
+        }
+      })
+    } catch {
+      // FTS table missing or query syntax rejected — caller falls back to LIKE.
+      return []
+    }
   }
 
   /**

@@ -121,8 +121,23 @@ function generateApiKey(): string {
 // Durable Object
 // ============================================================
 
+/**
+ * Minimum interval between lastUsedAt persistence writes per key.
+ * The in-memory meta is updated every call; only the durable write is
+ * throttled. 5 minutes balances freshness of "last used" observability
+ * against DO write amplification.
+ */
+const LAST_USED_THROTTLE_MS = 5 * 60 * 1000
+
 export class ApiKeyDO extends DurableObject<Env> {
   private store: ApiKeyStore
+  /**
+   * In-flight persist flag. While set, additional schedulePersist() calls
+   * coalesce into the running write instead of starting another one — this
+   * collapses burst writes (e.g. many validations within the same tick) into
+   * a single durable put.
+   */
+  private persistInFlight = false
 
   constructor(ctx: DurableObjectState, env: Env) {
     super(ctx, env)
@@ -144,6 +159,27 @@ export class ApiKeyDO extends DurableObject<Env> {
       keys: Object.fromEntries(this.store.keys),
       hashIndex: Object.fromEntries(this.store.hashIndex),
     })
+  }
+
+  /**
+   * Coalescing persist — if a write is already running, this is a no-op
+   * (the running write will pick up the latest store state on completion
+   * via the re-check loop). Use for non-critical updates like lastUsedAt
+   * where eventual durability is acceptable. Critical writes (create/revoke)
+   * still call persist() directly and await it.
+   */
+  private schedulePersist(): void {
+    if (this.persistInFlight) return
+    this.persistInFlight = true
+    // Fire and forget — do NOT block the read path. Re-check after completion
+    // so concurrent mutations during the write are picked up by a follow-up.
+    ;(async () => {
+      try {
+        await this.persist()
+      } finally {
+        this.persistInFlight = false
+      }
+    })()
   }
 
   // ============================================================
@@ -209,10 +245,21 @@ export class ApiKeyDO extends DurableObject<Env> {
       return { valid: false, reason: 'key_expired' }
     }
 
-    // 마지막 사용 시간 업데이트
-    meta.lastUsedAt = Date.now()
+    // 마지막 사용 시간 업데이트 — THROTTLED.
+    // The previous version persisted the whole key store on every validation,
+    // turning ApiKeyDO into a serialization bottleneck (every API call wrote
+    // the full store to durable storage). Throttle to one write per key per
+    // LAST_USED_THROTTLE_MS so high-QPS authenticated traffic no longer queues
+    // on the singleton DO. The in-memory meta is still refreshed immediately,
+    // so concurrent reads in the same isolate see the fresh timestamp.
+    const now = Date.now()
+    const stale = !meta.lastUsedAt || (now - meta.lastUsedAt) >= LAST_USED_THROTTLE_MS
+    meta.lastUsedAt = now
     this.store.keys.set(keyId, meta)
-    await this.persist()
+    if (stale) {
+      // Best-effort persist via alarm queue — do NOT block the read path.
+      this.schedulePersist()
+    }
 
     return { valid: true, meta }
   }

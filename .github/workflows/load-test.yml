@@ -6,7 +6,7 @@ on:
       target_url:
         description: 'Target URL to load test'
         required: true
-        default: 'https://search-engine-api.pages.dev'
+        default: 'https://ssak-search.pages.dev'
       api_key:
         description: 'API key (if required)'
         required: false
@@ -51,7 +51,7 @@ jobs:
       - name: Configure test parameters
         id: config
         run: |
-          TARGET_URL="${{ github.event.inputs.target_url || 'https://search-engine-api.pages.dev' }}"
+          TARGET_URL="${{ github.event.inputs.target_url || 'https://ssak-search.pages.dev' }}"
           VUS="${{ github.event.inputs.vus || '10' }}"
           DURATION="${{ github.event.inputs.duration || '30s' }}"
           API_KEY="${{ github.event.inputs.api_key || '' }}"

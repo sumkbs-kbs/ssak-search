@@ -1,4 +1,4 @@
-# SLO (Service Level Objectives) — Self-Contained Search Engine API
+# SLO (Service Level Objectives) — ssak-search
 
 > **Owner**: Backend Team  
 > **Review cadence**: Quarterly  
@@ -10,9 +10,9 @@
 
 | Item | Value |
 |------|-------|
-| **Service name** | `search-engine-api` (Cloudflare Pages) |
+| **Service name** | `ssak-search` (Cloudflare Pages) |
 | **Endpoints covered** | `POST /api/search`, `GET /api/search`, `POST /api/extract`, `GET /api/health`, `GET /api/metrics` |
-| **Client-facing domain** | `https://search-engine-api.pages.dev` (and custom domains) |
+| **Client-facing domain** | `https://ssak-search.pages.dev` (and custom domains) |
 | **Backend dependencies** | Bing, Naver, Wikipedia, GitHub, HackerNews, Reddit, arXiv, DuckDuckGo, Jina AI, Workers AI |
 
 ---
@@ -46,7 +46,7 @@
 
 ```yaml
 groups:
-- name: search-engine-api-slo
+- name: ssak-search-slo
   rules:
   # Availability burn-rate alerts
   - alert: SearchAPIHighErrorRate

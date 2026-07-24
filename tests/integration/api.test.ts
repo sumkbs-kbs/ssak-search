@@ -24,7 +24,7 @@ async function fetchJson(path: string, init?: RequestInit): Promise<{
   headers: Headers
   body: unknown
 }> {
-  const url = `https://search-engine-api.pages.dev${path}`
+  const url = `https://ssak-search.pages.dev${path}`
   const res = await worker.fetch(url, init)
   const text = await res.text()
   let body: unknown
@@ -41,7 +41,7 @@ async function fetchText(path: string, init?: RequestInit): Promise<{
   headers: Headers
   body: string
 }> {
-  const url = `https://search-engine-api.pages.dev${path}`
+  const url = `https://ssak-search.pages.dev${path}`
   const res = await worker.fetch(url, init)
   return { status: res.status, headers: res.headers, body: await res.text() }
 }
@@ -55,7 +55,7 @@ describe('GET /api', () => {
     const { status, body } = await fetchJson('/api')
     expect(status).toBe(200)
     const data = body as Record<string, unknown>
-    expect(data.name).toBe('Self-Contained Search Engine API')
+    expect(data.name).toBe('ssak-search')
     expect(data.version).toBe('2.0.0')
     expect(data.endpoints).toBeDefined()
     const eps = data.endpoints as Record<string, unknown>

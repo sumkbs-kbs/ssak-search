@@ -1,6 +1,6 @@
 #!/usr/bin/env npx tsx
 /**
- * Vercel AI SDK Compatibility Test — Self-Contained Search Engine API
+ * Vercel AI SDK Compatibility Test — ssak-search
  *
  * Tests the OpenAI-compatible /v1/chat/completions endpoint using the Vercel AI SDK
  * (@ai-sdk/openai). Validates generateText, streamText, and tool calling patterns.
@@ -9,7 +9,7 @@
  *   npx tsx packages/hermes-search/test_vercel_ai_sdk.ts
  *
  * Env Variables:
- *   OPENAI_BASE_URL   Base URL (default: https://609ec5ff.search-engine-api.pages.dev/v1)
+ *   OPENAI_BASE_URL   Base URL (default: https://609ec5ff.ssak-search.pages.dev/v1)
  *   OPENAI_API_KEY    API key (default: test-key for open mode)
  *   TEST_MODEL        Model name (default: search-engine)
  *   CI                CI mode — JSON summary, strict exit codes
@@ -25,7 +25,7 @@ import * as process from 'node:process';
 // Configuration
 // ============================================================
 
-const API_BASE_URL = process.env.OPENAI_BASE_URL ?? 'https://609ec5ff.search-engine-api.pages.dev/v1';
+const API_BASE_URL = process.env.OPENAI_BASE_URL ?? 'https://609ec5ff.ssak-search.pages.dev/v1';
 const MODEL = process.env.TEST_MODEL ?? 'search-engine';
 const API_KEY = process.env.OPENAI_API_KEY ?? 'test-key';
 const IS_CI = process.env.CI === 'true';

@@ -19,11 +19,11 @@
 #   export CLOUDFLARE_ACCOUNT_ID="..."
 #   export DATADOG_API_KEY="..."
 #   export DATADOG_SITE="datadoghq.com"     # or datadoghq.eu for EU
-#   export SERVICE_NAME="search-engine-api"  # your Worker script name
+#   export SERVICE_NAME="ssak-search"  # your Worker script name
 #   bash scripts/create-logpush-datadog.sh
 #
 # Optional filters:
-#   export FILTER="{\"where\":{\"key\":\"script_name\",\"operator\":\"eq\",\"value\":\"search-engine-api\"}}"
+#   export FILTER="{\"where\":{\"key\":\"script_name\",\"operator\":\"eq\",\"value\":\"ssak-search\"}}"
 #   The above ships logs only from the named Worker script.
 #
 # To disable the job later:
@@ -48,7 +48,7 @@ fi
 
 # ---- Defaults ---------------------------------------------------------------
 DATADOG_SITE="${DATADOG_SITE:-datadoghq.com}"
-SERVICE_NAME="${SERVICE_NAME:-search-engine-api}"
+SERVICE_NAME="${SERVICE_NAME:-ssak-search}"
 DATADOG_DOMAIN="http-intake.logs.${DATADOG_SITE}"
 FILTER="${FILTER:-}"
 
@@ -59,7 +59,7 @@ FILTER="${FILTER:-}"
 #
 # Additional parameters:
 #   ddsource=cloudflare   → tagged in Datadog for source filtering
-#   service=search-engine-api → Datadog service field
+#   service=ssak-search → Datadog service field
 #   host=cf-workers       → Datadog host field
 DESTINATION_CONF="datadog://${DATADOG_DOMAIN}/v1/input?header_DD-API-KEY=${DATADOG_API_KEY}&ddsource=cloudflare&service=${SERVICE_NAME}&host=cf-workers"
 
@@ -138,7 +138,7 @@ PAYLOAD
 # Apply optional filter
 if [ -n "${FILTER}" ]; then
   # FILTER should be a JSON string like:
-  # {"where":{"key":"script_name","operator":"eq","value":"search-engine-api"}}
+  # {"where":{"key":"script_name","operator":"eq","value":"ssak-search"}}
   # Merge into payload using jq
   jq --argjson filter "${FILTER}" '. + {filter: $filter}' "${PAYLOAD_FILE}" > "${PAYLOAD_FILE}.filtered"
   mv "${PAYLOAD_FILE}.filtered" "${PAYLOAD_FILE}"

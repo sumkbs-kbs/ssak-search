@@ -1,6 +1,6 @@
 openapi: "3.1.0"
 info:
-  title: Self-Contained Search Engine API
+  title: ssak-search
   description: |
     Tavily-compatible AI search engine — no API keys required for backends.
 

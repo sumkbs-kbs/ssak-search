@@ -8,10 +8,10 @@ on:
       target_url:
         description: 'API URL to check (default: production)'
         required: false
-        default: 'https://search-engine-api.pages.dev'
+        default: 'https://ssak-search.pages.dev'
 
 env:
-  TARGET_URL: ${{ github.event.inputs.target_url || 'https://search-engine-api.pages.dev' }}
+  TARGET_URL: ${{ github.event.inputs.target_url || 'https://ssak-search.pages.dev' }}
   SLACK_WEBHOOK: ${{ secrets.ALERT_SLACK_WEBHOOK || '' }}
 
 jobs:

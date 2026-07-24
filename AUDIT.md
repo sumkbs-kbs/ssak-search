@@ -73,10 +73,10 @@ Each log line is a single JSON object:
   "reason": "Invalid or missing API key",
   "attemptType": "bearer",
   "ddsource": "cloudflare-workers",
-  "ddService": "search-engine-api",
+  "ddService": "ssak-search",
   "ddEnv": "production",
   "ddVersion": "2.0.0",
-  "service": "search-engine-api",
+  "service": "ssak-search",
   "version": "2.0.0",
   "requestId": "47e3fde9-1193-4e94-93a4-37e7ae1541e1"
 }
@@ -96,7 +96,7 @@ The fields below match Datadog's standard log intake schema for auto-parsing:
 
 1. Cloudflare Dashboard → **Logs & Analytics** → **Logs** → **Logpush**
 2. Click **Add job**
-3. Dataset: **Workers logs** (or filter by field `script_name="search-engine-api"`)
+3. Dataset: **Workers logs** (or filter by field `script_name="ssak-search"`)
 4. Destination: **R2 bucket**
    - Create new bucket: `audit-logs-search-api`
    - Path: `{date}/{hour}/`
@@ -111,7 +111,7 @@ The fields below match Datadog's standard log intake schema for auto-parsing:
    - Type: HTTP
    - URL: `https://http-intake.logs.datadoghq.com/api/v2/logs?ddsource=cloudflare&dd-api-key=<YOUR_KEY>`
 2. Cloudflare: **Logpush** → **Add job**
-3. Dataset: **Workers logs** (script_name = "search-engine-api")
+3. Dataset: **Workers logs** (script_name = "ssak-search")
 4. Destination: **HTTP endpoint** → select the Datadog endpoint above
 5. Add header: `DD-API-KEY: <YOUR_KEY>` (Datadog API key)
 6. Save → Activate
@@ -277,17 +277,17 @@ bash scripts/create-logpush-datadog.sh
      plus exception traces and fetch event metadata
    - **Destination**: `datadog://http-intake.logs.datadoghq.com/v1/input`
    - **Auth**: `DD-API-KEY` appended as header query parameter
-   - **Tags**: `ddsource=cloudflare`, `service=search-engine-api`, `host=cf-workers`
+   - **Tags**: `ddsource=cloudflare`, `service=ssak-search`, `host=cf-workers`
 
 2. Audit events are tagged with `audit: "true"` in the structured JSON — in Datadog,
    use `@audit:"true"` to filter security events.
 
 ### Optional: Filter by Script Name
 
-To ship ONLY logs from the search-engine-api Worker (not all Workers on the account):
+To ship ONLY logs from the ssak-search Worker (not all Workers on the account):
 
 ```bash
-export FILTER='{"where":{"key":"script_name","operator":"eq","value":"search-engine-api"}}'
+export FILTER='{"where":{"key":"script_name","operator":"eq","value":"ssak-search"}}'
 bash scripts/create-logpush-datadog.sh
 ```
 
@@ -302,7 +302,7 @@ curl -s -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
 
 Then in Datadog → **Logs → Log Explorer**, run:
 ```
-source:cloudflare service:search-engine-api @audit:"true"
+source:cloudflare service:ssak-search @audit:"true"
 ```
 
 ---
@@ -381,9 +381,9 @@ Notify: @pagerduty-search-engine
 |---------|-------|-----|
 | No logs in Datadog | API token missing `logs_write` | Regenerate key with correct permissions |
 | "active job already exists" | Only one Logpush job per dataset allowed | Delete old job: `curl -X DELETE .../logpush/jobs/{id}` |
-| Logs arriving but no `@audit` field | Datadog hasn't parsed the JSON | Wait 5-10m for field extraction. Check `source:cloudflare service:search-engine-api` |
+| Logs arriving but no `@audit` field | Datadog hasn't parsed the JSON | Wait 5-10m for field extraction. Check `source:cloudflare service:ssak-search` |
 | `403 Forbidden` | API token lacks Logs:Write | Create new token with Logs → Write permission |
-| Dashboard shows 0 data | Template variable mismatch | Set `$service` to `search-engine-api` in dashboard header |
+| Dashboard shows 0 data | Template variable mismatch | Set `$service` to `ssak-search` in dashboard header |
 
 ---
 

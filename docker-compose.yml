@@ -94,7 +94,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.webapp
-    container_name: search-webapp
+    container_name: ssak-search
     ports:
       - "8788:8788"
     environment:

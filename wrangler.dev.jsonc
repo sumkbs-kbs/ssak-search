@@ -9,7 +9,7 @@
  * Inherits all other bindings from wrangler.jsonc via merge.
  */
 {
-  "name": "search-engine-api-dev",
+  "name": "ssak-search-dev",
   "compatibility_date": "2026-07-10",
   "pages_build_output_dir": "./dist",
   "compatibility_flags": ["nodejs_compat"],

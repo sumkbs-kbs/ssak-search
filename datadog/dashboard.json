@@ -3,12 +3,12 @@
   "description": "Created via Cloudflare Logpush → Datadog. Monitors auth/rate-limit security events, backend performance, and SLO compliance.",
   "layout_type": "free",
   "notify_list": [],
-  "tags": ["service:search-engine-api", "source:cloudflare", "monitoring:logpush"],
+  "tags": ["service:ssak-search", "source:cloudflare", "monitoring:logpush"],
   "template_variables": [
     {
       "name": "service",
       "prefix": "service",
-      "default": "search-engine-api"
+      "default": "ssak-search"
     },
     {
       "name": "env",
@@ -26,7 +26,7 @@
       "id": 1,
       "definition": {
         "type": "note",
-        "content": "# Search Engine API — Audit & Operations Dashboard\n\nThis dashboard visualizes security audit events streamed via **Cloudflare Logpush → Datadog Logs Ingestion**.\n\n**Data Source:** `source:cloudflare service:search-engine-api`\n\n**Audit Events:** `@audit:\"true\"` | **Critical Alerts:** `@severity:\"critical\"`\n\n---",
+        "content": "# Search Engine API — Audit & Operations Dashboard\n\nThis dashboard visualizes security audit events streamed via **Cloudflare Logpush → Datadog Logs Ingestion**.\n\n**Data Source:** `source:cloudflare service:ssak-search`\n\n**Audit Events:** `@audit:\"true\"` | **Critical Alerts:** `@severity:\"critical\"`\n\n---",
         "background_color": "transparent",
         "font_size": "14",
         "text_align": "left",
@@ -88,7 +88,7 @@
         "autoscale": true,
         "precision": 0,
         "custom_links": [
-          { "label": "View Critical Events", "link": "/logs?query=source%3Acloudflare%20service%3Asearch-engine-api%20%40audit%3A%22true%22%20%40severity%3A%22critical%22&cols=%5B%22timestamp%22%2C%22message%22%2C%22auditEventType%22%2C%22actor%22" }
+          { "label": "View Critical Events", "link": "/logs?query=source%3Acloudflare%20service%3Assak-search%20%40audit%3A%22true%22%20%40severity%3A%22critical%22&cols=%5B%22timestamp%22%2C%22message%22%2C%22auditEventType%22%2C%22actor%22" }
         ]
       },
       "layout": { "x": 3, "y": 4, "width": 3, "height": 2 }
@@ -118,7 +118,7 @@
         "autoscale": true,
         "precision": 0,
         "custom_links": [
-          { "label": "View Auth Failures", "link": "/logs?query=source%3Acloudflare%20service%3Asearch-engine-api%20%40audit%3A%22true%22%20%40eventType%3A%22auth_failure%22" }
+          { "label": "View Auth Failures", "link": "/logs?query=source%3Acloudflare%20service%3Assak-search%20%40audit%3A%22true%22%20%40eventType%3A%22auth_failure%22" }
         ]
       },
       "layout": { "x": 6, "y": 4, "width": 3, "height": 2 }
@@ -175,7 +175,7 @@
         "autoscale": true,
         "precision": 0,
         "custom_links": [
-          { "label": "View SSRF Attempts", "link": "/logs?query=source%3Acloudflare%20service%3Asearch-engine-api%20%40audit%3A%22true%22%20%40eventType%3A%22ssrf_attempt%22" }
+          { "label": "View SSRF Attempts", "link": "/logs?query=source%3Acloudflare%20service%3Assak-search%20%40audit%3A%22true%22%20%40eventType%3A%22ssrf_attempt%22" }
         ]
       },
       "layout": { "x": 12, "y": 4, "width": 3, "height": 2 }

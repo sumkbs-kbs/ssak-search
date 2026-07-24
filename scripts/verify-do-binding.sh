@@ -21,7 +21,7 @@
 
 set -euo pipefail
 
-WORKER_URL="${WORKER_URL:-https://search-engine-api.pages.dev}"
+WORKER_URL="${WORKER_URL:-https://ssak-search.pages.dev}"
 
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo " Verifying ALL Durable Object Bindings"
@@ -60,7 +60,7 @@ print(d.get('rate_limiter',{}).get('mode','unknown'))
   echo " ✅ RATE_LIMITER is ACTIVE (mode: ${RL_MODE})"
 else
   echo " ⚠️  RATE_LIMITER is INACTIVE (in-memory fallback)"
-  echo "    To enable: Cloudflare Dashboard → Pages → search-engine-api"
+  echo "    To enable: Cloudflare Dashboard → Pages → ssak-search"
   echo "    → Settings → Functions → Durable Objects → Add binding"
   echo "    (name: RATE_LIMITER, class: RateLimiterDO)"
   echo "    Then redeploy."
@@ -178,7 +178,7 @@ if [ "${FAIL_COUNT}" -eq 0 ] && [ "${DO_ACTIVE}" = "true" ]; then
 elif [ "${FAIL_COUNT}" -gt 0 ]; then
   echo ""
   echo " ⚠️  ${FAIL_COUNT} DO binding(s) missing."
-  echo "    To fix: Cloudflare Dashboard → Pages → search-engine-api"
+  echo "    To fix: Cloudflare Dashboard → Pages → ssak-search"
   echo "    → Settings → Functions → Durable Objects → Add binding"
   echo ""
   echo "    Required bindings (binding_name → class_name):"

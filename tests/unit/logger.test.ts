@@ -130,9 +130,9 @@ describe('Logger', () => {
       const loggedEntry = spy.mock.calls[0][0]
       const parsed = JSON.parse(loggedEntry)
       expect(parsed).toHaveProperty('ddsource', 'cloudflare-workers')
-      expect(parsed).toHaveProperty('ddService', 'search-engine-api')
+      expect(parsed).toHaveProperty('ddService', 'ssak-search')
       expect(parsed).toHaveProperty('ddVersion', '2.0.0')
-      expect(parsed).toHaveProperty('service', 'search-engine-api')
+      expect(parsed).toHaveProperty('service', 'ssak-search')
       expect(parsed).toHaveProperty('version', '2.0.0')
       expect(parsed).toHaveProperty('timestamp')
       expect(parsed).toHaveProperty('level', 'info')

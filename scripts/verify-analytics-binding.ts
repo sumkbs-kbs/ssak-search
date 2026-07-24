@@ -36,7 +36,7 @@ function main() {
       console.error('To enable metrics persistence across cold starts:')
       console.error('1. Cloudflare Dashboard → Workers & Pages → Analytics → Create dataset')
       console.error('   (e.g. name: SEARCH_API_METRICS)')
-      console.error('2. Pages → search-engine-api → Settings → Bindings')
+      console.error('2. Pages → ssak-search → Settings → Bindings')
       console.error('   → Workers Analytics Engine Datasets → "Add binding"')
       console.error('   - Variable name: ANALYTICS')
       console.error('   - Dataset: (dataset from step 1)')

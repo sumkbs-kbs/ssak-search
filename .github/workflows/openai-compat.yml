@@ -21,7 +21,7 @@ on:
 
 env:
   PYTHON_VERSION: '3.11'
-  DEFAULT_API_URL: 'https://609ec5ff.search-engine-api.pages.dev/v1'
+  DEFAULT_API_URL: 'https://609ec5ff.ssak-search.pages.dev/v1'
 
 jobs:
   openai-compat-test:

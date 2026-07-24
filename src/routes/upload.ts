@@ -160,7 +160,7 @@ ${text.slice(0, 8000)}`
 uploadRoute.post('/', async (c) => {
   if (!checkBinding(c)) {
     return c.json<ErrorResponse>(
-      { detail: 'File upload requires UPLOAD_BUCKET R2 binding. Configure via Cloudflare Dashboard → Pages → search-engine-api → Settings → Bindings → R2 → Add binding (name: UPLOAD_BUCKET).', code: 'binding_missing' },
+      { detail: 'File upload requires UPLOAD_BUCKET R2 binding. Configure via Cloudflare Dashboard → Pages → ssak-search → Settings → Bindings → R2 → Add binding (name: UPLOAD_BUCKET).', code: 'binding_missing' },
       501,
     )
   }

@@ -1,5 +1,5 @@
 /**
- * k6 Load Test — Self-Contained Search Engine API
+ * k6 Load Test — ssak-search
  *
  * Usage:
  *   k6 run --vus 5 --duration 30s tests/k6/load-test.js

@@ -29,7 +29,7 @@ crawlRoute.post('/', async (c) => {
   if (!checkBinding(c)) {
     return c.json<ErrorResponse>(
       {
-        detail: 'Crawler requires CRAWLER_DO Durable Object binding. Configure via Cloudflare Dashboard → Pages → search-engine-api → Settings → Functions → Durable Objects → Add binding (name: CRAWLER_DO, class: CrawlerDO).',
+        detail: 'Crawler requires CRAWLER_DO Durable Object binding. Configure via Cloudflare Dashboard → Pages → ssak-search → Settings → Functions → Durable Objects → Add binding (name: CRAWLER_DO, class: CrawlerDO).',
         code: 'binding_missing',
       },
       501,

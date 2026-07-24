@@ -1,6 +1,6 @@
 # Hermes Agent Integration Guide
 
-> **Self-Contained Search Engine API**를 Hermes Agent의 검색 엔진으로 연결하는 3가지 방법
+> **ssak-search**를 Hermes Agent의 검색 엔진으로 연결하는 3가지 방법
 
 본 API는 **Tavily 완전 호환** 인터페이스를 제공하므로, Hermes Agent가 Tavily를 사용하는 방식과
 동일하게 연결할 수 있습니다. API 키가 필요 없는 **open 모드**로 동작하며, 한국어/중국어/영어 등
@@ -25,12 +25,12 @@
 
 | 항목 | Production URL | Local Dev URL |
 |------|---------------|---------------|
-| **API Base** | `https://search-engine-api.pages.dev/api` | `http://localhost:8788/api` |
+| **API Base** | `https://ssak-search.pages.dev/api` | `http://localhost:8788/api` |
 | **Search** | `POST /api/search` | 동일 |
 | **Extract** | `POST /api/extract` | 동일 |
 | **Chat** | `POST /api/chat` | 동일 |
 | **Health** | `GET /api/health` | 동일 |
-| **OpenAI 호환** | `https://search-engine-api.pages.dev/v1` | `http://localhost:8788/v1` |
+| **OpenAI 호환** | `https://ssak-search.pages.dev/v1` | `http://localhost:8788/v1` |
 | **API 키** | 불필요 (open 모드) 또는 `SEARCH_API_KEY` 설정 시 필요 | 불필요 |
 
 ---
@@ -45,7 +45,7 @@
 import httpx
 from typing import Optional
 
-SEARCH_API = "https://search-engine-api.pages.dev/api"
+SEARCH_API = "https://ssak-search.pages.dev/api"
 
 async def web_search(
     query: str,
@@ -131,7 +131,7 @@ Hermes Agent가 **OpenAI SDK** 또는 **OpenAI-compatible function calling**을 
 from openai import OpenAI
 
 client = OpenAI(
-    base_url="https://search-engine-api.pages.dev/v1",
+    base_url="https://ssak-search.pages.dev/v1",
     api_key="any-string-works",  # open 모드: 아무 값이나 가능
 )
 
@@ -164,7 +164,7 @@ Hermes Agent가 OpenAI-style function calling을 지원하는 경우, 아래 too
 from openai import OpenAI
 
 client = OpenAI(
-    base_url="https://search-engine-api.pages.dev/v1",
+    base_url="https://ssak-search.pages.dev/v1",
     api_key="any-string-works",
 )
 
@@ -236,7 +236,7 @@ pip install hermes-search
 ```python
 from hermes_search import HermesSearch
 
-client = HermesSearch(    base_url="https://search-engine-api.pages.dev/api"
+client = HermesSearch(    base_url="https://ssak-search.pages.dev/api"
 )
 
 # Tavily 호환 검색 (raw dict)
@@ -257,7 +257,7 @@ import asyncio
 from hermes_search import HermesSearch
 
 async def main():
-    client = HermesSearch(    base_url="https://search-engine-api.pages.dev/api"
+    client = HermesSearch(    base_url="https://ssak-search.pages.dev/api"
 )
 
     # 1. 검색
@@ -286,7 +286,7 @@ asyncio.run(main())
 from hermes_search import HermesAgentTools
 
 # Tool 인스턴스 생성
-tools = HermesAgentTools(base_url="https://search-engine-api.pages.dev/api")
+tools = HermesAgentTools(base_url="https://ssak-search.pages.dev/api")
 
 # Hermes Agent에 등록할 tool 정의 획득
 tool_definitions = tools.get_tool_definitions()
@@ -494,7 +494,7 @@ class WebSearchTool(BaseTool):
     def _run(self, query: str, max_results: int = 10) -> str:
         import httpx
         resp = httpx.post(
-            "https://search-engine-api.pages.dev/api/search",
+            "https://ssak-search.pages.dev/api/search",
             json={"query": query, "max_results": max_results, "include_answer": True},
             timeout=30,
         )
@@ -515,10 +515,10 @@ class WebSearchTool(BaseTool):
 
 ```bash
 # 1. API가 응답하는지 확인
-curl -s https://search-engine-api.pages.dev/api/health | python3 -m json.tool
+curl -s https://ssak-search.pages.dev/api/health | python3 -m json.tool
 
 # 2. 검색 테스트
-curl -s -X POST https://search-engine-api.pages.dev/api/search \
+curl -s -X POST https://ssak-search.pages.dev/api/search \
   -H "Content-Type: application/json" \
   -d '{"query":"test","max_results":1}' | python3 -c "
 import sys, json
@@ -530,7 +530,7 @@ print(f'📡 백엔드: {d[\"backend\"]}')
 # 3. Python SDK 테스트
 python3 -c "
 from hermes_search import HermesSearch
-c = HermesSearch(base_url='https://search-engine-api.pages.dev/api')
+c = HermesSearch(base_url='https://ssak-search.pages.dev/api')
 r = c.search_dict('hello world', max_results=1)
 print(f'✅ {len(r[\"results\"])}건 결과')
 "
@@ -569,4 +569,4 @@ print(f'✅ {len(r[\"results\"])}건 결과')
 
 ---
 
-*문서 생성일: 2026-07-21 | 기준 URL: https://search-engine-api.pages.dev | 현재 배포: https://4ebb7a0f.search-engine-api.pages.dev*
+*문서 생성일: 2026-07-21 | 기준 URL: https://ssak-search.pages.dev | 현재 배포: https://4ebb7a0f.ssak-search.pages.dev*

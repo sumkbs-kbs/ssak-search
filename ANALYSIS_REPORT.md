@@ -1,6 +1,6 @@
 # 🔍 전체 코드 분석 및 상용 프로그램 격차 분석 보고서
 
-**프로젝트명**: Self-Contained Search Engine API (webapp)  
+**프로젝트명**: ssak-search (webapp)  
 **버전**: 2.0.0  
 **분석일**: 2026-07-18  
 

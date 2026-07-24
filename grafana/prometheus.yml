@@ -29,14 +29,14 @@ scrape_configs:
   # ============================================================
   # Main Search Engine API
   # ============================================================
-  - job_name: 'search-engine-api'
+  - job_name: 'ssak-search'
     metrics_path: '/api/metrics'
     scheme: https
     static_configs:
       - targets:
-          - 'search-engine-api.pages.dev'
+          - 'ssak-search.pages.dev'
         labels:
-          service: 'search-engine-api'
+          service: 'ssak-search'
           environment: 'production'
           team: 'search-engine'
 
@@ -52,14 +52,14 @@ scrape_configs:
   # ============================================================
   # Staging environment (if available)
   # ============================================================
-  - job_name: 'search-engine-api-staging'
+  - job_name: 'ssak-search-staging'
     metrics_path: '/api/metrics'
     scheme: https
     static_configs:
       - targets:
-          - 'staging.search-engine-api.pages.dev'
+          - 'staging.ssak-search.pages.dev'
         labels:
-          service: 'search-engine-api'
+          service: 'ssak-search'
           environment: 'staging'
           team: 'search-engine'
     scrape_interval: 120s
@@ -71,7 +71,7 @@ scrape_configs:
 # Example alert rules — see MONITORING_GUIDE.md for full list
 #
 # groups:
-#   - name: search-engine-api
+#   - name: ssak-search
 #     rules:
 #       - alert: BackendDown
 #         expr: search_backend_status < 0.5

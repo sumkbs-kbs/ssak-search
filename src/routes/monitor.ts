@@ -174,7 +174,7 @@ monitorRoute.get('/', async (c) => {
   // Build response
   const response = {
     // Service identity
-    service: 'search-engine-api',
+    service: 'ssak-search',
     version: '2.0.0',
     timestamp: new Date(now).toISOString(),
     monitored_since: usage.trackedSince,

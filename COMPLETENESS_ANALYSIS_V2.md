@@ -1,4 +1,4 @@
-# Self-Contained Search Engine API — 상용 완성도 정밀 분석 & 만회 전략 (Perplexity 목표 기준)
+# ssak-search — 상용 완성도 정밀 분석 & 만회 전략 (Perplexity 목표 기준)
 
 **분석 대상**: `webapp` (v2.0.0, Cloudflare Pages + Hono + Workers)  
 **분석 일시**: 2026-07-19  

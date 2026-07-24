@@ -1,6 +1,6 @@
 # Cloudflare Pages Binding 설정 가이드
 
-> **목표**: 이 가이드는 `search-engine-api` 프로젝트에 필요한 모든 Cloudflare 바인딩을  
+> **목표**: 이 가이드는 `ssak-search` 프로젝트에 필요한 모든 Cloudflare 바인딩을  
 > **Cloudflare Dashboard**에서 설정하는 방법을 단계별로 설명합니다.  
 > 로컬 개발(`wrangler pages dev`)은 `wrangler.jsonc`에 미리 설정되어 있지만,  
 > **프로덕션 Pages 배포**에서는 대시보드에서 직접 바인딩을 구성해야 합니다.
@@ -43,11 +43,11 @@
 
 ### 프로젝트 이름 확인
 
-이 가이드에서는 Pages 프로젝트 이름이 `search-engine-api`라고 가정합니다.  
+이 가이드에서는 Pages 프로젝트 이름이 `ssak-search`라고 가정합니다.  
 실제 프로젝트 이름이 다르다면 그에 맞게 치환하세요.
 
 ```
-현재 wrangler.jsonc name: "search-engine-api"
+현재 wrangler.jsonc name: "ssak-search"
 ```
 
 ---
@@ -72,7 +72,7 @@ D1은 SQLite 기반 관계형 데이터베이스로, 인덱싱된 문서의 메�
 | 단계 | 설명 |
 |:----|:------|
 | ① | Cloudflare Dashboard → **Workers & Pages** → **Pages** |
-| ② | `search-engine-api` 프로젝트 클릭 |
+| ② | `ssak-search` 프로젝트 클릭 |
 | ③ | **Settings** → **Functions** 탭 |
 | ④ | **D1 Databases** → **Add binding** |
 | ⑤ | **Variable name**: `SEARCH_INDEX_DB` ⚠️ 정확히 입력 |
@@ -162,7 +162,7 @@ Vectorize는 벡터 임베딩을 저장하고 의미 기반 검색을 제공합�
 | 단계 | 설명 |
 |:----|:------|
 | ① | Cloudflare Dashboard → **Workers & Pages** → **Pages** |
-| ② | `search-engine-api` 프로젝트 클릭 |
+| ② | `ssak-search` 프로젝트 클릭 |
 | ③ | **Settings** → **Functions** 탭 |
 | ④ | **Vectorize** → **Add binding** |
 | ⑤ | **Variable name**: `VECTORIZE_INDEX` ⚠️ 정확히 입력 |
@@ -212,7 +212,7 @@ Consumer가 백그라운드에서 처리합니다.
 | 단계 | 설명 |
 |:----|:------|
 | ① | Cloudflare Dashboard → **Workers & Pages** → **Pages** |
-| ② | `search-engine-api` 프로젝트 클릭 |
+| ② | `ssak-search` 프로젝트 클릭 |
 | ③ | **Settings** → **Functions** 탭 |
 | ④ | **Queues** → **Add binding** |
 | ⑤ | **Variable name**: `INDEX_QUEUE` ⚠️ 정확히 입력 |
@@ -226,7 +226,7 @@ Queue를 사용하려면 **Queue Consumer를 Pages Functions에 연결**해야 �
 | 단계 | 설명 |
 |:----|:------|
 | ① | Cloudflare Dashboard → **Workers & Pages** → **Pages** |
-| ② | `search-engine-api` → **Settings** → **Functions** |
+| ② | `ssak-search` → **Settings** → **Functions** |
 | ③ | **Queues Producers/Consumers** 섹션 |
 | ④ | **Add consumer** 클릭 |
 | ⑤ | **Queue**: `search-index-queue` 선택 |
@@ -251,7 +251,7 @@ DO(Durable Object)는 상태를 유지하는 싱글톤 인스턴스로,
 | 단계 | 설명 |
 |:----|:------|
 | ① | Cloudflare Dashboard → **Workers & Pages** → **Pages** |
-| ② | `search-engine-api` 프로젝트 클릭 |
+| ② | `ssak-search` 프로젝트 클릭 |
 | ③ | **Settings** → **Functions** 탭 |
 | ④ | **Durable Objects** → **Add binding** |
 | ⑤ | 아래 표를 참고하여 각 바인딩 추가 |
@@ -321,7 +321,7 @@ KV는 캐시 영속화에 사용됩니다. Cache API만으로는 Cold Start 시 
 | 단계 | 설명 |
 |:----|:------|
 | ① | Cloudflare Dashboard → **Workers & Pages** → **Pages** |
-| ② | `search-engine-api` → **Settings** → **Functions** 탭 |
+| ② | `ssak-search` → **Settings** → **Functions** 탭 |
 | ③ | **KV Namespaces** → **Add binding** |
 | ④ | **Variable name**: `CACHE_KV` ⚠️ 정확히 입력 |
 | ⑤ | **KV namespace**: `search-engine-cache` 선택 |
@@ -347,7 +347,7 @@ R2는 파일 업로드(/api/upload)에 사용됩니다.
 | 단계 | 설명 |
 |:----|:------|
 | ① | Cloudflare Dashboard → **Workers & Pages** → **Pages** |
-| ② | `search-engine-api` → **Settings** → **Functions** 탭 |
+| ② | `ssak-search` → **Settings** → **Functions** 탭 |
 | ③ | **R2 Buckets** → **Add binding** |
 | ④ | **Variable name**: `UPLOAD_BUCKET` ⚠️ 정확히 입력 |
 | ⑤ | **Bucket**: `search-engine-uploads` 선택 |
@@ -375,7 +375,7 @@ Analytics Engine은 요청 메트릭을 영속화합니다.
 | 단계 | 설명 |
 |:----|:------|
 | ① | Cloudflare Dashboard → **Workers & Pages** → **Pages** |
-| ② | `search-engine-api` → **Settings** → **Functions** 탭 |
+| ② | `ssak-search` → **Settings** → **Functions** 탭 |
 | ③ | **Workers Analytics Engine Datasets** → **Add binding** |
 | ④ | **Variable name**: `ANALYTICS` ⚠️ 정확히 입력 |
 | ⑤ | **Dataset**: `SEARCH_API_METRICS` (또는 위에서 생성한 데이터셋) |
@@ -403,7 +403,7 @@ Secrets는 암호화된 환경 변수로, 민감한 정보에 사용됩니다.
 | 단계 | 설명 |
 |:----|:------|
 | ① | Cloudflare Dashboard → **Workers & Pages** → **Pages** |
-| ② | `search-engine-api` 프로젝트 클릭 |
+| ② | `ssak-search` 프로젝트 클릭 |
 | ③ | **Settings** → **Environment variables** (Secrets 섹션) |
 | ④ | **Add secret** 클릭 → 이름과 값을 입력 |
 | ⑤ | **Save** |
@@ -451,7 +451,7 @@ GitHub Actions 워크플로우에서 사용할 Secrets입니다.
 
 | 단계 | 설명 |
 |:----|:------|
-| ① | GitHub → `search-engine-api` 리포지토리 |
+| ① | GitHub → `ssak-search` 리포지토리 |
 | ② | **Settings** → **Secrets and variables** → **Actions** |
 | ③ | **New repository secret** 클릭 |
 | ④ | 아래 표 참고하여 각 Secret 등록 |
@@ -599,7 +599,7 @@ curl https://your-pages-domain.pages.dev/api/queue/stats
 **원인**: D1 또는 Vectorize 바인딩이 Pages에 연결되지 않음
 
 **해결**:
-1. Dashboard → Pages → search-engine-api → Settings → Functions
+1. Dashboard → Pages → ssak-search → Settings → Functions
 2. D1 + Vectorize 바인딩이 모두 있는지 확인
 3. 없으면 위 가이드 1, 2번 단계 다시 수행
 4. **Save & Redeploy** 필수
@@ -637,7 +637,7 @@ npx wrangler d1 execute search-engine-index --file=./src/lib/index/schema.sql
 **원인**: Queue Consumer가 Pages Functions에 연결되지 않음
 
 **해결**:
-1. Dashboard → Pages → search-engine-api → Settings → Functions
+1. Dashboard → Pages → ssak-search → Settings → Functions
 2. **Queues Producers/Consumers** 섹션 확인
 3. Consumer function이 `indexQueueConsumer`로 설정되었는지 확인
 

@@ -66,7 +66,7 @@ Content-Type: text/plain; version=0.0.4
 
 ```bash
 # Verify metrics are being emitted
-curl -s https://search-engine-api.pages.dev/api/metrics | head -20
+curl -s https://ssak-search.pages.dev/api/metrics | head -20
 
 # Output:
 # HELP search_backend_status Backend status (1=healthy, 0.5=degraded, 0=down)
@@ -81,7 +81,7 @@ curl -s https://search-engine-api.pages.dev/api/metrics | head -20
 For a full current snapshot:
 
 ```bash
-curl -s https://search-engine-api.pages.dev/api/metrics
+curl -s https://ssak-search.pages.dev/api/metrics
 ```
 
 ---
@@ -98,7 +98,7 @@ curl -s https://search-engine-api.pages.dev/api/metrics
    - Copy the Dataset ID
 
 2. **Bind the dataset** to the Pages project:
-   - Pages → `search-engine-api` → Settings → Bindings
+   - Pages → `ssak-search` → Settings → Bindings
    - Workers Analytics Engine Datasets → Add binding
    - **Variable name**: `ANALYTICS`
    - **Dataset**: `SEARCH_API_METRICS`
@@ -195,14 +195,14 @@ Use the built-in `metrics_path` pointing directly to the Workers URL:
 ```yaml
 # prometheus.yml
 scrape_configs:
-  - job_name: 'search-engine-api'
+  - job_name: 'ssak-search'
     metrics_path: '/api/metrics'
     scheme: https
     static_configs:
       - targets:
-          - 'search-engine-api.pages.dev'
+          - 'ssak-search.pages.dev'
         labels:
-          service: 'search-engine-api'
+          service: 'ssak-search'
     scrape_interval: 60s
     scrape_timeout: 15s
 ```
@@ -213,7 +213,7 @@ scrape_configs:
 #### Approach 2: Grafana Cloud Prometheus
 
 If using Grafana Cloud, use the **Prometheus data source** pointing to
-`https://search-engine-api.pages.dev/api/metrics` directly with a scrape interval
+`https://ssak-search.pages.dev/api/metrics` directly with a scrape interval
 of 60s.
 
 #### Approach 3: Cloudflare Workers-based Scraping Proxy
@@ -229,7 +229,7 @@ export default {
       return new Response('Not found', { status: 404 })
     }
 
-    const resp = await fetch('https://search-engine-api.pages.dev/api/metrics')
+    const resp = await fetch('https://ssak-search.pages.dev/api/metrics')
     const text = await resp.text()
 
     return new Response(text, {
@@ -245,7 +245,7 @@ export default {
 ### Grafana Prometheus Data Source
 
 1. Add a new **Prometheus** data source in Grafana
-2. URL: `https://search-engine-api.pages.dev` (or your proxy URL)
+2. URL: `https://ssak-search.pages.dev` (or your proxy URL)
 3. Scrape interval: `60s`
 4. Save & Test
 
@@ -295,7 +295,7 @@ output including structured audit events.
    - Datadog endpoint: `https://http-intake.logs.datadoghq.com/v1/input`
    - Datadog API key: your Datadog API key
 
-3. **Filter by script**: `search-engine-api`
+3. **Filter by script**: `ssak-search`
 
 ### Step 3: Create Datadog Dashboard
 
@@ -303,13 +303,13 @@ Use the logs to create dashboards with these queries:
 
 ```
 # Error rate
-service:search-engine-api @level:error | stats:count
+service:ssak-search @level:error | stats:count
 
 # Request volume by endpoint
-service:search-engine-api | stats:count by @endpoint
+service:ssak-search | stats:count by @endpoint
 
 # Audit events
-service:search-engine-api "AUDIT_SECURITY" | stats:count by @eventType
+service:ssak-search "AUDIT_SECURITY" | stats:count by @eventType
 ```
 
 ### Step 4: Custom Metrics via DogStatsD
@@ -439,7 +439,7 @@ search_subrequests_per_request
 
 ```yaml
 groups:
-  - name: search-engine-api
+  - name: ssak-search
     rules:
       # Backend down
       - alert: BackendDown
@@ -542,7 +542,7 @@ Example with 99.9% SLO:
 The API provides an SLO report at `/api/monitor`:
 
 ```bash
-curl -s https://search-engine-api.pages.dev/api/monitor | jq
+curl -s https://ssak-search.pages.dev/api/monitor | jq
 ```
 
 ```json
@@ -595,7 +595,7 @@ At peak throughput:
 The `/api/usage` endpoint shows current subrequest consumption:
 
 ```bash
-curl -s https://search-engine-api.pages.dev/api/usage | jq
+curl -s https://ssak-search.pages.dev/api/usage | jq
 ```
 
 ```json
@@ -624,10 +624,10 @@ search_subrequests_per_request
 
 ```bash
 # Check if the /api/metrics endpoint is reachable
-curl -sf https://search-engine-api.pages.dev/api/metrics | grep search_requests_total
+curl -sf https://ssak-search.pages.dev/api/metrics | grep search_requests_total
 
 # Check if content-type is correct
-curl -sI https://search-engine-api.pages.dev/api/metrics | grep content-type
+curl -sI https://ssak-search.pages.dev/api/metrics | grep content-type
 # Expected: text/plain; version=0.0.4
 ```
 
@@ -635,7 +635,7 @@ curl -sI https://search-engine-api.pages.dev/api/metrics | grep content-type
 
 ```bash
 # Check the persistence gauge
-curl -s https://search-engine-api.pages.dev/api/metrics | grep search_metrics_persistence
+curl -s https://ssak-search.pages.dev/api/metrics | grep search_metrics_persistence
 # Expected: search_metrics_persistence 1
 # If 0: the ANALYTICS binding is not configured
 ```
@@ -659,9 +659,9 @@ If using a browser-based Prometheus client (e.g., prometheus-ui), CORS is handle
 
 | Resource | URL |
 |----------|-----|
-| Production metrics | `https://search-engine-api.pages.dev/api/metrics` |
-| Health check | `https://search-engine-api.pages.dev/api/health` |
-| SLO report | `https://search-engine-api.pages.dev/api/monitor` |
-| Usage stats | `https://search-engine-api.pages.dev/api/usage` |
-| OpenAPI spec | `https://search-engine-api.pages.dev/openapi.yaml` |
+| Production metrics | `https://ssak-search.pages.dev/api/metrics` |
+| Health check | `https://ssak-search.pages.dev/api/health` |
+| SLO report | `https://ssak-search.pages.dev/api/monitor` |
+| Usage stats | `https://ssak-search.pages.dev/api/usage` |
+| OpenAPI spec | `https://ssak-search.pages.dev/openapi.yaml` |
 | GitHub repo | `https://github.com/mr.k/webapp` |

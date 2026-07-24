@@ -1,4 +1,4 @@
-# Self-Contained Search Engine API
+# ssak-search
 
 **API 키 없이, 무료로, 자체적으로 작동하는 검색엔진** — Hermes Agent용 Tavily 호환 API
 
@@ -570,7 +570,7 @@ Without this binding, rate limiting and circuit breaker are per-isolate best-eff
 (in-memory fallback). The API works, but rate limits are not enforced across
 concurrent requests. To enable cross-isolate coordination:
 
-1. Go to https://dash.cloudflare.com/ → **Pages** → `search-engine-api` → **Settings** → **Functions**
+1. Go to https://dash.cloudflare.com/ → **Pages** → `ssak-search` → **Settings** → **Functions**
 2. Scroll to **Durable Objects** → **Add binding**
 3. **Namespace name**: `RATE_LIMITER` (must match the binding name in code)
 4. **Class name**: `RateLimiterDO` (must match `export { RateLimiterDO }` in `src/index.tsx`)
@@ -626,7 +626,7 @@ sends Slack alerts when backends are down or latency exceeds thresholds.
 1. Cloudflare Dashboard → **Workers & Pages** → **Analytics** → **Create dataset**
 2. Name: `SEARCH_API_METRICS` (또는 원하는 이름)
 3. Dataset ID 복사
-4. Cloudflare Dashboard → **Pages** → `search-engine-api` → **Settings** → **Bindings** → **Workers Analytics Engine Datasets** → "Add binding"
+4. Cloudflare Dashboard → **Pages** → `ssak-search` → **Settings** → **Bindings** → **Workers Analytics Engine Datasets** → "Add binding"
 5. **Variable name**: `ANALYTICS`
 6. **Dataset**: 위에서 생성한 데이터셋
 7. **Save**
@@ -691,16 +691,16 @@ Workers AI 바인딩 추가 후 인덱스를 재시드하세요:
 
 ```bash
 # 1. Workers AI 바인딩이 활성화된 상태에서 배포
-npm run build && npx wrangler pages deploy dist/ --project-name=search-engine-api --branch=main --commit-dirty=true
+npm run build && npx wrangler pages deploy dist/ --project-name=ssak-search --branch=main --commit-dirty=true
 
 # 2. 스키마 재초기화 (기존 데이터 유지)
-curl -X POST https://search-engine-api.pages.dev/api/index/init
+curl -X POST https://ssak-search.pages.dev/api/index/init
 
 # 3. 전체 재시드 (Workers AI 임베딩으로 통일)
-npm run seed:index -- --api-url=https://search-engine-api.pages.dev --static --batch-size=3 --concurrency=1
+npm run seed:index -- --api-url=https://ssak-search.pages.dev --static --batch-size=3 --concurrency=1
 
 # 4. 검증: total_documents와 index_health 확인
-curl https://search-engine-api.pages.dev/api/health | jq '.index'
+curl https://ssak-search.pages.dev/api/health | jq '.index'
 ```
 
 ### 3. 로컬 개발 환경
@@ -721,21 +721,21 @@ npm run seed:index -- --api-url=http://localhost:8788 --all
 
 ```bash
 # 1. Workers AI 활성화 여부
-curl -s https://search-engine-api.pages.dev/api/health | jq '.backends.workers_ai'
+curl -s https://ssak-search.pages.dev/api/health | jq '.backends.workers_ai'
 # 기대값: "operational" (미설정 시 "disabled")
 
 # 2. 인덱스 문서 수
-curl -s https://search-engine-api.pages.dev/api/health | jq '.index.total_documents'
+curl -s https://ssak-search.pages.dev/api/health | jq '.index.total_documents'
 # 기대값: 100+
 
 # 3. 검색 동작
-curl -s -X POST https://search-engine-api.pages.dev/api/search \
+curl -s -X POST https://ssak-search.pages.dev/api/search \
   -H 'Content-Type: application/json' \
   -d '{"query":"react hooks","max_results":3}' | jq '.backend, .total_results'
 # 기대값: 백엔드 조합, 5+ 결과
 
 # 4. 인덱스 검색 (임베딩 정상 여부)
-curl -s "https://search-engine-api.pages.dev/api/index/search?query=javascript&top_k=3" | jq '.results_count'
+curl -s "https://ssak-search.pages.dev/api/index/search?query=javascript&top_k=3" | jq '.results_count'
 # 기대값: 1+ (0이면 임베딩 불일치 — 재시드 필요)
 ```
 

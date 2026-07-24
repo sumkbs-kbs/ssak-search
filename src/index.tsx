@@ -126,7 +126,7 @@ app.route('/v1', openaiRoute)
 // API root - list available endpoints
 app.get('/api', (c) => {
   return c.json({
-    name: 'Self-Contained Search Engine API',
+    name: 'ssak-search',
     version: '2.0.0',
     description: 'Tavily-compatible AI search engine API — no API keys required',
     endpoints: {

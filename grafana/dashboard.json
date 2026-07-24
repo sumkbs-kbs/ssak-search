@@ -883,13 +883,13 @@
         }
       ],
       "links": [
-        { "title": "API Root", "url": "https://search-engine-api.pages.dev/api", "targetBlank": true },
-        { "title": "Metrics", "url": "https://search-engine-api.pages.dev/api/metrics", "targetBlank": true },
-        { "title": "Health", "url": "https://search-engine-api.pages.dev/api/health", "targetBlank": true },
-        { "title": "SLO Report", "url": "https://search-engine-api.pages.dev/api/monitor", "targetBlank": true },
-        { "title": "Usage", "url": "https://search-engine-api.pages.dev/api/usage", "targetBlank": true },
-        { "title": "Status Page", "url": "https://search-engine-api.pages.dev/status", "targetBlank": true },
-        { "title": "Analytics Proxy (AE Explorer)", "url": "https://search-engine-api.pages.dev/api/analytics-proxy", "targetBlank": true },
+        { "title": "API Root", "url": "https://ssak-search.pages.dev/api", "targetBlank": true },
+        { "title": "Metrics", "url": "https://ssak-search.pages.dev/api/metrics", "targetBlank": true },
+        { "title": "Health", "url": "https://ssak-search.pages.dev/api/health", "targetBlank": true },
+        { "title": "SLO Report", "url": "https://ssak-search.pages.dev/api/monitor", "targetBlank": true },
+        { "title": "Usage", "url": "https://ssak-search.pages.dev/api/usage", "targetBlank": true },
+        { "title": "Status Page", "url": "https://ssak-search.pages.dev/status", "targetBlank": true },
+        { "title": "Analytics Proxy (AE Explorer)", "url": "https://ssak-search.pages.dev/api/analytics-proxy", "targetBlank": true },
         { "title": "Grafana Simple JSON Plugin", "url": "https://grafana.com/grafana/plugins/grafana-simple-json-datasource/", "targetBlank": true }
       ]
     }

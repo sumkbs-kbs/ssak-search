@@ -9,7 +9,7 @@
 # Reference: MONITORING_GUIDE.md
 
 groups:
-  - name: search-engine-api
+  - name: ssak-search
     interval: 60s
     rules:
 
@@ -178,7 +178,7 @@ groups:
       # ============================================================
 
       - alert: ScrapeMissing
-        expr: up{job="search-engine-api"} == 0
+        expr: up{job="ssak-search"} == 0
         for: 5m
         labels:
           severity: critical

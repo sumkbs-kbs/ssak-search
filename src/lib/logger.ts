@@ -58,7 +58,7 @@ const logBuffer: Array<{ level: LogLevel; message: string; context: LogContext; 
 const MAX_BUFFER = 1000
 
 /** Service identifier for log aggregation (Datadog/compatible systems use this) */
-const SERVICE_NAME = 'search-engine-api'
+const SERVICE_NAME = 'ssak-search'
 const SERVICE_VERSION = '2.0.0'
 
 /**

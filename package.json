@@ -1,7 +1,7 @@
 {
-  "name": "webapp",
+  "name": "ssak-search",
   "version": "2.0.0",
-  "description": "Self-contained search engine API — Tavily-compatible, no API keys required",
+  "description": "ssak-search — Tavily-compatible search engine API, no API keys required",
   "license": "MIT",
   "author": "Byungseok Kang <sumkbs@gmail.com>",
   "repository": {

@@ -24,6 +24,7 @@ import { createAnswerTokenStream, generateAnswer } from '../lib/answer'
 import type { AnswerStreamResult } from '../lib/answer'
 import { classifyQuery, DEFAULT_CLASSIFIER_CONFIG } from '../lib/agentic/classifier'
 import { normalizeQuery, SubrequestTracker, installSubrequestTracker } from '../lib/util'
+import { expandCompanyAlias } from '../lib/stock-finance'
 
 /**
  * Resolve the effective search depth.
@@ -177,7 +178,7 @@ searchRoute.post('/', async (c) => {
   const maxResults = Math.min(Math.max(body.max_results ?? 10, 1), 20)
 
   const request: SearchRequest = {
-    query: normalizeQuery(body.query),
+    query: expandCompanyAlias(normalizeQuery(body.query)),
     search_depth: searchDepth,
     topic: body.topic && ['general', 'news', 'finance'].includes(body.topic) ? body.topic : 'general',
     max_results: maxResults,
@@ -249,7 +250,13 @@ searchRoute.post('/', async (c) => {
     // entries or paths that bypass orchestrator must surface empty state to
     // agents unambiguously (defect 2: never return 200 + empty body).
     if (!result.no_results) result.no_results = !(result.results && result.results.length > 0)
-    const response = c.json<SearchResponse>(result)
+    // Empty-result responses use HTTP 404 instead of 200 so agents/clients can
+    // branch on the status code directly without inspecting the body. The JSON
+    // body is still a full SearchResponse with no_results=true — agents that
+    // already check the body keep working. This is the agent-friendly contract
+    // requested in feedback item 5.
+    const statusCode = result.no_results ? 404 : 200
+    const response = c.json<SearchResponse>(result, statusCode)
     response.headers.set('X-Search-Mode', searchMode)
     response.headers.set('X-Subrequests-Used', String(reportedSubrequests))
     response.headers.set('X-Subrequests-Limit', '50')
@@ -287,7 +294,9 @@ searchRoute.get('/', async (c) => {
   const rawQuery = c.req.query('query') || c.req.query('q')
   // normalizeQuery repairs double-encoded Korean/special-char queries that
   // survive Hono's single decodeURI pass (common with urllib.parse.quote()).
-  const query = rawQuery ? normalizeQuery(rawQuery) : ''
+  // expandCompanyAlias maps stock abbreviations to their canonical names so
+  // "한화에오" → "한화에어로스페이스" gets relevant results instead of cafes.
+  const query = rawQuery ? expandCompanyAlias(normalizeQuery(rawQuery)) : ''
   if (!query || query.trim().length === 0) {
     return c.json<ErrorResponse>({ detail: 'Query parameter "query" or "q" is required', code: 'missing_query' }, 400)
   }
@@ -318,12 +327,15 @@ searchRoute.get('/', async (c) => {
     focus: (c.req.query('focus') as FocusMode) || 'all',
   }
 
-  // Parse domain filters from comma-separated strings
-  const includeDomains = c.req.query('include_domains')
+  // Parse domain filters from comma-separated strings.
+  // Accept short aliases too — agents often type `?site=github.com` or
+  // `?exclude=blog.naver.com` instead of the verbose include_domains form.
+  // Both forms are merged; the verbose form wins on conflict for backward compat.
+  const includeDomains = c.req.query('include_domains') ?? c.req.query('site') ?? c.req.query('domain')
   if (includeDomains) {
     request.include_domains = includeDomains.split(',').map((d) => d.trim()).filter(Boolean)
   }
-  const excludeDomains = c.req.query('exclude_domains')
+  const excludeDomains = c.req.query('exclude_domains') ?? c.req.query('exclude') ?? c.req.query('block')
   if (excludeDomains) {
     request.exclude_domains = excludeDomains.split(',').map((d) => d.trim()).filter(Boolean)
   }
@@ -371,7 +383,9 @@ searchRoute.get('/', async (c) => {
     recordSearchSubrequests(reportedSubrequests)
     // Guarantee an explicit no_results flag on the wire (defect 2).
     if (!result.no_results) result.no_results = !(result.results && result.results.length > 0)
-    const response = c.json<SearchResponse>(result)
+    // Empty-result → HTTP 404 (agent-friendly; see POST handler for rationale).
+    const statusCode = result.no_results ? 404 : 200
+    const response = c.json<SearchResponse>(result, statusCode)
     response.headers.set('X-Subrequests-Used', String(reportedSubrequests))
     response.headers.set('X-Subrequests-Limit', '50')
     response.headers.set('X-Cache', 'MISS')
@@ -413,7 +427,7 @@ searchRoute.get('/stream', async (c) => {
   c.executionCtx.waitUntil(Promise.resolve().then(uninstallTracker))
 
   const rawQuery = c.req.query('query') || c.req.query('q')
-  const query = rawQuery ? normalizeQuery(rawQuery) : ''
+  const query = rawQuery ? expandCompanyAlias(normalizeQuery(rawQuery)) : ''
   if (!query || query.trim().length === 0) {
     return c.json<ErrorResponse>({ detail: 'Query parameter "query" or "q" is required', code: 'missing_query' }, 400)
   }

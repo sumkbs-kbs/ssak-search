@@ -170,89 +170,98 @@ describe('Route Handlers', () => {
         expect(res.status).toBe(400)
       })
 
-      it('returns 200 for valid query', async () => {
+      it('returns 404 (not 200) for a query that yields no results', async () => {
+        // Agent-friendly contract (feedback item 5): empty results use HTTP 404
+        // so callers can branch on status without inspecting the body. The body
+        // is still a full SearchResponse with no_results=true.
         const res = await requestWithEnv(app, '/api/search?q=test')
-        expect(res.status).toBe(200)
+        expect(res.status).toBe(404)
         const body = await res.json() as any
         expect(body.query).toBe('test')
         expect(body.results).toEqual([])
+        expect(body.no_results).toBe(true)
       })
 
-      it('returns 200 for query parameter "query"', async () => {
+      it('returns 404 for query parameter "query" with no results', async () => {
         const res = await requestWithEnv(app, '/api/search?query=hello')
-        expect(res.status).toBe(200)
+        expect(res.status).toBe(404)
         const body = await res.json() as any
         expect(body.query).toBe('hello')
+        expect(body.no_results).toBe(true)
       })
 
       it('parses max_results parameter', async () => {
         const res = await requestWithEnv(app, '/api/search?q=test&max_results=5')
-        expect(res.status).toBe(200)
+        expect(res.status).toBe(404) // empty result → 404, param still parsed
+        const body = await res.json() as any
+        expect(body.page_size).toBe(5)
       })
 
       it('caps max_results at 20', async () => {
         const res = await requestWithEnv(app, '/api/search?q=test&max_results=100')
-        expect(res.status).toBe(200)
+        expect(res.status).toBe(404)
+        const body = await res.json() as any
+        expect(body.page_size).toBe(20)
       })
 
       it('parses include_answer parameter', async () => {
         const res = await requestWithEnv(app, '/api/search?q=test&include_answer=true')
-        expect(res.status).toBe(200)
+        expect([200, 404]).toContain(res.status)
       })
 
       it('parses topic parameter', async () => {
         const res = await requestWithEnv(app, '/api/search?q=test&topic=news')
-        expect(res.status).toBe(200)
+        expect([200, 404]).toContain(res.status)
       })
 
       it('parses time_range parameter', async () => {
         const res = await requestWithEnv(app, '/api/search?q=test&time_range=day')
-        expect(res.status).toBe(200)
+        expect([200, 404]).toContain(res.status)
       })
 
       it('parses sort_by parameter', async () => {
         const res = await requestWithEnv(app, '/api/search?q=test&sort_by=date')
-        expect(res.status).toBe(200)
+        expect([200, 404]).toContain(res.status)
       })
 
       it('parses page parameter', async () => {
         const res = await requestWithEnv(app, '/api/search?q=test&page=2')
-        expect(res.status).toBe(200)
+        expect([200, 404]).toContain(res.status)
       })
 
       it('caps page at 10', async () => {
         const res = await requestWithEnv(app, '/api/search?q=test&page=100')
-        expect(res.status).toBe(200)
+        expect([200, 404]).toContain(res.status)
       })
 
       it('parses include_domains as comma-separated', async () => {
         const res = await requestWithEnv(app, '/api/search?q=test&include_domains=example.com,test.com')
-        expect(res.status).toBe(200)
+        expect([200, 404]).toContain(res.status)
       })
 
       it('parses exclude_domains as comma-separated', async () => {
         const res = await requestWithEnv(app, '/api/search?q=test&exclude_domains=spam.com,bad.com')
-        expect(res.status).toBe(200)
+        expect([200, 404]).toContain(res.status)
       })
 
       it('parses country parameter', async () => {
         const res = await requestWithEnv(app, '/api/search?q=test&country=KR')
-        expect(res.status).toBe(200)
+        expect([200, 404]).toContain(res.status)
       })
 
       it('parses language parameter', async () => {
         const res = await requestWithEnv(app, '/api/search?q=test&language=ko')
-        expect(res.status).toBe(200)
+        expect([200, 404]).toContain(res.status)
       })
 
       it('parses focus parameter', async () => {
         const res = await requestWithEnv(app, '/api/search?q=test&focus=academic')
-        expect(res.status).toBe(200)
+        expect([200, 404]).toContain(res.status)
       })
 
       it('includes response headers', async () => {
         const res = await requestWithEnv(app, '/api/search?q=test&topic=general')
-        expect(res.status).toBe(200)
+        expect([200, 404]).toContain(res.status)
         // Headers set by route middleware and handler
         expect(res.headers.has('X-Tenant-Id')).toBe(true)
         expect(res.headers.has('X-RateLimit-Remaining')).toBe(true)
@@ -327,15 +336,17 @@ describe('Route Handlers', () => {
         expect(body.code).toBe('too_many_domains')
       })
 
-      it('returns 200 for valid POST body', async () => {
+      it('returns 404 for valid POST body that yields no results', async () => {
+        // Agent-friendly contract: empty results → 404 with no_results:true body.
         const res = await requestWithEnv(app, '/api/search', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ query: 'test query', max_results: 5 }),
         })
-        expect(res.status).toBe(200)
+        expect(res.status).toBe(404)
         const body = await res.json() as any
         expect(body.query).toBe('test query')
+        expect(body.no_results).toBe(true)
       })
 
       it('parses search_depth parameter', async () => {
@@ -344,7 +355,7 @@ describe('Route Handlers', () => {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ query: 'test', search_depth: 'advanced' }),
         })
-        expect(res.status).toBe(200)
+        expect([200, 404]).toContain(res.status)
       })
 
       it('parses include_answer parameter', async () => {
@@ -353,7 +364,7 @@ describe('Route Handlers', () => {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ query: 'test', include_answer: true }),
         })
-        expect(res.status).toBe(200)
+        expect([200, 404]).toContain(res.status)
       })
 
       it('parses include_raw_content parameter', async () => {
@@ -362,7 +373,7 @@ describe('Route Handlers', () => {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ query: 'test', include_raw_content: true }),
         })
-        expect(res.status).toBe(200)
+        expect([200, 404]).toContain(res.status)
       })
 
       it('defaults max_results to 10', async () => {
@@ -371,7 +382,9 @@ describe('Route Handlers', () => {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ query: 'test' }),
         })
-        expect(res.status).toBe(200)
+        expect([200, 404]).toContain(res.status)
+        const body = await res.json() as any
+        expect(body.page_size).toBe(10)
       })
     })
 
@@ -582,7 +595,7 @@ describe('Route Handlers', () => {
 
       it('parses sort_by parameter', async () => {
         const res = await requestWithEnv(app, '/api/news?q=test&sort_by=date')
-        expect(res.status).toBe(200)
+        expect([200, 404]).toContain(res.status)
       })
 
       it('parses date_from and date_to parameters', async () => {

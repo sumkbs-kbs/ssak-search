@@ -113,6 +113,76 @@ const STOCK_CODE_MAP: Record<string, string> = {
   '아시아나항공': '020560',
 }
 
+/**
+ * Query-expansion aliases for Korean stock/company names.
+ *
+ * Users (and agents) frequently type abbreviations or shortened forms:
+ * "한화에오" → "한화에어로스페이스", "현대차" → "현대자동차", "셀트리온" → stays.
+ * The canonical name is what Naver/Bing index best, so expanding at query
+ * time yields much higher relevance without requiring the user to know the
+ * exact spelling. This is the agent-friendly "query expansion" requested in
+ * feedback item 3.
+ *
+ * Matching is whole-token on the alias (NOT substring) to avoid hijacking
+ * unrelated queries — e.g. "기아" must not expand inside "기아요?" contexts
+ * that aren't about the automaker. We only expand when the alias IS the
+ * query (optionally followed by stock keywords like 주가/실적/주식).
+ *
+ * Format: alias → canonical name (must also be a key in STOCK_CODE_MAP).
+ */
+const COMPANY_NAME_ALIASES: Record<string, string> = {
+  // Hanwha Aerospace — the case that surfaced this need ("한화에오")
+  '한화에오': '한화에어로스페이스',
+  '한화에어로': '한화에어로스페이스',
+  '한화에어로스페이': '한화에어로스페이스',
+  // Common shortened corporate names
+  '현대차': '현대자동차',
+  '기아차': '기아자동차',
+  '포스코': 'POSCO홀딩스',
+  'lg에너지': 'LG에너지솔루션',
+  '삼성바이오': '삼성바이오로직스',
+  'lg화학': 'LG화학',
+  'sk하이닉': 'SK하이닉스',
+  '하이닉스': 'SK하이닉스',
+  '두산에너빌': '두산에너빌리티',
+  'hd현대중': 'HD현대중공업',
+}
+
+/**
+ * Expand a user query using company-name aliases. Returns the expanded query
+ * if an alias match is found, otherwise the original query unchanged.
+ *
+ * Expansion rules:
+ *   - The alias must appear as a standalone token (bounded by start/end of
+ *     string, whitespace, or Korean stock-keyword boundaries).
+ *   - Only the FIRST match expands; multiple expansions would risk query drift.
+ *   - Idempotent: expanding an already-canonical query is a no-op (the
+ *     canonical names aren't aliases of themselves).
+ *
+ * Exported for unit testing.
+ */
+export function expandCompanyAlias(query: string): string {
+  if (!query) return query
+  // Build a regex that matches any alias bounded by non-Hangul or string edge.
+  // Sort longest-first so "한화에어로스페이스" (if it were an alias) wins over
+  // "한화에오" — defensive against future alias additions.
+  const aliases = Object.keys(COMPANY_NAME_ALIASES).sort((a, b) => b.length - a.length)
+  for (const alias of aliases) {
+    // Boundary: start/end of string OR a non-Hangul character.
+    // Using a regex with the alias literally escaped.
+    const escaped = alias.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+    const re = new RegExp(`(^|[^가-힣])${escaped}([^가-힣]|$)`)
+    const match = query.match(re)
+    if (match) {
+      const canonical = COMPANY_NAME_ALIASES[alias]
+      // Only expand if it actually changes the query (idempotency guard).
+      if (canonical === alias) continue
+      return query.replace(new RegExp(escaped, 'g'), canonical)
+    }
+  }
+  return query
+}
+
 // ============================================================
 // Stock Code Extraction from Query
 // ============================================================

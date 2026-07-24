@@ -11,7 +11,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { _lookupStockCodeForTest as lookupStockCode } from '../../src/lib/stock-finance'
+import { _lookupStockCodeForTest as lookupStockCode, expandCompanyAlias } from '../../src/lib/stock-finance'
 
 // ============================================================
 // Mock global fetch for network tests
@@ -267,6 +267,55 @@ describe('lookupStockCode (longest-match)', () => {
 
   it('returns null for an unknown company', () => {
     expect(lookupStockCode('존재하지않는회사')).toBeNull()
+  })
+})
+
+// ============================================================
+// expandCompanyAlias — query expansion (feedback item 3)
+// ============================================================
+describe('expandCompanyAlias', () => {
+  it('expands the "한화에오" abbreviation', () => {
+    // The case that surfaced this: "한화에오" should find Hanwha Aerospace.
+    expect(expandCompanyAlias('한화에오')).toBe('한화에어로스페이스')
+  })
+
+  it('expands when followed by stock keywords', () => {
+    expect(expandCompanyAlias('한화에오 주가')).toBe('한화에어로스페이스 주가')
+    expect(expandCompanyAlias('한화에오 실적')).toBe('한화에어로스페이스 실적')
+  })
+
+  it('expands "한화에어로" partial', () => {
+    expect(expandCompanyAlias('한화에어로 전망')).toBe('한화에어로스페이스 전망')
+  })
+
+  it('expands common short corporate names', () => {
+    expect(expandCompanyAlias('현대차')).toBe('현대자동차')
+    expect(expandCompanyAlias('포스코')).toBe('POSCO홀딩스')
+    expect(expandCompanyAlias('하이닉스')).toBe('SK하이닉스')
+  })
+
+  it('is idempotent on canonical names', () => {
+    // Already-canonical query must not double-expand.
+    expect(expandCompanyAlias('한화에어로스페이스')).toBe('한화에어로스페이스')
+    expect(expandCompanyAlias('현대자동차')).toBe('현대자동차')
+  })
+
+  it('leaves unrelated Korean queries untouched', () => {
+    // "한화에오" must not hijack queries that merely contain those syllables
+    // inside a longer word. The alias requires a non-Hangul boundary.
+    expect(expandCompanyAlias('날씨')).toBe('날씨')
+    expect(expandCompanyAlias('한국어 학습')).toBe('한국어 학습')
+  })
+
+  it('returns the original for empty/english input', () => {
+    expect(expandCompanyAlias('')).toBe('')
+    expect(expandCompanyAlias('quantum computing')).toBe('quantum computing')
+  })
+
+  it('does not expand alias embedded inside a longer Hangul word', () => {
+    // "한화에오" appearing as a substring of a longer word should NOT match,
+    // because the right-side Hangul boundary isn't satisfied.
+    expect(expandCompanyAlias('한화에오엔진')).toBe('한화에오엔진')
   })
 })
 

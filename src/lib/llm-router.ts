@@ -15,7 +15,7 @@ import { logger, toError } from './logger'
  *   - extractive: Keyword-based fallback (always available)
  */
 
-export type LLMProvider = 'openai' | 'anthropic' | 'ollama' | 'workers-ai' | 'extractive'
+export type LLMProvider = 'openai' | 'anthropic' | 'ollama' | 'workers-ai' | 'openrouter' | 'extractive'
 export type LLMTier = 'premium' | 'standard' | 'budget' | 'free'
 
 export interface ModelConfig {
@@ -127,6 +127,50 @@ export const MODEL_REGISTRY: ModelConfig[] = [
     latencyP50Ms: 150,
     label: 'LLaVA 7B (Local, Vision)',
     requiredKey: 'OLLAMA_BASE_URL',
+  },
+  // ── OpenRouter Free Tier (external API, no CPU cost) ──
+  // OpenRouter provides free access to strong models. API is 100% OpenAI-compatible.
+  // Key benefit: external HTTP calls don't consume Workers CPU time (unlike Workers AI),
+  // so answer generation works even on the free Cloudflare plan.
+  // Get a free API key at https://openrouter.ai/keys
+  {
+    id: 'deepseek/deepseek-r1:free',
+    provider: 'openrouter',
+    tier: 'standard',
+    costPer1KOutput: 0,
+    costPer1KInput: 0,
+    maxTokens: 8192,
+    supportsStreaming: true,
+    quality: 0.90,
+    latencyP50Ms: 3000,
+    label: 'DeepSeek R1 (Free, Reasoning)',
+    requiredKey: 'OPENROUTER_API_KEY',
+  },
+  {
+    id: 'qwen/qwen3-235b-a22b:free',
+    provider: 'openrouter',
+    tier: 'standard',
+    costPer1KOutput: 0,
+    costPer1KInput: 0,
+    maxTokens: 8192,
+    supportsStreaming: true,
+    quality: 0.88,
+    latencyP50Ms: 2500,
+    label: 'Qwen3 235B (Free, Multilingual)',
+    requiredKey: 'OPENROUTER_API_KEY',
+  },
+  {
+    id: 'meta-llama/llama-4-scout:free',
+    provider: 'openrouter',
+    tier: 'budget',
+    costPer1KOutput: 0,
+    costPer1KInput: 0,
+    maxTokens: 8192,
+    supportsStreaming: true,
+    quality: 0.82,
+    latencyP50Ms: 1500,
+    label: 'Llama 4 Scout (Free, Fast)',
+    requiredKey: 'OPENROUTER_API_KEY',
   },
   // ── Standard Tier ──
   {
@@ -257,6 +301,7 @@ export async function getAvailableModels(
     OPENAI_API_KEY?: string
     ANTHROPIC_API_KEY?: string
     OLLAMA_BASE_URL?: string
+    OPENROUTER_API_KEY?: string
     AI?: unknown
   },
 ): Promise<ModelConfig[]> {
@@ -266,6 +311,7 @@ export async function getAvailableModels(
     if (m.requiredKey === 'AI_BINDING') return !!env?.AI
     if (m.requiredKey === 'OPENAI_API_KEY') return !!env?.OPENAI_API_KEY
     if (m.requiredKey === 'ANTHROPIC_API_KEY') return !!env?.ANTHROPIC_API_KEY
+    if (m.requiredKey === 'OPENROUTER_API_KEY') return !!env?.OPENROUTER_API_KEY
     if (m.provider === 'extractive') return true
     return true
   })
@@ -748,6 +794,38 @@ export async function* streamOllama(
 }
 
 /**
+ * Stream from OpenRouter (free models).
+ * OpenRouter is 100% OpenAI-compatible, so we reuse streamOpenAICompatible
+ * with the OpenRouter base URL and API key.
+ *
+ * Key benefit: OpenRouter calls are external HTTP requests that DON'T consume
+ * Workers CPU time — so answer generation works even on the free Cloudflare plan
+ * (unlike Workers AI which hits the 10ms CPU limit).
+ *
+ * Free models available: DeepSeek R1, Qwen3 235B, Llama 4 Scout, etc.
+ * Get a free API key at https://openrouter.ai/keys
+ */
+export async function* streamOpenRouter(
+  apiKey: string,
+  prompt: string,
+  systemMsg: string,
+  options: {
+    model?: string
+    maxTokens?: number
+    temperature?: number
+    signal?: AbortSignal
+  } = {},
+): AsyncGenerator<string, CostTracking, undefined> {
+  return yield* streamOpenAICompatible(
+    'https://openrouter.ai/api/v1',
+    apiKey,
+    prompt,
+    systemMsg,
+    options,
+  )
+}
+
+/**
  * Generate answer using Ollama (synchronous, non-streaming).
  * Makes a POST to Ollama's OpenAI-compatible /v1/chat/completions.
  */
@@ -781,6 +859,47 @@ export async function generateOllamaAnswer(
   const data = await response.json() as { choices?: Array<{ message?: { content?: string } }> }
   const text = data.choices?.[0]?.message?.content?.trim()
   if (!text || text.length < 10) throw new Error('Ollama returned empty response')
+  return text
+}
+
+/**
+ * Generate answer using OpenRouter (synchronous, non-streaming).
+ * Uses OpenRouter's OpenAI-compatible /api/v1/chat/completions endpoint.
+ * Free models (e.g. deepseek-r1:free, qwen3-235b:free) cost $0.
+ */
+export async function generateOpenRouterAnswer(
+  apiKey: string,
+  prompt: string,
+  systemMsg: string,
+  modelId: string,
+  maxTokens = 600,
+): Promise<string> {
+  const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${apiKey}`,
+    },
+    body: JSON.stringify({
+      model: modelId,
+      messages: [
+        { role: 'system', content: systemMsg },
+        { role: 'user', content: prompt },
+      ],
+      max_tokens: maxTokens,
+      temperature: 0.3,
+      stream: false,
+    }),
+  })
+
+  if (!response.ok) {
+    const errText = await response.text().catch(() => '')
+    throw new Error(`OpenRouter API error ${response.status}: ${errText || response.statusText}`)
+  }
+
+  const data = await response.json() as { choices?: Array<{ message?: { content?: string } }> }
+  const text = data.choices?.[0]?.message?.content?.trim()
+  if (!text || text.length < 10) throw new Error('OpenRouter returned empty response')
   return text
 }
 

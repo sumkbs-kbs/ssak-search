@@ -27,9 +27,11 @@ import {
   estimateTokenCount,
   streamOpenAI,
   streamOllama,
+  streamOpenRouter,
   streamAnthropic,
   getOllamaBaseUrl,
   generateOllamaAnswer,
+  generateOpenRouterAnswer,
 } from './llm-router'
 import type { CostTracking, ModelConfig } from './llm-router'
 
@@ -96,7 +98,7 @@ export async function generateAnswer(
   query: string,
   results: SearchResult[],
   ai?: Ai,
-  env?: { OPENAI_API_KEY?: string; ANTHROPIC_API_KEY?: string },
+  env?: { OPENAI_API_KEY?: string; ANTHROPIC_API_KEY?: string; OPENROUTER_API_KEY?: string; OLLAMA_BASE_URL?: string },
   extraContext?: string,
 ): Promise<SearchAnswer> {
   if (results.length === 0) {
@@ -113,7 +115,7 @@ export async function generateAnswer(
   const availableModels = await getAvailableModels({
     ...(env || {}),
     AI: ai,
-  } as { OPENAI_API_KEY?: string; ANTHROPIC_API_KEY?: string; OLLAMA_BASE_URL?: string; AI?: unknown })
+  } as { OPENAI_API_KEY?: string; ANTHROPIC_API_KEY?: string; OPENROUTER_API_KEY?: string; OLLAMA_BASE_URL?: string; AI?: unknown })
   const fallbackChain = buildFallbackChain(availableModels)
 
   let lastError: unknown
@@ -128,6 +130,9 @@ export async function generateAnswer(
       }
       if (model.provider === 'ollama') {
         return await generateWithOllama(query, contextParts, sourceIndices, env, extraContext, model)
+      }
+      if (model.provider === 'openrouter' && env?.OPENROUTER_API_KEY) {
+        return await generateWithOpenRouter(query, contextParts, sourceIndices, env.OPENROUTER_API_KEY, extraContext, model)
       }
       if (model.provider === 'workers-ai' && ai) {
         return await generateWithWorkersAI(query, contextParts, sourceIndices, ai, extraContext, model)
@@ -166,7 +171,7 @@ export async function createAnswerTokenStream(
   results: SearchResult[],
   ai?: Ai,
   signal?: AbortSignal,
-  env?: { OPENAI_API_KEY?: string; ANTHROPIC_API_KEY?: string },
+  env?: { OPENAI_API_KEY?: string; ANTHROPIC_API_KEY?: string; OPENROUTER_API_KEY?: string; OLLAMA_BASE_URL?: string },
   options?: AnswerOptions,
 ): Promise<AnswerStreamResult | null> {
   if (results.length === 0) return null
@@ -180,7 +185,7 @@ export async function createAnswerTokenStream(
   const availableModels = await getAvailableModels({
     ...(env || {}),
     AI: ai,
-  } as { OPENAI_API_KEY?: string; ANTHROPIC_API_KEY?: string; OLLAMA_BASE_URL?: string; AI?: unknown })
+  } as { OPENAI_API_KEY?: string; ANTHROPIC_API_KEY?: string; OPENROUTER_API_KEY?: string; OLLAMA_BASE_URL?: string; AI?: unknown })
   const fallbackChain = buildFallbackChain(availableModels)
 
   // Filter by options
@@ -287,6 +292,39 @@ export async function createAnswerTokenStream(
           },
           modelUsed: model,
           finalCost: result.finalCost,
+        }
+      }
+
+      // OpenRouter: external free models (DeepSeek R1, Qwen3, Llama 4)
+      // Key benefit: external HTTP calls don't consume Workers CPU time,
+      // so answer generation works even on the free Cloudflare plan.
+      if (model.provider === 'openrouter') {
+        const envWithRouter = env as { OPENROUTER_API_KEY?: string }
+        if (envWithRouter?.OPENROUTER_API_KEY) {
+          const gen = streamOpenRouter(
+            envWithRouter.OPENROUTER_API_KEY, prompt, SYSTEM_MSG, {
+              model: model.id,
+              maxTokens: model.maxTokens,
+              signal,
+            },
+          )
+          const result = createAsyncGeneratorStreamWithCost(gen)
+          return {
+            stream: result.stream,
+            cost: {
+              modelId: model.id,
+              modelLabel: model.label,
+              provider: 'openrouter',
+              tier: model.tier,
+              inputTokens: estimateTokenCount(prompt + SYSTEM_MSG),
+              outputTokens: 0,
+              estimatedCostUSD: 0,
+              latencyMs: Date.now() - startTime,
+              success: true,
+            },
+            modelUsed: model,
+            finalCost: result.finalCost,
+          }
         }
       }
 
@@ -611,6 +649,35 @@ async function generateWithOllama(
 
   const text = await generateOllamaAnswer(
     getOllamaBaseUrl(env),
+    prompt,
+    SYSTEM_MSG,
+    model,
+  )
+
+  return {
+    text,
+    confidence: computeConfidence(sourceIndices.length, contextParts.length),
+    sources: sourceIndices,
+  }
+}
+
+/**
+ * Generate answer using OpenRouter free models (synchronous).
+ * Uses the OpenAI-compatible API. Free models: DeepSeek R1, Qwen3, Llama 4.
+ */
+async function generateWithOpenRouter(
+  query: string,
+  contextParts: string[],
+  sourceIndices: number[],
+  apiKey: string,
+  extraContext?: string,
+  _model?: ModelConfig,
+): Promise<SearchAnswer> {
+  const prompt = buildAnswerPrompt(query, contextParts, extraContext)
+  const model = _model?.id || 'deepseek/deepseek-r1:free'
+
+  const text = await generateOpenRouterAnswer(
+    apiKey,
     prompt,
     SYSTEM_MSG,
     model,

@@ -522,6 +522,11 @@ export interface AppBindings {
   // Ollama local LLM base URL (default: http://localhost:11434)
   // Set OLLAMA_BASE_URL to use a remote Ollama instance or custom port
   OLLAMA_BASE_URL?: string
+  // OpenRouter API key for free LLM models (DeepSeek R1, Qwen3, Llama 4).
+  // Get a free key at https://openrouter.ai/keys
+  // Key benefit: external API calls don't consume Workers CPU time, so answer
+  // generation works even on the free Cloudflare plan (unlike Workers AI).
+  OPENROUTER_API_KEY?: string
   // Cohere Rerank API key for Cross-Encoder Reranker (Phase 1.2)
   COHERE_API_KEY?: string
   // Optional external LLM API keys for answer generation

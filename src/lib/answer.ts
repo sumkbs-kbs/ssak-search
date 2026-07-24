@@ -101,6 +101,32 @@ export async function generateAnswer(
   env?: { OPENAI_API_KEY?: string; ANTHROPIC_API_KEY?: string; OPENROUTER_API_KEY?: string; OLLAMA_BASE_URL?: string },
   extraContext?: string,
 ): Promise<SearchAnswer> {
+  // 12s overall cap — if all LLM providers are slow, fall back to extractive
+  // instead of blocking the response indefinitely.
+  const ANSWER_TIMEOUT_MS = 12_000
+
+  try {
+    const result = await Promise.race([
+      generateAnswerInner(query, results, ai, env, extraContext),
+      new Promise<SearchAnswer>((_, reject) =>
+        setTimeout(() => reject(new Error('Answer generation timeout')), ANSWER_TIMEOUT_MS),
+      ),
+    ])
+    return result
+  } catch (err) {
+    logger.warn('Answer generation timed out or failed, using extractive:', { error: toError(err) })
+    return generateExtractiveAnswer(query, results)
+  }
+}
+
+/** Inner implementation — the original generateAnswer logic. */
+async function generateAnswerInner(
+  query: string,
+  results: SearchResult[],
+  ai?: Ai,
+  env?: { OPENAI_API_KEY?: string; ANTHROPIC_API_KEY?: string; OPENROUTER_API_KEY?: string; OLLAMA_BASE_URL?: string },
+  extraContext?: string,
+): Promise<SearchAnswer> {
   if (results.length === 0) {
     return { text: 'No results found for this query.', confidence: 0, sources: [] }
   }
@@ -681,6 +707,7 @@ async function generateWithOpenRouter(
     prompt,
     SYSTEM_MSG,
     model,
+    2000, // Nemotron is a reasoning model — needs more tokens for reasoning + answer
   )
 
   return {

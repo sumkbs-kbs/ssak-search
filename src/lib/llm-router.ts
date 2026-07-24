@@ -854,6 +854,7 @@ export async function generateOpenRouterAnswer(
       'Content-Type': 'application/json',
       'Authorization': `Bearer ${apiKey}`,
     },
+    signal: AbortSignal.timeout(10_000), // 10s cap — prevents indefinite hang on slow free models
     body: JSON.stringify({
       model: modelId,
       messages: [

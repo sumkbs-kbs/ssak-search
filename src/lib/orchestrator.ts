@@ -368,10 +368,14 @@ export async function executeSearch(
     }
   }
 
-  // ── 10. Answer generation ──
-  let answer: SearchAnswer | undefined
+  // ── 10-14. Answer + Knowledge Panel + Images (PARALLEL) ──
+  // These three are independent: answer gen doesn't need the knowledge panel,
+  // and neither needs image results. Running them in parallel cuts latency
+  // from sum(answer+panel+images) to max(answer, panel, images).
+  // For basic depth, reranking (step 11) and enrichment (step 9) are skipped.
 
-  // 10a. Agentic Pipeline (Pro mode)
+  // 10a. Agentic Pipeline (Pro mode) — only for advanced depth
+  let answer: SearchAnswer | undefined
   if (search_depth === 'advanced' && include_answer && config.ai && results.length >= 3) {
     try {
       logger.info('[Orchestrator] Running Agentic Pipeline (Pro mode)', { query, resultCount: results.length })
@@ -400,27 +404,56 @@ export async function executeSearch(
     }
   }
 
-  // 10b. Standard answer fallback
+  // 10b/13/14. Standard answer + knowledge panel + images — ALL IN PARALLEL
+  // Answer generation, knowledge panel build, and image matching have no data
+  // dependency on each other. Previously they ran sequentially (~5s + ~3s + ~2s
+  // = ~10s). Now they run concurrently: max(~5s, ~3s, ~2s) ≈ ~5s.
+  const parallelTasks: Promise<void>[] = []
+
+  // Task A: Standard answer generation (if not already set by agentic)
   if (include_answer && !answer) {
-    const answerQueryType = detectQueryType(query, entityHints)
-    if (answerQueryType === 'factual' || answerQueryType === 'general') {
-      const instantAnswer = await duckDuckGoInstantAnswer(query)
-      if (instantAnswer && instantAnswer.abstract.length > 50) {
-        answer = { text: instantAnswer.abstract, confidence: 0.6, sources: [] }
+    parallelTasks.push((async () => {
+      const answerQueryType = detectQueryType(query, entityHints)
+      if (answerQueryType === 'factual' || answerQueryType === 'general') {
+        const instantAnswer = await duckDuckGoInstantAnswer(query)
+        if (instantAnswer && instantAnswer.abstract.length > 50) {
+          answer = { text: instantAnswer.abstract, confidence: 0.6, sources: [] }
+          return
+        }
       }
-    }
-    if (!answer && results.length > 0) {
-      answer = await generateAnswer(query, results, config.ai, config.env, ctx.spaceFileContext)
-    }
-    if (!answer) {
-      const instantAnswer = await duckDuckGoInstantAnswer(query)
-      if (instantAnswer) {
-        answer = { text: instantAnswer.abstract, confidence: 0.5, sources: [] }
+      if (!answer && results.length > 0) {
+        answer = await generateAnswer(query, results, config.ai, config.env, ctx.spaceFileContext)
       }
-    }
+      if (!answer) {
+        const instantAnswer = await duckDuckGoInstantAnswer(query)
+        if (instantAnswer) {
+          answer = { text: instantAnswer.abstract, confidence: 0.5, sources: [] }
+        }
+      }
+    })().catch((err) => {
+      logger.warn('[Orchestrator] Answer generation failed (non-critical):', { error: toError(err) })
+    }))
   }
 
-  // ── 11. Reranking (advanced depth, non-news/finance) ──
+  // Task B: Knowledge panel build
+  if (!knowledgeGraph && results.length >= 3) {
+    parallelTasks.push((async () => {
+      const kg = await buildKnowledgePanel(query, results.slice(0, 10), { language: effectiveWikiLang, env })
+      if (kg) knowledgeGraph = kg
+    })().catch((err) => {
+      logger.warn('[Orchestrator] Knowledge panel build failed (non-critical):', { error: toError(err) })
+    }))
+  }
+
+  // Task C: Image search await (already started at step 3)
+  parallelTasks.push(imagePromise.catch((err) => {
+    logger.warn('Image search failed (non-critical):', { error: err.message || String(err) })
+  }))
+
+  // Wait for all independent tasks to complete
+  await Promise.all(parallelTasks)
+
+  // ── 11. Reranking (advanced depth only, after answer is set) ──
   if (config.ai && !isNews && !isFinance && results.length >= 3 && search_depth === 'advanced') {
     try {
       const { rerankSearchResultsRaw } = await import('./retrieval/reranker')
@@ -443,18 +476,7 @@ export async function executeSearch(
     }
   }
 
-  // ── 13. Knowledge Panel ──
-  if (!knowledgeGraph && results.length >= 3) {
-    try {
-      const kg = await buildKnowledgePanel(query, results.slice(0, 10), { language: effectiveWikiLang, env })
-      if (kg) knowledgeGraph = kg
-    } catch (err) {
-      logger.warn('[Orchestrator] Knowledge panel build failed (non-critical):', { error: toError(err) })
-    }
-  }
-
-  // ── 14. Await images + match to results ──
-  await imagePromise
+  // ── 14b. Match images to results (after parallel await) ──
   if (imageResults.length > 0 && results.length > 0) {
     try {
       results = matchImagesToResults(results, imageResults)

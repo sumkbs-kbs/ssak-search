@@ -55,7 +55,7 @@
     "eval:self:tag": "npx tsx eval/index-self.ts --tag"
   },
   "dependencies": {
-    "@sentry/cloudflare": "^10.67.0",
+    "@sentry/cloudflare": "^10.68.0",
     "hono": "^4.12.30"
   },
   "devDependencies": {

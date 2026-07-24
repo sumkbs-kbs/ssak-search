@@ -31,7 +31,7 @@ const BACKEND_TIMEOUT_MS: Record<string, number> = {
   'bing-writing': 3000,
   'bing-youtube': 3000,
   'naver': 3000,
-  'naver-finance': 2500,
+  'naver-finance': 6000,
   'wikipedia': 5000,
   'github': 3000,
   'hackernews': 2500,

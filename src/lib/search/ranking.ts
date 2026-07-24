@@ -41,13 +41,70 @@ export function applyFilters(results: SearchResult[], ctx: SearchContext): Searc
 }
 
 /**
+ * Domain authority bonus map — trusted financial/data sources get a score
+ * boost so they outrank low-quality news aggregators that merely match the
+ * query title. Without this, topstarnews.net (0.98) beats finance.naver.com
+ * (0.89) for Korean stock queries despite being far less authoritative.
+ */
+const DOMAIN_AUTHORITY_BONUS: Record<string, number> = {
+  'finance.naver.com': 0.15,
+  'm.stock.naver.com': 0.12,
+  'm.finance.naver.com': 0.12,
+  'investing.com': 0.10,
+  'krx.co.kr': 0.10,
+  'dart.fss.or.kr': 0.08,
+  'wikipedia.org': 0.05,
+  'developer.mozilla.org': 0.05,
+  'github.com': 0.04,
+}
+
+/** Domains penalized for low content quality (news aggregators, spam). */
+const LOW_QUALITY_DOMAINS: Record<string, number> = {
+  'topstarnews.net': -0.15,
+  'choicenews.co.kr': -0.12,
+  'wikitree.co.kr': -0.10,
+  'seoul.co.kr': -0.05,
+}
+
+function getDomainAuthorityBonus(url: string): number {
+  try {
+    const domain = new URL(url).hostname.replace(/^www\./, '').toLowerCase()
+    for (const [d, bonus] of Object.entries(DOMAIN_AUTHORITY_BONUS)) {
+      if (domain.includes(d)) return bonus
+    }
+    for (const [d, penalty] of Object.entries(LOW_QUALITY_DOMAINS)) {
+      if (domain.includes(d)) return penalty
+    }
+  } catch {
+    // Invalid URL
+  }
+  return 0
+}
+
+/**
  * Recompute scores with full query context + freshness + authority.
+ * Applies domain authority bonus/penalty after base score computation.
  */
 export function recomputeScores(results: SearchResult[], ctx: SearchContext): SearchResult[] {
-  return results.map((r) => ({
-    ...r,
-    score: computeScore(r.title, r.content, ctx.query, r.published_date, r.url),
-  }))
+  return results.map((r) => {
+    const authorityBonus = getDomainAuthorityBonus(r.url)
+
+    // Results with structured stock_data already have a hand-tuned score from
+    // searchKoreanStock (0.98 for the main finance page). Don't overwrite it
+    // with text-based computeScore — just apply the authority bonus.
+    if (r.stock_data) {
+      return {
+        ...r,
+        score: Math.max(0, Math.min(1, r.score + authorityBonus)),
+      }
+    }
+
+    const baseScore = computeScore(r.title, r.content, ctx.query, r.published_date, r.url)
+    return {
+      ...r,
+      score: Math.max(0, Math.min(1, baseScore + authorityBonus)),
+    }
+  })
 }
 
 /**

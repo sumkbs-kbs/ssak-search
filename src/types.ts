@@ -310,9 +310,84 @@ export interface HealthResponse {
 // Error Types
 // ============================================================
 
+/**
+ * Stable error code identifiers emitted in ErrorResponse.code.
+ *
+ * Clients (agents, SDKs) switch on these to drive fallback behavior, so the
+ * literal strings are part of the public API — do NOT rename without a
+ * deprecation window. The union lets the type-checker catch typos at the
+ * emit site and lets consumers narrow without casting.
+ */
+export type ErrorCode =
+  | 'missing_query'
+  | 'query_too_long'
+  | 'invalid_body'
+  | 'too_many_domains'
+  | 'too_many_urls'
+  | 'payload_too_large'
+  | 'file_too_large'
+  | 'unauthorized'
+  | 'auth_required'
+  | 'insufficient_scope'
+  | 'invalid_key'
+  | 'rate_limited'
+  | 'search_error'
+  | 'extract_error'
+  | 'image_search_error'
+  | 'news_search_error'
+  | 'research_error'
+  | 'chat_error'
+  | 'analyze_error'
+  | 'boosted_error'
+  | 'trending_error'
+  | 'thread_not_found'
+  | 'collection_not_found'
+  | 'key_not_found'
+  | 'missing_collection_id'
+  | 'missing_domain'
+  | 'missing_url'
+  | 'missing_urls'
+  | 'missing_fields'
+  | 'missing_name'
+  | 'name_too_long'
+  | 'no_file'
+  | 'no_models'
+  | 'no_updates'
+  | 'not_found'
+  | 'parse_error'
+  | 'validation_error'
+  | 'internal_error'
+  | 'status_error'
+  | 'binding_missing'
+  | 'crawl_error'
+  | 'stop_error'
+  | 'reset_error'
+  | 'create_error'
+  | 'get_error'
+  | 'list_error'
+  | 'update_error'
+  | 'delete_error'
+  | 'revoke_error'
+  | 'schedule_error'
+  | 'stats_error'
+  | 'init_error'
+  | 'upload_error'
+  | 'visit_error'
+  | 'unsupported_type'
+  | 'invalid_key_id'
+  | 'invalid_scope'
+  | 'invalid_severity'
+  | 'invalid_source'
+  | 'invalid_theme'
+  | 'invalid_urls'
+  // Escape hatch for forward compatibility — newer servers may emit codes
+  // this build doesn't know yet. Clients should treat unknown codes as
+  // generic errors rather than crashing.
+  | (string & {})
+
 export interface ErrorResponse {
   detail: string
-  code: string
+  code: ErrorCode
   query?: string
 }
 

@@ -46,6 +46,18 @@ export function applyFilters(results: SearchResult[], ctx: SearchContext): Searc
  * query title. Without this, topstarnews.net (0.98) beats finance.naver.com
  * (0.89) for Korean stock queries despite being far less authoritative.
  */
+/**
+ * Finance/regulatory domains that warrant an additional authority boost so
+ * they outrank low-quality news aggregators for stock/financial queries.
+ *
+ * NOTE: general-purpose authority (wikipedia, github, MDN, stackoverflow, etc.)
+ * is owned by DOMAIN_AUTHORITY in util.ts and applied during initial score
+ * computation via computeScore(). To avoid the two maps silently disagreeing
+ * (the prior bug where wikipedia was +0.12 in util.ts AND +0.05 here, while
+ * investing.com was only here), this map is restricted to the FINANCE-specific
+ * domains that the general map doesn't cover. Update the general map in
+ * util.ts for cross-cutting authority changes.
+ */
 const DOMAIN_AUTHORITY_BONUS: Record<string, number> = {
   'finance.naver.com': 0.15,
   'm.stock.naver.com': 0.12,
@@ -53,9 +65,6 @@ const DOMAIN_AUTHORITY_BONUS: Record<string, number> = {
   'investing.com': 0.10,
   'krx.co.kr': 0.10,
   'dart.fss.or.kr': 0.08,
-  'wikipedia.org': 0.05,
-  'developer.mozilla.org': 0.05,
-  'github.com': 0.04,
 }
 
 /** Domains penalized for low content quality (news aggregators, spam). */

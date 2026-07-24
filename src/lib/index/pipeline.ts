@@ -108,6 +108,13 @@ export class IndexingPipeline {
       // 2. Chunk the document
       const chunkResult = chunkDocument(url, title, html, this.config.chunking)
 
+      // Limit number of chunks to control Workers AI embedding calls (CPU budget).
+      // Each chunk = 1 embedding call; on Pages free plan CPU time is limited.
+      const maxChunks = (options.maxChunks as number) ?? 0
+      if (maxChunks > 0 && chunkResult.chunks.length > maxChunks) {
+        chunkResult.chunks = chunkResult.chunks.slice(0, maxChunks)
+      }
+
       if (chunkResult.chunks.length === 0) {
         return {
           success: false,

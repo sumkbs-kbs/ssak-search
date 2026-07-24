@@ -6,6 +6,11 @@
   "compatibility_flags": [
     "nodejs_compat"
   ],
+  // Workers AI binding — free, auto-provisioned on all Cloudflare accounts.
+  // Enables: answer generation (LLM), embedding generation (bge-base-en-v1.5),
+  // and LLM reranking. Without this, all three fall back to degraded modes
+  // (extractive answers, hash embeddings, heuristic reranking).
+  "ai": { "binding": "AI" },
   // ── Phase 1: Self-index activation checklist ────────────────────────
   // The index layer (Vectorize + D1) is fully implemented in code but only
   // activates when both bindings resolve to real resources at runtime.

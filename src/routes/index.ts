@@ -229,7 +229,13 @@ indexRoute.post('/', async (c) => {
       }
 
       // 2. Run through indexing pipeline
-      const jobResult = await pipeline.processIndexJob(url, title, html)
+      // Limit max chunks to stay within Workers CPU time budget.
+      // Each chunk = 1 Workers AI embedding call (~50-100ms CPU each).
+      // Pages free plan allows 10ms CPU per request; we cap at 3 chunks to
+      // avoid timeout while still providing meaningful semantic coverage.
+      const maxChunks = parseInt(c.req.query('max_chunks') || '3', 10)
+      const truncatedHtml = maxChunks > 0 ? html.slice(0, maxChunks * 2000) : html
+      const jobResult = await pipeline.processIndexJob(url, title, truncatedHtml, { maxChunks })
       results.push(jobResult)
 
       // Small delay between URLs

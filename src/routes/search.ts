@@ -23,6 +23,7 @@ import { auditAuthFailure, auditRateLimit, audit } from '../lib/audit'
 import { createAnswerTokenStream, generateAnswer } from '../lib/answer'
 import type { AnswerStreamResult } from '../lib/answer'
 import { classifyQuery, DEFAULT_CLASSIFIER_CONFIG } from '../lib/agentic/classifier'
+import { normalizeQuery } from '../lib/util'
 
 /**
  * Resolve the effective search depth.
@@ -164,7 +165,7 @@ searchRoute.post('/', async (c) => {
   const maxResults = Math.min(Math.max(body.max_results ?? 10, 1), 20)
 
   const request: SearchRequest = {
-    query: body.query.trim(),
+    query: normalizeQuery(body.query),
     search_depth: searchDepth,
     topic: body.topic && ['general', 'news', 'finance'].includes(body.topic) ? body.topic : 'general',
     max_results: maxResults,
@@ -223,6 +224,10 @@ searchRoute.post('/', async (c) => {
 
     recordSearchRequest(Date.now() - startTime, true)
     recordSearchSubrequests(subrequestEstimate)
+    // Guarantee an explicit no_results flag on the wire — even legacy cache
+    // entries or paths that bypass orchestrator must surface empty state to
+    // agents unambiguously (defect 2: never return 200 + empty body).
+    if (!result.no_results) result.no_results = !(result.results && result.results.length > 0)
     const response = c.json<SearchResponse>(result)
     response.headers.set('X-Search-Mode', searchMode)
     response.headers.set('X-Subrequests-Used', String(subrequestEstimate))
@@ -251,7 +256,10 @@ searchRoute.post('/', async (c) => {
 // GET /api/search - simplified GET interface for quick testing
 searchRoute.get('/', async (c) => {
   setMetricsEnv(c.env)
-  const query = c.req.query('query') || c.req.query('q')
+  const rawQuery = c.req.query('query') || c.req.query('q')
+  // normalizeQuery repairs double-encoded Korean/special-char queries that
+  // survive Hono's single decodeURI pass (common with urllib.parse.quote()).
+  const query = rawQuery ? normalizeQuery(rawQuery) : ''
   if (!query || query.trim().length === 0) {
     return c.json<ErrorResponse>({ detail: 'Query parameter "query" or "q" is required', code: 'missing_query' }, 400)
   }
@@ -264,10 +272,10 @@ searchRoute.get('/', async (c) => {
   const includeAnswer = includeAnswerParam === undefined ? false : includeAnswerParam === 'true' || c.req.query('answer') === 'true'
   const includeRawContent = c.req.query('include_raw_content') === 'true'
 
-  const { depth: searchDepth } = resolveSearchDepth(query.trim(), c.req.query('search_depth'))
+  const { depth: searchDepth } = resolveSearchDepth(query, c.req.query('search_depth'))
 
   const request: SearchRequest = {
-    query: query.trim(),
+    query,
     max_results: maxResults,
     include_answer: includeAnswer,
     include_raw_content: includeRawContent,
@@ -330,6 +338,8 @@ searchRoute.get('/', async (c) => {
 
     recordSearchRequest(Date.now() - startTime, true)
     recordSearchSubrequests(subrequestEstimate)
+    // Guarantee an explicit no_results flag on the wire (defect 2).
+    if (!result.no_results) result.no_results = !(result.results && result.results.length > 0)
     const response = c.json<SearchResponse>(result)
     response.headers.set('X-Subrequests-Used', String(subrequestEstimate))
     response.headers.set('X-Subrequests-Max', '50')
@@ -366,7 +376,8 @@ searchRoute.get('/', async (c) => {
 //   event: keepalive → { ts }  (every 10s during generation)
 searchRoute.get('/stream', async (c) => {
   setMetricsEnv(c.env)
-  const query = c.req.query('query') || c.req.query('q')
+  const rawQuery = c.req.query('query') || c.req.query('q')
+  const query = rawQuery ? normalizeQuery(rawQuery) : ''
   if (!query || query.trim().length === 0) {
     return c.json<ErrorResponse>({ detail: 'Query parameter "query" or "q" is required', code: 'missing_query' }, 400)
   }
@@ -374,10 +385,10 @@ searchRoute.get('/stream', async (c) => {
   const maxResultsParam = c.req.query('max_results') || c.req.query('limit')
   const maxResults = maxResultsParam ? Math.min(Math.max(parseInt(maxResultsParam, 10) || 10, 1), 20) : 10
 
-  const { depth: streamDepth } = resolveSearchDepth(query.trim(), c.req.query('search_depth'))
+  const { depth: streamDepth } = resolveSearchDepth(query, c.req.query('search_depth'))
 
   const request: SearchRequest = {
-    query: query.trim(),
+    query,
     max_results: maxResults,
     include_answer: true,
     search_depth: streamDepth,

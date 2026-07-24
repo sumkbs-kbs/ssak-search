@@ -102,6 +102,60 @@ export async function naverSearch(
 // ============================================================
 
 /**
+ * Assess how well a Naver-rendered stock card name corresponds to the user's
+ * query. Returns 'high' for exact/prefix/substring matches, 'partial' for
+ * token-level overlap, and 'none' when there is no Hangul overlap — the case
+ * where Naver fuzzy-matched a wrong company.
+ *
+ * Boundary rule: when the company name appears INSIDE the query, the name
+ * must be bounded by non-Hangul characters (space, punctuation, end-of-string)
+ * on both sides. This rejects "한화" matching inside "한화에오" — the Hangul
+ * continuation "에" means "한화" is the prefix of a DIFFERENT word, not a
+ * match. (This is the defect-3 root cause: Naver renders the wrong stock card
+ * and we previously pinned it at score 0.95.)
+ *
+ * Examples:
+ *   ('한화에어로스페이스', '한화에어로스페이스 주가') → 'high' (name bounded by space)
+ *   ('한화에어로스페이스', '한화에어로')            → 'high' (query is a prefix of name)
+ *   ('한화',             '한화 주가')              → 'high'
+ *   ('한화',             '한화에오')               → 'none' (Hangul after name → not a match)
+ */
+function stockNameMatchesQuery(stockName: string, query: string): 'high' | 'partial' | 'none' {
+  const name = stockName.trim()
+  const q = query.trim()
+  if (!name || !q) return 'none'
+
+  // Exact match.
+  if (name === q) return 'high'
+
+  // Query is a prefix of the company name — a legitimate partial input
+  // (e.g. user typed "한화에어로" for "한화에어로스페이스"). Always accept;
+  // the trailing Hangul belongs to the SAME name, not a different word.
+  if (name.startsWith(q)) return 'high'
+
+  // Company name appears inside the query — accept only if bounded by
+  // non-Hangul on both sides. This is what stops "한화" from matching
+  // "한화에오": the char after "한화" is "에" (Hangul) → not a boundary.
+  const isBoundary = (ch: string | undefined) =>
+    ch === undefined || /[^가-힣]/.test(ch)
+  const idx = q.indexOf(name)
+  if (idx !== -1) {
+    const before = idx > 0 ? q[idx - 1] : undefined
+    const after = q[idx + name.length]
+    if (isBoundary(before) && isBoundary(after)) return 'high'
+  }
+
+  // Token overlap: split on non-letter/digit boundaries and look for a shared
+  // meaningful token (length >= 2). Catches multi-word names.
+  const tokenize = (s: string) =>
+    s.split(/[^\p{L}\p{N}]+/u).filter((t) => t.length >= 2)
+  const nameTokens = new Set(tokenize(name))
+  const queryTokens = tokenize(q)
+  const overlap = queryTokens.some((t) => nameTokens.has(t))
+  return overlap ? 'partial' : 'none'
+}
+
+/**
  * Parse Naver's stock card from mobile search results.
  * Structure: <div class="stock_top ..." data-stock-top>
  *   <strong class="item_name">한화에어로스페이스</strong>
@@ -125,6 +179,15 @@ export function parseStockCard(html: string, query: string): SearchResult[] {
   const nameMatch = block.match(/<strong[^>]*class="[^"]*item_name[^"]*"[^>]*>([\s\S]*?)<\/strong>/i)
   const stockName = nameMatch ? decodeEntities(stripHtml(nameMatch[1])).trim() : ''
   if (!stockName) return results
+
+  // Validate that the stock card Naver rendered actually corresponds to the
+  // query. Naver sometimes returns a stock card for a *different* company when
+  // the query is a typo or partial name (e.g. "한화에오" → Naver renders the
+  // "한화" (000880) card because that's its best fuzzy match). Without this
+  // check we'd inject a high-confidence (score 0.95) wrong stock into results,
+  // which then survives the ranking pipeline. If the names share no Hangul
+  // overlap, demote the card instead of presenting it as the top result.
+  const queryStockRelevance = stockNameMatchesQuery(stockName, query)
 
   // Extract stock code and exchange
   const refMatch = block.match(/<span[^>]*class="[^"]*stock_ref[^"]*"[^>]*>([\s\S]*?)<\/span>/i)
@@ -179,23 +242,33 @@ export function parseStockCard(html: string, query: string): SearchResult[] {
   } : undefined
 
   // Naver stock detail page
-  if (stockCode) {
+  // Skip the stock card entirely when Naver rendered a company whose name
+  // doesn't overlap the query at all — this is the "한화에오" → "한화"(000880)
+  // misroute. Better to show organic Naver web results than a wrong-stock card
+  // pinned at the top with score 0.95.
+  if (stockCode && queryStockRelevance !== 'none') {
+    // Relevance-aware scoring: 'high' (exact/contains) keeps the original 0.95
+    // pin; 'partial' (token overlap only) demotes to 0.6 so organic results can
+    // still outrank a weakly-matching card.
+    const cardScore = queryStockRelevance === 'high' ? 0.95 : 0.6
     const stockUrl = `https://m.stock.naver.com/domestic/stock/${stockCode}/total`
     results.push({
       title: `${stockName} 주가 정보 (${exchange} ${stockCode})`,
       url: stockUrl,
       content: truncateToTokens(content, 500),
-      score: 0.95, // Stock card is the most relevant result for stock queries
+      score: cardScore,
       domain: 'm.stock.naver.com',
       stock_data: stockData,
     })
 
-    // Add finance/research sub-pages
+    // Sub-pages inherit a proportional demotion when the card is only a partial
+    // match — they're still useful context but mustn't crowd out better hits.
+    const subScore = queryStockRelevance === 'high' ? 0.80 : 0.5
     results.push({
       title: `${stockName} 재무제표 — 네이버증권`,
       url: `https://m.stock.naver.com/domestic/stock/${stockCode}/finance/quarter`,
       content: `${stockName} 분기 재무제표, 매출액, 영업이익, 당기순이익 조회`,
-      score: 0.80,
+      score: subScore,
       domain: 'm.stock.naver.com',
     })
 
@@ -203,7 +276,7 @@ export function parseStockCard(html: string, query: string): SearchResult[] {
       title: `${stockName} 증권사 리서치 — 네이버증권`,
       url: `https://m.stock.naver.com/domestic/stock/${stockCode}/research`,
       content: `${stockName} 증권사 투자의견, 목표주가, 리서치 리포트`,
-      score: 0.78,
+      score: subScore - 0.02,
       domain: 'm.stock.naver.com',
     })
   }

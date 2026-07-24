@@ -113,7 +113,23 @@ export interface OrchestratorConfig {
 
 /** Detect if query contains Korean (Hangul) characters */
 function isKoreanQuery(query: string): boolean {
-  return /[\uAC00-\uD7A3]/.test(query)
+  if (!query) return false
+  // Fast path: literal Hangul syllables (U+AC00–U+D7A3)
+  if (/[\uAC00-\uD7A3]/.test(query)) return true
+  // Defensive: residual percent-encoded Korean UTF-8 sequences.
+  // Agents using urllib.parse.quote() can double-encode Korean, leaving
+  // "%ED%95%9C" (한) literal strings after Hono's single auto-decode.
+  // Those would otherwise fail the Hangul regex and silently route the
+  // query to English backends. routes/search.ts:normalizeQuery already
+  // repairs most of these, but we keep a belt-and-suspenders guard here.
+  if (/%[0-9A-Fa-f]{2}/.test(query)) {
+    try {
+      return /[\uAC00-\uD7A3]/.test(decodeURIComponent(query))
+    } catch {
+      return false
+    }
+  }
+  return false
 }
 
 /** Detect if query contains Chinese (CJK) characters — but NOT Korean Hangul */
@@ -512,6 +528,9 @@ export async function executeSearch(
     images: imageResults.length > 0 ? imageResults : undefined,
     knowledge_graph: knowledgeGraph || undefined,
     subrequest_estimate: backendCount * 2,
+    // Explicit empty marker — lets agents distinguish "no results found"
+    // from "server error / empty body" without inspecting backend strings.
+    no_results: paginatedResults.length === 0,
   }
 
   setInMemoryCache(memCacheKey, searchResponse, isNews || isFinance)

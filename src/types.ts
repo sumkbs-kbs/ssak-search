@@ -214,6 +214,13 @@ export interface SearchResponse {
   knowledge_graph?: KnowledgeGraph
   /** Estimated number of subrequests made (for quota monitoring) */
   subrequest_estimate?: number
+  /**
+   * True when the orchestrator ran to completion but produced zero usable
+   * results (every backend failed and all fallbacks exhausted). Sent so
+   * agents/clients can distinguish a genuine "no results" from a transient
+   * server error or empty body. Mirrors the Tavily convention.
+   */
+  no_results?: boolean
 }
 
 /** Image search result */

@@ -899,3 +899,64 @@ export function countryToLanguageTag(country: string): string {
   }
   return map[country.toUpperCase()] || 'en'
 }
+
+// ============================================================
+// Query normalization — defends against double-encoded queries
+// ============================================================
+
+/**
+ * Detect ANY residual percent-encoding in the post-Hono query string.
+ *
+ * We can't require "2+ consecutive %XX pairs" (the obvious pattern) because
+ * triple-encoded input leaves shapes like "%25EC%2582%25BC" where each hex
+ * pair is separated by literal hex chars (E, C) rather than another %XX.
+ * A single `%` followed by two hex digits is enough signal that decoding
+ * wasn't complete. Loop-termination is handled by progress detection in
+ * normalizeQuery, not by this regex.
+ */
+const RESIDUAL_PERCENT_ENCODING = /%[0-9A-Fa-f]{2}/
+
+/**
+ * Safely decode a percent-encoded string. Returns the original on any failure
+ * (invalid sequences, malformed UTF-8) so callers never crash on bad input.
+ */
+function tryDecodeURIComponent(value: string): string {
+  try {
+    return decodeURIComponent(value)
+  } catch {
+    return value
+  }
+}
+
+/**
+ * Normalize a search query received from an HTTP request.
+ *
+ * Hono auto-decodes query params ONCE. When a client (notably Python agents
+ * using urllib.parse.quote()) double-encodes a Korean query, the single decode
+ * leaves residual "%ED%95%9C" literal strings. Those literals fail the Hangul
+ * regex in isKoreanQuery(), silently routing the query to English backends and
+ * returning either unrelated English results or an empty body.
+ *
+ * This helper:
+ *   1. trims whitespace
+ *   2. if residual percent-encoding is detected, attempts extra safe decodes
+ *      until the input stabilizes (no more %XX) or a guard is hit
+ *   3. collapses internal whitespace
+ *
+ * Idempotent — already-decoded Korean text passes through unchanged because
+ * the regex doesn't match Hangul syllables.
+ */
+export function normalizeQuery(raw: string): string {
+  if (!raw) return ''
+  let q = raw.trim()
+  // Defensive loop: a triple-encoded value needs at most 2 extra decodes after
+  // Hono's single pass; allow up to 4 iterations as a safety margin.
+  let guard = 0
+  while (RESIDUAL_PERCENT_ENCODING.test(q) && guard < 4) {
+    const decoded = tryDecodeURIComponent(q)
+    if (decoded === q) break // no progress — stop to avoid infinite loop
+    q = decoded.trim()
+    guard++
+  }
+  return q.replace(/\s+/g, ' ').trim()
+}

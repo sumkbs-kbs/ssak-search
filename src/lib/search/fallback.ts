@@ -45,6 +45,13 @@ export async function emergencyFallback(
   const searxngAlreadyRan = usedBackends.includes('searxng')
   const ddgAlreadyRan = usedBackends.includes('duckduckgo')
   const indexBound = !!(env?.VECTORIZE_INDEX && env?.SEARCH_INDEX_DB)
+  // Korean queries must NOT regress to English-biased backends. DuckDuckGo's
+  // default region (wt-wt) returns English results for Korean text, and a bare
+  // SearXNG call without a Korean locale does the same — the exact "한화에오
+  // → SpaceX" symptom users reported. Pin Korean fallbacks to ko-KR and skip
+  // DuckDuckGo entirely for Korean (it adds English noise, never Korean value).
+  const isKorean = ctx.korean === true
+  const fallbackLocale = ctx.bingLang || (isKorean ? 'ko-KR' : undefined)
 
   // Priority 0: Self-index fallback (fastest, no live network dependency).
   if (indexBound) {
@@ -52,7 +59,7 @@ export async function emergencyFallback(
     try {
       const idxResults = await hybridSearch(env, ctx.query, {
         maxResults: ctx.overFetch,
-        language: ctx.bingLang || ctx.effectiveWikiLang,
+        language: fallbackLocale,
       })
       if (idxResults.length > 0) {
         updatedResults = idxResults.map((r) => ({
@@ -79,7 +86,9 @@ export async function emergencyFallback(
         maxResults: ctx.overFetch,
         timeoutMs: 10000,
         category: 'general',
-        language: ctx.bingLang,
+        // Force Korean locale for Korean queries so SearXNG doesn't fall back
+        // to English results (defect 3: Korean→English regression).
+        language: fallbackLocale,
         env,
       })
       if (searxngResults.length > 0) {
@@ -92,7 +101,11 @@ export async function emergencyFallback(
   }
 
   // Priority 2: DuckDuckGo scraping (last resort)
-  if (updatedResults.length === 0 && !ddgAlreadyRan) {
+  // SKIPPED for Korean queries — DDG's default region returns English results
+  // for Korean text, which is the primary cause of the Korean→English
+  // regression. Better to return an honest empty result (no_results=true)
+  // than unrelated English pages.
+  if (updatedResults.length === 0 && !ddgAlreadyRan && !isKorean) {
     fallbackUsed = true
     try {
       const ddgResults = await duckDuckGoSearch(ctx.query, {

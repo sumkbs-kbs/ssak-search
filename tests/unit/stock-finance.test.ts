@@ -11,6 +11,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { _lookupStockCodeForTest as lookupStockCode } from '../../src/lib/stock-finance'
 
 // ============================================================
 // Mock global fetch for network tests
@@ -216,6 +217,56 @@ describe('searchKoreanStock', () => {
     const results = await searchKoreanStock('005930', { maxResults: 5 })
     expect(results.length).toBeGreaterThan(0)
     expect(results[0].content).toBeTruthy()
+  })
+})
+
+// ============================================================
+// lookupStockCode — longest-match-first routing (defect 3: 한화에오 misroute)
+// ============================================================
+describe('lookupStockCode (longest-match)', () => {
+  it('matches an exact company name', () => {
+    expect(lookupStockCode('삼성전자')).toBe('005930')
+  })
+
+  it('matches a 6-digit stock code directly', () => {
+    expect(lookupStockCode('012450 주가')).toBe('012450')
+    expect(lookupStockCode('005930')).toBe('005930')
+  })
+
+  it('matches when the company name is followed by financial keywords', () => {
+    expect(lookupStockCode('한화에어로스페이스 목표주가')).toBe('012450')
+    expect(lookupStockCode('현대차 실적')).toBe('005380')
+  })
+
+  it('prefers the LONGER name when two map entries share a prefix', () => {
+    // Critical regression guard: "한화에어로스페이스" must NOT collapse to the
+    // shorter "한화" (000880). Longest match wins.
+    expect(lookupStockCode('한화에어로스페이스')).toBe('012450')
+    expect(lookupStockCode('한화에어로스페이스 주가')).toBe('012450')
+  })
+
+  it('does NOT misroute a typo like "한화에오" to the "한화" entry', () => {
+    // The original bug: "한화에오".includes("한화") was true → returned 000880.
+    // With syllable-boundary checking, the Hangul continuation "에" rejects the
+    // short match, so the typo correctly resolves to no code (lets the Naver
+    // backend surface the right company organically instead).
+    expect(lookupStockCode('한화에오')).toBeNull()
+    expect(lookupStockCode('한화에오 주가')).toBeNull()
+  })
+
+  it('matches the short entry when the query IS that short entry', () => {
+    // Genuine "한화" queries still work.
+    expect(lookupStockCode('한화')).toBe('000880')
+    expect(lookupStockCode('한화 주가')).toBe('000880')
+  })
+
+  it('handles POSCO Korean/Latin coexistence', () => {
+    expect(lookupStockCode('POSCO홀딩스')).toBe('005490')
+    expect(lookupStockCode('포스코')).toBe('005490')
+  })
+
+  it('returns null for an unknown company', () => {
+    expect(lookupStockCode('존재하지않는회사')).toBeNull()
   })
 })
 

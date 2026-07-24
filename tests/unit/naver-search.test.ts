@@ -139,3 +139,62 @@ describe('parseStockCard', () => {
     expect(results[0].content).toContain('1.51%')
   })
 })
+
+// ============================================================
+// parseStockCard — query/name relevance gating (defect 3: 한화에오 misroute)
+// ============================================================
+describe('parseStockCard (query relevance gating)', () => {
+  const cardHtml = (name: string, code: string) => `
+    <div class="stock_top" data-stock-top>
+      <strong class="item_name">${name}</strong>
+      <span class="stock_ref">${code}<span class="exchange_name">KOSPI</span></span>
+      <span class="stock_price">100,000</span>원
+      <span>상승 1,000 (1.00%)</span>
+    </div></div>
+  `
+
+  it('keeps score 0.95 when query exactly matches the stock name', () => {
+    const results = parseStockCard(cardHtml('한화에어로스페이스', '012450'), '한화에어로스페이스')
+    expect(results.length).toBeGreaterThan(0)
+    expect(results[0].score).toBe(0.95)
+    expect(results[0].stock_data?.ticker).toBe('012450')
+  })
+
+  it('keeps score 0.95 when the query contains the name (with keywords)', () => {
+    const results = parseStockCard(cardHtml('한화에어로스페이스', '012450'), '한화에어로스페이스 주가')
+    expect(results.length).toBeGreaterThan(0)
+    expect(results[0].score).toBe(0.95)
+  })
+
+  it('keeps score 0.95 when the query is a prefix of the name', () => {
+    // "한화에어로" is a plausible partial input that should still match the
+    // Hanwha Aerospace card at full confidence.
+    const results = parseStockCard(cardHtml('한화에어로스페이스', '012450'), '한화에어로')
+    expect(results.length).toBeGreaterThan(0)
+    expect(results[0].score).toBe(0.95)
+  })
+
+  it('DROPS the card when Naver renders an unrelated company', () => {
+    // The "한화에오" symptom: Naver fuzzy-matches the wrong company ("한화")
+    // and renders its card. The card must NOT be injected as a top result.
+    const results = parseStockCard(cardHtml('한화', '000880'), '한화에오')
+    expect(results).toEqual([])
+  })
+
+  it('demotes (but keeps) the card on partial token overlap', () => {
+    // Shared token but not exact/substring — partial match, lower score.
+    // Construct: name="POSCO홀딩스", query="포스코 홀딩스 주가" — no direct
+    // substring either way, but token overlap exists.
+    const html = cardHtml('POSCO홀딩스', '005490')
+    const results = parseStockCard(html, '포스코홀딩스')
+    // 포스코홀딩스 is not a substring of POSCO홀딩스 and vice versa; tokens
+    // differ (Korean vs Latin) so this resolves to 'none' → empty.
+    expect(results).toEqual([])
+  })
+
+  it('still emits finance + research sub-pages on a strong match', () => {
+    const results = parseStockCard(cardHtml('삼성전자', '005930'), '삼성전자 주가')
+    expect(results.length).toBe(3) // main + finance + research
+    expect(results[0].score).toBe(0.95)
+  })
+})

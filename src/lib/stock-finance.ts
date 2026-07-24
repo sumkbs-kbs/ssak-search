@@ -143,24 +143,51 @@ function extractCompanyName(query: string): string {
 
 /**
  * 쿼리에서 종목코드 조회.
- * 우선순위: 직접 코드 매칭 > 상장사명 맵 > 회사명 추출 후 재시도
+ * 우선순위: 직접 코드 매칭 > 상장사명 맵(가장 긴 이름 우선) > 회사명 추출 후 재시도
+ *
+ * Longest-match-first: "한화에오" must not match the "한화" entry when a longer
+ * candidate ("한화에어로스페이스") is also present. We sort map keys by length
+ * descending so the most specific name wins, then require a Hangul syllable
+ * boundary (next char is non-Hangul or end-of-string) to avoid prefix-only
+ * false matches like "한화" matching inside "한화에어로스페이스".
  */
 function lookupStockCode(query: string): string | null {
   // 1. 직접 코드 매칭 (예: "005930")
   const code = extractStockCode(query)
   if (code) return code
 
-  // 2. 상장사명 맵 (빠름, 네트워크 불필요)
-  for (const [name, c] of Object.entries(STOCK_CODE_MAP)) {
-    if (query.includes(name)) return c
+  // 2. 상장사명 맵 — longest name first so "한화에어로스페이스" beats "한화".
+  //    Require the match to end at a syllable boundary so a short entry like
+  //    "한화" cannot hijack "한화에오" (which is not in the map at all).
+  const entries = Object.entries(STOCK_CODE_MAP).sort(
+    (a, b) => b[0].length - a[0].length,
+  )
+  for (const [name, c] of entries) {
+    const idx = query.indexOf(name)
+    if (idx === -1) continue
+    const nextChar = query[idx + name.length]
+    // Syllable boundary: end-of-string, space, punctuation, ASCII, or a Hangul
+    // char that is NOT a plausible continuation of the company name. Since map
+    // names are themselves the canonical company names, a query that CONTAINS
+    // an exact map name is always a valid match. The boundary check exists to
+    // reject the degenerate case where a longer real name starts with a shorter
+    // map name (e.g. user types the full "한화에어로스페이스" — "한화" would
+    // match at idx=0, but we want the longer exact entry to win, which the
+    // descending-length sort already guarantees).
+    if (nextChar === undefined || /[\s.,;!?)\/\-]|[^가-힣]/.test(nextChar)) {
+      return c
+    }
   }
 
-  // 3. 회사명 추출 후 재시도
+  // 3. 회사명 추출 후 정확 매칭 (금융 키워드 제거)
   const company = extractCompanyName(query)
   if (company && STOCK_CODE_MAP[company]) return STOCK_CODE_MAP[company]
 
   return null
 }
+
+// Exported for unit testing of the longest-match logic.
+export const _lookupStockCodeForTest = lookupStockCode
 
 // ============================================================
 // Naver Finance API — 실시간 시세 조회

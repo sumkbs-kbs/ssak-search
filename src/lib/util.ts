@@ -19,17 +19,19 @@ export const SUBREQUEST_HARD_LIMIT = 50
 export const SUBREQUEST_SOFT_LIMIT = 40
 
 /**
- * Per-request subrequest tracker. One instance is wired into globalThis.fetch
- * for the duration of a request via installSubrequestTracker(); the counter
- * increments on every outbound fetch, and fan-out callers can poll
- * `budgetExhausted()` to skip remaining backends once the soft limit is hit.
+ * Per-request subrequest tracker. fetchWithTimeout() increments the tracker
+ * on every outbound backend fetch; fan-out callers can poll budgetExhausted()
+ * to skip remaining backends once the soft limit is hit.
  *
- * Design notes:
- *   - The tracker MUST be uninstalled in a finally / waitUntil path, otherwise
- *     it leaks into the next request that reuses the isolate.
- *   - We do NOT throw from inside the fetch wrapper — callers already have
- *     try/catch around backend work. We just increment; shedding is the
- *     orchestrator's job (it has the context to decide what is skippable).
+ * Implementation note: we do NOT monkey-patch globalThis.fetch. On Cloudflare
+ * Workers the `fetch` binding is effectively read-only per request — a patch
+ * silently no-ops, so the counter stays at 0 (this was the original bug).
+ * Instead fetchWithTimeout is the single choke point all 30+ backend fetches
+ * pass through, so we count there.
+ *
+ * The tracker is wired into a module-global slot via installSubrequestTracker()
+ * for the duration of a request. Workers isolates are per-request, so the slot
+ * cannot leak across requests.
  */
 export class SubrequestTracker {
   count = 0
@@ -50,33 +52,45 @@ export class SubrequestTracker {
   budgetCritical(): boolean {
     return this.count >= this.hardLimit - 2
   }
+
+  /** Increment the counter and enforce the hard limit by throwing. */
+  tick(): void {
+    this.count++
+    if (this.count > this.hardLimit) {
+      throw new Error(
+        `Subrequest budget exhausted (${this.count}/${this.hardLimit}) — request would exceed Cloudflare limit`,
+      )
+    }
+  }
 }
 
 /**
- * Wrap globalThis.fetch so every outbound subrequest increments the tracker.
- * Returns an uninstall function that restores the original fetch — callers
- * MUST invoke it (typically via c.executionCtx.waitUntil or a finally block).
- *
- * The wrapper also enforces the hard limit by short-circuiting further fetches
- * to a thrown Error once the limit is reached. This turns the Cloudflare
- * "too many subrequests" 500 into a controlled, loggable failure inside the
- * orchestrator's existing try/catch.
+ * Module-global slot for the active request's tracker. Workers isolates are
+ * single-request, so this is per-request in practice. Cleared on uninstall.
+ */
+let _activeTracker: SubrequestTracker | null = null
+
+/**
+ * Register a subrequest tracker as active for the current request. Returns an
+ * uninstall function that MUST be called (via c.executionCtx.waitUntil or a
+ * finally block) to clear the slot before the isolate is reused.
  */
 export function installSubrequestTracker(tracker: SubrequestTracker): () => void {
-  const originalFetch = globalThis.fetch
-  globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
-    tracker.count++
-    if (tracker.count > tracker.hardLimit) {
-      throw new Error(
-        `Subrequest budget exhausted (${tracker.count}/${tracker.hardLimit}) — request would exceed Cloudflare limit`,
-      )
-    }
-    return originalFetch(input as Parameters<typeof originalFetch>[0], init as Parameters<typeof originalFetch>[1])
-  }) as typeof globalThis.fetch
-
+  _activeTracker = tracker
   return () => {
-    globalThis.fetch = originalFetch
+    if (_activeTracker === tracker) _activeTracker = null
   }
+}
+
+/**
+ * Internal hook called by fetchWithTimeout on every outbound fetch. If a
+ * tracker is active for the current request, it increments the count and
+ * enforces the hard limit. No-op when no tracker is installed (library reuse,
+ * tests, non-request contexts).
+ */
+function tickSubrequestTracker(): void {
+  const tracker = _activeTracker
+  if (tracker) tracker.tick()
 }
 
 // ============================================================
@@ -664,6 +678,12 @@ export async function fetchWithTimeout(
   init: RequestInit = {},
   timeoutMs = 15000,
 ): Promise<Response> {
+  // Count this fetch against the active request's subrequest budget (if any).
+  // This is the single choke point for all backend fetches, which is why we
+  // count here rather than monkey-patching globalThis.fetch (which is a no-op
+  // on Cloudflare Workers).
+  tickSubrequestTracker()
+
   // Route through the rate limiter / circuit breaker for all backend fetches.
   // This ensures per-host concurrency limits and automatic circuit tripping
   // on consecutive failures, preventing IP bans.

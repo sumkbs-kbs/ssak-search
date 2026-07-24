@@ -239,18 +239,21 @@ searchRoute.post('/', async (c) => {
     // Prefer the ACTUAL measured subrequest count over the static estimate.
     // The estimate (backendCount * 2) systematically under-reports advanced
     // mode, where the agentic pipeline + enrichment can issue 30+ fetches.
-    subrequestEstimate = Math.max(tracker.count, subrequestEstimate)
-    recordSearchSubrequests(subrequestEstimate)
+    // When the tracker counts non-zero (real fetch interception), trust it;
+    // otherwise fall back to the orchestrator's structural estimate so the
+    // header always reflects a plausible subrequest cost.
+    const reportedSubrequests = Math.max(tracker.count, subrequestEstimate)
+    recordSearchSubrequests(reportedSubrequests)
     // Guarantee an explicit no_results flag on the wire — even legacy cache
     // entries or paths that bypass orchestrator must surface empty state to
     // agents unambiguously (defect 2: never return 200 + empty body).
     if (!result.no_results) result.no_results = !(result.results && result.results.length > 0)
     const response = c.json<SearchResponse>(result)
     response.headers.set('X-Search-Mode', searchMode)
-    response.headers.set('X-Subrequests-Used', String(tracker.count))
+    response.headers.set('X-Subrequests-Used', String(reportedSubrequests))
     response.headers.set('X-Subrequests-Limit', '50')
-    if (tracker.budgetExhausted()) {
-      logger.warn(`[QUOTA] Subrequest soft limit reached: ${tracker.count}/50`)
+    if (reportedSubrequests >= 40) {
+      logger.warn(`[QUOTA] High subrequest usage: ${reportedSubrequests}/50`)
     }
     return response
   } catch (err) {
@@ -266,7 +269,7 @@ searchRoute.post('/', async (c) => {
     )
     // Surface the real subrequest count even on failure so agents/ops can see
     // whether the error was quota-induced.
-    response.headers.set('X-Subrequests-Used', String(tracker.count))
+    response.headers.set('X-Subrequests-Used', String(Math.max(tracker.count, subrequestEstimate)))
     response.headers.set('X-Subrequests-Limit', '50')
     return response
   }
@@ -362,16 +365,16 @@ searchRoute.get('/', async (c) => {
     }
 
     recordSearchRequest(Date.now() - startTime, true)
-    subrequestEstimate = Math.max(tracker.count, subrequestEstimate)
-    recordSearchSubrequests(subrequestEstimate)
+    const reportedSubrequests = Math.max(tracker.count, subrequestEstimate)
+    recordSearchSubrequests(reportedSubrequests)
     // Guarantee an explicit no_results flag on the wire (defect 2).
     if (!result.no_results) result.no_results = !(result.results && result.results.length > 0)
     const response = c.json<SearchResponse>(result)
-    response.headers.set('X-Subrequests-Used', String(tracker.count))
+    response.headers.set('X-Subrequests-Used', String(reportedSubrequests))
     response.headers.set('X-Subrequests-Limit', '50')
     response.headers.set('X-Cache', 'MISS')
-    if (tracker.budgetExhausted()) {
-      logger.warn(`[QUOTA] Subrequest soft limit reached: ${tracker.count}/50`)
+    if (reportedSubrequests >= 40) {
+      logger.warn(`[QUOTA] High subrequest usage: ${reportedSubrequests}/50`)
     }
     return response
   } catch (err) {
@@ -385,7 +388,7 @@ searchRoute.get('/', async (c) => {
       },
       500,
     )
-    response.headers.set('X-Subrequests-Used', String(tracker.count))
+    response.headers.set('X-Subrequests-Used', String(Math.max(tracker.count, subrequestEstimate)))
     response.headers.set('X-Subrequests-Limit', '50')
     return response
   }

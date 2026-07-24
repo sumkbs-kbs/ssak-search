@@ -674,7 +674,7 @@ async function generateWithOpenRouter(
   _model?: ModelConfig,
 ): Promise<SearchAnswer> {
   const prompt = buildAnswerPrompt(query, contextParts, extraContext)
-  const model = _model?.id || 'deepseek/deepseek-r1:free'
+  const model = _model?.id || 'nvidia/nemotron-3-ultra-550b-a55b:free'
 
   const text = await generateOpenRouterAnswer(
     apiKey,

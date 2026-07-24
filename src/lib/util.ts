@@ -5,6 +5,80 @@
 import type { Env } from '../types'
 
 import { logger, toError } from './logger'
+
+// ============================================================
+// Subrequest budget — guards the Cloudflare 50-subrequest/request cap
+// ============================================================
+
+/**
+ * Cloudflare Workers/Pages hard limit on outbound subrequests per request.
+ * We start shedding non-essential work at SUBREQUEST_SOFT_LIMIT so the
+ * orchestrator still has headroom to finish and serialize a response.
+ */
+export const SUBREQUEST_HARD_LIMIT = 50
+export const SUBREQUEST_SOFT_LIMIT = 40
+
+/**
+ * Per-request subrequest tracker. One instance is wired into globalThis.fetch
+ * for the duration of a request via installSubrequestTracker(); the counter
+ * increments on every outbound fetch, and fan-out callers can poll
+ * `budgetExhausted()` to skip remaining backends once the soft limit is hit.
+ *
+ * Design notes:
+ *   - The tracker MUST be uninstalled in a finally / waitUntil path, otherwise
+ *     it leaks into the next request that reuses the isolate.
+ *   - We do NOT throw from inside the fetch wrapper — callers already have
+ *     try/catch around backend work. We just increment; shedding is the
+ *     orchestrator's job (it has the context to decide what is skippable).
+ */
+export class SubrequestTracker {
+  count = 0
+  readonly softLimit: number
+  readonly hardLimit: number
+
+  constructor(softLimit = SUBREQUEST_SOFT_LIMIT, hardLimit = SUBREQUEST_HARD_LIMIT) {
+    this.softLimit = softLimit
+    this.hardLimit = hardLimit
+  }
+
+  /** True once we've passed the soft limit — fan-out should stop adding work. */
+  budgetExhausted(): boolean {
+    return this.count >= this.softLimit
+  }
+
+  /** True at the Cloudflare hard limit — the next fetch will likely throw. */
+  budgetCritical(): boolean {
+    return this.count >= this.hardLimit - 2
+  }
+}
+
+/**
+ * Wrap globalThis.fetch so every outbound subrequest increments the tracker.
+ * Returns an uninstall function that restores the original fetch — callers
+ * MUST invoke it (typically via c.executionCtx.waitUntil or a finally block).
+ *
+ * The wrapper also enforces the hard limit by short-circuiting further fetches
+ * to a thrown Error once the limit is reached. This turns the Cloudflare
+ * "too many subrequests" 500 into a controlled, loggable failure inside the
+ * orchestrator's existing try/catch.
+ */
+export function installSubrequestTracker(tracker: SubrequestTracker): () => void {
+  const originalFetch = globalThis.fetch
+  globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+    tracker.count++
+    if (tracker.count > tracker.hardLimit) {
+      throw new Error(
+        `Subrequest budget exhausted (${tracker.count}/${tracker.hardLimit}) — request would exceed Cloudflare limit`,
+      )
+    }
+    return originalFetch(input as Parameters<typeof originalFetch>[0], init as Parameters<typeof originalFetch>[1])
+  }) as typeof globalThis.fetch
+
+  return () => {
+    globalThis.fetch = originalFetch
+  }
+}
+
 // ============================================================
 // Domain Authority Map
 // ============================================================

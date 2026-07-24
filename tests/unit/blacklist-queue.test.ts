@@ -10,6 +10,13 @@
 
 import { describe, it, expect, vi } from 'vitest'
 
+// State-changing routes now require auth even in "open mode" (no keys set).
+// For tests we configure a synthetic admin key and send it on every POST/DELETE
+// so the auth middleware passes and we reach the handler under test.
+const TEST_API_KEY = 'sk-test-admin-key-for-unit-tests'
+const AUTH_ENV = { SEARCH_API_KEY: TEST_API_KEY } as any
+const AUTH_HEADERS = { 'Content-Type': 'application/json', 'X-API-Key': TEST_API_KEY }
+
 // ============================================================
 // Blacklist API
 // ============================================================
@@ -33,17 +40,20 @@ describe('Blacklist API route', () => {
     const mod = await import('../../src/routes/blacklist')
     const req = new Request('http://localhost/', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: AUTH_HEADERS,
       body: JSON.stringify({ domain: 'spam.com' }),
     })
-    const res = await mod.blacklistRoute.fetch(req, { } as any, {} as any)
+    const res = await mod.blacklistRoute.fetch(req, AUTH_ENV, {} as any)
     expect(res.status).toBe(501)
   })
 
   it('returns 501 when SEARCH_INDEX_DB is missing (DELETE /:domain)', async () => {
     const mod = await import('../../src/routes/blacklist')
-    const req = new Request('http://localhost/spam.com', { method: 'DELETE' })
-    const res = await mod.blacklistRoute.fetch(req, { } as any, {} as any)
+    const req = new Request('http://localhost/spam.com', {
+      method: 'DELETE',
+      headers: { 'X-API-Key': TEST_API_KEY },
+    })
+    const res = await mod.blacklistRoute.fetch(req, AUTH_ENV, {} as any)
     expect(res.status).toBe(501)
   })
 
@@ -54,10 +64,10 @@ describe('Blacklist API route', () => {
     }
     const req = new Request('http://localhost/', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: AUTH_HEADERS,
       body: JSON.stringify({ reason: 'test' }),
     })
-    const res = await mod.blacklistRoute.fetch(req, { SEARCH_INDEX_DB: mockDb } as any, {} as any)
+    const res = await mod.blacklistRoute.fetch(req, { SEARCH_INDEX_DB: mockDb, ...AUTH_ENV } as any, {} as any)
     expect(res.status).toBe(400)
     const body: any = await res.json()
     expect(body.code).toBe('missing_domain')
@@ -68,10 +78,10 @@ describe('Blacklist API route', () => {
     const mockDb = { prepare: vi.fn() }
     const req = new Request('http://localhost/', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: AUTH_HEADERS,
       body: 'not-json',
     })
-    const res = await mod.blacklistRoute.fetch(req, { SEARCH_INDEX_DB: mockDb } as any, {} as any)
+    const res = await mod.blacklistRoute.fetch(req, { SEARCH_INDEX_DB: mockDb, ...AUTH_ENV } as any, {} as any)
     expect(res.status).toBe(400)
   })
 
@@ -80,10 +90,10 @@ describe('Blacklist API route', () => {
     const mockDb = { prepare: vi.fn() }
     const req = new Request('http://localhost/', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: AUTH_HEADERS,
       body: JSON.stringify({ domain: 'spam.com', severity: 'invalid' }),
     })
-    const res = await mod.blacklistRoute.fetch(req, { SEARCH_INDEX_DB: mockDb } as any, {} as any)
+    const res = await mod.blacklistRoute.fetch(req, { SEARCH_INDEX_DB: mockDb, ...AUTH_ENV } as any, {} as any)
     expect(res.status).toBe(400)
     const body: any = await res.json()
     expect(body.code).toBe('invalid_severity')
@@ -94,10 +104,10 @@ describe('Blacklist API route', () => {
     const mockDb = { prepare: vi.fn() }
     const req = new Request('http://localhost/', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: AUTH_HEADERS,
       body: JSON.stringify({ domain: 'spam.com', source: 'unknown' }),
     })
-    const res = await mod.blacklistRoute.fetch(req, { SEARCH_INDEX_DB: mockDb } as any, {} as any)
+    const res = await mod.blacklistRoute.fetch(req, { SEARCH_INDEX_DB: mockDb, ...AUTH_ENV } as any, {} as any)
     expect(res.status).toBe(400)
     const body: any = await res.json()
     expect(body.code).toBe('invalid_source')
@@ -113,14 +123,41 @@ describe('Blacklist API route', () => {
 
     const req = new Request('http://localhost/', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: AUTH_HEADERS,
       body: JSON.stringify({ domain: 'spam.com', reason: 'Spam domain', severity: 'high', source: 'manual' }),
     })
-    const res = await mod.blacklistRoute.fetch(req, { SEARCH_INDEX_DB: mockDb } as any, {} as any)
+    const res = await mod.blacklistRoute.fetch(req, { SEARCH_INDEX_DB: mockDb, ...AUTH_ENV } as any, {} as any)
     expect(res.status).toBe(201)
     const body: any = await res.json()
     expect(body.success).toBe(true)
     expect(body.added).toBe(1)
+  })
+
+  it('rejects POST with 401 in open mode (no auth configured)', async () => {
+    // P0-1: state-changing routes must deny even when public search is open.
+    const mod = await import('../../src/routes/blacklist')
+    const req = new Request('http://localhost/', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ domain: 'spam.com' }),
+    })
+    // Empty env = open mode. Must NOT reach the handler.
+    const res = await mod.blacklistRoute.fetch(req, {} as any, {} as any)
+    expect(res.status).toBe(401)
+    const body: any = await res.json()
+    expect(body.code).toBe('auth_required')
+  })
+
+  it('rejects POST with 401 when key is wrong', async () => {
+    // P0-1: a configured key that doesn't match is the same as no key.
+    const mod = await import('../../src/routes/blacklist')
+    const req = new Request('http://localhost/', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-API-Key': 'sk-wrong' },
+      body: JSON.stringify({ domain: 'spam.com' }),
+    })
+    const res = await mod.blacklistRoute.fetch(req, AUTH_ENV, {} as any)
+    expect(res.status).toBe(401)
   })
 })
 

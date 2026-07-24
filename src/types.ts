@@ -539,6 +539,11 @@ export interface AppBindings {
   // Optional external LLM API keys for answer generation
   OPENAI_API_KEY?: string
   ANTHROPIC_API_KEY?: string
+  // Opt-in flag for auto-promoting complex queries to the agentic Pro pipeline.
+  // Default is OFF — Pro mode is opt-in via explicit search_depth=advanced to
+  // avoid burning Workers AI / subrequest quota on the free tier. Set to "1"
+  // or "true" to restore the legacy auto-promote behavior.
+  ENABLE_AUTO_PRO?: string
   // Durable Object binding for conversation threads (Phase 1.2)
   THREAD_DO?: DurableObjectNamespace
   // Durable Object binding for saved pages (Phase 2.1)

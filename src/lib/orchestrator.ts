@@ -105,6 +105,13 @@ export interface OrchestratorConfig {
   ai?: Ai
   /** Cloudflare Env for Durable Object rate limiter */
   env?: Env
+  /**
+   * Optional subrequest budget tracker. When the soft limit is reached, the
+   * orchestrator sheds non-essential work (enrichment, agentic re-query) to
+   * stay under Cloudflare's 50-subrequest/request hard cap. Optional for
+   * backward compat (tests, library reuse) — when omitted, no shedding occurs.
+   */
+  subrequestTracker?: { budgetExhausted(): boolean; count: number }
 }
 
 // ============================================================
@@ -339,7 +346,10 @@ export async function executeSearch(
   results = await applyRankingPipeline(results, ctx)
 
   // ── 9. Enrichment (advanced depth) ──
-  if (search_depth === 'advanced' && results.length > 0) {
+  // Skipped when the subrequest budget is exhausted — enrichment can issue
+  // up to 9 extra fetches (3 URLs × Jina/sidecar/direct chain), and pushing
+  // past the 50-subrequest cap turns a slow result into a 500.
+  if (search_depth === 'advanced' && results.length > 0 && !config.subrequestTracker?.budgetExhausted()) {
     for (const r of results.slice(0, 3)) {
       if (r.content.length < 200 && r.raw_content) {
         r.content = truncateToTokens(r.raw_content, 800)
@@ -390,9 +400,14 @@ export async function executeSearch(
   // from sum(answer+panel+images) to max(answer, panel, images).
   // For basic depth, reranking (step 11) and enrichment (step 9) are skipped.
 
-  // 10a. Agentic Pipeline (Pro mode) — only for advanced depth
+  // 10a. Agentic Pipeline (Pro mode) — only for advanced depth.
+  // Hard-skip when the subrequest budget is already exhausted: the agentic
+  // pipeline alone can issue 20–30 subrequests (planner + executePlan across
+  // up to 10 steps × 3 backends + quality-gate + synthesizer). Entering it
+  // with the budget already near the cap guarantees a 500 from Cloudflare.
   let answer: SearchAnswer | undefined
-  if (search_depth === 'advanced' && include_answer && config.ai && results.length >= 3) {
+  if (search_depth === 'advanced' && include_answer && config.ai && results.length >= 3
+      && !config.subrequestTracker?.budgetExhausted()) {
     try {
       logger.info('[Orchestrator] Running Agentic Pipeline (Pro mode)', { query, resultCount: results.length })
       const agenticOptions: AgenticSearchOptions = {

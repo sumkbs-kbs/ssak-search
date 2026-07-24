@@ -378,3 +378,114 @@ export function getClientIp(headers: Headers): string {
     'unknown'
   )
 }
+
+// ============================================================
+// Hono middleware — reusable auth guards
+// ============================================================
+//
+// These middlewares exist so routes that mutate server state (crawl, index,
+// blacklist, queue, keys) can enforce authentication uniformly without each
+// rolling its own. Previously /api/crawl and friends had NO auth at all,
+// letting anonymous callers drive server-side crawling/SSRF.
+//
+// Two guards are provided:
+//   - requireAuth: any valid key (or open mode). Use for state-changing
+//     endpoints that any authenticated client may hit.
+//   - requireAdmin: admin-scoped key only. Use for key/tenant management
+//     and destructive infra operations.
+//
+// Design notes:
+//   - Open mode (no keys configured): BOTH requireAuth and requireAdmin DENY.
+//     State-changing routes must never accept anonymous traffic, even when the
+//     search API itself runs in open mode. Open mode is for read-only public
+//     search; it is NOT a license to crawl, index, or edit the blacklist.
+//     The search route keeps using validateApiKeyAsync directly (which does
+//     pass in open mode), so this stricter default does not break search.
+//   - DO failure: deny-by-default. A transient DO error must NOT widen
+//     privileges; it fails the request closed, not open.
+
+type HonoContext = {
+  req: { raw: Request; path: string }
+  env: AppBindings
+  json: (body: unknown, status: number) => Response
+  set: (key: string, value: unknown) => void
+}
+type NextFn = () => Promise<void>
+
+function unauthorizedResponse(c: HonoContext, reason: string, code: string): Response {
+  return c.json({ detail: reason, code }, 401)
+}
+
+function forbiddenResponse(c: HonoContext, reason: string, code: string): Response {
+  return c.json({ detail: reason, code }, 403)
+}
+
+/**
+ * Require any valid API key. In open mode (no keys configured) this DENIES —
+ * state-changing routes (crawl/index/blacklist/keys) must never accept
+ * anonymous traffic, even when public search runs unauthenticated.
+ */
+export async function requireAuth(c: HonoContext, next: NextFn): Promise<Response | void> {
+  // Open mode: no auth material to validate against → deny closed.
+  if (!c.env.SEARCH_API_KEY && !c.env.TENANTS_CONFIG && !c.env.API_KEY_DO) {
+    return unauthorizedResponse(
+      c,
+      'Authentication required. Configure SEARCH_API_KEY, TENANTS_CONFIG, or API_KEY_DO to issue a key.',
+      'auth_required',
+    )
+  }
+  const result = await validateApiKeyAsync(c.req.raw.headers, c.env)
+  if (!result.valid) {
+    return unauthorizedResponse(c, result.reason || 'Unauthorized', 'unauthorized')
+  }
+  // Stash tenant for downstream handlers
+  c.set('tenantId', result.tenant?.id ?? '__default__')
+  c.set('tenantPlan', result.tenant?.config.plan ?? 'pro')
+  await next()
+}
+
+/**
+ * Require an admin-scoped API key. Open mode (no keys configured) is DENIED —
+ * anonymous access never grants admin. DO failures fail closed.
+ *
+ * Required scope: 'admin' on the resolved ApiKeyMeta. Legacy single
+ * SEARCH_API_KEY mode grants admin ONLY when the request presents that key
+ * (no DO available).
+ */
+export async function requireAdmin(c: HonoContext, next: NextFn): Promise<Response | void> {
+  // Step 1: validate the key first (rejects missing/invalid/open-mode-no-key).
+  // Open mode is denied here too — admin powers are never anonymous.
+  if (!c.env.SEARCH_API_KEY && !c.env.TENANTS_CONFIG && !c.env.API_KEY_DO) {
+    return forbiddenResponse(
+      c,
+      'Admin scope required — configure API_KEY_DO or SEARCH_API_KEY',
+      'insufficient_scope',
+    )
+  }
+  const result = await validateApiKeyAsync(c.req.raw.headers, c.env)
+  if (!result.valid) {
+    return unauthorizedResponse(c, result.reason || 'Unauthorized', 'unauthorized')
+  }
+
+  // Step 2: enforce admin scope from the DO. Legacy single SEARCH_API_KEY
+  // mode (no DO) already passed validateApiKeyAsync against that key, which
+  // is the admin key — so it's granted admin implicitly.
+  if (c.env.API_KEY_DO) {
+    const token = extractApiKeyToken(c.req.raw.headers)
+    if (token) {
+      const { getApiKeyStub } = await import('./api-key-do')
+      const stub = getApiKeyStub(c.env)
+      const revalidated = await stub.validateKey(token)
+      // DO failure → deny closed (previously: fall through to admin grant).
+      if (!revalidated.valid || !revalidated.meta) {
+        return unauthorizedResponse(c, 'API key validation failed', 'invalid_key')
+      }
+      if (revalidated.meta.scope !== 'admin') {
+        return forbiddenResponse(c, 'Admin scope required', 'insufficient_scope')
+      }
+    }
+  }
+
+  c.set('tenantId', result.tenant?.id ?? '__default__')
+  await next()
+}

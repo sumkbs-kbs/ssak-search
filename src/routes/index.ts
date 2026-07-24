@@ -22,10 +22,17 @@ import { INDEX_SCHEMA } from '../lib/index/index'
 import { RefreshScheduler } from '../lib/index/scheduler'
 import { extractContent } from '../lib/extractor'
 import { hashString, extractDomain } from '../lib/index/chunker'
+import { requireAuth } from '../lib/auth'
 
 const indexRoute = new Hono<{ Bindings: AppBindings }>()
 
 indexRoute.use('/*', cors({ origin: '*' }))
+
+// Index mutation (POST/DELETE) requires auth — anonymous indexing would let
+// anyone poison the global search index. GET (stats/search/documents) stays
+// open as read-only observability.
+indexRoute.post('/*', requireAuth as any)
+indexRoute.delete('/*', requireAuth as any)
 
 // ============================================================
 // Helpers

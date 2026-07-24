@@ -12,10 +12,17 @@ import { logger, toError } from '../lib/logger'
 import { cors } from 'hono/cors'
 import type { AppBindings, ErrorResponse, CrawlRequest, CrawlStartResponse, CrawlStatusResponse } from '../types'
 import { getCrawlerStub, generateCrawlId } from '../lib/crawler-do'
+import { requireAuth } from '../lib/auth'
 
 const crawlRoute = new Hono<{ Bindings: AppBindings }>()
 
 crawlRoute.use('/*', cors({ origin: '*' }))
+
+// State-changing endpoints require authentication. Previously these had NO
+// auth, letting anonymous callers drive server-side crawling/SSRF. GET (status
+// read) stays open since it leaks no data beyond a crawl id the caller owns.
+crawlRoute.post('/*', requireAuth as any)
+crawlRoute.delete('/*', requireAuth as any)
 
 // Binding check helper
 function checkBinding(c: any): boolean {

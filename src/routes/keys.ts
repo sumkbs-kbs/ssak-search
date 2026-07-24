@@ -16,55 +16,12 @@ import { logger, toError } from '../lib/logger'
 import { cors } from 'hono/cors'
 import type { AppBindings, ErrorResponse } from '../types'
 import { getApiKeyStub, type KeyScope, type CreateKeyRequest, type ApiKeyMeta } from '../lib/api-key-do'
-import { validateApiKeyWithTenant, getClientIp, extractApiKeyToken } from '../lib/auth'
+import { requireAdmin } from '../lib/auth'
 import { auditAuthFailure } from '../lib/audit'
 
 const keysRoute = new Hono<{ Bindings: AppBindings }>()
 
 keysRoute.use('/*', cors({ origin: '*' }))
-
-// ============================================================
-// Admin auth middleware — requires admin-scoped key
-// ============================================================
-async function requireAdmin(c: any, next: any) {
-  const authResult = validateApiKeyWithTenant(
-    c.req.raw.headers,
-    c.env.TENANTS_CONFIG,
-    c.env.SEARCH_API_KEY,
-  )
-
-  if (!authResult.valid) {
-    const clientIp = getClientIp(c.req.raw.headers)
-    auditAuthFailure({
-      reason: authResult.reason || 'Unauthorized',
-      clientIp,
-      resource: c.req.path,
-      attempt: c.req.raw.headers.get('Authorization')?.startsWith('Bearer ') ? 'bearer' : 'x-api-key',
-    })
-    return c.json({ detail: authResult.reason || 'Unauthorized', code: 'unauthorized' }, 401)
-  }
-
-  // If ApiKeyDO is available, validate with scope check
-  if (c.env.API_KEY_DO) {
-    const token = extractApiKeyToken(c.req.raw.headers)
-    if (token) {
-      const stub = getApiKeyStub(c.env)
-      const result = await stub.validateKey(token)
-      if (result.valid && result.meta) {
-        // Admin scope required for key management
-        if (result.meta.scope !== 'admin') {
-          return c.json({ detail: 'Admin scope required', code: 'insufficient_scope' }, 403)
-        }
-        await next()
-        return
-      }
-      // If DO validation fails, fall through to basic auth (legacy single-key mode)
-    }
-  }
-
-  // Legacy single SEARCH_API_KEY mode — all authenticated users are admins
-  await next()
-}
 
 // ============================================================
 // POST /api/keys — Create a new API key

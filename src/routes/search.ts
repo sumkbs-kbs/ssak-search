@@ -23,23 +23,40 @@ import { auditAuthFailure, auditRateLimit, audit } from '../lib/audit'
 import { createAnswerTokenStream, generateAnswer } from '../lib/answer'
 import type { AnswerStreamResult } from '../lib/answer'
 import { classifyQuery, DEFAULT_CLASSIFIER_CONFIG } from '../lib/agentic/classifier'
-import { normalizeQuery } from '../lib/util'
+import { normalizeQuery, SubrequestTracker, installSubrequestTracker } from '../lib/util'
 
 /**
  * Resolve the effective search depth.
  *
  * - If the user explicitly sets 'basic' or 'advanced', respect that.
- * - Otherwise ('auto' or unspecified), classify the query complexity
- *   and route accordingly: complex → 'advanced', simple → 'basic'.
+ * - Otherwise ('auto' or unspecified), default to 'basic' (fast mode).
+ *
+ * WHY default to fast: the agentic Pro pipeline (planner + executePlan +
+ * quality-gate + gap-fill + synthesizer) issues 5–10 Workers AI calls and
+ * ~30 subrequests per request. On the Cloudflare free tier that exhausts the
+ * daily 10k Neuron allowance in ~1–2k requests and the 50-subrequest/request
+ * limit on complex queries. Auto-promoting complex queries to Pro silently
+ * turned every busy day into a quota incident.
+ *
+ * Operators who want the old auto-promote behavior can set the env var
+ * ENABLE_AUTO_PRO=1 (e.g. on a paid tier or a private deployment).
  */
-function resolveSearchDepth(query: string, userDepth?: string): { depth: 'basic' | 'advanced'; mode: 'fast' | 'pro' } {
+function resolveSearchDepth(
+  query: string,
+  userDepth: string | undefined,
+  env?: { ENABLE_AUTO_PRO?: string },
+): { depth: 'basic' | 'advanced'; mode: 'fast' | 'pro' } {
   if (userDepth === 'basic') return { depth: 'basic', mode: 'fast' }
   if (userDepth === 'advanced') return { depth: 'advanced', mode: 'pro' }
 
-  // Auto mode — classify query complexity
-  const classification = classifyQuery(query, DEFAULT_CLASSIFIER_CONFIG)
-  const isPro = classification.mode === 'pro'
-  return { depth: isPro ? 'advanced' : 'basic', mode: classification.mode }
+  // Auto mode — opt-in agentic promotion via ENABLE_AUTO_PRO env var.
+  const autoProEnabled = env?.ENABLE_AUTO_PRO === '1' || env?.ENABLE_AUTO_PRO === 'true'
+  if (autoProEnabled) {
+    const classification = classifyQuery(query, DEFAULT_CLASSIFIER_CONFIG)
+    const isPro = classification.mode === 'pro'
+    return { depth: isPro ? 'advanced' : 'basic', mode: classification.mode }
+  }
+  return { depth: 'basic', mode: 'fast' }
 }
 
 const searchRoute = new Hono<{ Bindings: AppBindings; Variables: { tenantId: string; tenantPlan: string } }>()
@@ -115,17 +132,12 @@ searchRoute.use('/*', async (c, next) => {
 // POST /api/search - primary Tavily-compatible endpoint
 searchRoute.post('/', async (c) => {
   setMetricsEnv(c.env)
-  // Track subrequests for quota monitoring (Cloudflare Pages free: 50 subrequests/request)
-  let subrequestCount = 0
-  const originalFetch = globalThis.fetch
-  globalThis.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
-    subrequestCount++
-    return originalFetch(input, init)
-  }
-
-  // Restore original fetch after request
-  const restoreFetch = () => { globalThis.fetch = originalFetch }
-  c.executionCtx.waitUntil(Promise.resolve().then(restoreFetch))
+  // Track subrequests for quota monitoring (Cloudflare Pages free: 50 subrequests/request).
+  // The tracker wraps globalThis.fetch and is shared with the orchestrator so
+  // fan-out can shed backends once the soft limit is approached.
+  const tracker = new SubrequestTracker()
+  const uninstallTracker = installSubrequestTracker(tracker)
+  c.executionCtx.waitUntil(Promise.resolve().then(uninstallTracker))
 
   let body: Partial<SearchRequest>
   try {
@@ -159,7 +171,7 @@ searchRoute.post('/', async (c) => {
   }
 
   // Auto-routing: classify query complexity → basic (fast) or advanced (pro)
-  const { depth: searchDepth, mode: searchMode } = resolveSearchDepth(body.query.trim(), body.search_depth)
+  const { depth: searchDepth, mode: searchMode } = resolveSearchDepth(body.query.trim(), body.search_depth, c.env)
 
   // Validate max_results
   const maxResults = Math.min(Math.max(body.max_results ?? 10, 1), 20)
@@ -202,6 +214,7 @@ searchRoute.post('/', async (c) => {
       jinaApiKey: c.env.JINA_API_KEY,
       ai: c.env.AI,
       env: c.env,
+      subrequestTracker: tracker,
     })
 
     // Add subrequest estimate header for quota monitoring
@@ -223,6 +236,10 @@ searchRoute.post('/', async (c) => {
     }
 
     recordSearchRequest(Date.now() - startTime, true)
+    // Prefer the ACTUAL measured subrequest count over the static estimate.
+    // The estimate (backendCount * 2) systematically under-reports advanced
+    // mode, where the agentic pipeline + enrichment can issue 30+ fetches.
+    subrequestEstimate = Math.max(tracker.count, subrequestEstimate)
     recordSearchSubrequests(subrequestEstimate)
     // Guarantee an explicit no_results flag on the wire — even legacy cache
     // entries or paths that bypass orchestrator must surface empty state to
@@ -230,15 +247,15 @@ searchRoute.post('/', async (c) => {
     if (!result.no_results) result.no_results = !(result.results && result.results.length > 0)
     const response = c.json<SearchResponse>(result)
     response.headers.set('X-Search-Mode', searchMode)
-    response.headers.set('X-Subrequests-Used', String(subrequestEstimate))
-    if (subrequestEstimate >= 40) {
-      logger.warn(`[QUOTA] High subrequest usage: ${subrequestEstimate}/50`)
+    response.headers.set('X-Subrequests-Used', String(tracker.count))
+    response.headers.set('X-Subrequests-Limit', '50')
+    if (tracker.budgetExhausted()) {
+      logger.warn(`[QUOTA] Subrequest soft limit reached: ${tracker.count}/50`)
     }
     return response
   } catch (err) {
     logger.error('Search error:', { error: toError(err) })
     recordSearchRequest(Date.now() - startTime, false)
-    const subrequestEstimate = 0
     const response = c.json<ErrorResponse>(
       {
         detail: err instanceof Error ? err.message : 'Search failed',
@@ -247,8 +264,10 @@ searchRoute.post('/', async (c) => {
       },
       500,
     )
-    response.headers.set('X-Subrequests-Used', String(subrequestEstimate))
-    response.headers.set('X-Subrequests-Max', '50')
+    // Surface the real subrequest count even on failure so agents/ops can see
+    // whether the error was quota-induced.
+    response.headers.set('X-Subrequests-Used', String(tracker.count))
+    response.headers.set('X-Subrequests-Limit', '50')
     return response
   }
 })
@@ -256,6 +275,11 @@ searchRoute.post('/', async (c) => {
 // GET /api/search - simplified GET interface for quick testing
 searchRoute.get('/', async (c) => {
   setMetricsEnv(c.env)
+  // Same subrequest tracking as POST — the 50-subrequest cap applies equally.
+  const tracker = new SubrequestTracker()
+  const uninstallTracker = installSubrequestTracker(tracker)
+  c.executionCtx.waitUntil(Promise.resolve().then(uninstallTracker))
+
   const rawQuery = c.req.query('query') || c.req.query('q')
   // normalizeQuery repairs double-encoded Korean/special-char queries that
   // survive Hono's single decodeURI pass (common with urllib.parse.quote()).
@@ -272,7 +296,7 @@ searchRoute.get('/', async (c) => {
   const includeAnswer = includeAnswerParam === undefined ? false : includeAnswerParam === 'true' || c.req.query('answer') === 'true'
   const includeRawContent = c.req.query('include_raw_content') === 'true'
 
-  const { depth: searchDepth } = resolveSearchDepth(query, c.req.query('search_depth'))
+  const { depth: searchDepth } = resolveSearchDepth(query, c.req.query('search_depth'), c.env)
 
   const request: SearchRequest = {
     query,
@@ -320,6 +344,7 @@ searchRoute.get('/', async (c) => {
       jinaApiKey: c.env.JINA_API_KEY,
       ai: c.env.AI,
       env: c.env,
+      subrequestTracker: tracker,
     })
 
     // Cache the result if it's worth reusing (same logic as POST route)
@@ -337,15 +362,16 @@ searchRoute.get('/', async (c) => {
     }
 
     recordSearchRequest(Date.now() - startTime, true)
+    subrequestEstimate = Math.max(tracker.count, subrequestEstimate)
     recordSearchSubrequests(subrequestEstimate)
     // Guarantee an explicit no_results flag on the wire (defect 2).
     if (!result.no_results) result.no_results = !(result.results && result.results.length > 0)
     const response = c.json<SearchResponse>(result)
-    response.headers.set('X-Subrequests-Used', String(subrequestEstimate))
-    response.headers.set('X-Subrequests-Max', '50')
+    response.headers.set('X-Subrequests-Used', String(tracker.count))
+    response.headers.set('X-Subrequests-Limit', '50')
     response.headers.set('X-Cache', 'MISS')
-    if (subrequestEstimate >= 40) {
-      logger.warn(`[QUOTA] High subrequest usage: ${subrequestEstimate}/50`)
+    if (tracker.budgetExhausted()) {
+      logger.warn(`[QUOTA] Subrequest soft limit reached: ${tracker.count}/50`)
     }
     return response
   } catch (err) {
@@ -359,8 +385,8 @@ searchRoute.get('/', async (c) => {
       },
       500,
     )
-    response.headers.set('X-Subrequests-Used', String(subrequestEstimate))
-    response.headers.set('X-Subrequests-Max', '50')
+    response.headers.set('X-Subrequests-Used', String(tracker.count))
+    response.headers.set('X-Subrequests-Limit', '50')
     return response
   }
 })
@@ -376,6 +402,11 @@ searchRoute.get('/', async (c) => {
 //   event: keepalive → { ts }  (every 10s during generation)
 searchRoute.get('/stream', async (c) => {
   setMetricsEnv(c.env)
+  // Subrequest cap applies to SSE responses too.
+  const tracker = new SubrequestTracker()
+  const uninstallTracker = installSubrequestTracker(tracker)
+  c.executionCtx.waitUntil(Promise.resolve().then(uninstallTracker))
+
   const rawQuery = c.req.query('query') || c.req.query('q')
   const query = rawQuery ? normalizeQuery(rawQuery) : ''
   if (!query || query.trim().length === 0) {
@@ -385,7 +416,7 @@ searchRoute.get('/stream', async (c) => {
   const maxResultsParam = c.req.query('max_results') || c.req.query('limit')
   const maxResults = maxResultsParam ? Math.min(Math.max(parseInt(maxResultsParam, 10) || 10, 1), 20) : 10
 
-  const { depth: streamDepth } = resolveSearchDepth(query, c.req.query('search_depth'))
+  const { depth: streamDepth } = resolveSearchDepth(query, c.req.query('search_depth'), c.env)
 
   const request: SearchRequest = {
     query,
@@ -437,6 +468,7 @@ searchRoute.get('/stream', async (c) => {
           jinaApiKey: c.env.JINA_API_KEY,
           ai: c.env.AI,
           env: c.env,
+          subrequestTracker: tracker,
         })
 
         const subrequestEstimate = (result as SearchResponse & { subrequest_estimate?: number }).subrequest_estimate ?? 0

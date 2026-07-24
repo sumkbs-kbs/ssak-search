@@ -12,10 +12,16 @@ import { Hono } from 'hono'
 import { logger, toError } from '../lib/logger'
 import { cors } from 'hono/cors'
 import type { AppBindings, ErrorResponse } from '../types'
+import { requireAuth } from '../lib/auth'
 
 const blacklistRoute = new Hono<{ Bindings: AppBindings }>()
 
 blacklistRoute.use('/*', cors({ origin: '*' }))
+
+// Blacklist mutation requires auth — anonymous edits would let anyone censor
+// search results globally. GET (list) stays open as read-only observability.
+blacklistRoute.post('/*', requireAuth as any)
+blacklistRoute.delete('/*', requireAuth as any)
 
 // ============================================================
 // Constants

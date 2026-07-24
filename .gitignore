@@ -34,3 +34,4 @@ lerna-debug.log*
 
 # SearXNG configuration (contains secret_key)
 searxng/
+.zcode/

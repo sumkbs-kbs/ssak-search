@@ -16,6 +16,7 @@ import { cors } from 'hono/cors'
 import type { AppBindings, SearchRequest, SearchResponse, ErrorResponse, FocusMode } from '../types'
 import { executeSearch } from '../lib/orchestrator'
 import { cacheKey, getCached, setCached } from '../lib/cache'
+import { indexFromSearchResults } from '../lib/search/auto-index'
 import { validateApiKeyWithTenant, checkClientRateLimit, getClientIp } from '../lib/auth'
 import { recordSearchRequest, recordSearchSubrequests, setMetricsEnv } from '../lib/metrics'
 import { auditAuthFailure, auditRateLimit, audit } from '../lib/audit'
@@ -215,6 +216,11 @@ searchRoute.post('/', async (c) => {
       c.executionCtx.waitUntil(setCached(key, result, request.topic, c.env))
     }
 
+    // Phase A: Auto-index top results for self-index growth (async, best-effort)
+    if (hasUsableResults && !skipForTopic) {
+      c.executionCtx.waitUntil(indexFromSearchResults(result.results, c.env))
+    }
+
     recordSearchRequest(Date.now() - startTime, true)
     recordSearchSubrequests(subrequestEstimate)
     const response = c.json<SearchResponse>(result)
@@ -315,6 +321,11 @@ searchRoute.get('/', async (c) => {
     const skipForTopic = request.topic === 'news' || request.topic === 'finance'
     if (hasUsableResults && notFailed && !skipForTopic) {
       c.executionCtx.waitUntil(setCached(key, result, request.topic, c.env))
+    }
+
+    // Phase A: Auto-index top results for self-index growth (async, best-effort)
+    if (hasUsableResults && !skipForTopic) {
+      c.executionCtx.waitUntil(indexFromSearchResults(result.results, c.env))
     }
 
     recordSearchRequest(Date.now() - startTime, true)

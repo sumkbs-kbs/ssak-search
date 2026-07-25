@@ -12,7 +12,7 @@ vi.mock('../../src/lib/util', async (importOriginal) => {
   return { ...actual, fetchWithTimeout: (...args: unknown[]) => mockFetchWithTimeout(...args) }
 })
 
-import { parseStockCard } from '../../src/lib/naver-search'
+import { parseStockCard, parseLinks } from '../../src/lib/naver-search'
 
 // ============================================================
 // parseStockCard — pure parser
@@ -196,5 +196,65 @@ describe('parseStockCard (query relevance gating)', () => {
     const results = parseStockCard(cardHtml('삼성전자', '005930'), '삼성전자 주가')
     expect(results.length).toBe(3) // main + finance + research
     expect(results[0].score).toBe(0.95)
+  })
+})
+
+// ============================================================
+// parseLinks — publish-date extraction from <span class="time">
+// (powers sort_by=date for the Korean backend)
+// ============================================================
+describe('parseLinks (publish-date extraction)', () => {
+  it('attaches an ISO published_date from the nearest <span class="time">', () => {
+    // Mirrors real Naver mobile HTML: <li><a class="news_tit"/><span class="time">N시간 전</span></li>
+    const html = `
+      <ul>
+        <li>
+          <a href="https://n.news.naver.com/mnews/article/015/0001234567" class="news_tit">삼성전자 3분기 실적</a>
+          <span class="press">한국경제</span>
+          <span class="time">2시간 전</span>
+        </li>
+      </ul>
+    `
+    const results = parseLinks(html, '삼성전자', 5)
+    expect(results.length).toBeGreaterThan(0)
+    const r = results.find((x) => x.title.includes('삼성전자 3분기 실적'))
+    expect(r).toBeDefined()
+    expect(r!.published_date).toBeTruthy()
+    // "2시간 전" → ISO within the last few hours
+    expect(r!.published_date!.startsWith('20')).toBe(true)
+    // Sanity: the date should be within the last day of "now"
+    const ageHours = (Date.now() - new Date(r!.published_date!).getTime()) / (60 * 60 * 1000)
+    expect(ageHours).toBeGreaterThan(1.5)
+    expect(ageHours).toBeLessThan(2.5)
+  })
+
+  it('leaves published_date absent when no time element is present', () => {
+    const html = `
+      <ul>
+        <li>
+          <a href="https://m.blog.naver.com/example/123">블로그 글</a>
+        </li>
+      </ul>
+    `
+    const results = parseLinks(html, '블로그', 5)
+    expect(results.length).toBeGreaterThan(0)
+    expect(results[0].published_date).toBeUndefined()
+  })
+
+  it('parses absolute YYYY.MM.DD dates too', () => {
+    const html = `
+      <ul>
+        <li>
+          <a href="https://n.news.naver.com/mnews/article/015/0001234567" class="news_tit">과거 기사</a>
+          <span class="time">2025.03.15</span>
+        </li>
+      </ul>
+    `
+    const results = parseLinks(html, '과거', 5)
+    const r = results.find((x) => x.title.includes('과거 기사'))
+    expect(r).toBeDefined()
+    expect(r!.published_date).toBeTruthy()
+    // Local-time midnight serializes as the prior UTC day — check year/month.
+    expect(r!.published_date!.startsWith('2025-03')).toBe(true)
   })
 })

@@ -1054,3 +1054,132 @@ export function normalizeQuery(raw: string): string {
   }
   return q.replace(/\s+/g, ' ').trim()
 }
+
+// ============================================================
+// Relative time parsing — Korean + English → ISO timestamp
+// ============================================================
+
+/**
+ * Parse a relative-time string ("2시간 전", "3 days ago", "어제") into an ISO
+ * timestamp relative to `now` (defaults to Date.now()). Returns null when the
+ * input doesn't look like a recognized relative time — callers should keep the
+ * field empty rather than guess.
+ *
+ * Supported patterns (Korean + English):
+ *   - 방금 전 / just now / now
+ *   - N초 전 / N seconds ago
+ *   - N분 전 / N minutes ago / N min ago
+ *   - N시간 전 / N hours ago / N hr ago
+ *   - N일 전 / N days ago
+ *   - N주일 전 / N주 전 / N weeks ago
+ *   - N개월 전 / N달 전 / N months ago
+ *   - N년 전 / N years ago
+ *   - 어제 / yesterday
+ *
+ * This is the foundation for `sort_by=date` actually working — Naver mobile
+ * search results expose dates only as Korean relative time inside the
+ * `<span class="time">` element. Without parsing it, the date-sort blend in
+ * ranking.ts:sortResults silently no-ops for the dominant Korean backend.
+ */
+export function parseRelativeTime(input: string | undefined | null, now: number = Date.now()): string | null {
+  if (!input) return null
+  const s = input.trim().toLowerCase()
+  if (!s) return null
+
+  // 방금 전 / just now. (No \b — it's ASCII-only and won't match Hangul.)
+  if (/^(방금\s*전|just now|now)/i.test(s)) return new Date(now).toISOString()
+  // 어제 / yesterday → 24h ago. (No leading \b — ASCII-only, misses Hangul.)
+  if (/^어제(?!\S)/.test(s) || /^yesterday\b/i.test(s)) {
+    return new Date(now - 24 * 60 * 60 * 1000).toISOString()
+  }
+
+  // Korean relative: "<number><unit> 전"
+  // Units: 초(초), 분, 시간, 일, 주(일)/주, 개월/달, 년/해
+  const kr = s.match(/^(\d+)\s*(초|분|시간|시|일|주일|주|개월|달|년|해)\s*전$/)
+  if (kr) {
+    const n = parseInt(kr[1], 10)
+    const unit = kr[2]
+    const ms = koreanUnitToMs(unit, n)
+    if (ms !== null) return new Date(now - ms).toISOString()
+  }
+
+  // English relative: "<number> <unit> ago"
+  const en = s.match(/^(\d+)\s*(second|seconds|sec|s|minute|minutes|min|m|hour|hours|hr|h|day|days|d|week|weeks|w|month|months|mo|year|years|y)\s*ago$/)
+  if (en) {
+    const n = parseInt(en[1], 10)
+    const unit = en[2]
+    const ms = englishUnitToMs(unit, n)
+    if (ms !== null) return new Date(now - ms).toISOString()
+  }
+
+  return null
+}
+
+function koreanUnitToMs(unit: string, n: number): number | null {
+  const SEC = 1000
+  const MIN = 60 * SEC
+  const HOUR = 60 * MIN
+  const DAY = 24 * HOUR
+  switch (unit) {
+    case '초': return n * SEC
+    case '분': return n * MIN
+    case '시간':
+    case '시': return n * HOUR
+    case '일': return n * DAY
+    case '주일':
+    case '주': return n * 7 * DAY
+    case '개월':
+    case '달': return n * 30 * DAY
+    case '년':
+    case '해': return n * 365 * DAY
+    default: return null
+  }
+}
+
+function englishUnitToMs(unit: string, n: number): number | null {
+  const SEC = 1000
+  const MIN = 60 * SEC
+  const HOUR = 60 * MIN
+  const DAY = 24 * HOUR
+  switch (unit) {
+    case 'second': case 'seconds': case 'sec': case 's': return n * SEC
+    case 'minute': case 'minutes': case 'min': case 'm': return n * MIN
+    case 'hour': case 'hours': case 'hr': case 'h': return n * HOUR
+    case 'day': case 'days': case 'd': return n * DAY
+    case 'week': case 'weeks': case 'w': return n * 7 * DAY
+    case 'month': case 'months': case 'mo': return n * 30 * DAY
+    case 'year': case 'years': case 'y': return n * 365 * DAY
+    default: return null
+  }
+}
+
+/**
+ * Try to coerce an arbitrary date-ish string (absolute or relative) into an
+ * ISO timestamp. Accepts:
+ *   - Already-ISO: "2026-07-25T..." → passthrough
+ *   - YYYY.MM.DD / YYYY-MM-DD / YYYY/MM/DD
+ *   - Korean/English relative time (delegates to parseRelativeTime)
+ * Returns null on anything unrecognizable so callers can leave the field empty.
+ */
+export function parseFlexibleDate(input: string | undefined | null, now: number = Date.now()): string | null {
+  if (!input) return null
+  const s = input.trim()
+  if (!s) return null
+
+  // Already ISO 8601
+  if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(s)) {
+    const d = new Date(s)
+    return isNaN(d.getTime()) ? null : d.toISOString()
+  }
+
+  // YYYY.MM.DD / YYYY-MM-DD / YYYY/MM/DD (optionally with time)
+  const abs = s.match(/^(\d{4})[.\-/](\d{1,2})[.\-/](\d{1,2})(?:[ T](\d{1,2}):(\d{2}))?/)
+  if (abs) {
+    const [, y, mo, d, h, mi] = abs
+    const date = new Date(Number(y), Number(mo) - 1, Number(d), h ? Number(h) : 0, mi ? Number(mi) : 0)
+    return isNaN(date.getTime()) ? null : date.toISOString()
+  }
+
+  // Relative time fallback
+  return parseRelativeTime(s, now)
+}

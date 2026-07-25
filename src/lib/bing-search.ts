@@ -22,7 +22,7 @@
 
 import type { SearchResult, ImageResult, Env } from '../types'
 import { logger, toError } from './logger'
-import { fetchWithTimeout, extractDomain, stripHtml, decodeEntities, computeScore, truncateToTokens } from './util'
+import { fetchWithTimeout, extractDomain, stripHtml, decodeEntities, computeScore, truncateToTokens, parseFlexibleDate } from './util'
 
 const BING_SEARCH_URL = 'https://www.bing.com/search'
 
@@ -191,8 +191,20 @@ export function parseBingHtml(html: string, query: string, maxResults: number): 
       snippet = decodeEntities(stripHtml(snippetMatch[1])).trim()
     }
 
-    // Clean up snippet - remove date prefixes that Bing adds
-    snippet = snippet.replace(/^[A-Z][a-z]{2}\s+\d{1,2},?\s*\d{0,4}\s*[·•&#0183;]+\s*/i, '').trim()
+    // Bing prepends a publish date to the snippet like "Jul 24, 2026 · ..." or
+    // "2026. 7. 24. — ...". The previous code stripped it; we now capture it as
+    // published_date first so sort_by=date actually ranks Bing web results.
+    // Patterns: "Mon D, YYYY ·", "Mon D YYYY ·", "YYYY. M. D. —", "YYYY-MM-DD ·"
+    let publishedDate: string | undefined
+    const datePrefix = snippet.match(/^([A-Z][a-z]{2}\s+\d{1,2},?\s*\d{4}|\d{4}[.\-/]\s*\d{1,2}[.\-/]\s*\d{1,2})\s*[·•&#0183;—-]+\s*/)
+    if (datePrefix) {
+      const parsed = parseFlexibleDate(datePrefix[1].trim())
+      if (parsed) publishedDate = parsed
+      snippet = snippet.slice(datePrefix[0].length).trim()
+    } else {
+      // Strip even when we can't parse it (keep snippet clean for scoring).
+      snippet = snippet.replace(/^[A-Z][a-z]{2}\s+\d{1,2},?\s*\d{0,4}\s*[·•&#0183;]+\s*/i, '').trim()
+    }
 
     // Extract domain from cite tag if available
     // Bing cite tags may contain breadcrumb text like "en.wikipedia.org › wiki › OpenAI"
@@ -211,13 +223,18 @@ export function parseBingHtml(html: string, query: string, maxResults: number): 
       }
     }
 
-    results.push({
+    const result: SearchResult = {
       title,
       url,
       content: truncateToTokens(snippet, 500),
       score: computeScore(title, snippet, query),
       domain: citeDomain || extractDomain(url),
-    })
+    }
+    // Only attach published_date when we actually extracted one — keeps the
+    // result shape identical to the legacy output for undated results (avoids
+    // unnecessary snapshot churn and keeps JSON compact).
+    if (publishedDate) result.published_date = publishedDate
+    results.push(result)
   }
 
   return results

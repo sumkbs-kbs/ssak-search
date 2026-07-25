@@ -20,7 +20,7 @@
 
 import type { SearchResult, StockData, Env } from '../types'
 import { logger, toError } from './logger'
-import { fetchWithTimeout, extractDomain, stripHtml, decodeEntities, computeScore, truncateToTokens } from './util'
+import { fetchWithTimeout, extractDomain, stripHtml, decodeEntities, computeScore, truncateToTokens, parseFlexibleDate } from './util'
 
 const NAVER_SEARCH_URL = 'https://m.search.naver.com/search.naver'
 
@@ -364,6 +364,18 @@ export function parseLinks(html: string, query: string, maxResults: number): Sea
   const results: SearchResult[] = []
   const seenUrls = new Set<string>()
 
+  // Pre-extract all <span class="time">...</span> values with their byte
+  // offsets so each link can find the nearest preceding time marker. Naver
+  // mobile HTML puts the publish time as a sibling of the news/blog link
+  // inside the same <li> — "nearest preceding" is the right heuristic.
+  // Format examples: "2시간 전", "4시간 전", "2026.07.25", "어제".
+  const timeMarkers: Array<{ offset: number; iso: string | null }> = []
+  const timeRegex = /<span[^>]*class="[^"]*\btime\b[^"]*"[^>]*>([^<]+)<\/span>/gi
+  let tm: RegExpExecArray | null
+  while ((tm = timeRegex.exec(html)) !== null) {
+    timeMarkers.push({ offset: tm.index, iso: parseFlexibleDate(tm[1].trim()) })
+  }
+
   // Match all anchor tags with href
   const linkRegex = /<a[^>]*href="([^"]+)"[^>]*>([\s\S]*?)<\/a>/gi
   let match: RegExpExecArray | null
@@ -425,13 +437,36 @@ export function parseLinks(html: string, query: string, maxResults: number): Sea
     // Build snippet from title + any nearby text
     const title = rawTitle.slice(0, 120)
 
-    results.push({
+    // Find the publish date: the nearest time marker that FOLLOWS this link
+    // within the same list item. Naver mobile HTML lays out:
+    //   <li><a class="news_tit">...</a><span class="time">2시간 전</span></li>
+    // so the time element comes AFTER the link in source order. We find the
+    // smallest marker offset > match.index, bounded to the same <li> (≤ 1KB
+    // after the link — anything farther belongs to a sibling entry).
+    let publishedDate: string | undefined
+    const linkEnd = match.index + match[0].length
+    for (let i = 0; i < timeMarkers.length; i++) {
+      if (timeMarkers[i].offset >= linkEnd) {
+        // Same <li> proximity check: marker must be within 1KB after the link.
+        if (timeMarkers[i].offset - linkEnd <= 1024) {
+          const iso = timeMarkers[i].iso
+          if (iso) publishedDate = iso
+        }
+        break
+      }
+    }
+
+    const result: SearchResult = {
       title,
       url,
       content: truncateToTokens(rawTitle, 500),
       score: computeScore(title, rawTitle, query),
       domain: domain || extractDomain(url),
-    })
+    }
+    // Only attach published_date when we actually extracted one (see bing-search
+    // for the same rationale: compact JSON, no snapshot churn).
+    if (publishedDate) result.published_date = publishedDate
+    results.push(result)
   }
 
   return results

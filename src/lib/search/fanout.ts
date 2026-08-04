@@ -34,6 +34,14 @@ const PHASES = [
 // without improving result quality (the slower backend's results are usually
 // lower-relevance anyway). self-index/naver-finance keep longer ceilings
 // because they're high-value and consistently fast when healthy.
+//
+// wikipedia keeps a long ceiling because it is the single highest-value
+// authoritative source for factual/academic queries AND its REST API answers
+// with HTTP 429 under rapid-fire calls, triggering retries with backoff
+// (see wikipediaSearch in specialized.ts). A 3s ceiling cut most of those
+// retries, silently dropping wikipedia from the final results — the phase
+// collection broke early and the task's pending timer marked it rejected.
+// The 4.5s ceiling + fanout waitFor (below) lets the retry chain finish.
 const BACKEND_TIMEOUT_MS: Record<string, number> = {
   'self-index': 2500,
   'bing': 2000,
@@ -44,7 +52,7 @@ const BACKEND_TIMEOUT_MS: Record<string, number> = {
   'bing-youtube': 2000,
   'naver': 2500,
   'naver-finance': 4000,
-  'wikipedia': 3000,
+  'wikipedia': 4500,
   'github': 2000,
   'hackernews': 1800,
   'reddit': 2000,
@@ -68,20 +76,37 @@ export interface FanoutResult {
   usedBackends: string[]
 }
 
+export interface FanoutOptions {
+  /**
+   * Backend names awaited before collecting, even when phase collection broke
+   * early. Each await is bounded by the backend's own BACKEND_TIMEOUT_MS timer
+   * (which fires regardless of task.run()), so a waitFor backend delays
+   * collection by at most its configured ceiling — never indefinitely.
+   *
+   * Use for high-value sources that frequently arrive just after the phase
+   * early-exit (e.g. wikipedia's 429-retry chain).
+   */
+  waitFor?: string[]
+}
+
 /**
  * Run all backend tasks with progressive timeout collection.
  *
  * @param tasks  Named backend tasks to execute in parallel
  * @param maxResults  The requested result count (drives early-exit thresholds)
+ * @param options  Optional waitFor list (see FanoutOptions)
  * @returns Collected result sets and the names of backends that produced them
  */
 export async function fanoutBackends(
   tasks: BackendTask[],
   maxResults: number,
+  options: FanoutOptions = {},
 ): Promise<FanoutResult> {
   if (tasks.length === 0) {
     return { resultSets: [], usedBackends: [] }
   }
+
+  const waitForSet = options.waitFor ? new Set(options.waitFor) : null
 
   // Compute phase thresholds from maxResults (was inline in the God Function).
   // Phase 1 threshold is deliberately loose (just one full page worth) so a
@@ -100,6 +125,10 @@ export async function fanoutBackends(
     resolved: false,
     rejected: false,
   }))
+
+  // Collect per-task bgPromises so the waitFor path can await high-value
+  // backends that haven't settled by the time phase collection broke early.
+  const bgPromises: Promise<void>[] = []
 
   // Start all tasks with per-backend timeout (fire-and-forget — they update taskState)
   for (let idx = 0; idx < tasks.length; idx++) {
@@ -137,6 +166,7 @@ export async function fanoutBackends(
     })
 
     bgPromise.catch(() => {})
+    bgPromises.push(bgPromise)
   }
 
   // Progressive phase collection — wait up to each phase's timeout, break early
@@ -156,6 +186,19 @@ export async function fanoutBackends(
 
     if (totalRawResults >= phase.minResults || phase.minResults === 0) {
       break
+    }
+  }
+
+  // waitFor: await the named high-value backends that haven't settled yet. Each
+  // bgPromise resolves when either task.run() settles OR the per-backend
+  // timeout fires, so this can never hang beyond BACKEND_TIMEOUT_MS[name].
+  // This is what recovers wikipedia results when its 429-retry chain finishes
+  // just after phase 1's 800ms early-exit.
+  if (waitForSet) {
+    for (let idx = 0; idx < tasks.length; idx++) {
+      if (waitForSet.has(tasks[idx].name) && !taskState[idx].resolved) {
+        await bgPromises[idx]
+      }
     }
   }
 

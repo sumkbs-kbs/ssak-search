@@ -32,10 +32,13 @@ export async function wikipediaSearch(
   const { maxResults = 5, timeoutMs = 8000, language = 'en', env } = opts
   const results: SearchResult[] = []
 
-  // Wikipedia REST API can return HTTP 429 (rate limit) under rapid sequential calls.
-  // Implement retry with exponential backoff: 500ms → 1200ms → 3000ms
+  // Wikipedia REST API can return HTTP 429 (rate limit) under rapid sequential
+  // calls. Retry with backoff that fits within fanout's wikipedia ceiling
+  // (4500ms). The original 500/1200/3000 delays pushed the full retry chain
+  // past the ceiling, causing fanout to time the task out before the final
+  // attempt finished. 250/500/1000 keeps all 4 attempts inside ~2 s.
   const maxRetries = 3
-  const backoffDelays = [500, 1200, 3000]
+  const backoffDelays = [250, 500, 1000]
 
   try {
     // Search for page titles

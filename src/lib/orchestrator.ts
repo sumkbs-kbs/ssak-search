@@ -405,7 +405,10 @@ export async function executeSearch(
   tasks.push(...buildBackendTasks(ctx))
 
   // ── 5. Fan-out with progressive timeout collection ──
-  const { resultSets, usedBackends } = await fanoutBackends(tasks, max_results)
+  // waitFor=['wikipedia']: wikipedia's 429-retry chain often settles just
+  // after phase 1's 800ms early-exit. Awaiting it (bounded by its 4500ms
+  // ceiling) recovers authoritative results for factual/academic queries.
+  const { resultSets, usedBackends } = await fanoutBackends(tasks, max_results, { waitFor: ['wikipedia'] })
   const backendCount = usedBackends.length
 
   // ── 6. Merge & deduplicate ──

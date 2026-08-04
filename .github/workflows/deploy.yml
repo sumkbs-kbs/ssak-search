@@ -19,7 +19,7 @@ on:
 
 env:
   NODE_VERSION: "20"
-  PROJECT_NAME: "webapp"
+  PROJECT_NAME: "search-engine-api"
 
 jobs:
   deploy-staging:
@@ -31,7 +31,7 @@ jobs:
     timeout-minutes: 8
     environment:
       name: staging
-      url: https://staging.webapp.pages.dev
+      url: https://staging.search-engine-api.pages.dev
     steps:
       - uses: actions/checkout@v4
 
@@ -71,7 +71,7 @@ jobs:
     timeout-minutes: 8
     environment:
       name: production
-      url: https://webapp.pages.dev
+      url: https://search-engine-api.pages.dev
     needs: [deploy-staging]
     steps:
       - uses: actions/checkout@v4

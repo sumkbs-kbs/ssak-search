@@ -366,7 +366,10 @@
 
 #### D.3 (Week 13) — Multi-Region Active-Active (TRUE-P0-8) 🟡
 
-**현황**: 단일 Cloudflare Pages.
+**현황**: 단일 Cloudflare Pages (`search-engine-api.pages.dev`).
+
+> **로컬 구현 불가 항목** — 2개 Cloudflare 계정 + Load Balancer 인프라 작업.
+> 아래는 계정/대시보드 접근만 있으면 순서대로 진행할 수 있는 준비 단계.
 
 **구현**:
 1. 동일 코드 2개 Cloudflare 계정 배포 (US + APAC)
@@ -375,7 +378,16 @@
 4. Vectorize 인덱스 양 리전 동기화 (Cloudflare 자동 복제)
 5. 99.9% SLA 달성
 
-**검선**:
+**인프라 준비 체크리스트 (현재 계정 기준, 2026-08-04)**:
+
+- [ ] **RATE_LIMITER DO 바인딩** — Pages → Settings → Functions → Durable Objects → Add (class: `RateLimiterDO`). 현재 `features.rate_limiter_do: false` → 크로스-아이솔레이트 레이트 리밋 + 서킷 브레이커 미작동
+- [ ] **Analytics Engine 활성화** — <https://dash.cloudflare.com/3a870304363051c06be7bd609556d945/workers/analytics-engine> → 활성화 후 `wrangler.jsonc`의 `analytics_engine_datasets` 주석 해제 + Pages 바인딩 추가 (binding: `ANALYTICS`, dataset: `SEARCH_API_METRICS`) → 메트릭 영속화
+- [ ] **캐나리 활성화** — Pages → Settings → Variables → `HEALTH_CANARY_ENABLED=true` → `/api/canary` parser 회귀 감지 시작
+- [ ] **BRAVE_API_KEY** — Pages secret (선택, 키 없는 무료 백엔드 폴백은 유지됨). 미설정 시 `/api/health`에 `brave: down` 표시
+- [ ] **나머지 DO 바인딩 10개** — THREAD_DO / PAGES_DO / LIBRARY_DO / USER_PROFILE_DO / SPACE_DO / API_KEY_DO / CRAWLER_DO / CLICK_LOG_DO / EXPERIMENT_DO / CANARY_DO — wrangler.jsonc 푸터 테이블 참조 (LTR/A-B/캐나리/채팅 기능 활성화)
+- [ ] **Vectorize** — `search-engine-dense` ✅ 생성됨, `semantic-cache-dense` ✅ 생성됨 (2026-08-04 배포 전 생성)
+
+**검증**:
 - [ ] 리전 장애 시 자동 페일오버 < 30초
 - [ ] p95 < 3s 양 리전 달성
 - [ ] 99.9% uptime 30일 연속

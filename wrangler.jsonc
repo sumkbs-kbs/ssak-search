@@ -97,15 +97,12 @@
   //   - The dataset name below MUST match the created dataset.
   //   - To query historical data: see scripts/analytics-queries.sql.
   //
-  // NOTE (2026-08-04): Analytics Engine is NOT yet enabled on this account —
-  // deployment failed with "You need to enable Analytics Engine". Enable it at
-  // https://dash.cloudflare.com/3a870304363051c06be7bd609556d945/workers/analytics-engine
-  // then uncomment the block below and redeploy for persistent metrics.
-  // Without the binding, /api/metrics falls back to per-isolate in-memory
-  // counters (search_metrics_persistence gauge = 0).
-  // "analytics_engine_datasets": [
-  //   { "binding": "ANALYTICS", "dataset": "SEARCH_API_METRICS" }
-  // ],
+  // NOTE (2026-08-04): Analytics Engine enabled on account; dataset names must
+  // use underscores only (hyphen "ssak-search" was rejected by deploy as
+  // "Invalid dataset name"). Binding name ANALYTICS matches src/lib/metrics.ts.
+  "analytics_engine_datasets": [
+    { "binding": "ANALYTICS", "dataset": "ssak_search" }
+  ],
 
   //
   // Sentry DSN (Phase 0.5) — error tracking and APM:

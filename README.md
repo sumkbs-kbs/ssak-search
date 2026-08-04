@@ -633,15 +633,18 @@ sends Slack alerts when backends are down or latency exceeds thresholds.
 
 기본 상태에서는 `/api/metrics`의 카운터가 **아이솔레이트별 인메모리**로만 저장되어 콜드스타트 시 리셋됩니다. 검색/추출 메트릭을 크로스 아이솔레이트 + 재시작 후에도 유지하려면 **Workers Analytics Engine** 데이터셋을 바인딩하세요:
 
-1. Cloudflare Dashboard → **Workers & Pages** → **Analytics** → **Create dataset**
-2. Name: `SEARCH_API_METRICS` (또는 원하는 이름)
-3. Dataset ID 복사
-4. Cloudflare Dashboard → **Pages** → `ssak-search` → **Settings** → **Bindings** → **Workers Analytics Engine Datasets** → "Add binding"
-5. **Variable name**: `ANALYTICS`
-6. **Dataset**: 위에서 생성한 데이터셋
-7. **Save**
+> **현재 프로덕션 상태 (2026-08-04)**: `wrangler.jsonc`에 이미 `analytics_engine_datasets`가 설정되어 있어 배포 시 자동으로 바인딩됩니다. 데이터셋(`ssak_search`)은 첫 메트릭 쓰기 시 자동 생성됩니다. `/api/health`의 `features.analytics_engine: true` 및 `/api/metrics`의 `search_metrics_persistence: 1`로 활성화를 확인할 수 있습니다.
 
-8. 모듈 레벨 메트릭은 자동으로 영속됩니다. Prometheus 메트릭 endpoint (`/api/metrics`)는 현재 인메모리 카운터를 표시하지만, Analytics Engine에 기록된 데이터는 SQL API로 별도 쿼리할 수 있습니다.
+직접 바인딩이 필요한 경우 (wrangler.jsonc 없이 대시보드만으로 설정):
+
+1. Cloudflare Dashboard → **Workers & Pages** → **Analytics** → **Create dataset**
+2. Name: `ssak_search` (또는 원하는 이름 — **하이픈(`-`) 불가, 언더스코어(`_`)만 허용**; 하이픈 사용 시 배포가 "Invalid dataset name" 에러로 실패)
+3. Cloudflare Dashboard → **Pages** → `ssak-search` → **Settings** → **Bindings** → **Workers Analytics Engine Datasets** → "Add binding"
+4. **Variable name**: `ANALYTICS` (코드가 기대하는 바인딩 이름)
+5. **Dataset**: 위에서 생성한 데이터셋
+6. **Save**
+
+모듈 레벨 메트릭은 자동으로 영속됩니다. Prometheus 메트릭 endpoint (`/api/metrics`)는 현재 인메모리 카운터를 표시하지만, Analytics Engine에 기록된 데이터는 SQL API로 별도 쿼리할 수 있습니다.
 
 **Analytics Engine SQL API 쿼리 예시** (Cloudflare Dashboard → Analytics → 해당 데이터셋 → SQL Editor):
 ```sql
@@ -649,7 +652,7 @@ sends Slack alerts when backends are down or latency exceeds thresholds.
 SELECT
   blob1 AS endpoint,
   COUNT(*) AS request_count
-FROM SEARCH_API_METRICS
+FROM ssak_search
 WHERE timestamp > NOW() - INTERVAL '1' HOUR
 GROUP BY blob1
 
@@ -657,7 +660,7 @@ GROUP BY blob1
 SELECT
   blob1 AS endpoint,
   APPROX_QUANTILE(doubles[1], 0.99) AS p99_latency_seconds
-FROM SEARCH_API_METRICS
+FROM ssak_search
 WHERE timestamp > NOW() - INTERVAL '24' HOUR
 GROUP BY blob1
 ```

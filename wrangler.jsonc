@@ -69,9 +69,12 @@
   // (name: search-index-queue)
   // "queues": [ { "binding": "INDEX_QUEUE", "queue": "search-index-queue" } ],
 // Durable Object bindings are intentionally NOT declared here.
-// `wrangler pages deploy` rejects durable_objects without a script_name,
-// so production DO bindings MUST be configured via Cloudflare Dashboard.
-// See the consolidated setup checklist at the bottom of this file.
+// `wrangler pages deploy` rejects durable_objects without a script_name
+// (verified 2026-08-04 on wrangler 4.112.0: "Pages requires Durable Object
+// bindings to specify the name of the Worker where the Durable Object is
+// defined"), so production DO bindings MUST be configured via Cloudflare
+// Dashboard (or the Pages project API). See the consolidated setup checklist
+// at the bottom of this file.
 // Local dev: DO bindings are declared in wrangler.dev.jsonc instead.
 //
 // KV namespace for cross-restart cache persistence (Phase 5):

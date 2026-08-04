@@ -325,6 +325,14 @@ for r in results["results"]:
 - **로컬 서버**: PM2 + wrangler pages dev
 - **워커 크기**: 89.35 kB (30.47 kB gzip)
 
+## 개발 로드맵
+
+> **단일 신뢰 원천**: 본 프로젝트의 모든 개발 로드맵과 체크리스트는 **[UNIFIED_ROADMAP.md](UNIFIED_ROADMAP.md)** 로 통합되었습니다.
+>
+> 이전 진단 문서들(`DEVELOPMENT_ROADMAP.md`, `STRATEGIC_CHECKLIST.md`, `SENIOR_ENGINEERING_ANALYSIS.md` 등)은 서로 모순되는 항목이 있어 [`archive/2026-07/`](archive/2026-07/) 로 이동되었습니다. 새 작업은 모두 `UNIFIED_ROADMAP.md`를 따르세요.
+>
+> **핵심 원칙**: `UNIFIED_ROADMAP.md`는 README의 "API를 사용할 거면 별도 프로그램을 왜 만들려고" 원칙을 절대 제약으로 고정합니다. 유료 API(Brave/Cohere/OpenAI) 전면 금지, 자체 호스팅만 허용.
+
 ## 파일 구조
 
 ```
@@ -616,6 +624,8 @@ sends Slack alerts when backends are down or latency exceeds thresholds.
 | `CACHE_TTL_GENERAL` | Cache TTL for general queries (Pages variable, seconds, default 1800) | Pages → Settings → Variables |
 | `CACHE_TTL_NEWS` | Cache TTL for news/finance (Pages variable, seconds, default 300) | Pages → Settings → Variables |
 | `HEALTH_CANARY_ENABLED` | Parser regression detection (`true` to enable, default off) | Pages → Settings → Variables |
+| `PAGERDUTY_ROUTING_KEY` | PagerDuty Events API v2 routing key — backend success < 90% alert (optional) | PagerDuty → Integrations → Events API v2 |
+| `SUBREQUEST_QUOTA_PER_REQUEST` | Subrequest quota for capacity alert (Pages variable, default 50, paid 1000) | Pages → Settings → Variables |
 
 > **Note**: `SEARCH_API_KEY` and `JINA_API_KEY` must be set as **Pages Secrets** (encrypted), not Variables. `CACHE_TTL_*` can be Variables.
 

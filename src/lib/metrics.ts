@@ -17,6 +17,17 @@ import type { AppBindings } from '../types'
 
 const MAX_LATENCY_SAMPLES = 100
 
+// QPS tracking — ring buffer of request timestamps over the last 60s
+const QPS_WINDOW_MS = 60_000
+const MAX_QPS_SAMPLES = 10_000
+const requestTimestamps: number[] = []
+
+export function getQps(): number {
+  const cutoff = Date.now() - QPS_WINDOW_MS
+  const recent = requestTimestamps.filter((ts) => ts > cutoff)
+  return recent.length / (QPS_WINDOW_MS / 1000)
+}
+
 interface BackendMetrics {
   requests: number
   errors: number
@@ -53,6 +64,10 @@ function record(backend: string, latencyMs: number, success: boolean): void {
   if (!success) bm.errors++
   bm.latencies.push(latencyMs)
   if (bm.latencies.length > MAX_LATENCY_SAMPLES) bm.latencies.shift()
+
+  // QPS tracking
+  requestTimestamps.push(Date.now())
+  if (requestTimestamps.length > MAX_QPS_SAMPLES) requestTimestamps.shift()
 
   // Write to Analytics Engine if binding is available.
   // Fire-and-forget: don't await, don't block the request.
@@ -111,6 +126,28 @@ function percentile(sorted: number[], p: number): number {
   if (sorted.length === 0) return 0
   const idx = Math.ceil((p / 100) * sorted.length) - 1
   return sorted[Math.max(0, Math.min(idx, sorted.length - 1))]
+}
+
+export interface LatencyPercentiles {
+  p50: number
+  p95: number
+  p99: number
+  count: number
+}
+
+/** Latency percentiles per backend (search/extract) for monitor/SLO reporting. */
+export function getLatencyPercentiles(): Record<string, LatencyPercentiles> {
+  const out: Record<string, LatencyPercentiles> = {}
+  for (const [name, bm] of Object.entries(backends)) {
+    const sorted = [...bm.latencies].sort((a, b) => a - b)
+    out[name] = {
+      p50: percentile(sorted, 50),
+      p95: percentile(sorted, 95),
+      p99: percentile(sorted, 99),
+      count: sorted.length,
+    }
+  }
+  return out
 }
 
 /**
@@ -352,4 +389,5 @@ export function resetMetrics(): void {
   searchSubrequests = 0
   extractSubrequests = 0
   trackedSince = Date.now()
+  requestTimestamps.length = 0
 }

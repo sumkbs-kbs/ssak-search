@@ -32,6 +32,9 @@ export interface CircuitState {
   lastFailureTime: number
   tripped: boolean
   openedAt: number
+  // Self-healing (D.2): exponential backoff stage + half-open probe flag
+  tripCount: number
+  probeInFlight: boolean
 }
 
 export interface HostHealth {
@@ -43,6 +46,10 @@ export interface HostHealth {
   totalRequests: number
   totalFailures: number
   rateLimitedCount: number
+  // Self-healing state (D.2)
+  tripCount?: number
+  probeInFlight?: boolean
+  backoffMs?: number
 }
 
 export interface RateLimitResult {
@@ -66,13 +73,29 @@ export const DEFAULT_HOST_CONFIG: HostConfig = {
 export const HOST_CONFIGS: Record<string, HostConfig> = {
   'www.bing.com': { maxConcurrent: 3, failureThreshold: 5, resetTimeoutMs: 60_000, rateLimitPerMinute: 120 },
   'html.duckduckgo.com': { maxConcurrent: 1, failureThreshold: 3, resetTimeoutMs: 120_000, rateLimitPerMinute: 30 },
-  'search.naver.com': { maxConcurrent: 2, failureThreshold: 5, resetTimeoutMs: 60_000, rateLimitPerMinute: 60 },
+  'search.naver.com': { maxConcurrent: 3, failureThreshold: 5, resetTimeoutMs: 60_000, rateLimitPerMinute: 80 },
   'en.wikipedia.org': { maxConcurrent: 3, failureThreshold: 5, resetTimeoutMs: 30_000, rateLimitPerMinute: 100 },
   'api.github.com': { maxConcurrent: 2, failureThreshold: 3, resetTimeoutMs: 60_000, rateLimitPerMinute: 60 },
   'hacker-news.firebaseio.com': { maxConcurrent: 3, failureThreshold: 5, resetTimeoutMs: 30_000, rateLimitPerMinute: 100 },
   'www.reddit.com': { maxConcurrent: 2, failureThreshold: 5, resetTimeoutMs: 60_000, rateLimitPerMinute: 60 },
   'export.arxiv.org': { maxConcurrent: 2, failureThreshold: 3, resetTimeoutMs: 60_000, rateLimitPerMinute: 30 },
   'r.jina.ai': { maxConcurrent: 3, failureThreshold: 5, resetTimeoutMs: 60_000, rateLimitPerMinute: 60 },
+}
+
+// ============================================================
+// Self-healing circuit breaker configuration (D.2)
+// ============================================================
+
+// Exponential backoff stages: 30s → 5min → 30min (indexed by tripCount, capped)
+export const BACKOFF_STAGES_MS = [30_000, 300_000, 1_800_000]
+// Periodic health-check interval while a circuit is open (1 min)
+export const CIRCUIT_PROBE_INTERVAL_MS = 60_000
+// Timeout for a single health-check probe request
+const CIRCUIT_PROBE_TIMEOUT_MS = 3_000
+
+export function getBackoffMs(tripCount: number): number {
+  const stage = Math.min(Math.max(tripCount, 0), BACKOFF_STAGES_MS.length - 1)
+  return BACKOFF_STAGES_MS[stage]
 }
 
 // ============================================================
@@ -130,7 +153,7 @@ export class RateLimiterDO extends DurableObject<Env> {
   private getCircuit(host: string): CircuitState {
     let circuit = this.state.circuits.get(host)
     if (!circuit) {
-      circuit = { failures: 0, lastFailureTime: 0, tripped: false, openedAt: 0 }
+      circuit = { failures: 0, lastFailureTime: 0, tripped: false, openedAt: 0, tripCount: 0, probeInFlight: false }
       this.state.circuits.set(host, circuit)
     }
     return circuit
@@ -157,11 +180,14 @@ export class RateLimiterDO extends DurableObject<Env> {
     // Circuit breaker check
     if (circuit.tripped) {
       const elapsed = now - circuit.openedAt
-      if (elapsed < config.resetTimeoutMs) {
-        return { allowed: false, reason: 'circuit_open', retryAfter: Math.ceil((config.resetTimeoutMs - elapsed) / 1000) }
+      if (elapsed < getBackoffMs(circuit.tripCount)) {
+        return { allowed: false, reason: 'circuit_open', retryAfter: Math.ceil((getBackoffMs(circuit.tripCount) - elapsed) / 1000) }
       }
-      // Half-open: allow one probe
-      circuit.tripped = false
+      // Half-open: allow exactly one probe request
+      if (circuit.probeInFlight) {
+        return { allowed: false, reason: 'circuit_open', retryAfter: 10 }
+      }
+      circuit.probeInFlight = true
       circuit.failures = 0
     }
 
@@ -212,6 +238,28 @@ export class RateLimiterDO extends DurableObject<Env> {
     const circuit = this.getCircuit(host)
     const stats = this.getStats(host)
 
+    if (circuit.probeInFlight) {
+      circuit.probeInFlight = false
+      if (success) {
+        // Half-open probe succeeded → close circuit (gradual recovery complete)
+        circuit.tripped = false
+        circuit.failures = 0
+        circuit.tripCount = 0
+        circuit.openedAt = 0
+        logger.info(`[DO-rate-limiter] Circuit closed for ${host} after successful probe`)
+      } else {
+        // Half-open probe failed → reopen with next backoff stage
+        circuit.tripped = true
+        circuit.failures = 0
+        circuit.tripCount = Math.min(circuit.tripCount + 1, BACKOFF_STAGES_MS.length - 1)
+        circuit.openedAt = Date.now()
+        stats.totalFailures++
+        logger.warn(`[DO-rate-limiter] Circuit re-opened for ${host} (stage ${circuit.tripCount})`)
+      }
+      await this.persist()
+      return
+    }
+
     if (success) {
       circuit.failures = 0
     } else {
@@ -222,9 +270,91 @@ export class RateLimiterDO extends DurableObject<Env> {
         circuit.tripped = true
         circuit.openedAt = Date.now()
         logger.warn(`[DO-rate-limiter] Circuit tripped for ${host} after ${circuit.failures} failures`)
+        // Schedule periodic health checks while open (self-healing, D.2)
+        await this.scheduleCircuitProbe()
       }
     }
 
+    await this.persist()
+  }
+
+  /**
+   * Schedule the next periodic health-check alarm for open circuits.
+   * No-op when a probe alarm is already pending.
+   */
+  private async scheduleCircuitProbe(): Promise<void> {
+    const existing = await this.ctx.storage.getAlarm()
+    if (existing !== null) return
+    await this.ctx.storage.setAlarm(Date.now() + CIRCUIT_PROBE_INTERVAL_MS)
+  }
+
+  /**
+   * DO alarm handler — probes open circuits and auto-closes recovered backends.
+   * Runs every CIRCUIT_PROBE_INTERVAL_MS while any circuit is open.
+   */
+  async alarm(): Promise<void> {
+    const now = Date.now()
+    let stillOpen = false
+
+    for (const [host, circuit] of this.state.circuits) {
+      if (!circuit.tripped) continue
+      stillOpen = true
+
+      const elapsed = now - circuit.openedAt
+      const backoff = getBackoffMs(circuit.tripCount)
+      // Probe only after the current backoff window has elapsed
+      if (elapsed < backoff) continue
+
+      const alive = await this.probeHost(host)
+      if (alive) {
+        circuit.tripped = false
+        circuit.failures = 0
+        circuit.tripCount = 0
+        circuit.openedAt = 0
+        circuit.probeInFlight = false
+        logger.info(`[DO-rate-limiter] Health probe OK — circuit auto-closed for ${host}`)
+      } else {
+        circuit.tripCount = Math.min(circuit.tripCount + 1, BACKOFF_STAGES_MS.length - 1)
+        circuit.openedAt = now
+        logger.warn(`[DO-rate-limiter] Health probe failed for ${host} — escalating to stage ${circuit.tripCount}`)
+      }
+    }
+
+    if (stillOpen) {
+      await this.ctx.storage.setAlarm(now + CIRCUIT_PROBE_INTERVAL_MS)
+    }
+    await this.persist()
+  }
+
+  /**
+   * Lightweight liveness probe: GET /robots.txt with a short timeout.
+   * 429 (rate-limited) still counts as alive — the server is responding.
+   */
+  private async probeHost(host: string): Promise<boolean> {
+    try {
+      const controller = new AbortController()
+      const timer = setTimeout(() => controller.abort(), CIRCUIT_PROBE_TIMEOUT_MS)
+      const resp = await fetch(`https://${host}/robots.txt`, { signal: controller.signal })
+      clearTimeout(timer)
+      return resp.ok || resp.status === 429 || resp.status === 301 || resp.status === 302
+    } catch {
+      return false
+    }
+  }
+
+  /**
+   * Force-open a circuit (used by canary regression detection, D.1).
+   * Starts at backoff stage 0 (30s) so recovery probing begins immediately.
+   */
+  async forceOpen(host: string): Promise<void> {
+    const circuit = this.getCircuit(host)
+    circuit.tripped = true
+    circuit.failures = 0
+    circuit.tripCount = 0
+    circuit.openedAt = Date.now()
+    circuit.probeInFlight = false
+    logger.warn(`[DO-rate-limiter] Circuit force-opened for ${host} (canary regression)`)
+    await this.scheduleCircuitProbe()
     await this.persist()
   }
 
@@ -244,6 +374,9 @@ export class RateLimiterDO extends DurableObject<Env> {
         totalRequests: stats.totalRequests,
         totalFailures: stats.totalFailures,
         rateLimitedCount: stats.rateLimitedCount,
+        tripCount: circuit.tripCount,
+        probeInFlight: circuit.probeInFlight,
+        backoffMs: getBackoffMs(circuit.tripCount),
       }
     }
     return result
@@ -286,6 +419,7 @@ export interface RateLimiterRPC {
   release(host: string, success: boolean): Promise<void>
   getAllHealth(): Promise<Record<string, HostHealth>>
   getRateLimitStatus(host: string): Promise<RateLimitResult>
+  forceOpen(host: string): Promise<void>
   reset(): Promise<void>
 }
 

@@ -121,6 +121,18 @@ export class UserProfileDO extends DurableObject<Env> {
       .slice(0, 10)
       .map((d) => d.domain)
   }
+
+  async getVisitCounts(userId: string, domains: string[]): Promise<Record<string, number>> {
+    const p = this.profiles.get(userId)
+    if (!p || domains.length === 0) return {}
+
+    const counts: Record<string, number> = {}
+    for (const d of domains) {
+      const visit = p.domains.find((v) => v.domain === d)
+      if (visit) counts[d] = visit.count
+    }
+    return counts
+  }
 }
 
 // ============================================================
@@ -132,6 +144,7 @@ export interface UserProfileRPC {
   updatePreferences(userId: string, prefs: Partial<UserPreferences>): Promise<UserProfile>
   recordDomainVisit(userId: string, domain: string): Promise<void>
   getBoostedDomains(userId: string, minVisits?: number): Promise<string[]>
+  getVisitCounts(userId: string, domains: string[]): Promise<Record<string, number>>
 }
 
 export function getProfileStub(env: Env): UserProfileRPC {

@@ -183,11 +183,13 @@ describe('CrossEncoderReranker', () => {
 
   describe('config', () => {
     it('uses sensible defaults', () => {
-      expect(DEFAULT_RERANK_CONFIG.model).toBe('rerank-english-v3.0')
+      expect(DEFAULT_RERANK_CONFIG.model).toBe('BAAI/bge-reranker-v2-m3')
       expect(DEFAULT_RERANK_CONFIG.maxDocuments).toBe(50)
       expect(DEFAULT_RERANK_CONFIG.timeoutMs).toBe(5000)
       expect(DEFAULT_RERANK_CONFIG.enableFallback).toBe(true)
       expect(DEFAULT_RERANK_CONFIG.topK).toBe(10)
+      expect(DEFAULT_RERANK_CONFIG.enableWorkersAI).toBe(true)
+      expect(DEFAULT_RERANK_CONFIG.enableSidecar).toBe(true)
     })
   })
 })

@@ -646,7 +646,7 @@ async function wikipediaToWikidataId(title: string, language = 'en'): Promise<st
 /**
  * Fetch Wikidata entity and extract interesting facts.
  */
-async function wikidataEntityFacts(wikidataId: string): Promise<{ type?: string; facts: Record<string, string>; image?: string } | null> {
+async function wikidataEntityFacts(wikidataId: string): Promise<{ type?: string; facts: Record<string, string>; image?: string; timeline?: Array<{ date: string; event: string }>; stats?: Record<string, string> } | null> {
   try {
     const url = `https://www.wikidata.org/wiki/Special:EntityData/${wikidataId}.json`
     const resp = await fetch(url, { headers: { 'User-Agent': 'SearchAPI/1.0' } })
@@ -727,9 +727,118 @@ async function wikidataEntityFacts(wikidataId: string): Promise<{ type?: string;
       image = `https://commons.wikimedia.org/wiki/Special:FilePath/${encodeURIComponent(imageClaim.replace(/\s+/g, '_'))}`
     }
 
-    return Object.keys(facts).length > 0 || type ? { type, facts, image } : null
+    const timeline = extractTimelineFromClaims(claims)
+    const stats = extractStatsFromClaims(claims)
+
+    return Object.keys(facts).length > 0 || type ? { type, facts, image, timeline, stats } : null
   } catch (err) {
     logger.warn('Wikidata entity fetch failed:', { error: toError(err) })
+    return null
+  }
+}
+
+/**
+ * Extract a chronological timeline from Wikidata claims.
+ * Only date-typed claims (time precision ≥ year) are included.
+ */
+export function extractTimelineFromClaims(
+  claims: Record<string, { mainsnak: { datavalue?: { value?: unknown } }; rank?: string }[]>,
+): Array<{ date: string; event: string }> {
+  const TIMELINE_CLAIMS: Record<string, string> = {
+    P569: 'Born',
+    P570: 'Died',
+    P571: 'Founded',
+    P576: 'Dissolved',
+    P577: 'Publication date',
+    P580: 'Start time',
+    P582: 'End time',
+    P1619: 'Opened',
+  }
+
+  const timeline: Array<{ date: string; event: string }> = []
+  for (const [claimId, label] of Object.entries(TIMELINE_CLAIMS)) {
+    const claim = claims[claimId]?.[0]
+    const val = claim?.mainsnak?.datavalue?.value
+    if (!val || typeof val !== 'object') continue
+    const time = (val as { time?: string }).time
+    if (!time) continue
+    // Wikidata time format: "+1969-07-20T00:00:00Z" — extract the year
+    const yearMatch = time.match(/[+-]?(\d{4})/)
+    if (yearMatch) timeline.push({ date: yearMatch[1], event: label })
+  }
+
+  return timeline.sort((a, b) => a.date.localeCompare(b.date))
+}
+
+/**
+ * Extract key numeric statistics from Wikidata claims (population, area, revenue...).
+ */
+export function extractStatsFromClaims(
+  claims: Record<string, { mainsnak: { datavalue?: { value?: unknown } }; rank?: string }[]>,
+): Record<string, string> {
+  const STAT_CLAIMS: Record<string, string> = {
+    P1082: 'Population',
+    P2046: 'Area',
+    P2048: 'Height',
+    P2049: 'Width',
+    P2131: 'Revenue',
+    P2403: 'Net profit',
+    P2295: 'Net income',
+    P2079: 'Production',
+  }
+
+  const stats: Record<string, string> = {}
+  for (const [claimId, label] of Object.entries(STAT_CLAIMS)) {
+    const claim = claims[claimId]?.[0]
+    const val = claim?.mainsnak?.datavalue?.value
+    if (!val) continue
+    // Amount form: { amount: "+510000000", unit: "..." } or plain number/string
+    let raw: string
+    if (typeof val === 'string' || typeof val === 'number') {
+      raw = String(val)
+    } else {
+      const amount = (val as { amount?: string }).amount
+      if (typeof amount !== 'string') continue
+      raw = amount
+    }
+    const normalized = raw.replace(/^[+-]/, '').replace(/\B(?=(\d{3})+(?!\d))/g, ',')
+    if (normalized && normalized !== '0') stats[label] = normalized
+  }
+
+  return stats
+}
+
+/**
+ * Fetch DBPedia entity data and extract abstract + thumbnail.
+ * Free, no API key. Silent failure — returns null on any error.
+ */
+export async function fetchDbpediaEntity(
+  title: string,
+  env?: Env,
+): Promise<{ abstract?: string; thumbnail?: string } | null> {
+  try {
+    const encodedTitle = encodeURIComponent(title.replace(/\s+/g, '_'))
+    const url = `https://dbpedia.org/data/${encodedTitle}.json`
+    const resp = await fetchWithTimeout(env, url, {
+      headers: { Accept: 'application/json', 'User-Agent': 'SearchAPI/1.0' },
+    }, 6000)
+    if (!resp.ok) return null
+    const data = await resp.json() as Record<string, unknown>
+    // DBPedia JSON structure: { "http://dbpedia.org/resource/Title": { predicate: [{ value }] } }
+    const resourceKey = `http://dbpedia.org/resource/${encodedTitle}`
+    const entity = data[resourceKey] as Record<string, Array<{ value?: unknown }>> | undefined
+    if (!entity) return null
+
+    const pick = (predicate: string): string | undefined => {
+      const value = entity[predicate]?.[0]?.value
+      return typeof value === 'string' ? value : undefined
+    }
+
+    const abstract = pick('http://dbpedia.org/ontology/abstract')
+    const thumbnail = pick('http://dbpedia.org/ontology/thumbnail')
+    return abstract || thumbnail ? { abstract, thumbnail } : null
+  } catch (err) {
+    logger.warn('DBPedia entity fetch failed:', { error: toError(err) })
     return null
   }
 }
@@ -793,7 +902,7 @@ export async function getKnowledgeGraph(
   query: string,
   language = 'en',
   env?: Env,
-): Promise<{ title: string; description: string; url?: string; image?: string; type?: string; facts?: Record<string, string> } | null> {
+): Promise<{ title: string; description: string; url?: string; image?: string; type?: string; facts?: Record<string, string>; timeline?: Array<{ date: string; event: string }>; stats?: Record<string, string> } | null> {
   try {
     // Phase 1: Get Wikipedia summary (primary source of truth)
     const summaryUrl = `https://${language}.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(query.replace(/\s+/g, '_'))}`
@@ -816,12 +925,13 @@ export async function getKnowledgeGraph(
     const thumbnail = (summary.thumbnail as { source?: string })?.source
     const description = summary.description as string | undefined
 
-    // Phase 2: Get Wikidata ID → richer facts (run in parallel with infobox)
+    // Phase 2: Get Wikidata ID → richer facts + DBPedia abstract (run in parallel with infobox)
     const wikidataId = await wikipediaToWikidataId(title, language)
 
-    const [wd, infobox] = await Promise.all([
+    const [wd, infobox, dbpedia] = await Promise.all([
       wikidataId ? wikidataEntityFacts(wikidataId) : Promise.resolve(null),
       wikipediaInfobox(title, language),
+      fetchDbpediaEntity(title, env),
     ])
 
     // Merge facts: Wikidata structured data + Wikipedia infobox
@@ -836,7 +946,7 @@ export async function getKnowledgeGraph(
     // Always include description
     if (description) facts['Description'] = description
 
-    const image = wd?.image || thumbnail
+    const image = wd?.image || dbpedia?.thumbnail || thumbnail
     const type = wd?.type ?? (
       description?.toLowerCase().includes('company') ? 'organization'
         : description?.toLowerCase().includes('person') ? 'person'
@@ -851,6 +961,8 @@ export async function getKnowledgeGraph(
       image,
       type,
       facts: Object.keys(facts).length > 0 ? facts : undefined,
+      timeline: wd?.timeline && wd.timeline.length > 0 ? wd.timeline : undefined,
+      stats: wd?.stats && Object.keys(wd.stats).length > 0 ? wd.stats : undefined,
     }
   } catch (err) {
     logger.warn('Wikipedia knowledge graph fetch failed:', { error: toError(err) })

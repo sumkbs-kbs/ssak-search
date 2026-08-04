@@ -5,12 +5,20 @@
  * boosting, sorts, and applies an adaptive quality threshold.
  *
  * Extracted from orchestrator.ts lines 923-1039.
+ *
+ * Phase A.4: recomputeScores now uses a hybrid BM25 + heuristic blend. BM25
+ * (Okapi BM25 with k1=1.5, b=0.75 + CJK bigram tokenization) is the primary
+ * relevance signal; the heuristic computeScore remains as a fallback when
+ * BM25 tokenization produces no useful terms (empty query, stop-word-only).
+ * Final score = 0.7 * bm25 + 0.3 * heuristic, clamped to [0, 1].
  */
 
 import type { SearchResult } from '../../types'
 import type { SearchContext } from './context'
 import { domainMatches, computeScore, timeRangeToDays } from '../util'
+import { bm25Score, tokenize as bm25Tokenize } from '../retrieval/bm25'
 import { logger, toError } from '../logger'
+import { applyLtrRanking } from '../ltr/ranker'
 
 /**
  * Apply domain include/exclude and time-range filters.
@@ -91,8 +99,64 @@ function getDomainAuthorityBonus(url: string): number {
 }
 
 /**
+ * Blend BM25 relevance with heuristic computeScore.
+ *
+ * BM25 (bm25Score) is the primary relevance signal — it gives proper
+ * term-frequency saturation and length normalization that the heuristic
+ * lacks. The heuristic computeScore remains as a fallback when BM25
+ * tokenization yields no useful terms (stop-word-only, single-character,
+ * or empty query) AND as a secondary signal that already accounts for
+ * cross-language penalties and Korean finance special-cases.
+ *
+ * Weighting: 0.7 BM25 + 0.3 heuristic. Tuned so:
+ *   - On English/web queries where BM25 is well-calibrated, it dominates
+ *     (heuristic only contributes 30%)
+ *   - On Korean finance queries where heuristic has domain-specific
+ *     authority baked in, the 30% weight keeps the boost meaningful
+ *   - On CJK queries where both signals are noisy, the blend is more
+ *     robust than either alone
+ *
+ * Returns 0.01 (last-resort tier of quality threshold) when BM25 returns
+ * no matches AND the heuristic is also weak, so callers can fall through
+ * to the adaptive threshold tiers.
+ */
+export function hybridScore(
+  query: string,
+  title: string,
+  content: string,
+  publishedDate: string | undefined,
+  url: string,
+): number {
+  let bm25 = 0
+  try {
+    bm25 = bm25Score(query, title, content)
+  } catch (err) {
+    logger.warn('[ranking] bm25Score threw, falling back to heuristic-only:', { error: toError(err) })
+    bm25 = 0
+  }
+
+  const heuristic = computeScore(title, content, query, publishedDate, url)
+
+  // Fallback path: if BM25 tokenization yields no useful terms, trust heuristic.
+  const tokens = bm25Tokenize(query)
+  if (tokens.length === 0) {
+    return heuristic
+  }
+
+  const blended = 0.7 * bm25 + 0.3 * heuristic
+
+  if (bm25 <= 0.02 && heuristic <= 0.05) return 0.01
+
+  return Math.max(0, Math.min(1, blended))
+}
+
+/**
  * Recompute scores with full query context + freshness + authority.
  * Applies domain authority bonus/penalty after base score computation.
+ *
+ * Phase A.4: base score is now hybridScore() (BM25 + heuristic blend).
+ * Stock-data branch is preserved — Naver finance results carry hand-tuned
+ * scores from searchKoreanStock that should not be overwritten by BM25.
  */
 export function recomputeScores(results: SearchResult[], ctx: SearchContext): SearchResult[] {
   return results.map((r) => {
@@ -108,7 +172,13 @@ export function recomputeScores(results: SearchResult[], ctx: SearchContext): Se
       }
     }
 
-    const baseScore = computeScore(r.title, r.content, ctx.query, r.published_date, r.url)
+    const baseScore = hybridScore(
+      ctx.query,
+      r.title,
+      r.content,
+      r.published_date,
+      r.url,
+    )
     return {
       ...r,
       score: Math.max(0, Math.min(1, baseScore + authorityBonus)),
@@ -213,6 +283,10 @@ export async function applyRankingPipeline(
   let r = applyFilters(results, ctx)
   r = recomputeScores(r, ctx)
   r = await applyDomainBoosting(r, ctx)
+  // A/B 테스트: control variant는 LTR 없이 기존 순위를 유지 (C.2)
+  if (ctx.experimentVariant !== 'control') {
+    r = await applyLtrRanking(r, ctx)
+  }
   r = sortResults(r, ctx)
   r = applyQualityThreshold(r, ctx)
   return r

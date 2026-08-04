@@ -77,6 +77,52 @@ python -m app.main
 }
 ```
 
+### `POST /rerank` — BGE-Reranker-v2-m3 의미론적 재순위화 (Phase B.1)
+
+No-API-Key 준수: 자체 호스팅 BGE cross-encoder. torch/sentence-transformers
+미설치 또는 모델 로드 실패 시 자동으로 heuristic fallback.
+
+```json
+{
+  "query": "삼성전자 주가 전망",
+  "documents": [
+    { "title": "삼성전자 실적 분석", "content": "..." },
+    { "title": "애플 주가 뉴스", "content": "..." }
+  ],
+  "top_k": 5,
+  "return_text": false
+}
+```
+
+응답:
+```json
+{
+  "results": [
+    { "index": 0, "relevance_score": 0.92 }
+  ],
+  "model": "BAAI/bge-reranker-v2-m3",
+  "latency_ms": 340,
+  "fallback_used": false
+}
+```
+
+- `model`이 `"heuristic-fallback"`이면 BGE 미가용 — 웹앱은 이 신호로 Workers AI만 사용 가능
+- 모델은 첫 요청 시 lazy-load되어 프로세스 수명 동안 캐시됨 (콜드스타트 ~30s, 이후 ~300ms)
+
+### `GET /rerank/status` — Reranker 상태
+
+```json
+{
+  "bge_reranker_available": true,
+  "torch_available": true,
+  "sentence_transformers_available": true,
+  "transformers_available": true,
+  "model_name": "BAAI/bge-reranker-v2-m3",
+  "device": "cpu",
+  "load_error": null
+}
+```
+
 ### `GET /health` — 상태 확인
 
 ```json

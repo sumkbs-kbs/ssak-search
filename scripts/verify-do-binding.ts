@@ -1,66 +1,136 @@
 #!/usr/bin/env -S npx tsx
 /**
  * DO Binding Verification Script
- * 
- * Verifies that the RATE_LIMITER Durable Object binding is properly configured
- * in wrangler.jsonc and will be available at deploy time.
- * 
- * Run in CI before deploy to catch missing bindings early.
- * Exit codes: 0 = OK, 1 = Missing binding, 2 = Config error
+ *
+ * Verifies that ALL 8 Durable Object bindings are present in the active
+ * wrangler config (`wrangler.dev.jsonc` for local dev, `wrangler.jsonc` for
+ * production). Run in CI before deploy to catch missing bindings early.
+ *
+ * Exit codes:
+ *   0 = OK (all bindings present)
+ *   1 = Missing one or more bindings
+ *   2 = Config parse error
+ *
+ * Usage:
+ *   npx tsx scripts/verify-do-binding.ts                       # checks wrangler.jsonc
+ *   npx tsx scripts/verify-do-binding.ts --config wrangler.dev.jsonc
  */
 
 import { parse } from 'comment-json'
-import { readFileSync } from 'fs'
+import { readFileSync, existsSync } from 'fs'
 import { resolve } from 'path'
 
-interface WranglerConfig {
-  durable_objects?: {
-    bindings?: Array<{ name: string; class_name: string }>
-  }
+interface DOBinding {
+  name: string
+  class_name: string
 }
 
+interface WranglerConfig {
+  durable_objects?: { bindings?: DOBinding[] }
+  r2_buckets?: Array<{ binding: string; bucket_name: string }>
+  queues?: { producers?: Array<{ binding: string; queue: string }> }
+}
+
+const REQUIRED_DO_BINDINGS: DOBinding[] = [
+  { name: 'RATE_LIMITER', class_name: 'RateLimiterDO' },
+  { name: 'THREAD_DO', class_name: 'ThreadDO' },
+  { name: 'PAGES_DO', class_name: 'PagesDO' },
+  { name: 'LIBRARY_DO', class_name: 'LibraryDO' },
+  { name: 'USER_PROFILE_DO', class_name: 'UserProfileDO' },
+  { name: 'SPACE_DO', class_name: 'SpaceDO' },
+  { name: 'API_KEY_DO', class_name: 'ApiKeyDO' },
+  { name: 'CRAWLER_DO', class_name: 'CrawlerDO' },
+  { name: 'CANARY_DO', class_name: 'CanaryOrchestratorDO' },
+]
+
+const REQUIRED_R2_BINDINGS = ['UPLOAD_BUCKET']
+const REQUIRED_QUEUE_BINDINGS = ['INDEX_QUEUE']
+
 function main() {
-  const configPath = resolve(process.cwd(), 'wrangler.jsonc')
-  
-  try {
-    const content = readFileSync(configPath, 'utf-8')
-    const config: WranglerConfig = parse(content)
-    
-    const doBindings = config.durable_objects?.bindings || []
-    const rateLimiterBinding = doBindings.find(b => b.name === 'RATE_LIMITER')
-    
-    if (!rateLimiterBinding) {
-      console.error('❌ FAIL: RATE_LIMITER Durable Object binding NOT FOUND in wrangler.jsonc')
-      console.error('')
-      console.error('Required configuration:')
-      console.error('  "durable_objects": {')
-      console.error('    "bindings": [')
-      console.error('      { "name": "RATE_LIMITER", "class_name": "RateLimiterDO" }')
-      console.error('    ]')
-      console.error('  }')
-      console.error('')
-      console.error('Add this to wrangler.jsonc and redeploy.')
-      process.exit(1)
-    }
-    
-    if (rateLimiterBinding.class_name !== 'RateLimiterDO') {
-      console.error(`❌ FAIL: RATE_LIMITER binding has wrong class_name: "${rateLimiterBinding.class_name}"`)
-      console.error('Expected: "RateLimiterDO"')
-      process.exit(1)
-    }
-    
-    console.log('✅ PASS: RATE_LIMITER Durable Object binding verified')
-    console.log(`   Name: ${rateLimiterBinding.name}`)
-    console.log(`   Class: ${rateLimiterBinding.class_name}`)
-    process.exit(0)
-    
-  } catch (err) {
-    if (err instanceof SyntaxError) {
-      console.error('❌ FAIL: wrangler.jsonc contains invalid JSON:', err.message)
-    } else {
-      console.error('❌ FAIL: Could not read wrangler.jsonc:', err)
-    }
+  const args = process.argv.slice(2)
+  const configArg = args.find((a) => a.startsWith('--config='))
+  const configPath = configArg
+    ? resolve(process.cwd(), configArg.slice('--config='.length))
+    : resolve(process.cwd(), 'wrangler.jsonc')
+
+  if (!existsSync(configPath)) {
+    console.error(`❌ FAIL: Config file not found: ${configPath}`)
     process.exit(2)
+  }
+
+  console.log(`📋 Checking: ${configPath}`)
+  console.log('')
+
+  let config: WranglerConfig
+  try {
+    config = parse(readFileSync(configPath, 'utf-8')) as WranglerConfig
+  } catch (err) {
+    console.error(`❌ FAIL: Could not parse ${configPath}:`, err)
+    process.exit(2)
+  }
+
+  const doBindings = config.durable_objects?.bindings || []
+  const r2Bindings = (config.r2_buckets || []).map((b) => b.binding)
+  const queueBindings = (config.queues?.producers || []).map((q) => q.binding)
+
+  let failCount = 0
+
+  // Durable Objects
+  for (const required of REQUIRED_DO_BINDINGS) {
+    const found = doBindings.find((b) => b.name === required.name)
+    if (!found) {
+      console.error(`❌ MISSING DO: ${required.name} (class: ${required.class_name})`)
+      failCount++
+      continue
+    }
+    if (found.class_name !== required.class_name) {
+      console.error(`❌ WRONG CLASS: ${required.name} has "${found.class_name}", expected "${required.class_name}"`)
+      failCount++
+      continue
+    }
+    console.log(`✅ DO ${required.name.padEnd(18)} → ${required.class_name}`)
+  }
+
+  // R2 buckets
+  for (const required of REQUIRED_R2_BINDINGS) {
+    if (r2Bindings.includes(required)) {
+      console.log(`✅ R2 ${required.padEnd(18)} → bound`)
+    } else {
+      console.error(`❌ MISSING R2: ${required}`)
+      failCount++
+    }
+  }
+
+  // Queues
+  for (const required of REQUIRED_QUEUE_BINDINGS) {
+    if (queueBindings.includes(required)) {
+      console.log(`✅ QUEUE ${required.padEnd(15)} → bound`)
+    } else {
+      console.error(`⚠️  MISSING QUEUE: ${required} (async indexing disabled)`)
+      // Queue is non-critical — don't fail build, but warn loudly
+    }
+  }
+
+  console.log('')
+  if (failCount === 0) {
+    console.log(`✅ PASS: All ${REQUIRED_DO_BINDINGS.length} DO + ${REQUIRED_R2_BINDINGS.length} R2 bindings present`)
+    process.exit(0)
+  } else {
+    console.error(`❌ FAIL: ${failCount} binding(s) missing in ${configPath}`)
+    console.error('')
+    console.error('If this is wrangler.jsonc (production):')
+    console.error('  Pages cannot declare durable_objects in wrangler.jsonc. You MUST')
+    console.error('  configure DO bindings via Cloudflare Dashboard:')
+    console.error('    Pages → ssak-search → Settings → Functions → Durable Objects')
+    console.error('')
+    console.error('  Required bindings (binding_name → class_name):')
+    for (const b of REQUIRED_DO_BINDINGS) {
+      console.error(`    ${b.name.padEnd(18)} → ${b.class_name}`)
+    }
+    console.error('')
+    console.error('If this is wrangler.dev.jsonc (local dev):')
+    console.error('  Add the missing bindings under "durable_objects.bindings" in that file.')
+    process.exit(1)
   }
 }
 

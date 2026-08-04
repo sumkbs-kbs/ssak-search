@@ -177,4 +177,84 @@ export const EVAL_QUERIES: EvalQuery[] = [
   { id: 'ts-02', query: 'CES 2025 best products', topic: 'news', minResults: 5, maxTimeMs: 10_000, tags: ['english', 'news'] },
   { id: 'ts-03', query: '2025 tech industry predictions', topic: 'news', minResults: 5, maxTimeMs: 10_000, tags: ['english', 'news'] },
   { id: 'ts-04', query: 'Black Friday deals technology 2025', topic: 'news', minResults: 5, maxTimeMs: 10_000, tags: ['english', 'news'] },
+
+  // ════════════════════════════════════════════════════════════════
+  // KOREAN QUERIES — 확장 (10)
+  // ════════════════════════════════════════════════════════════════
+  { id: 'kr-fin-06', query: 'LG에너지솔루션 주가', topic: 'finance', minResults: 5, maxTimeMs: 10_000, tags: ['korean', 'financial'] },
+  { id: 'kr-fin-07', query: 'SK하이닉스 실적 전망', topic: 'finance', minResults: 5, maxTimeMs: 10_000, tags: ['korean', 'financial'] },
+  { id: 'kr-fin-08', query: '한국은행 기준금리', topic: 'finance', minResults: 5, maxTimeMs: 10_000, tags: ['korean', 'financial'] },
+  { id: 'kr-tech-06', query: 'React Query 사용법', topic: 'general', minResults: 5, maxTimeMs: 12_000, tags: ['korean', 'technical'] },
+  { id: 'kr-tech-07', query: 'Python 웹 크롤링 방법', topic: 'general', minResults: 5, maxTimeMs: 12_000, tags: ['korean', 'technical'] },
+  { id: 'kr-tech-08', query: 'AWS vs Azure 비교', topic: 'general', minResults: 5, maxTimeMs: 12_000, tags: ['korean', 'technical', 'comparison'] },
+  { id: 'kr-general-06', query: '에어팟 프로 후기', topic: 'general', minResults: 5, maxTimeMs: 12_000, tags: ['korean', 'general'] },
+  { id: 'kr-general-07', query: '2025 자동차 추천', topic: 'general', minResults: 5, maxTimeMs: 12_000, tags: ['korean', 'general'] },
+  { id: 'kr-news-05', query: '코로나19 재유행', topic: 'news', minResults: 5, maxTimeMs: 10_000, tags: ['korean', 'news'] },
+  { id: 'kr-news-06', query: 'KBO 리그 순위', topic: 'news', minResults: 5, maxTimeMs: 10_000, tags: ['korean', 'news'] },
+
+  // ════════════════════════════════════════════════════════════════
+  // ENGLISH QUERIES — 확장 (24)
+  // ════════════════════════════════════════════════════════════════
+  { id: 'en-stock-09', query: 'Microsoft stock dividend history', topic: 'finance', minResults: 5, maxTimeMs: 12_000, tags: ['english', 'financial'] },
+  { id: 'en-stock-10', query: 'Netflix subscriber growth Q1', topic: 'finance', minResults: 5, maxTimeMs: 12_000, tags: ['english', 'financial'] },
+  { id: 'en-tech-13', query: 'TypeScript generics advanced patterns', topic: 'general', minResults: 5, maxTimeMs: 12_000, tags: ['english', 'technical'] },
+  { id: 'en-tech-14', query: 'Docker multi-stage builds best practices', topic: 'general', minResults: 5, maxTimeMs: 12_000, tags: ['english', 'technical'] },
+  { id: 'en-tech-15', query: 'SQL index optimization techniques', topic: 'general', minResults: 5, maxTimeMs: 12_000, tags: ['english', 'technical'] },
+  { id: 'en-tech-16', query: 'Rust ownership explained', topic: 'general', minResults: 5, maxTimeMs: 12_000, tags: ['english', 'technical'] },
+  { id: 'en-tech-17', query: 'WebSockets vs SSE real-time', topic: 'general', minResults: 5, maxTimeMs: 12_000, tags: ['english', 'technical', 'comparison'] },
+  { id: 'en-tech-18', query: 'monorepo vs polyrepo', topic: 'general', minResults: 5, maxTimeMs: 12_000, tags: ['english', 'technical', 'comparison'] },
+  { id: 'en-news-11', query: 'tech layoffs 2025 latest', topic: 'news', minResults: 5, maxTimeMs: 10_000, tags: ['english', 'news'] },
+  { id: 'en-news-12', query: 'crypto regulation news', topic: 'news', minResults: 5, maxTimeMs: 10_000, tags: ['english', 'news'] },
+  { id: 'en-news-13', query: 'chip export controls impact', topic: 'news', minResults: 5, maxTimeMs: 10_000, tags: ['english', 'news'] },
+  { id: 'en-news-14', query: 'AI safety summit outcomes', topic: 'news', minResults: 5, maxTimeMs: 10_000, tags: ['english', 'news'] },
+  { id: 'en-news-15', query: 'global warming report 2025', topic: 'news', minResults: 5, maxTimeMs: 10_000, tags: ['english', 'news'] },
+  { id: 'en-fact-11', query: 'how does GPS work', topic: 'general', minResults: 5, maxTimeMs: 12_000, tags: ['english', 'factual'] },
+  { id: 'en-fact-12', query: 'what is CRISPR gene editing', topic: 'general', minResults: 5, maxTimeMs: 12_000, tags: ['english', 'factual'] },
+  { id: 'en-fact-13', query: 'how do solar panels work', topic: 'general', minResults: 5, maxTimeMs: 12_000, tags: ['english', 'factual'] },
+  { id: 'en-fact-14', query: 'what is the multiverse theory', topic: 'general', minResults: 5, maxTimeMs: 12_000, tags: ['english', 'factual'] },
+  { id: 'en-fact-15', query: 'what is antimatter', topic: 'general', minResults: 5, maxTimeMs: 12_000, tags: ['english', 'factual'] },
+  { id: 'en-acad-06', query: 'BERT paper natural language processing', topic: 'general', minResults: 5, maxTimeMs: 12_000, tags: ['english', 'academic'] },
+  { id: 'en-acad-07', query: 'GAN generative adversarial networks paper', topic: 'general', minResults: 5, maxTimeMs: 12_000, tags: ['english', 'academic'] },
+  { id: 'en-general-01', query: 'best laptops for developers 2025', topic: 'general', minResults: 5, maxTimeMs: 12_000, tags: ['english', 'general'] },
+  { id: 'en-general-02', query: 'healthy meal prep ideas', topic: 'general', minResults: 5, maxTimeMs: 12_000, tags: ['english', 'general'] },
+  { id: 'en-general-03', query: 'remote work productivity tips', topic: 'general', minResults: 5, maxTimeMs: 12_000, tags: ['english', 'general'] },
+  { id: 'en-general-04', query: 'how to learn a language fast', topic: 'general', minResults: 5, maxTimeMs: 12_000, tags: ['english', 'general'] },
+
+  // ════════════════════════════════════════════════════════════════
+  // CHINESE QUERIES — 확장 (8)
+  // ════════════════════════════════════════════════════════════════
+  { id: 'zh-fact-05', query: '什么是黑洞', topic: 'general', minResults: 3, maxTimeMs: 14_000, tags: ['chinese', 'factual'] },
+  { id: 'zh-fact-06', query: '什么是区块链', topic: 'general', minResults: 3, maxTimeMs: 14_000, tags: ['chinese', 'factual'] },
+  { id: 'zh-tech-03', query: 'TypeScript 泛型详解', topic: 'general', minResults: 5, maxTimeMs: 14_000, tags: ['chinese', 'technical'] },
+  { id: 'zh-tech-04', query: 'Python 数据分析入门', topic: 'general', minResults: 5, maxTimeMs: 14_000, tags: ['chinese', 'technical'] },
+  { id: 'zh-news-04', query: '中国芯片产业进展', topic: 'news', minResults: 5, maxTimeMs: 14_000, tags: ['chinese', 'news'] },
+  { id: 'zh-news-05', query: '中国新能源汽车出口', topic: 'news', minResults: 5, maxTimeMs: 14_000, tags: ['chinese', 'news'] },
+  { id: 'zh-general-04', query: '西安旅游攻略', topic: 'general', minResults: 5, maxTimeMs: 14_000, tags: ['chinese', 'general'] },
+  { id: 'zh-general-05', query: '2025年手机推荐', topic: 'general', minResults: 5, maxTimeMs: 14_000, tags: ['chinese', 'general'] },
+
+  // ════════════════════════════════════════════════════════════════
+  // JAPANESE QUERIES — 확장 (8)
+  // ════════════════════════════════════════════════════════════════
+  { id: 'ja-fact-03', query: 'ブラックホールとは', topic: 'general', minResults: 3, maxTimeMs: 14_000, tags: ['japanese', 'factual'] },
+  { id: 'ja-fact-04', query: '太陽光発電の仕組み', topic: 'general', minResults: 3, maxTimeMs: 14_000, tags: ['japanese', 'factual'] },
+  { id: 'ja-tech-03', query: 'TypeScript 入門', topic: 'general', minResults: 5, maxTimeMs: 14_000, tags: ['japanese', 'technical'] },
+  { id: 'ja-tech-04', query: 'AWS とは 初心者向け', topic: 'general', minResults: 5, maxTimeMs: 14_000, tags: ['japanese', 'technical'] },
+  { id: 'ja-news-03', query: '半導体不足 最新', topic: 'news', minResults: 5, maxTimeMs: 14_000, tags: ['japanese', 'news'] },
+  { id: 'ja-news-04', query: '円安 影響', topic: 'news', minResults: 5, maxTimeMs: 14_000, tags: ['japanese', 'news'] },
+  { id: 'ja-travel-03', query: '沖縄観光おすすめ', topic: 'general', minResults: 5, maxTimeMs: 14_000, tags: ['japanese', 'general'] },
+  { id: 'ja-travel-04', query: '大阪観光スポット', topic: 'general', minResults: 5, maxTimeMs: 14_000, tags: ['japanese', 'general'] },
+
+  // ════════════════════════════════════════════════════════════════
+  // MULTI-TOPIC — 확장 (10)
+  // ════════════════════════════════════════════════════════════════
+  { id: 'cmp-06', query: 'Vue vs React vs Svelte 2025', topic: 'general', minResults: 5, maxTimeMs: 12_000, tags: ['english', 'technical', 'comparison'] },
+  { id: 'cmp-07', query: 'Kafka vs RabbitMQ use cases', topic: 'general', minResults: 5, maxTimeMs: 12_000, tags: ['english', 'technical', 'comparison'] },
+  { id: 'cmp-08', query: 'GraphQL vs tRPC', topic: 'general', minResults: 5, maxTimeMs: 12_000, tags: ['english', 'technical', 'comparison'] },
+  { id: 'cmp-09', query: 'PostgreSQL vs MySQL vs SQLite', topic: 'general', minResults: 5, maxTimeMs: 12_000, tags: ['english', 'technical', 'comparison'] },
+  { id: 'lt-06', query: 'Cloudflare Workers vs Pages when to use', topic: 'general', minResults: 5, maxTimeMs: 12_000, tags: ['english', 'technical', 'comparison'] },
+  { id: 'lt-07', query: 'Hono vs Express framework comparison', topic: 'general', minResults: 5, maxTimeMs: 12_000, tags: ['english', 'technical', 'comparison'] },
+  { id: 'lt-08', query: 'pgvector vs Pinecone vector database', topic: 'general', minResults: 5, maxTimeMs: 12_000, tags: ['english', 'technical', 'comparison'] },
+  { id: 'gk-06', query: 'how does blockchain mining work', topic: 'general', minResults: 5, maxTimeMs: 12_000, tags: ['english', 'factual'] },
+  { id: 'gk-07', query: 'what is quantum entanglement', topic: 'general', minResults: 5, maxTimeMs: 12_000, tags: ['english', 'factual'] },
+  { id: 'adv-05', query: 'best budget smartphone 2025', topic: 'general', minResults: 5, maxTimeMs: 12_000, tags: ['english', 'general'] },
 ]

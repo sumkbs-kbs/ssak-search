@@ -55,6 +55,8 @@ export interface SearchContext {
 
   // ── Space context (Phase 3.3b) ──
   spaceFileContext: string
+  /** A/B experiment variant (Phase C.2) — 'control' disables LTR ranking */
+  experimentVariant?: string
 }
 
 /** A named async task that produces search results. */

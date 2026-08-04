@@ -24,6 +24,7 @@ import { DurableObject } from 'cloudflare:workers'
 import { logger, toError } from './logger'
 import type { Env, CrawlUrl, CrawlDomainState, CrawlStats, CrawlerConfig, IndexQueueMessage } from '../types'
 import { normalizeUrl, assertSafeFetchUrl } from './util'
+import { discoverAndParseSitemaps } from './sitemap'
 import { DEFAULT_CRAWLER_CONFIG } from '../types'
 
 // ============================================================
@@ -417,6 +418,61 @@ export class CrawlerDO extends DurableObject<Env> {
     } catch (err) {
       logger.error('[CrawlerDO] Reputation seed failed:', { error: toError(err) })
       return { added: 0 }
+    }
+  }
+
+  /**
+   * Phase B.4: Seed from sitemap discovery.
+   * Discovers sitemap URLs for a domain (robots.txt → /sitemap.xml → sub-sitemaps)
+   * and adds the found page URLs to the frontier.
+   */
+  async seedFromSitemap(domain: string, maxUrls = 100): Promise<{ added: number; failed: number; discovered: number }> {
+    try {
+      const pageUrls = await discoverAndParseSitemaps(domain, { maxUrls })
+      if (pageUrls.length === 0) {
+        logger.info(`[CrawlerDO] No sitemap URLs discovered for ${domain}`)
+        return { added: 0, failed: 0, discovered: 0 }
+      }
+
+      const blacklisted = await this.checkDomainBlacklist(pageUrls)
+
+      let added = 0
+      let failed = 0
+      for (const rawUrl of pageUrls) {
+        try {
+          const url = normalizeUrl(rawUrl.trim())
+          await assertSafeFetchUrl(url)
+
+          if (blacklisted.has(new URL(url).hostname.replace(/^www\./, ''))) {
+            logger.info(`[CrawlerDO] Skipping blacklisted domain from sitemap: ${url}`)
+            failed++
+            continue
+          }
+          if (this.visited.has(url)) continue
+          this.visited.add(url)
+
+          this.frontier.push({
+            url,
+            depth: 0,
+            source_url: `sitemap:${domain}`,
+            priority: 80,  // High priority — authoritative page list from the publisher
+            added_at: Date.now(),
+          })
+          added++
+        } catch (err) {
+          logger.warn(`[CrawlerDO] Failed to add sitemap URL:`, { error: toError(err) })
+          failed++
+        }
+      }
+
+      this.sortFrontier()
+      this.stats.total_urls_discovered = this.frontier.length + this.visited.size
+      await this.persist()
+      logger.info(`[CrawlerDO] Sitemap-seeded ${added} URLs from ${domain} (${pageUrls.length} discovered)`)
+      return { added, failed, discovered: pageUrls.length }
+    } catch (err) {
+      logger.error(`[CrawlerDO] Sitemap seed failed for ${domain}:`, { error: toError(err) })
+      return { added: 0, failed: 0, discovered: 0 }
     }
   }
 
@@ -847,6 +903,9 @@ export interface CrawlerRPC {
   start(): Promise<void>
   pause(): Promise<void>
   reset(): Promise<void>
+  seedFromBrave(query: string, maxResults?: number): Promise<{ added: number; failed: number; query: string }>
+  seedFromReputation(minAuthority?: number, maxResults?: number): Promise<{ added: number }>
+  seedFromSitemap(domain: string, maxUrls?: number): Promise<{ added: number; failed: number; discovered: number }>
   getStatus(): Promise<{
     stats: CrawlStats
     config: CrawlerConfig

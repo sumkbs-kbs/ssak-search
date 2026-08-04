@@ -49,16 +49,18 @@ describe('searchKoreanStock', () => {
     mockFetch.mockReset()
   })
 
-  it('returns empty array for empty query', async () => {
+  it('falls back to market overview page for empty query', async () => {
     const { searchKoreanStock } = await import('../../src/lib/stock-finance')
     const results = await searchKoreanStock('', { maxResults: 5 })
-    expect(results).toEqual([])
+    expect(results.length).toBeGreaterThanOrEqual(1)
+    expect(results[0].title).toContain('시황')
   })
 
-  it('returns empty array for unknown stock name', async () => {
+  it('falls back to market overview page for unknown stock name', async () => {
     const { searchKoreanStock } = await import('../../src/lib/stock-finance')
     const results = await searchKoreanStock('unknownstockname', { maxResults: 5 })
-    expect(results).toEqual([])
+    expect(results.length).toBeGreaterThanOrEqual(1)
+    expect(results[0].title).toContain('시황')
   })
 
   it('returns results for known stock via stock code', async () => {

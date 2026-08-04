@@ -191,29 +191,40 @@ function normalizeEntity(text: string): string {
     .trim()
 }
 
-function findInDictionary(text: string, dict: string[], type: EntityType): ExtractedEntity | null {
+function findInDictionary(text: string, dict: string[], type: EntityType): ExtractedEntity[] {
   const lower = text.toLowerCase()
+  const found: ExtractedEntity[] = []
+
   for (const entry of dict) {
     const entryLower = entry.toLowerCase()
-    const idx = lower.indexOf(entryLower)
-    if (idx >= 0) {
+    let idx = lower.indexOf(entryLower)
+    while (idx >= 0) {
       // Ensure word boundary or start/end
       const before = idx > 0 ? lower[idx - 1] : ' '
       const after = idx + entryLower.length < lower.length ? lower[idx + entryLower.length] : ' '
       const isWordBoundary = /[\s,.;:!?()[\]{}"'\-–—]/.test(before) && /[\s,.;:!?()[\]{}"'\-–—]/.test(after)
       if (isWordBoundary || entryLower.length > 3) {
-        return {
+        found.push({
           text: text.slice(idx, idx + entry.length),
           type,
           confidence: 0.9,
           startIndex: idx,
           endIndex: idx + entry.length,
           normalized: entry, // use dictionary form
-        }
+        })
       }
+      idx = lower.indexOf(entryLower, idx + 1)
     }
   }
-  return null
+
+  // Prefer the longest match when a shorter one is fully contained
+  // (e.g. "galaxy s24" matches both "galaxy" and "galaxy s").
+  found.sort((a, b) => a.startIndex - b.startIndex || b.endIndex - a.endIndex)
+  return found.filter(
+    (e, i) => !found.some(
+      (other, j) => j < i && other.startIndex <= e.startIndex && other.endIndex >= e.endIndex
+    )
+  )
 }
 
 // ============================================================
@@ -258,11 +269,11 @@ export function extractEntities(query: string): ExtractionResult {
 
   for (const { dict, type } of dictConfigs) {
     const found = findInDictionary(query, dict, type)
-    if (found) {
-      const key = `${type}:${found.text.toLowerCase()}`
+    for (const entity of found) {
+      const key = `${type}:${entity.text.toLowerCase()}`
       if (!seen.has(key)) {
         seen.add(key)
-        entities.push(found)
+        entities.push(entity)
       }
     }
   }

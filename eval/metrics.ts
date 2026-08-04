@@ -10,7 +10,7 @@
  */
 
 import type { SearchResult } from '../src/types'
-import type { EvalResult, RankingMetrics, AggregateRankingMetrics } from './types'
+import type { EvalResult, RankingMetrics, AggregateRankingMetrics, CacheHitMetrics } from './types'
 
 /**
  * Compute a BLEU-inspired score (0–1) measuring how many of the
@@ -463,5 +463,44 @@ export function aggregateRankingMetrics(results: EvalResult[]): AggregateRanking
     avgNdcgAt10: sum.ndcg / n,
     avgMrr: sum.mrr / n,
     avgPrecisionAt10: sum.precision / n,
+  }
+}
+
+// ============================================================
+// Cache Hit Rate Measurement
+// ============================================================
+
+/**
+ * Compute cache hit rate from a cold/warm double-run latency pair.
+ *
+ * The eval runner executes every query twice: the first pass is cold
+ * (network fan-out), the second pass immediately after is warm. Queries
+ * served from the in-process memory cache (or Cache API where available)
+ * return in a few milliseconds; anything above the hit threshold counts
+ * as a miss.
+ */
+export function computeCacheHitRate(
+  coldTimesMs: number[],
+  warmTimesMs: number[],
+  hitThresholdMs = 200,
+): CacheHitMetrics {
+  const avg = (arr: number[]): number =>
+    arr.length > 0 ? arr.reduce((s, t) => s + t, 0) / arr.length : 0
+
+  let hits = 0
+  for (let i = 0; i < warmTimesMs.length; i++) {
+    const warm = warmTimesMs[i]
+    const cold = coldTimesMs[i] ?? Number.POSITIVE_INFINITY
+    if (warm < hitThresholdMs && warm < cold) hits++
+  }
+
+  const total = warmTimesMs.length
+  return {
+    hitRate: total > 0 ? hits / total : 0,
+    hits,
+    misses: total - hits,
+    avgColdMs: Math.round(avg(coldTimesMs)),
+    avgWarmMs: Math.round(avg(warmTimesMs)),
+    hitThresholdMs,
   }
 }

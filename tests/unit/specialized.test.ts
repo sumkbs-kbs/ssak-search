@@ -13,7 +13,7 @@ vi.mock('../../src/lib/util', async (importOriginal) => {
   return { ...actual, fetchWithTimeout: (...args: unknown[]) => mockFetchWithTimeout(...args) }
 })
 
-import { detectQueryType, getSourcesForQueryType, wikipediaSearch, githubSearch, hackerNewsSearch, arxivSearch, redditSearch } from '../../src/lib/specialized'
+import { detectQueryType, getSourcesForQueryType, wikipediaSearch, githubSearch, hackerNewsSearch, arxivSearch, redditSearch, extractTimelineFromClaims, extractStatsFromClaims, fetchDbpediaEntity, getKnowledgeGraph } from '../../src/lib/specialized'
 
 // ============================================================
 // detectQueryType — pure function, many edge cases
@@ -663,5 +663,180 @@ describe('redditSearch', () => {
     await redditSearch('test', { maxResults: 100 })
     const calledUrl = mockFetchWithTimeout.mock.calls[0][1]
     expect(calledUrl).toContain('limit=25')
+  })
+})
+
+// ============================================================
+// extractTimelineFromClaims / extractStatsFromClaims (C.4)
+// ============================================================
+
+type MockClaim = { mainsnak: { datavalue?: { value?: unknown } }; rank?: string }
+
+describe('extractTimelineFromClaims', () => {
+  it('extracts dated claims into chronological timeline', () => {
+    const claims: Record<string, MockClaim[]> = {
+      P569: [{ mainsnak: { datavalue: { value: { time: '+1955-02-24T00:00:00Z' } } } }],
+      P571: [{ mainsnak: { datavalue: { value: { time: '+1976-04-01T00:00:00Z' } } } }],
+      P570: [{ mainsnak: { datavalue: { value: { time: '+2011-10-05T00:00:00Z' } } } }],
+    }
+    const timeline = extractTimelineFromClaims(claims)
+    expect(timeline).toEqual([
+      { date: '1955', event: 'Born' },
+      { date: '1976', event: 'Founded' },
+      { date: '2011', event: 'Died' },
+    ])
+  })
+
+  it('skips claims without time values', () => {
+    const claims: Record<string, MockClaim[]> = {
+      P571: [{ mainsnak: { datavalue: { value: 'not a time object' } } }],
+      P577: [{ mainsnak: {} }],
+    }
+    expect(extractTimelineFromClaims(claims)).toEqual([])
+  })
+})
+
+describe('extractStatsFromClaims', () => {
+  it('extracts numeric claims with thousands separators', () => {
+    const claims: Record<string, MockClaim[]> = {
+      P1082: [{ mainsnak: { datavalue: { value: { amount: '+51780579' } } } }],
+      P2046: [{ mainsnak: { datavalue: { value: { amount: '+100210' } } } }],
+    }
+    expect(extractStatsFromClaims(claims)).toEqual({
+      Population: '51,780,579',
+      Area: '100,210',
+    })
+  })
+
+  it('handles plain string values', () => {
+    const claims: Record<string, MockClaim[]> = {
+      P2131: [{ mainsnak: { datavalue: { value: '1200000000' } } }],
+    }
+    expect(extractStatsFromClaims(claims)).toEqual({ Revenue: '1,200,000,000' })
+  })
+
+  it('ignores zero and missing values', () => {
+    const claims: Record<string, MockClaim[]> = {
+      P1082: [{ mainsnak: { datavalue: { value: { amount: '+0' } } } }],
+      P2046: [{ mainsnak: {} }],
+    }
+    expect(extractStatsFromClaims(claims)).toEqual({})
+  })
+})
+
+// ============================================================
+// fetchDbpediaEntity (C.4) — DBPedia merge source
+// ============================================================
+
+describe('fetchDbpediaEntity', () => {
+  beforeEach(() => { mockFetchWithTimeout.mockReset() })
+
+  it('extracts abstract and thumbnail from DBPedia JSON', async () => {
+    mockFetchWithTimeout.mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({
+        'http://dbpedia.org/resource/Apple_Inc.': {
+          'http://dbpedia.org/ontology/abstract': [{ value: 'Apple Inc. is an American multinational corporation.' }],
+          'http://dbpedia.org/ontology/thumbnail': [{ value: 'https://upload.wikimedia.org/thumb.jpg' }],
+        },
+      }),
+    })
+    const result = await fetchDbpediaEntity('Apple Inc.')
+    expect(result).toEqual({
+      abstract: 'Apple Inc. is an American multinational corporation.',
+      thumbnail: 'https://upload.wikimedia.org/thumb.jpg',
+    })
+  })
+
+  it('returns null on non-ok response', async () => {
+    mockFetchWithTimeout.mockResolvedValue({ ok: false, status: 404 })
+    expect(await fetchDbpediaEntity('Missing')).toBeNull()
+  })
+
+  it('returns null on network error', async () => {
+    mockFetchWithTimeout.mockRejectedValue(new Error('network down'))
+    expect(await fetchDbpediaEntity('Anything')).toBeNull()
+  })
+
+  it('returns null when entity key is missing', async () => {
+    mockFetchWithTimeout.mockResolvedValue({ ok: true, json: () => Promise.resolve({}) })
+    expect(await fetchDbpediaEntity('Anything')).toBeNull()
+  })
+})
+
+// ============================================================
+// getKnowledgeGraph — C.4 multi-source merge integration
+// ============================================================
+
+describe('getKnowledgeGraph', () => {
+  beforeEach(() => {
+    mockFetchWithTimeout.mockReset()
+    vi.unstubAllGlobals()
+  })
+  afterEach(() => {
+    vi.unstubAllGlobals()
+    vi.restoreAllMocks()
+  })
+
+  it('merges Wikidata timeline/stats and DBPedia fallback image', async () => {
+    mockFetchWithTimeout.mockResolvedValueOnce({
+      ok: true,
+      json: () => Promise.resolve({
+        type: 'standard',
+        title: 'Apple Inc.',
+        extract: 'Apple Inc. is an American multinational corporation.',
+        description: 'American multinational technology company',
+        content_urls: { desktop: { page: 'https://en.wikipedia.org/wiki/Apple_Inc.' } },
+      }),
+    })
+    mockFetchWithTimeout.mockResolvedValueOnce({
+      ok: true,
+      json: () => Promise.resolve({
+        'http://dbpedia.org/resource/Apple_Inc.': {
+          'http://dbpedia.org/ontology/abstract': [{ value: 'DBPedia abstract text.' }],
+          'http://dbpedia.org/ontology/thumbnail': [{ value: 'https://example.com/dbpedia-thumb.jpg' }],
+        },
+      }),
+    })
+
+    const rawFetch = vi.fn()
+    rawFetch
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ query: { pages: { '1': { pageprops: { wikibase_item: 'Q312' } } } } }) })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          entities: {
+            Q312: {
+              claims: {
+                P571: [{ mainsnak: { datavalue: { value: { time: '+1976-04-01T00:00:00Z' } } } }],
+                P1082: [{ mainsnak: { datavalue: { value: { amount: '+51780579' } } } }],
+              },
+            },
+          },
+        }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          parse: { text: { '*': '<table><tr><th class="infobox-label">Founded</th><td class="infobox-data">1976</td></tr></table>' } },
+        }),
+      })
+    vi.stubGlobal('fetch', rawFetch)
+
+    const kg = await getKnowledgeGraph('Apple Inc.')
+    expect(kg).not.toBeNull()
+    expect(kg!.timeline).toEqual([{ date: '1976', event: 'Founded' }])
+    expect(kg!.stats).toEqual({ Population: '51,780,579' })
+    expect(kg!.image).toBe('https://example.com/dbpedia-thumb.jpg')
+  })
+
+  it('returns null when summary is a disambiguation page', async () => {
+    mockFetchWithTimeout.mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({ type: 'disambiguation' }) })
+    expect(await getKnowledgeGraph('Java')).toBeNull()
+  })
+
+  it('returns null on summary network error', async () => {
+    mockFetchWithTimeout.mockRejectedValueOnce(new Error('timeout'))
+    expect(await getKnowledgeGraph('Anything')).toBeNull()
   })
 })

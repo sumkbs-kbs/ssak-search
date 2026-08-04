@@ -39,6 +39,15 @@ export function formatReport(report: EvalReport, regressions: RegressionDiff[]):
     }
   }
   lines.push('')
+
+  // Cache hit rate (measured via cold/warm double-run when --cache is set)
+  if (report.cache) {
+    const c = report.cache
+    lines.push('  ─ Cache Hit Rate ─')
+    lines.push(`  Hit rate:      ${(c.hitRate * 100).toFixed(1)}% (${c.hits}/${c.hits + c.misses})`)
+    lines.push(`  Avg cold:      ${c.avgColdMs}ms  →  Avg warm: ${c.avgWarmMs}ms`)
+    lines.push('')
+  }
   lines.push('  Backend coverage:')
   for (const [backend, count] of Object.entries(report.backendCoverage).sort()) {
     const pct = ((count / report.totalQueries) * 100).toFixed(0)
@@ -146,6 +155,19 @@ export function formatReportSummary(report: EvalReport, regressions: RegressionD
     }
   }
   lines.push('')
+
+  // Cache hit rate section
+  if (report.cache) {
+    const c = report.cache
+    lines.push('### Cache Hit Rate (cold/warm double-run)')
+    lines.push('')
+    lines.push('| Metric | Value |')
+    lines.push('|--------|-------|')
+    lines.push(`| **Hit Rate** | ${(c.hitRate * 100).toFixed(1)}% (${c.hits}/${c.hits + c.misses}) |`)
+    lines.push(`| **Avg Cold Latency** | ${c.avgColdMs}ms |`)
+    lines.push(`| **Avg Warm Latency** | ${c.avgWarmMs}ms |`)
+    lines.push('')
+  }
 
   // Per-query details
   lines.push('### Per-Query Results')

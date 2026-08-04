@@ -37,16 +37,8 @@ function resolveTtl(env: AppBindings | undefined, topic?: string): number {
   return DEFAULT_TTL
 }
 
-/**
- * Normalize a search request into a stable cache key.
- *
- * Includes `page` so paginated requests do NOT share cache entries with page 1
- * (otherwise page=2 would silently return page=1 results).
- *
- * Query is normalized to NFC + lowercased + whitespace-canonicalized so that
- * trivial differences (U+200B ZWSP, U+00A0 NBSP, NFD vs NFC) don't fragment the cache.
- */
-export function cacheKey(request: {
+/** Request shape consumed by cacheKey / cacheParamsSignature. */
+export interface CacheKeyRequest {
   query: string
   max_results?: number
   search_depth?: string
@@ -62,11 +54,50 @@ export function cacheKey(request: {
   country?: string
   language?: string
   location?: string
-}): string {
+}
+
+/**
+ * Build the non-query portion of a cache key. Shared by cacheKey() and
+ * cacheParamsSignature() so the two can never drift apart.
+ */
+function buildCacheParams(request: CacheKeyRequest, variant?: string): string[] {
   // Sort domain arrays for deterministic keys
   const includeSorted = request.include_domains ? [...request.include_domains].sort() : []
   const excludeSorted = request.exclude_domains ? [...request.exclude_domains].sort() : []
 
+  const parts = [
+    `mr=${request.max_results ?? 10}`,
+    `sd=${request.search_depth ?? 'basic'}`,
+    `tp=${request.topic ?? 'general'}`,
+    `tr=${request.time_range ?? 'any'}`,
+    `sb=${request.sort_by ?? 'relevance'}`,
+    `pg=${request.page ?? 1}`,
+    `ia=${request.include_answer ? 1 : 0}`,
+    `irc=${request.include_raw_content ? 1 : 0}`,
+    `inc=${includeSorted.join(',')}`,
+    `exc=${excludeSorted.join(',')}`,
+    `fc=${request.focus ?? 'all'}`,
+    `exp=${variant ?? ''}`,
+  ]
+
+  // Include location-aware params in cache key
+  if (request.country) parts.push(`cc=${request.country}`)
+  if (request.language) parts.push(`lang=${request.language}`)
+  if (request.location) parts.push(`loc=${request.location.slice(0, 50)}`)
+
+  return parts
+}
+
+/**
+ * Normalize a search request into a stable cache key.
+ *
+ * Includes `page` so paginated requests do NOT share cache entries with page 1
+ * (otherwise page=2 would silently return page=1 results).
+ *
+ * Query is normalized to NFC + lowercased + whitespace-canonicalized so that
+ * trivial differences (U+200B ZWSP, U+00A0 NBSP, NFD vs NFC) don't fragment the cache.
+ */
+export function cacheKey(request: CacheKeyRequest, variant?: string): string {
   // Canonicalize the query string:
   // 1. NFC normalization — collapses NFD/NFKD variations (Korean 조합형/완성형 etc.)
   // 2. Strip zero-width separators and non-breaking spaces that humans can't see
@@ -79,27 +110,18 @@ export function cacheKey(request: {
     .replace(/\s+/g, ' ')
     .toLowerCase()
 
-  const parts = [
-    canonicalQuery,
-    `mr=${request.max_results ?? 10}`,
-    `sd=${request.search_depth ?? 'basic'}`,
-    `tp=${request.topic ?? 'general'}`,
-    `tr=${request.time_range ?? 'any'}`,
-    `sb=${request.sort_by ?? 'relevance'}`,
-    `pg=${request.page ?? 1}`,
-    `ia=${request.include_answer ? 1 : 0}`,
-    `irc=${request.include_raw_content ? 1 : 0}`,
-    `inc=${includeSorted.join(',')}`,
-    `exc=${excludeSorted.join(',')}`,
-    `fc=${request.focus ?? 'all'}`,
-  ]
+  return `search:${[canonicalQuery, ...buildCacheParams(request, variant)].join('|')}`
+}
 
-  // Include location-aware params in cache key
-  if (request.country) parts.push(`cc=${request.country}`)
-  if (request.language) parts.push(`lang=${request.language}`)
-  if (request.location) parts.push(`loc=${request.location.slice(0, 50)}`)
-
-  return `search:${parts.join('|')}`
+/**
+ * Signature of the non-query parameters of a cache key (everything after the
+ * canonicalized query). The semantic cache stores this next to each response
+ * so a vector hit is only served when the incoming request's parameters match
+ * exactly — otherwise a query with max_results=5 could be answered with a
+ * cached 10-result response built for different params.
+ */
+export function cacheParamsSignature(request: CacheKeyRequest, variant?: string): string {
+  return buildCacheParams(request, variant).join('|')
 }
 
 /**

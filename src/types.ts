@@ -221,6 +221,12 @@ export interface SearchResponse {
    * server error or empty body. Mirrors the Tavily convention.
    */
   no_results?: boolean
+  /** A/B experiment assignment (Phase C.2) — present when a running experiment matched this user */
+  experiment?: {
+    name: string
+    variant: string
+    impression_id: string
+  }
 }
 
 /** Image search result */
@@ -247,6 +253,10 @@ export interface KnowledgeGraph {
   image?: string
   type?: string // person | organization | place | concept | technology | product
   facts?: Record<string, string> // e.g. { "Founded": "1969", "CEO": "John Doe" }
+  /** Chronological events (date → event) */
+  timeline?: Array<{ date: string; event: string }>
+  /** Key numeric statistics (e.g. population, area, revenue) */
+  stats?: Record<string, string>
   /** Related entities / topics for navigation */
   related_entities?: Array<{ name: string; type?: string; url?: string }>
   /** Source of the knowledge panel data */
@@ -584,12 +594,25 @@ export interface AppBindings {
   CACHE_TTL_NEWS?: string
   // Health canary check (parser regression detection)
   HEALTH_CANARY_ENABLED?: string
+  // Durable Object for canary parser regression detection (D.1)
+  CANARY_DO?: DurableObjectNamespace
+  // GitHub token for automated issue creation on canary regression (D.1, optional)
+  GITHUB_TOKEN?: string
+  // GitHub repo for canary issue creation, format "owner/repo" (D.1, optional)
+  GITHUB_REPO?: string
+  // PagerDuty Events API v2 routing key for critical alerts (D.4, optional)
+  PAGERDUTY_ROUTING_KEY?: string
+  // Subrequest quota per request for capacity alerts (D.4, default 50 = free tier)
+  SUBREQUEST_QUOTA_PER_REQUEST?: string
   // KV namespace for persistent response caching (optional, secondary to Cloudflare Cache API)
   CACHE_KV?: KVNamespace
   // Workers Analytics Engine for metrics persistence
   ANALYTICS?: AnalyticsEngineDataset
   // Vectorize index for dense vector search (Phase 2)
   VECTORIZE_INDEX?: VectorizeIndex
+  // Vectorize index for semantic cache (Phase C.3) — SEPARATE from the document
+  // index so cached query vectors never pollute document search results.
+  SEMANTIC_CACHE_INDEX?: VectorizeIndex
   // D1 database for metadata, indexing schedule, URL importance scores
   SEARCH_INDEX_DB?: D1Database
   // Queue for async indexing
@@ -611,6 +634,12 @@ export interface AppBindings {
   OPENROUTER_API_KEY?: string
   // Cohere Rerank API key for Cross-Encoder Reranker (Phase 1.2)
   COHERE_API_KEY?: string
+  // Phase B.1 — self-hosted sidecar URL (e.g. http://localhost:8000).
+  // Hosts the BGE-Reranker (/rerank) AND the Learning-to-Rank model
+  // (/ltr/rank, /ltr/train, /ltr/status) — one sidecar, same binding.
+  SIDECAR_RERANK_URL?: string
+  // Bearer token for the sidecar /rerank and /ltr endpoints
+  SIDECAR_RERANK_TOKEN?: string
   // Optional external LLM API keys for answer generation
   OPENAI_API_KEY?: string
   ANTHROPIC_API_KEY?: string
@@ -635,6 +664,10 @@ export interface AppBindings {
   API_KEY_DO?: DurableObjectNamespace
   // Durable Object for web crawling (Phase 2.1)
   CRAWLER_DO?: DurableObjectNamespace
+  // Durable Object for LTR click/impression events (Phase C.1)
+  CLICK_LOG_DO?: DurableObjectNamespace
+  // Durable Object for the self-hosted A/B testing framework (Phase C.2)
+  EXPERIMENT_DO?: DurableObjectNamespace
   // Brave Search API key (Phase 0.1 — official API, ToS-safe, 50 req/s)
   BRAVE_API_KEY?: string
   // Free image search API keys (Phase 3.4b)

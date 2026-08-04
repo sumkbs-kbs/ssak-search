@@ -12,6 +12,9 @@ on:
     paths:
       - 'src/**'
       - 'eval/**'
+  schedule:
+    # Weekly full run (with cache measurement) → auto-updates README metrics
+    - cron: '0 3 * * 1'  # Monday 03:00 UTC
   workflow_dispatch:
     inputs:
       tag:
@@ -20,6 +23,11 @@ on:
         default: ''
       save_baseline:
         description: 'Save results as new baseline (main branch only)'
+        required: false
+        default: 'false'
+        type: boolean
+      cache:
+        description: 'Measure cache hit rate (doubles runtime)'
         required: false
         default: 'false'
         type: boolean
@@ -32,7 +40,7 @@ jobs:
   eval:
     name: Search Quality Evaluation
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
 
@@ -61,26 +69,47 @@ jobs:
             fi
           fi
 
+          CACHE_FLAG=""
+          if [ "${{ github.event_name }}" = "schedule" ] || [ "${{ github.event.inputs.cache }}" = "true" ]; then
+            CACHE_FLAG="--cache"
+          fi
+
+          # Weekly/manual-cache runs use the full search-quality eval (direct mode):
+          # it supports --cache, computes NDCG/MRR/Precision@10 from gold standards,
+          # and writes eval/results/latest.json for the weekly README update.
+          # Push/PR runs keep the fast deterministic self-index benchmark as before.
+          RUN_MODE="eval:ci:slack"
+          if [ "${{ github.event_name }}" = "schedule" ] || [ "${{ github.event.inputs.cache }}" = "true" ]; then
+            RUN_MODE="eval:ci"
+          fi
+
           echo "tag_flag=$TAG_FLAG" >> $GITHUB_OUTPUT
           echo "save_flag=$SAVE_FLAG" >> $GITHUB_OUTPUT
+          echo "cache_flag=$CACHE_FLAG" >> $GITHUB_OUTPUT
+          echo "run_mode=$RUN_MODE" >> $GITHUB_OUTPUT
 
           echo "=== Eval Configuration ==="
+          echo "Run mode: $RUN_MODE"
           echo "Tag filter: ${TAG_FLAG:-all}"
           echo "Save baseline: ${SAVE_FLAG:+yes}${SAVE_FLAG:-no}"
+          echo "Cache measurement: ${CACHE_FLAG:+yes}${CACHE_FLAG:-no}"
 
       - name: Run evaluation
         id: eval
         continue-on-error: true
-        timeout-minutes: 12
+        timeout-minutes: 50
         run: |
-          npm run eval:ci:slack -- ${{ steps.config.outputs.tag_flag }} ${{ steps.config.outputs.save_flag }} 2>&1
+          npm run ${{ steps.config.outputs.run_mode }} -- ${{ steps.config.outputs.tag_flag }} ${{ steps.config.outputs.save_flag }} ${{ steps.config.outputs.cache_flag }} 2>&1
 
       - name: Upload eval results artifact
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: eval-results
-          path: eval-results.json
+          path: |
+            eval-results.json
+            eval-self-results.json
+            eval/results/latest.json
           retention-days: 90
           if-no-files-found: ignore
 
@@ -97,6 +126,19 @@ jobs:
             git diff --cached --quiet || git commit -m "chore: update eval baseline [skip ci]"
             git push
             echo "Baseline updated and committed"
+          fi
+
+      - name: Update README metrics (weekly)
+        if: github.event_name == 'schedule' && github.ref == 'refs/heads/main'
+        run: |
+          if [ -f "eval/results/latest.json" ]; then
+            npx tsx scripts/update-readme-eval.ts
+            git config user.name "github-actions[bot]"
+            git config user.email "github-actions[bot]@users.noreply.github.com"
+            git add README.md
+            git diff --cached --quiet || git commit -m "docs: update README eval metrics [skip ci]"
+            git push
+            echo "README metrics updated and committed"
           fi
 
       - name: Check results

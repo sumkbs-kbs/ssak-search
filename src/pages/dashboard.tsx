@@ -396,7 +396,8 @@ function renderSearchResults(data, area) {
   }
 
   // === Search Results with thumbnails ===
-  for (const r of data.results) {
+  for (let i = 0; i < data.results.length; i++) {
+    const r = data.results[i];
     const scorePct = Math.round((r.score || 0) * 100);
     const pctColor = scorePct >= 70 ? 'var(--success)' : scorePct >= 40 ? 'var(--warning)' : 'var(--error)';
     html += '<div class="result-card card card-clickable" style="padding:16px;margin-bottom:10px;">';
@@ -407,7 +408,10 @@ function renderSearchResults(data, area) {
       html += '<img class="result-thumb" src="' + escapeAttr(r.images[0]) + '" alt="" loading="lazy" onerror="this.style.display=\\'none\\'" />';
     }
     html += '<div style="min-width:0;">';
-    html += '<a href="' + escapeAttr(r.url) + '" target="_blank" rel="noopener" style="font-size:0.95rem;font-weight:600;color:var(--accent-dark);text-decoration:none;line-height:1.4;display:block;">' + escapeHtml(r.title) + '</a>';
+    const expName = data.experiment ? data.experiment.name : '';
+    const expVariant = data.experiment ? data.experiment.variant : '';
+    const expImpression = data.experiment ? data.experiment.impression_id : '';
+    html += '<a href="' + escapeAttr(r.url) + '" target="_blank" rel="noopener" onclick="trackClick(\\'' + escapeAttr(data.query) + '\\',\\'' + escapeAttr(r.url) + '\\',' + (i + 1) + ',\\'' + escapeAttr(expName) + '\\',\\'' + escapeAttr(expVariant) + '\\',\\'' + escapeAttr(expImpression) + '\\')" style="font-size:0.95rem;font-weight:600;color:var(--accent-dark);text-decoration:none;line-height:1.4;display:block;">' + escapeHtml(r.title) + '</a>';
     html += '<div style="display:flex;flex-wrap:wrap;gap:10px;margin-top:4px;font-size:0.72rem;color:var(--text-tertiary);">';
     html += '<span><i class="fas fa-link" style="width:12px;"></i> ' + escapeHtml(r.domain) + '</span>';
     if (r.published_date) {
@@ -646,6 +650,25 @@ function escapeHtml(s) {
 function escapeAttr(s) {
   if (!s) return '';
   return String(s).replace(/'/g, "&apos;").replace(/\"/g, "&quot;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
+
+function trackClick(query, url, position, expName, expVariant, expImpression) {
+  fetch('/api/ltr/click', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ query: query, url: url, position: position }),
+    keepalive: true,
+  }).catch((e) => console.warn('Click beacon failed', e));
+  // Phase C.2: A/B experiment click attribution (when the response carried
+  // experiment metadata from the search route).
+  if (expName && expImpression) {
+    fetch('/api/experiments/' + encodeURIComponent(expName) + '/click', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ variant: expVariant, impression_id: expImpression, position: position }),
+      keepalive: true,
+    }).catch((e) => console.warn('Experiment click beacon failed', e));
+  }
 }
 
 function renderMarkdown(text) {

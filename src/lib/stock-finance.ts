@@ -582,7 +582,40 @@ export async function searchKoreanStock(
   try {
     // 1. 종목코드 조회 (직접 코드, 상장사명 맵, 회사명 추출 순)
     const stockCode = lookupStockCode(query)
-    if (!stockCode) return results
+
+    if (!stockCode) {
+      // ——————————————————————————————————————————————————————————————
+      // 유기적 연결망 패치: 종목 못 찾을 때 시장 종합 데이터(KOSPI/KOWSQ 시황/금리/환율) fetch
+      // 처리(검색어) ←→ 저장(map 매핑 시도) ←→ 외부(naverAPI)를 끊기지 않게 엮음
+      // ——————————————————————————————————————————————————————————————
+      logger.debug('[StockFinance] stockCode not found — fetching market composite data', { query })
+
+      // 1a. 시장 지수(fetch from naver finance market page)
+      const indexResp = await fetchRealtimeIndex(env, timeoutMs)
+      if (indexResp && indexResp.length > 0) {
+        results.push(indexResp[0])
+      }
+
+      // 1b. 환율/금리 정보(네이버 환율 페이지 scraping or API)
+      const fxResp = await fetchFXRates(env, timeoutMs)
+      if (fxResp && fxResp.length > 0) {
+        results.push(fxResp[fxResp.length - 1])
+      }
+
+      // 1c. 시장 개요(종합 시황페이지 — 네이버 증권 종합현황)
+      const page = buildMarketOverviewPage(query, indexResp?.[0]?.stock_data || null)
+      if (page) {
+        results.push(page)
+      }
+
+      // 1d. 관련 검색어(질문에 포함되어 있을 수 있는 키워드에서 유추 — 종목코드맵에 가장 근접한 것)
+      const nearestMatch = findNearestCompanyInSearch(query)
+      if (nearestMatch) {
+        results.push(nearestMatch)
+      }
+
+      return results.slice(0, maxResults)
+    }
 
     // 2. 실시간 시세 API 호출
     const apiData = await fetchRealtimePrice(stockCode, env, timeoutMs)
@@ -769,5 +802,219 @@ export async function extractStockPriceAdaptive(
   } catch (err) {
     logger.warn('[StockFinance] Adaptive extraction failed:', { error: toError(err) })
     return null
+  }
+}
+
+// ============================================================
+
+// ============================================================
+// Market Composite Data Helpers — 유기적 연결망 핵심 (종목 못 찾을 때 폴백)
+// ============================================================
+
+/** Naver Finance市場綜合指數(KOSPI/KOSDAQ等) fetch */
+async function fetchRealtimeIndex(env: Env | undefined, timeoutMs: number): Promise<SearchResult[]> {
+  const results: SearchResult[] = []
+  try {
+    const url = 'https://finance.naver.com/marketindex/'
+    const resp = await fetchWithTimeout(env, url, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15',
+        Accept: 'text/html',
+        Referer: 'https://finance.naver.com/',
+      },
+    }, timeoutMs)
+
+    if (!resp.ok) {
+      logger.debug('[StockFinance] Market index page returned status code not OK', {})
+      return results
+    }
+
+    const html = await resp.text()
+
+    // KOSPI related section extraction
+    const kospiPattern = /KOSP[^<]*<\/(?:strong|span)>[\s\S]{0,200}?\bvalue["'>]\s*([0-9,]+)/i
+    const kospiMatch = html.match(kospiPattern)
+
+    if (kospiMatch) {
+      const priceStr = kospiMatch[1].replace(/,/g, '')
+      const price = parseInt(priceStr, 10)
+      if (!isNaN(price) && price > 0) {
+        // Get section description
+        const sectionPattern = /KOSP[^<]*<\/[^>]+>[\s\S]{0,500}?/i
+        const sectionMatch = html.match(sectionPattern)
+        const sectionText = sectionMatch
+          ? sectionMatch[0].replace(/<\/?[^>]+(>|$)/g, '').trim().slice(0, 300)
+          : ''
+
+        results.push({
+          title: `${'코스피 (KOSPI)'} — 실시간 시장 지표`,
+          url: url,
+          content: truncateToTokens(`코스피 (KOSPI) | 시장 종합 지수: 현재가 ${price.toLocaleString()}, ${sectionText}`, 400),
+          score: 0.75,
+          domain: 'finance.naver.com',
+        })
+      }
+    }
+
+    // Try alternative pattern: money section
+    const moneyPattern = /<p class="money"[^>]*>\s*([\s\S]*?)\s*<\/p>/g
+    let moneyMatchResult: RegExpExecArray | null
+    while ((moneyMatchResult = moneyPattern.exec(html)) !== null && results.length < 3) {
+      const spanPat = /<span[^>]*class="[\w ]*value[\w ]*"[^>]*>([^<]+)<\/span>/
+      const spanM = moneyMatchResult[1].match(spanPat)
+      if (spanM) {
+        const val = spanM[1].replace(/,/g, '').trim()
+        if (/^[0-9.]+$/.test(val)) {
+          const headPat = /class="head_info"[^>]*>([^<]+)<\/span>/
+          const nameMatch = moneyPattern.lastIndex > 0
+            ? html.substring(Math.max(0, moneyPattern.lastIndex - 200), moneyPattern.lastIndex).match(headPat)
+            : null
+          const name = nameMatch ? nameMatch[1] : '시장 지수'
+          const priceNum = parseFloat(val)
+          if (!isNaN(priceNum) && priceNum > 10) {
+            results.push({
+              title: `${name} — 시황 데이터`,
+              url: url,
+              content: `${name} — 현재가 ${Math.round(priceNum).toLocaleString()}원 | 실시간 시장综合 정보`,
+              score: 0.65,
+              domain: 'finance.naver.com',
+            })
+          }
+        }
+      }
+    }
+
+    // Final fallback from page title
+    if (results.length === 0) {
+      const titleM = html.match(/<title[^>]*>([^<]+)<\/title>/)
+      const pageTitle = titleM?.[1]?.trim() ?? '네이버 증권 시황 페이지'
+      results.push({
+        title: `${pageTitle} — 시장 종합 정보`,
+        url: url,
+        content: `${pageTitle}의 실시간 시장 지수 및综合 시황 데이터입니다.`,
+        score: 0.5,
+        domain: 'finance.naver.com',
+      })
+    }
+
+  } catch (err) {
+    logger.debug('[StockFinance] Market index fetch error:', { error: toError(err) })
+  }
+  return results
+}
+
+/** Naver 환율/금리 page fetch */
+async function fetchFXRates(env: Env | undefined, timeoutMs: number): Promise<SearchResult[]> {
+  const results: SearchResult[] = []
+  try {
+    const fxUrl = 'https://finance.naver.com/marketindex/'
+    const resp = await fetchWithTimeout(env, fxUrl, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15',
+        Accept: 'text/html',
+        Referer: 'https://finance.naver.com/',
+      },
+    }, timeoutMs)
+
+    if (!resp.ok) {
+      logger.debug('[StockFinance] FX page returned non-OK status', {})
+      return results
+    }
+
+    const html = await resp.text()
+
+    // Look for currency pairs in the HTML
+    const currencyPairs = ['달러', '엔', '유로', '위안', "GBP (영국's Pound)"]
+    let foundCount = 0
+
+    for (const unit of currencyPairs) {
+      if (foundCount >= 3) break
+      // Match: "{currency} 환율" followed by amount
+      const pat = new RegExp(`${RegExp.escape(unit)}[^\\n]{0,100}?amount["'>]([^<>"]+)`, 'i')
+      const m = html.match(pat)
+      if (m) {
+        const valStr = m[1].replace(/,/g, '').trim()
+        const rate = parseFloat(valStr)
+        if (!isNaN(rate) && rate > 0) {
+          results.push({
+            title: `${unit} — 환율 실시간`,
+            url: fxUrl,
+            content: `${unit} 환율 | ${Math.round(rate).toLocaleString()}원 | 네이버 증권 기준`,
+            score: 0.55,
+            domain: 'finance.naver.com',
+          })
+          foundCount++
+        }
+      }
+    }
+
+  } catch (err) {
+    logger.debug('[StockFinance] FX rates fetch error:', { error: toError(err) })
+  }
+  return results
+}
+
+/** buildOrganicMarketPage — 검색어와 연결된 시장综合 SearchResult 생성 */
+function buildMarketOverviewPage(query: string, _indexData: StockData | null): SearchResult | null {
+  const keywords = ['주가', '시세', '종목', '투자', '금리', ' 환율', '지수', '코스피', '코스닥', '외국인', '기관']
+  let matchedKeyword = ''
+  for (let i = 0; i < keywords.length; i++) {
+    const kwi = keywords[i]
+      if (query.toLowerCase().includes(kwi)) {
+        matchedKeyword = kwi
+        break
+      }
+  }
+
+  return {
+    title: `${matchedKeyword ? matchedKeyword.toUpperCase() : '시장'}综合 시황 — 네이버 증권`,
+    url: 'https://finance.naver.com/news/news_list.naver?mode=news&section=all',
+    content: truncateToTokens(
+      `${matchedKeyword ? `${matchedKeyword} 관련` : '시장'}综合 시황 정보 | 주식/경제 뉴스 및 분석 리포트 제공`,
+      350
+    ),
+    score: matchedKeyword ? 0.6 : 0.45,
+    domain: 'finance.naver.com',
+  }
+}
+
+/** findNearestCompanyInSearch — 검색어에서 가장 근접한 종목코드 찾기 */
+function findNearestCompanyInSearch(query: string): SearchResult | null {
+  const companyNames = Object.keys(STOCK_CODE_MAP).sort((a, b) => b.length - a.length)
+
+  for (let i = 0; i < companyNames.length; i++) {
+    const name = companyNames[i]
+    // 완전 포함
+    if (query.includes(name)) {
+      return buildCompanyFromMapEntry(name)
+    }
+    // 역포함 (검색어가 회사명 일부)
+    if (name.includes(query) && query.length >= 2) {
+      return buildCompanyFromMapEntry(name)
+    }
+  }
+
+  return null
+}
+
+/** STOCK_CODE_MAP에서 항목 → SearchResult 생성 */
+function buildCompanyFromMapEntry(companyName: string): SearchResult | null {
+  const code = STOCK_CODE_MAP[companyName]
+  if (!code) return null
+  
+  return {
+    title: `${companyName} (${code}) — 기본 종목 정보`,
+    url: `https://finance.naver.com/item/main.naver?code=${code}`,
+    content: `${companyName}(${code}) — 코스피/코스닥 상장 기업. 관련 데이터 제공`,
+    score: 0.5,
+    domain: 'finance.naver.com',
+  }
+}
+
+/** Helper to escape regex strings */
+if (typeof RegExp !== 'undefined') {
+  // Add escape method if not exists 
+  ;(RegExp as any).escape = function(str: string): string {
+    return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
   }
 }

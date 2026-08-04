@@ -1,7 +1,7 @@
-import type { EvalQuery, EvalResult, EvalReport, RegressionDiff, EvalBaseline } from './types'
+import type { EvalQuery, EvalResult, EvalReport, RegressionDiff, EvalBaseline, CacheHitMetrics } from './types'
 import type { SearchResponse } from '../src/types'
 import { executeSearch } from '../src/lib/orchestrator'
-import { calculateLatencyPercentiles, calculateQPS, computeRankingMetrics, aggregateRankingMetrics } from './metrics'
+import { calculateLatencyPercentiles, calculateQPS, computeRankingMetrics, aggregateRankingMetrics, computeCacheHitRate } from './metrics'
 import { readFileSync } from 'fs'
 import { resolve } from 'path'
 
@@ -36,11 +36,30 @@ function loadGoldStandards(): Record<string, string[]> {
  */
 export async function runEval(
   queries: EvalQuery[],
-  config: { jinaApiKey?: string; ai?: Ai; env?: Record<string, unknown> } = {},
+  config: {
+    jinaApiKey?: string
+    ai?: Ai
+    env?: Record<string, unknown>
+    /** Run every query twice and measure the cache hit rate of the warm pass */
+    measureCache?: boolean
+  } = {},
 ): Promise<EvalReport> {
   const results: EvalResult[] = []
   const runStartTime = Date.now()
   const goldStandards = loadGoldStandards()
+
+  const buildRequest = (q: EvalQuery): Parameters<typeof executeSearch>[0] => ({
+    query: q.query,
+    topic: q.topic,
+    max_results: 10,
+    include_answer: false,
+  })
+
+  const buildConfig = () => ({
+    jinaApiKey: config.jinaApiKey,
+    ai: config.ai,
+    env: config.env as Parameters<typeof executeSearch>[1]['env'],
+  })
 
   for (const q of queries) {
     const startTime = Date.now()
@@ -51,19 +70,7 @@ export async function runEval(
     const failures: string[] = []
 
     try {
-      response = await executeSearch(
-        {
-          query: q.query,
-          topic: q.topic,
-          max_results: 10,
-          include_answer: false,
-        },
-        {
-          jinaApiKey: config.jinaApiKey,
-          ai: config.ai,
-          env: config.env as Parameters<typeof executeSearch>[1]['env'],
-        },
-      )
+      response = await executeSearch(buildRequest(q), buildConfig())
 
       resultCount = response.results?.length ?? 0
       backends = response.backend ? response.backend.split('+').filter(Boolean) : []
@@ -114,6 +121,27 @@ export async function runEval(
 
   const totalDurationMs = Date.now() - runStartTime
 
+  // Cache hit-rate measurement: re-run every query immediately after the
+  // cold pass. Warm runs served from the in-process memory cache complete
+  // in a few ms; the orchestrator's memory cache TTL (120s/30s) covers the
+  // gap, so a fast warm run means the cache worked.
+  let cache: CacheHitMetrics | undefined
+  if (config.measureCache && queries.length > 0) {
+    const coldTimesMs = results.map((r) => r.responseTimeMs)
+    const warmTimesMs: number[] = []
+    for (const q of queries) {
+      const warmStart = Date.now()
+      try {
+        await executeSearch(buildRequest(q), buildConfig())
+      } catch {
+        // Cache is measured on latency alone — search failures just
+        // contribute a long warm time (counted as a miss)
+      }
+      warmTimesMs.push(Date.now() - warmStart)
+    }
+    cache = computeCacheHitRate(coldTimesMs, warmTimesMs)
+  }
+
   // Aggregate statistics
   const passedQueries = results.filter((r) => r.passed).length
   const totalTimeMs = results.reduce((sum, r) => sum + r.responseTimeMs, 0)
@@ -150,6 +178,7 @@ export async function runEval(
     backendCoverage,
     latencyPercentiles,
     qps,
+    cache,
     ranking,
     results,
   }

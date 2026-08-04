@@ -27,9 +27,15 @@ from .models import (
     ExtractRequest, ExtractResponse,
     StockRequest, StockResponse,
     SidecarStatus,
+    RerankRequest, RerankResponse, RerankResultItem, RerankerStatus,
+    LtrRankRequest, LtrRankResponse,
+    LtrTrainRequest, LtrTrainResponse,
+    LtrStatus,
 )
 from .scraper import AdaptiveScraper, get_scraper, SCRAPLING_AVAILABLE, FETCHERS_AVAILABLE
 from .stock_naver import fetch_stock_data
+from .reranker import rerank as rerank_documents, status as reranker_status
+from .ltr import train as ltr_train, rank as ltr_rank, status as ltr_status
 
 # ============================================================
 # App Setup
@@ -269,6 +275,192 @@ async def stock_naver(request: StockRequest):
             error=str(e),
             response_time_ms=total_time,
         )
+
+
+# ============================================================
+# Rerank Endpoint (Phase B.1) — BGE-Reranker-v2-m3
+# ============================================================
+
+@app.post("/rerank", response_model=RerankResponse)
+async def rerank(request: RerankRequest):
+    """
+    Rerank documents against a query using the self-hosted BGE-Reranker-v2-m3.
+
+    Falls back to a lightweight term-overlap heuristic when the BGE model
+    is unavailable (no torch installed, model download failed, etc.), so
+    the endpoint always returns a result — never raises.
+
+    Architecture: webapp's Workers AI 1st-pass narrows top 30 → top 15;
+    this sidecar 2nd-pass refines top 15 → top 10 with BGE cross-encoder.
+    """
+    global _request_count, _error_count
+    _request_count += 1
+    start = time.time()
+
+    try:
+        if len(request.documents) > 100:
+            raise HTTPException(
+                status_code=413,
+                detail=f"Too many documents (max 100, got {len(request.documents)})",
+            )
+
+        doc_texts: list[str] = []
+        for doc in request.documents:
+            if doc.text is not None:
+                doc_texts.append(doc.text)
+            else:
+                title = doc.title or ""
+                content = doc.content or ""
+                doc_texts.append(f"{title}\n\n{content}" if title and content else title or content)
+        result = rerank_documents(
+            query=request.query,
+            documents=doc_texts,
+            top_k=request.top_k,
+            return_text=request.return_text,
+        )
+
+        results = [
+            RerankResultItem(
+                index=item["index"],
+                relevance_score=item["relevance_score"],
+                text=item.get("text") if request.return_text else None,
+            )
+            for item in result["results"]
+        ]
+
+        total_time = int((time.time() - start) * 1000)
+        return RerankResponse(
+            results=results,
+            model=result["model"],
+            latency_ms=total_time,
+            fallback_used=result["fallback_used"],
+            success=True,
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        _error_count += 1
+        logger.exception("Rerank failed")
+        total_time = int((time.time() - start) * 1000)
+        return RerankResponse(
+            results=[],
+            model="none",
+            latency_ms=total_time,
+            fallback_used=False,
+            success=False,
+            error=str(e),
+        )
+
+
+@app.get("/rerank/status", response_model=RerankerStatus)
+async def rerank_status():
+    """Report BGE-Reranker availability and configuration."""
+    s = reranker_status()
+    return RerankerStatus(
+        bge_reranker_available=s["bge_reranker_available"],
+        torch_available=s["torch_available"],
+        sentence_transformers_available=s["sentence_transformers_available"],
+        transformers_available=s["transformers_available"],
+        model_name=s["model_name"],
+        device=s["device"],
+        load_error=s["load_error"],
+    )
+
+
+# ============================================================
+# LTR Endpoints (Phase C.1) — LightGBM LambdaRank
+# ============================================================
+
+@app.post("/ltr/rank", response_model=LtrRankResponse)
+async def ltr_rank_endpoint(request: LtrRankRequest):
+    """
+    Score search results with the trained LambdaRank model.
+
+    The webapp pre-computes feature vectors (feature-store.ts) and sends
+    them with the feature names; this endpoint only predicts. Returns an
+    empty scores list (model: "none") when lightgbm is unavailable or no
+    model has been trained yet — the webapp falls back to base scores.
+    """
+    global _request_count, _error_count
+    _request_count += 1
+
+    try:
+        if len(request.features) > 100:
+            raise HTTPException(
+                status_code=413,
+                detail=f"Too many results (max 100, got {len(request.features)})",
+            )
+
+        result = ltr_rank(request.features, request.feature_names)
+        return LtrRankResponse(
+            scores=result["scores"],
+            model=result["model"],
+            latency_ms=result["latency_ms"],
+            success=True,
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        _error_count += 1
+        logger.exception("LTR rank failed")
+        return LtrRankResponse(
+            scores=[],
+            model="none",
+            latency_ms=0,
+            success=False,
+            error=str(e),
+        )
+
+
+@app.post("/ltr/train", response_model=LtrTrainResponse)
+async def ltr_train_endpoint(request: LtrTrainRequest):
+    """
+    Train (or retrain) the LambdaRank model from labeled click data.
+
+    Invoked weekly by the GitHub Actions workflow (ltr-train.yml) with
+    labeled rows exported from /api/ltr/events. Returns trained=false
+    with an error when there is not enough training data.
+    """
+    global _request_count, _error_count
+    _request_count += 1
+
+    try:
+        if len(request.samples) > 200000:
+            raise HTTPException(
+                status_code=413,
+                detail=f"Too many samples (max 200000, got {len(request.samples)})",
+            )
+
+        samples = [s.model_dump() for s in request.samples]
+        result = ltr_train(request.feature_names, samples)
+        return LtrTrainResponse(
+            trained=result["trained"],
+            samples=result["samples"],
+            groups=result["groups"],
+            model=result["model"],
+            error=result.get("error"),
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        _error_count += 1
+        logger.exception("LTR train failed")
+        return LtrTrainResponse(
+            trained=False,
+            samples=len(request.samples),
+            groups=0,
+            model="none",
+            error=str(e),
+        )
+
+
+@app.get("/ltr/status", response_model=LtrStatus)
+async def ltr_status_endpoint():
+    """Report LightGBM availability and model training state."""
+    return LtrStatus(**ltr_status())
 
 
 # ============================================================

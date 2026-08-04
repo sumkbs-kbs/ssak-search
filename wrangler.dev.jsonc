@@ -2,11 +2,15 @@
  * Local development config — used with:
  *   npx wrangler pages dev dist/ --port 8788 -c wrangler.dev.jsonc
  *
- * This file enables the Durable Object binding that `wrangler pages deploy`
- * rejects (Pages can't supply script_name). For local dev, the DO class
- * resolves from _worker.js directly.
+ * Enables the Durable Object bindings that `wrangler pages deploy` rejects
+ * (Pages can't supply script_name). For local dev, the DO classes resolve
+ * from _worker.js directly.
  *
- * Inherits all other bindings from wrangler.jsonc via merge.
+ * Includes ALL 10 DO bindings + R2 + INDEX_QUEUE so every feature is testable
+ * in local dev. Production DO bindings must be configured via Cloudflare
+ * Dashboard (Pages Settings → Functions → Durable Objects) — see
+ * UNIFIED_ROADMAP.md Phase A.2 and the consolidated setup checklist at the
+ * bottom of wrangler.jsonc.
  */
 {
   "name": "ssak-search-dev",
@@ -15,7 +19,31 @@
   "compatibility_flags": ["nodejs_compat"],
   "durable_objects": {
     "bindings": [
-      { "name": "RATE_LIMITER", "class_name": "RateLimiterDO" }
+      { "name": "RATE_LIMITER", "class_name": "RateLimiterDO" },
+      { "name": "THREAD_DO", "class_name": "ThreadDO" },
+      { "name": "PAGES_DO", "class_name": "PagesDO" },
+      { "name": "LIBRARY_DO", "class_name": "LibraryDO" },
+      { "name": "USER_PROFILE_DO", "class_name": "UserProfileDO" },
+      { "name": "SPACE_DO", "class_name": "SpaceDO" },
+      { "name": "API_KEY_DO", "class_name": "ApiKeyDO" },
+      { "name": "CRAWLER_DO", "class_name": "CrawlerDO" },
+      { "name": "CLICK_LOG_DO", "class_name": "ClickLogDO" },
+      { "name": "EXPERIMENT_DO", "class_name": "ExperimentDO" },
+      { "name": "CANARY_DO", "class_name": "CanaryOrchestratorDO" }
     ]
-  }
+  },
+  "r2_buckets": [
+    { "binding": "UPLOAD_BUCKET", "bucket_name": "search-engine-uploads-dev" }
+  ],
+  "queues": {
+    "producers": [
+      { "binding": "INDEX_QUEUE", "queue": "search-index-queue-dev" }
+    ]
+  },
+  // Analytics Engine — same binding as production. Local writes are no-ops
+  // (wrangler pages dev doesn't persist data points), but record() in
+  // metrics.ts takes the Analytics Engine branch when the binding is present.
+  "analytics_engine_datasets": [
+    { "binding": "ANALYTICS", "dataset": "SEARCH_API_METRICS-dev" }
+  ]
 }

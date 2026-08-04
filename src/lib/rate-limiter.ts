@@ -24,6 +24,9 @@ export interface HostHealth {
   totalRequests?: number
   totalFailures?: number
   rateLimitedCount?: number
+  tripCount?: number
+  probeInFlight?: boolean
+  backoffMs?: number
 }
 
 export interface RateLimitResult {
@@ -46,7 +49,7 @@ interface HostConfig {
 const HOST_CONFIGS: Record<string, HostConfig> = {
   'www.bing.com': { maxConcurrent: 3, failureThreshold: 5, resetTimeoutMs: 60_000, rateLimitPerMinute: 60 },
   'html.duckduckgo.com': { maxConcurrent: 1, failureThreshold: 3, resetTimeoutMs: 120_000, rateLimitPerMinute: 20 },
-  'search.naver.com': { maxConcurrent: 2, failureThreshold: 5, resetTimeoutMs: 60_000, rateLimitPerMinute: 40 },
+  'search.naver.com': { maxConcurrent: 3, failureThreshold: 5, resetTimeoutMs: 60_000, rateLimitPerMinute: 80 },
   'en.wikipedia.org': { maxConcurrent: 3, failureThreshold: 5, resetTimeoutMs: 30_000, rateLimitPerMinute: 80 },
   'api.github.com': { maxConcurrent: 2, failureThreshold: 3, resetTimeoutMs: 60_000, rateLimitPerMinute: 100 },
   'hacker-news.firebaseio.com': { maxConcurrent: 3, failureThreshold: 5, resetTimeoutMs: 30_000, rateLimitPerMinute: 100 },
@@ -75,17 +78,28 @@ function hostname(url: string): string {
 }
 
 // ============================================================
+// Self-healing circuit breaker (D.2) — shared with rate-limiter-do.ts
+// ============================================================
+
+const BACKOFF_STAGES_MS = [30_000, 300_000, 1_800_000]
+
+function getBackoffMs(tripCount: number): number {
+  const stage = Math.min(Math.max(tripCount, 0), BACKOFF_STAGES_MS.length - 1)
+  return BACKOFF_STAGES_MS[stage]
+}
+
+// ============================================================
 // Fallback in-memory state (for local dev without DO binding)
 // ============================================================
 
 const LOCAL_INFLIGHT = new Map<string, number>()
-const LOCAL_CIRCUITS = new Map<string, { failures: number; tripped: boolean; openedAt: number }>()
+const LOCAL_CIRCUITS = new Map<string, { failures: number; tripped: boolean; openedAt: number; tripCount: number; probeInFlight: boolean }>()
 const LOCAL_RATE_WINDOWS = new Map<string, number[]>()
 
 function getLocalCircuit(host: string) {
   let c = LOCAL_CIRCUITS.get(host)
   if (!c) {
-    c = { failures: 0, tripped: false, openedAt: 0 }
+    c = { failures: 0, tripped: false, openedAt: 0, tripCount: 0, probeInFlight: false }
     LOCAL_CIRCUITS.set(host, c)
   }
   return c
@@ -101,6 +115,7 @@ interface RateLimiterDOClient {
   release(host: string, success: boolean): Promise<void>
   getAllHealth(): Promise<Record<string, HostHealth>>
   getRateLimitStatus(host: string): Promise<RateLimitResult>
+  forceOpen(host: string): Promise<void>
 }
 
 let doClient: RateLimiterDOClient | null = null
@@ -143,8 +158,9 @@ export async function canRequest(env: AppBindings, url: string): Promise<boolean
   const now = Date.now()
   if (circuit.tripped) {
     const elapsed = now - circuit.openedAt
-    if (elapsed < config.resetTimeoutMs) return false
-    circuit.tripped = false
+    if (elapsed < getBackoffMs(circuit.tripCount)) return false
+    if (circuit.probeInFlight) return false
+    circuit.probeInFlight = true
     circuit.failures = 0
   }
   const current = LOCAL_INFLIGHT.get(host) ?? 0
@@ -175,8 +191,23 @@ export async function release(env: AppBindings, url: string, success: boolean): 
   const current = LOCAL_INFLIGHT.get(host) ?? 0
   LOCAL_INFLIGHT.set(host, Math.max(0, current - 1))
 
-  const config = getConfig(host)
   const circuit = getLocalCircuit(host)
+  if (circuit.probeInFlight) {
+    circuit.probeInFlight = false
+    if (success) {
+      circuit.tripped = false
+      circuit.failures = 0
+      circuit.tripCount = 0
+      circuit.openedAt = 0
+    } else {
+      circuit.tripped = true
+      circuit.failures = 0
+      circuit.tripCount = Math.min(circuit.tripCount + 1, BACKOFF_STAGES_MS.length - 1)
+      circuit.openedAt = Date.now()
+    }
+    return
+  }
+  const config = getConfig(host)
   if (success) {
     circuit.failures = 0
   } else {
@@ -240,9 +271,32 @@ export async function getBackendHealth(env: AppBindings): Promise<Record<string,
       failures: circuit.failures,
       inflight,
       tripped: circuit.tripped,
+      tripCount: circuit.tripCount,
+      probeInFlight: circuit.probeInFlight,
+      backoffMs: getBackoffMs(circuit.tripCount),
     }
   }
   return result
+}
+
+/**
+ * Force-open the circuit for a backend host (canary regression detection, D.1).
+ * Rejects requests to that host until recovery probing succeeds.
+ */
+export async function forceOpenBackend(env: AppBindings, url: string): Promise<void> {
+  const host = hostname(url)
+  const client = getDOClient(env)
+  if (client) {
+    await client.forceOpen(host)
+    return
+  }
+  const circuit = getLocalCircuit(host)
+  circuit.tripped = true
+  circuit.failures = 0
+  circuit.tripCount = 0
+  circuit.openedAt = Date.now()
+  circuit.probeInFlight = false
+  logger.warn(`[rate-limiter] Circuit force-opened for ${host} (canary regression)`)
 }
 
 /** Get rate limit status for a specific host (for response headers). */

@@ -17,6 +17,9 @@ import type { AppBindings, SearchRequest, SearchResponse, ErrorResponse, FocusMo
 import { executeSearch } from '../lib/orchestrator'
 import { cacheKey, getCached, setCached } from '../lib/cache'
 import { indexFromSearchResults } from '../lib/search/auto-index'
+import { logSearchImpression } from '../lib/ltr/click-logger'
+import { resolveExperimentAssignment, logExperimentImpression, logExperimentLatency, logExperimentError } from '../lib/experiments/ab-test'
+import type { ExperimentAssignment } from '../lib/experiments/ab-test'
 import { validateApiKeyWithTenant, checkClientRateLimit, getClientIp } from '../lib/auth'
 import { recordSearchRequest, recordSearchSubrequests, setMetricsEnv } from '../lib/metrics'
 import { auditAuthFailure, auditRateLimit, audit } from '../lib/audit'
@@ -196,18 +199,29 @@ searchRoute.post('/', async (c) => {
     focus: body.focus && ['all', 'academic', 'news', 'writing', 'video', 'social', 'finance', 'math'].includes(body.focus)
       ? body.focus as FocusMode
       : 'all',
+    user_id: typeof body.user_id === 'string' ? body.user_id.slice(0, 200) : undefined,
   }
 
   const startTime = Date.now()
   let subrequestEstimate = 0
+  // Phase C.2: deterministic A/B assignment — user_id hash → control/treatment.
+  // Resolved BEFORE the cache lookup because the variant is part of the cache
+  // key (control and treatment must never share cached result ordering).
+  // Falls back to the client IP so dashboard users (who send no user_id) still
+  // receive a stable assignment per browser.
+  const experiment = await resolveExperimentAssignment(c.env, request.user_id ?? getClientIp(c.req.raw.headers))
   try {
     // Check cache first (skip for news/finance — freshness matters)
-    const key = cacheKey(request)
+    const key = cacheKey(request, experiment?.variant)
     if (request.topic !== 'news' && request.topic !== 'finance') {
       const cached = await getCached<SearchResponse>(key, c.env)
       if (cached) {
         recordSearchRequest(Date.now() - startTime, true)
-        return c.json<SearchResponse>({ ...cached, cached: true })
+        if (experiment) {
+          c.executionCtx.waitUntil(logExperimentImpression(c.env, experiment, request.query, cached.results?.length ?? 0))
+          c.executionCtx.waitUntil(logExperimentLatency(c.env, experiment, Date.now() - startTime))
+        }
+        return c.json<SearchResponse>({ ...cached, cached: true, ...(experiment ? { experiment } : {}) })
       }
     }
 
@@ -217,6 +231,11 @@ searchRoute.post('/', async (c) => {
       env: c.env,
       subrequestTracker: tracker,
       requestId: getRequestId(c.req.raw.headers),
+      experimentVariant: experiment?.variant,
+      // Phase C.3: semantic cache tier (Vectorize) — opt-in per route so the
+      // eval runner / research pipeline never receive cached responses.
+      semanticCache: true,
+      waitUntil: (promise) => { c.executionCtx.waitUntil(promise) },
     })
 
     // Add subrequest estimate header for quota monitoring
@@ -235,6 +254,21 @@ searchRoute.post('/', async (c) => {
     // Phase A: Auto-index top results for self-index growth (async, best-effort)
     if (hasUsableResults && !skipForTopic) {
       c.executionCtx.waitUntil(indexFromSearchResults(result.results, c.env))
+    }
+
+    // Phase C.1: Log impression for LTR training (async, best-effort)
+    if (hasUsableResults) {
+      c.executionCtx.waitUntil(logSearchImpression(request.query, result.results, c.env))
+    }
+
+    // Phase C.2: Log experiment impression + latency (async, best-effort).
+    // Impressions cover every served result list (cache hits too, handled
+    // above) so CTR denominators reflect real exposure.
+    if (experiment) {
+      if (hasUsableResults) {
+        c.executionCtx.waitUntil(logExperimentImpression(c.env, experiment, request.query, result.results.length))
+      }
+      c.executionCtx.waitUntil(logExperimentLatency(c.env, experiment, Date.now() - startTime))
     }
 
     recordSearchRequest(Date.now() - startTime, true)
@@ -256,7 +290,9 @@ searchRoute.post('/', async (c) => {
     // already check the body keep working. This is the agent-friendly contract
     // requested in feedback item 5.
     const statusCode = result.no_results ? 404 : 200
-    const response = c.json<SearchResponse>(result, statusCode)
+    // Attach experiment metadata to the response (never to the cached copy —
+    // impression_id is per-request, so it must not be serialized into cache).
+    const response = c.json<SearchResponse>(experiment ? { ...result, experiment } : result, statusCode)
     response.headers.set('X-Search-Mode', searchMode)
     response.headers.set('X-Subrequests-Used', String(reportedSubrequests))
     response.headers.set('X-Subrequests-Limit', '50')
@@ -267,6 +303,9 @@ searchRoute.post('/', async (c) => {
   } catch (err) {
     logger.error('Search error:', { error: toError(err) })
     recordSearchRequest(Date.now() - startTime, false)
+    if (experiment) {
+      c.executionCtx.waitUntil(logExperimentError(c.env, experiment))
+    }
     const response = c.json<ErrorResponse>(
       {
         detail: err instanceof Error ? err.message : 'Search failed',
@@ -325,6 +364,7 @@ searchRoute.get('/', async (c) => {
     language: c.req.query('language'),
     location: c.req.query('location'),
     focus: (c.req.query('focus') as FocusMode) || 'all',
+    user_id: c.req.query('user_id') || undefined,
   }
 
   // Parse domain filters from comma-separated strings.
@@ -342,15 +382,23 @@ searchRoute.get('/', async (c) => {
 
   const startTime = Date.now()
   let subrequestEstimate = 0
+  // Phase C.2: deterministic A/B assignment — same rule as POST, so a given
+  // user_id always sees the same variant across both endpoints. IP fallback
+  // covers dashboard users who send no user_id.
+  const experiment = await resolveExperimentAssignment(c.env, request.user_id ?? getClientIp(c.req.raw.headers))
   try {
     // Phase 5: Check cache first (skip for news/finance — freshness matters)
     // GET route previously had NO cache lookup, so every GET was a cold search.
-    const key = cacheKey(request)
+    const key = cacheKey(request, experiment?.variant)
     if (request.topic !== 'news' && request.topic !== 'finance') {
       const cached = await getCached<SearchResponse>(key, c.env)
       if (cached) {
         recordSearchRequest(Date.now() - startTime, true)
-        const response = c.json<SearchResponse>({ ...cached, cached: true })
+        if (experiment) {
+          c.executionCtx.waitUntil(logExperimentImpression(c.env, experiment, request.query, cached.results?.length ?? 0))
+          c.executionCtx.waitUntil(logExperimentLatency(c.env, experiment, Date.now() - startTime))
+        }
+        const response = c.json<SearchResponse>({ ...cached, cached: true, ...(experiment ? { experiment } : {}) })
         response.headers.set('X-Cache', 'HIT')
         return response
       }
@@ -362,6 +410,11 @@ searchRoute.get('/', async (c) => {
       env: c.env,
       subrequestTracker: tracker,
       requestId: getRequestId(c.req.raw.headers),
+      experimentVariant: experiment?.variant,
+      // Phase C.3: semantic cache tier (Vectorize) — opt-in per route so the
+      // eval runner / research pipeline never receive cached responses.
+      semanticCache: true,
+      waitUntil: (promise) => { c.executionCtx.waitUntil(promise) },
     })
 
     // Cache the result if it's worth reusing (same logic as POST route)
@@ -378,6 +431,19 @@ searchRoute.get('/', async (c) => {
       c.executionCtx.waitUntil(indexFromSearchResults(result.results, c.env))
     }
 
+    // Phase C.1: Log impression for LTR training (async, best-effort)
+    if (hasUsableResults) {
+      c.executionCtx.waitUntil(logSearchImpression(request.query, result.results, c.env))
+    }
+
+    // Phase C.2: Log experiment impression + latency (async, best-effort).
+    if (experiment) {
+      if (hasUsableResults) {
+        c.executionCtx.waitUntil(logExperimentImpression(c.env, experiment, request.query, result.results.length))
+      }
+      c.executionCtx.waitUntil(logExperimentLatency(c.env, experiment, Date.now() - startTime))
+    }
+
     recordSearchRequest(Date.now() - startTime, true)
     const reportedSubrequests = Math.max(tracker.count, subrequestEstimate)
     recordSearchSubrequests(reportedSubrequests)
@@ -385,7 +451,7 @@ searchRoute.get('/', async (c) => {
     if (!result.no_results) result.no_results = !(result.results && result.results.length > 0)
     // Empty-result → HTTP 404 (agent-friendly; see POST handler for rationale).
     const statusCode = result.no_results ? 404 : 200
-    const response = c.json<SearchResponse>(result, statusCode)
+    const response = c.json<SearchResponse>(experiment ? { ...result, experiment } : result, statusCode)
     response.headers.set('X-Subrequests-Used', String(reportedSubrequests))
     response.headers.set('X-Subrequests-Limit', '50')
     response.headers.set('X-Cache', 'MISS')
@@ -396,6 +462,9 @@ searchRoute.get('/', async (c) => {
   } catch (err) {
     logger.error('Search error:', { error: toError(err) })
     recordSearchRequest(Date.now() - startTime, false)
+    if (experiment) {
+      c.executionCtx.waitUntil(logExperimentError(c.env, experiment))
+    }
     const response = c.json<ErrorResponse>(
       {
         detail: err instanceof Error ? err.message : 'Search failed',
@@ -447,7 +516,12 @@ searchRoute.get('/stream', async (c) => {
     language: c.req.query('language'),
     location: c.req.query('location'),
     focus: (c.req.query('focus') as FocusMode) || 'all',
+    user_id: c.req.query('user_id') || undefined,
   }
+
+  // Phase C.2: same deterministic assignment as POST/GET — keeps the control
+  // group's ranking consistent across every search entry point.
+  const experiment = await resolveExperimentAssignment(c.env, request.user_id ?? null)
 
   const abortController = new AbortController()
 
@@ -483,13 +557,18 @@ searchRoute.get('/stream', async (c) => {
 
       try {
         // Phase 1: Execute search and send results immediately
-        const result = await executeSearch(request, {
-          jinaApiKey: c.env.JINA_API_KEY,
-          ai: c.env.AI,
-          env: c.env,
-          subrequestTracker: tracker,
-          requestId: getRequestId(c.req.raw.headers),
-        })
+    const result = await executeSearch(request, {
+      jinaApiKey: c.env.JINA_API_KEY,
+      ai: c.env.AI,
+      env: c.env,
+      subrequestTracker: tracker,
+      requestId: getRequestId(c.req.raw.headers),
+      experimentVariant: experiment?.variant,
+      // Phase C.3: semantic cache tier (Vectorize) — opt-in per route so the
+      // eval runner / research pipeline never receive cached responses.
+      semanticCache: true,
+      waitUntil: (promise) => { c.executionCtx.waitUntil(promise) },
+    })
 
         const subrequestEstimate = (result as SearchResponse & { subrequest_estimate?: number }).subrequest_estimate ?? 0
         if (subrequestEstimate >= 40) {

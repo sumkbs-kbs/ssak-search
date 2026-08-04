@@ -33,3 +33,11 @@ export type {
   ExtractionResult,
   EntityType,
 } from './entity-extractor'
+
+export {
+  decomposeQuery,
+} from './decomposer'
+
+export type {
+  DecomposedQuery,
+} from './decomposer'

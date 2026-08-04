@@ -48,6 +48,8 @@ import {
 } from './util'
 import { type AgenticSearchOptions, executeAgenticSearch } from './agentic'
 import { recordAgenticPipeline } from './metrics'
+import { cacheKey, cacheParamsSignature } from './cache'
+import { semanticCacheLookup, semanticCacheStore } from './semantic-cache'
 // Phase 2: decomposed search modules
 import type { SearchContext, BackendTask } from './search/context'
 import { buildBackendTasks } from './search/strategies'
@@ -78,7 +80,7 @@ const MEMORY_CACHE_TTL_NEWS = 30_000      // 30 seconds
  */
 const INFLIGHT_SEARCHES = new Map<string, Promise<SearchResponse>>()
 
-function getMemoryCacheKey(request: SearchRequest): string {
+function getMemoryCacheKey(request: SearchRequest, variant?: string): string {
   // Fast deterministic key: all fields that affect search results.
   // The query MUST be canonicalized the SAME way as cache.ts:cacheKey does —
   // otherwise Tier 0 (memory) and Tier 1/2 (Cache API / KV) fragment into
@@ -92,7 +94,7 @@ function getMemoryCacheKey(request: SearchRequest): string {
     .toLowerCase()
   const includeSorted = request.include_domains ? [...request.include_domains].sort().join(',') : ''
   const excludeSorted = request.exclude_domains ? [...request.exclude_domains].sort().join(',') : ''
-  return `${canonicalQuery}|${request.topic}|${request.max_results}|${request.search_depth}|${request.time_range ?? ''}|${request.sort_by}|${request.country ?? ''}|${request.language ?? ''}|${request.focus ?? 'all'}|${request.page ?? 1}|ia=${request.include_answer ? 1 : 0}|inc=${includeSorted}|exc=${excludeSorted}`
+  return `${canonicalQuery}|${request.topic}|${request.max_results}|${request.search_depth}|${request.time_range ?? ''}|${request.sort_by}|${request.country ?? ''}|${request.language ?? ''}|${request.focus ?? 'all'}|${request.page ?? 1}|ia=${request.include_answer ? 1 : 0}|inc=${includeSorted}|exc=${excludeSorted}|exp=${variant ?? ''}`
 }
 
 function getFromMemoryCache(key: string): SearchResponse | undefined {
@@ -137,6 +139,20 @@ export interface OrchestratorConfig {
    * generation can be traced end-to-end in Logpush.
    */
   requestId?: string
+  /** A/B experiment variant (Phase C.2) — 'control' disables LTR ranking */
+  experimentVariant?: string
+  /**
+   * Phase C.3: enable the semantic cache tier. Opt-in so callers that must
+   * measure fresh search behavior (eval runner, research pipeline) never
+   * receive cached responses that would skew their metrics.
+   */
+  semanticCache?: boolean
+  /**
+   * Phase C.3: register fire-and-forget promises (semantic cache store) with
+   * the runtime's waitUntil so they survive past the response. When omitted,
+   * the store is still attempted as a floating promise.
+   */
+  waitUntil?: (promise: Promise<unknown>) => void
 }
 
 // ============================================================
@@ -282,6 +298,13 @@ function toBingTimeRange(range: string | undefined): 'day' | 'week' | 'month' | 
  *
  * No API keys required — all backends are free and key-less.
  */
+/** News/finance queries must never be served from the semantic cache — freshness wins. */
+function isSemanticCacheEligible(request: SearchRequest): boolean {
+  return request.topic !== 'news' && request.topic !== 'finance'
+    && detectQueryType(request.query) !== 'news'
+    && detectQueryType(request.query) !== 'financial'
+}
+
 export async function executeSearch(
   request: SearchRequest,
   config: OrchestratorConfig,
@@ -298,7 +321,7 @@ export async function executeSearch(
     : logger
 
   // ── 1. Cache check ──
-  const memCacheKey = getMemoryCacheKey(request)
+  const memCacheKey = getMemoryCacheKey(request, config.experimentVariant)
   const memCached = getFromMemoryCache(memCacheKey)
   if (memCached) {
     log.debug('search cache hit (memory)')
@@ -602,11 +625,48 @@ export async function executeSearch(
   }
 
   setInMemoryCache(memCacheKey, searchResponse, isNews || isFinance)
+
+  // ── 17. Semantic cache store (C.3) — fire-and-forget, never blocks the
+  // response. Skipped for news/finance (freshness) and when the caller opted
+  // out. Stored under the SAME key as the exact-match tiers so a later
+  // semantic hit is promoted into them by the route's setCached().
+  if (env && config.semanticCache && !isNews && !isFinance) {
+    const store = semanticCacheStore(env, cacheKey(request, config.experimentVariant), query, searchResponse, {
+      language: request.language,
+      paramsSig: cacheParamsSignature(request, config.experimentVariant),
+    })
+    if (config.waitUntil) config.waitUntil(store)
+    else void store
+  }
+
   return searchResponse
   })()
 
   // Register and await. The .finally clears the slot regardless of outcome.
   INFLIGHT_SEARCHES.set(memCacheKey, execution)
+
+  // ── 1c. Semantic cache tier (C.3): race the vector lookup against the full
+  // fan-out. On a hit the lookup typically resolves in <100ms while the
+  // fan-out takes seconds — the cached response short-circuits the request.
+  // On a miss the fan-out wins the race, so the lookup adds ZERO latency to
+  // the hot path. The execution lane swallows rejections here so a failed
+  // search still flows through the normal return below (which re-throws via
+  // execution.finally) instead of wedging the single-flight slot.
+  if (env && config.semanticCache && isSemanticCacheEligible(request)) {
+    const key = cacheKey(request, config.experimentVariant)
+    const paramsSig = cacheParamsSignature(request, config.experimentVariant)
+    const semantic = await Promise.race([
+      semanticCacheLookup(env, key, request.query, { language: request.language, paramsSig })
+        .catch(() => undefined),
+      execution.then(() => undefined, () => undefined),
+    ])
+    if (semantic) {
+      log.info('[SemanticCache] Hit', { matchedQuery: semantic.matchedQuery, score: semantic.score })
+      setInMemoryCache(memCacheKey, semantic.response, false)
+      return semantic.response
+    }
+  }
+
   return execution.finally(() => {
     INFLIGHT_SEARCHES.delete(memCacheKey)
   })
@@ -684,6 +744,7 @@ async function buildSearchContext(
     isNews, isFinance, focus, hasExplicitFocus, overFetch, maxResults,
     bingLang, bingRegion, bingTimeRange, effectiveWikiLang,
     spaceFileContext,
+    experimentVariant: config.experimentVariant,
   }
 }
 

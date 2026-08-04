@@ -128,6 +128,17 @@ vi.mock('../../src/lib/answer', () => ({
   }),
 }))
 
+vi.mock('../../src/lib/ltr/click-logger', () => ({
+  logSearchImpression: vi.fn(),
+}))
+
+vi.mock('../../src/lib/experiments/ab-test', () => ({
+  resolveExperimentAssignment: vi.fn().mockResolvedValue(null),
+  logExperimentImpression: vi.fn(),
+  logExperimentLatency: vi.fn(),
+  logExperimentError: vi.fn(),
+}))
+
 // Create test apps
 function createSearchApp() {
   return createTestApp((app) => app.route('/api/search', searchRoute))

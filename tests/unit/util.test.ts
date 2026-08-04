@@ -115,4 +115,17 @@ describe('assertSafeFetchUrl — SSRF DNS-rebinding guards (P0-6 hardening)', ()
 
     await expect(assertSafeFetchUrl('http://metadata.internal')).rejects.toThrow(/private|internal/)
   })
+
+  it('blocks the classic DNS-rebinding pattern — attacker-controlled hostname resolves to loopback', async () => {
+    const rebinding_body = Promise.resolve({
+      Status: 0,
+      Answer: [{ type: 1, data: '127.0.0.1' }],
+    })
+
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, json: () => rebinding_body }))
+
+    await expect(assertSafeFetchUrl('http://evil.attacker.com/admin')).rejects.toThrow(
+      /private\/internal IP: 127\.0\.0\.1/,
+    )
+  })
 })

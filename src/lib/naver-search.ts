@@ -31,6 +31,8 @@ export interface NaverSearchOptions {
   maxResults?: number
   timeoutMs?: number
   env?: Env
+  /** Internal: set when retrying after throttle/overload (prevents infinite retry loops) */
+  _retry?: boolean
 }
 
 /**
@@ -66,7 +68,24 @@ export async function naverSearch(
       timeoutMs,
     )
 
-    if (!response.ok) return results
+    if (!response.ok) {
+      // Retry once on 429 (throttle) or 5xx (overload) with jitter.
+      // Naver sometimes returns Cloudflare challenge pages (403) for
+      // aggressive scraping — no amount of retries will help; just return empty.
+      const status = response.status
+      if ((status === 429 || status >= 500) && !opts._retry) {
+        const jitter = Math.random() * 1500 + 500 // 0.5–2s
+        await new Promise(r => setTimeout(r, jitter))
+        logger.info('[ssak] Retrying Naver (status=' + status + ')')
+        return naverSearch(query, { ...opts, _retry: true })
+      }
+      if (status === 403) {
+        logger.warn('[ssak] Naver returned 403 — Cloudflare challenge detected; skipping this backend')
+      } else {
+        logger.warn('[ssak] Naver search non-OK:', { status })
+      }
+      return results
+    }
 
     const html = await response.text()
 

@@ -148,6 +148,25 @@ CREATE INDEX IF NOT EXISTS idx_reputation_crawl ON domain_reputation(crawability
 -- 기존 DB 마이그레이션은 별도 스크립트를 통해 진행하세요.
 
 -- ============================================================
+-- Semantic Cache (Phase C.3) — 유사 쿼리 재사용
+-- ============================================================
+
+-- Vectorize(SEMANTIC_CACHE_INDEX)에는 쿼리 벡터만 저장되고,
+-- 실제 검색 응답은 이 테이블에 저장됩니다. 유사 쿼리(cosine > 0.92)가
+-- Vectorize에서 매칭되면 이 테이블에서 응답을 로드합니다.
+CREATE TABLE IF NOT EXISTS semantic_cache (
+  cache_key TEXT PRIMARY KEY,          -- 캐시 키 (canonical query + params)
+  query TEXT NOT NULL,                 -- 원본 쿼리
+  response_json TEXT NOT NULL,         -- SearchResponse JSON
+  created_at INTEGER NOT NULL,         -- 생성 시간 (TTL 24h 판정)
+  last_accessed INTEGER NOT NULL,      -- 마지막 접근 시간 (LRU eviction)
+  access_count INTEGER NOT NULL DEFAULT 1  -- 접근 횟수 (인기 순위)
+);
+
+CREATE INDEX IF NOT EXISTS idx_semantic_cache_accessed ON semantic_cache(last_accessed);
+CREATE INDEX IF NOT EXISTS idx_semantic_cache_created ON semantic_cache(created_at);
+
+-- ============================================================
 -- Index Statistics (cached)
 -- ============================================================
 

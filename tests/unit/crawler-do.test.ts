@@ -293,6 +293,126 @@ describe('CrawlerDO.seedFromReputation', () => {
 })
 
 // ============================================================
+// seedFromSitemap (Phase B.4)
+// ============================================================
+describe('CrawlerDO.seedFromSitemap', () => {
+  let CrawlerDOClass: any
+  let doState: any
+  let doInstance: any
+
+  beforeEach(async () => {
+    vi.mock('cloudflare:workers', () => ({
+      DurableObject: class MockDurableObject {
+        ctx: any; env: any
+        constructor(ctx: any, env: any) { this.ctx = ctx; this.env = env }
+      },
+    }))
+    const mod = await import('../../src/lib/crawler-do')
+    CrawlerDOClass = mod.CrawlerDO
+    doState = createMockDOState()
+  })
+
+  afterEach(() => {
+    vi.restoreAllMocks()
+  })
+
+  // Mock fetch: DoH queries return JSON, robots.txt/sitemap URLs return the
+  // registered body (or 404), everything else 500.
+  function mockSitemapFetch(routes: Record<string, string>): void {
+    globalThis.fetch = vi.fn(async (input: unknown) => {
+      const url = typeof input === 'string' ? input : String(input)
+      if (url.includes('1.1.1.1/dns-query')) {
+        return { ok: true, status: 200, json: async () => ({ Status: 0, Answer: [{ data: '1.2.3.4', type: 1 }] }) }
+      }
+      const body = routes[url]
+      if (body === undefined) {
+        return { ok: false, status: 404, text: async () => '' }
+      }
+      return { ok: true, status: 200, text: async () => body }
+    }) as unknown as typeof fetch
+  }
+
+  it('returns zero counts when no sitemap URLs are discovered', async () => {
+    mockSitemapFetch({
+      'https://example.com/robots.txt': 'User-agent: *\nDisallow: /\n',
+      'https://example.com/sitemap.xml': '',
+    })
+
+    const env = createMockEnv({})
+    doInstance = new CrawlerDOClass(doState, env)
+
+    const result = await doInstance.seedFromSitemap('example.com', 50)
+    expect(result).toEqual({ added: 0, failed: 0, discovered: 0 })
+  })
+
+  it('seeds URLs from sitemap into frontier with priority 80 and sitemap source', async () => {
+    mockSitemapFetch({
+      'https://example.com/robots.txt': 'Sitemap: https://example.com/sitemap.xml\n',
+      'https://example.com/sitemap.xml': `<urlset><url><loc>https://example.com/a</loc></url><url><loc>https://example.com/b</loc></url><url><loc>https://example.com/c</loc></url></urlset>`,
+    })
+
+    const env = createMockEnv({})
+    doInstance = new CrawlerDOClass(doState, env)
+
+    const result = await doInstance.seedFromSitemap('example.com', 50)
+    expect(result.discovered).toBe(3)
+    expect(result.added).toBe(3)
+    expect(result.failed).toBe(0)
+
+    const status = await doInstance.getStatus()
+    expect(status.frontier_size).toBe(3)
+    const frontier = (doInstance as any).frontier as Array<{ url: string; priority: number; source_url?: string }>
+    expect(frontier.every(u => u.priority === 80)).toBe(true)
+    expect(frontier.every(u => u.source_url === 'sitemap:example.com')).toBe(true)
+  })
+
+  it('skips already-visited URLs (dedupe across seeds)', async () => {
+    mockSitemapFetch({
+      'https://example.com/robots.txt': 'Sitemap: https://example.com/sitemap.xml\n',
+      'https://example.com/sitemap.xml': `<urlset><url><loc>https://example.com/a</loc></url></urlset>`,
+    })
+
+    const env = createMockEnv({})
+    doInstance = new CrawlerDOClass(doState, env)
+
+    const first = await doInstance.seedFromSitemap('example.com', 50)
+    expect(first.added).toBe(1)
+
+    const second = await doInstance.seedFromSitemap('example.com', 50)
+    expect(second.discovered).toBe(1)
+    expect(second.added).toBe(0)
+
+    const status = await doInstance.getStatus()
+    expect(status.frontier_size).toBe(1)
+  })
+
+  it('skips blacklisted domains from sitemap results', async () => {
+    mockSitemapFetch({
+      'https://example.com/robots.txt': 'Sitemap: https://example.com/sitemap.xml\n',
+      'https://example.com/sitemap.xml': `<urlset><url><loc>https://example.com/a</loc></url><url><loc>https://spam.com/b</loc></url></urlset>`,
+    })
+
+    const mockFirst = vi.fn()
+      .mockResolvedValueOnce(null)        // example.com — not blacklisted
+      .mockResolvedValueOnce({ domain: 'spam.com' })  // spam.com — blacklisted
+    const mockBind = vi.fn().mockReturnValue({ first: mockFirst })
+    const mockPrepare = vi.fn().mockReturnValue({ bind: mockBind })
+    const mockDb = { prepare: mockPrepare }
+
+    const env = createMockEnv({ SEARCH_INDEX_DB: mockDb })
+    doInstance = new CrawlerDOClass(doState, env)
+
+    const result = await doInstance.seedFromSitemap('example.com', 50)
+    expect(result.discovered).toBe(2)
+    expect(result.added).toBe(1)
+    expect(result.failed).toBe(1)
+
+    const status = await doInstance.getStatus()
+    expect(status.frontier_size).toBe(1)
+  })
+})
+
+// ============================================================
 // CrawlerRPC interface
 // ============================================================
 describe('CrawlerDO RPC interface', () => {

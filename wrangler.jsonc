@@ -1,6 +1,6 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
-  "name": "ssak-search",
+  "name": "search-engine-api",
   "compatibility_date": "2026-07-10",
   "pages_build_output_dir": "./dist",
   "compatibility_flags": [
@@ -41,7 +41,17 @@
   // Vectorize index — Vectorize does not support local simulation, so without
   // this flag local dev gets "not supported" and indexing/search no-ops.
   // Production deploys are unaffected (they always use the remote index).
-  "vectorize": [ { "binding": "VECTORIZE_INDEX", "index_name": "search-engine-dense", "remote": true } ],
+  // Phase C.3: Semantic cache index — SEPARATE from the document index so
+  // cached-query vectors never pollute document search results (and vice
+  // versa: document chunks must not match as "similar queries").
+  // Create it with the same model/dimensions as VECTORIZE_INDEX:
+  //   npx wrangler vectorize create semantic-cache-dense \
+  //     --dimensions 768 --metric cosine
+  // Add the binding on Cloudflare Dashboard (Workers & Pages → Vectorize →
+  // "semantic-cache-dense" → Add binding → name: SEMANTIC_CACHE_INDEX).
+  // Without this binding, semanticCacheLookup()/semanticCacheStore() no-op —
+  // the exact-match tiers keep working unchanged.
+  "vectorize": [ { "binding": "VECTORIZE_INDEX", "index_name": "search-engine-dense", "remote": true }, { "binding": "SEMANTIC_CACHE_INDEX", "index_name": "semantic-cache-dense", "remote": true } ],
   // D1 database — create via Dashboard or CLI and set the real UUID:
   //   npx wrangler d1 create search-engine-index
   //   npx wrangler d1 list   (to look up the id)
@@ -58,76 +68,39 @@
   // Cloudflare Dashboard → Workers & Pages → Queues → Create queue
   // (name: search-index-queue)
   // "queues": [ { "binding": "INDEX_QUEUE", "queue": "search-index-queue" } ],
-// Durable Object binding for rate limiting + circuit breaker.
-  //
-  // IMPORTANT — Pages deploy vs local dev:
-  // `wrangler pages deploy` REJECTS both `exports` and durable_objects bindings
-  // without a `script_name` (Pages auto-generates the Worker name). So:
-  //
-  //   - For PRODUCTION: the DO binding must be configured via Cloudflare
-  //     Dashboard → Pages → search-engine-api → Settings → Functions
-  //     → Durable Objects → Add (name: RATE_LIMITER, class: RateLimiterDO).
-  //     The block below is commented out so `pages deploy` succeeds.
-  //
-  //   - For LOCAL dev (`wrangler pages dev`): uncomment the block below.
-  //     Local dev resolves the DO class from _worker.js without script_name.
-  //     Without it, rate-limiter.ts falls back to per-isolate in-memory mode.
-  //
-  // "durable_objects": {
-  //   "bindings": [
-  //     { "name": "RATE_LIMITER", "class_name": "RateLimiterDO" }
-  //   ]
-  // },
-  //
-  // KV namespace for cross-restart cache persistence (Phase 5):
-  // Hot queries persist across isolates and restarts (30 min TTL).
-  // Cache.ts tier 2: Cache API miss → KV lookup → KV miss → live search.
-  // Without this binding, cache is Cache API + in-memory only (per-isolate).
+// Durable Object bindings are intentionally NOT declared here.
+// `wrangler pages deploy` rejects durable_objects without a script_name,
+// so production DO bindings MUST be configured via Cloudflare Dashboard.
+// See the consolidated setup checklist at the bottom of this file.
+// Local dev: DO bindings are declared in wrangler.dev.jsonc instead.
+//
+// KV namespace for cross-restart cache persistence (Phase 5):
+// Hot queries persist across isolates and restarts (30 min TTL).
+// Cache.ts tier 2: Cache API miss → KV lookup → KV miss → live search.
+// Without this binding, cache is Cache API + in-memory only (per-isolate).
   //
   "kv_namespaces": [ { "binding": "CACHE_KV", "id": "1f5b3825e6a240a5b500d0f2faed15a8" } ],
+
+  // Workers Analytics Engine binding — persists metrics across isolate restarts.
+  // Each record() in src/lib/metrics.ts calls ANALYTICS.writeDataPoint() so
+  // search/extract latency + error rate survive cold starts and can be queried
+  // via the Cloudflare Analytics Engine SQL API or visualized in Grafana.
   //
-  // Conversational Threads DO (Phase 1.2) — multi-turn chat with context awareness:
-  // Cloudflare Dashboard → Pages → search-engine-api → Settings → Functions
-  // → Durable Objects → Add binding (name: THREAD_DO, class: ThreadDO).
-  // Without this binding, POST /api/chat returns 501 with setup guidance.
-  // "durable_objects": { "bindings": [ ... ] },
+  // For local dev with `wrangler pages dev -c wrangler.dev.jsonc`:
+  //   - Wrangler's local simulator supports Analytics Engine writes (writes
+  //     are no-ops locally but the binding is present so record() succeeds).
+  // For production Pages deploy:
+  //   - Create the dataset in Dashboard (Workers & Pages → Analytics →
+  //     Create dataset, name: SEARCH_API_METRICS).
+  //   - Pages → ssak-search → Settings → Bindings → Workers Analytics
+  //     Engine Datasets → Add binding (variable: ANALYTICS, dataset: above).
+  //   - The dataset name below MUST match the created dataset.
+  //   - To query historical data: see scripts/analytics-queries.sql.
   //
-  // Saved Pages DO (Phase 2.1) — research report storage and sharing:
-  // Cloudflare Dashboard → Pages → search-engine-api → Settings → Functions
-  // → Durable Objects → Add binding (name: PAGES_DO, class: PagesDO).
-  // Without this binding, POST/GET/PUT/DELETE /api/pages returns 501 with setup guidance.
-  // "durable_objects": { "bindings": [ ... ] },
-  //
-  // R2 bucket for file uploads (Phase 2.2):
-  // Cloudflare Dashboard → R2 → Create bucket (e.g. "search-engine-uploads")
-  // Then → Pages → search-engine-api → Settings → Bindings → R2 → Add binding
-  // (name: UPLOAD_BUCKET, bucket: search-engine-uploads).
-  // Without this binding, POST/GET /api/upload returns 501 with setup guidance.
-  // "r2_buckets": [ { "binding": "UPLOAD_BUCKET", "bucket_name": "search-engine-uploads" } ],
-  //
-  // Library / Collections DO (Phase 2.3) — saved search collections:
-  // Cloudflare Dashboard → Pages → search-engine-api → Settings → Functions
-  // → Durable Objects → Add binding (name: LIBRARY_DO, class: LibraryDO).
-  // Without this binding, /api/library returns 501 with setup guidance.
-  // "durable_objects": { "bindings": [ ... ] },
-  //
-  // User Profile DO (Phase 3.2) — personalized preferences and domain visit tracking:
-  // Cloudflare Dashboard → Pages → search-engine-api → Settings → Functions
-  // → Durable Objects → Add binding (name: USER_PROFILE_DO, class: UserProfileDO).
-  // Without this binding, /api/profile returns 501 with setup guidance.
-  // "durable_objects": { "bindings": [ ... ] },
-  // Workers Analytics Engine binding configured via Cloudflare Dashboard:
-  // 1. Cloudflare Dashboard → Workers & Pages → Analytics → Create dataset
-  //    (e.g. name: SEARCH_API_METRICS)
-  // 2. Pages → search-engine-api → Settings → Bindings
-  //    → Workers Analytics Engine Datasets → "Add binding"
-  //    - Variable name: ANALYTICS
-  //    - Dataset: (dataset from step 1)
-  // 3. Save & Redeploy
-  //
-  // Without this binding, metrics are per-isolate only (lost on cold start).
-  // With binding, every request writes a data point that survives isolate restart
-  // and can be queried via SQL API or visualized in Grafana.
+  "analytics_engine_datasets": [
+    { "binding": "ANALYTICS", "dataset": "SEARCH_API_METRICS" }
+  ],
+
   //
   // Sentry DSN (Phase 0.5) — error tracking and APM:
   // 1. Create a Sentry account at https://sentry.io/
@@ -158,4 +131,55 @@
   // 3. Save → Activate (logs stream immediately)
   //
   // For multi-region deployment strategy, see AUDIT.md § "Multi-Region Strategy".
+  //
+  // ════════════════════════════════════════════════════════════════════════════
+  // PRODUCTION DO / R2 BINDINGS — Dashboard configuration checklist
+  // ════════════════════════════════════════════════════════════════════════════
+  //
+  // `wrangler pages deploy` REJECTS durable_objects / r2_buckets bindings
+  // without a script_name (Pages auto-generates the Worker name). So these
+  // bindings MUST be configured manually via Cloudflare Dashboard.
+  //
+  // Step 1 — For EACH Durable Object below:
+  //   Cloudflare Dashboard → Pages → search-engine-api → Settings → Functions
+  //   → Durable Objects → Add binding
+  //
+  // ┌──────────────────┬──────────────────┬─────────────────────────────────┐
+  // │ Binding name     │ Class name       │ Feature that breaks if missing  │
+  // ├──────────────────┼──────────────────┼─────────────────────────────────┤
+  // │ RATE_LIMITER     │ RateLimiterDO    │ /api/search rate limiting       │
+  // │ THREAD_DO        │ ThreadDO         │ /api/chat (multi-turn)          │
+  // │ PAGES_DO         │ PagesDO          │ /api/pages (report storage)     │
+  // │ LIBRARY_DO       │ LibraryDO        │ /api/library (collections)      │
+  // │ USER_PROFILE_DO  │ UserProfileDO    │ /api/profile (personalization)  │
+  // │ SPACE_DO         │ SpaceDO          │ /api/spaces (workspaces)        │
+  // │ API_KEY_DO       │ ApiKeyDO         │ /api/keys (API key mgmt)        │
+  // │ CRAWLER_DO       │ CrawlerDO        │ /api/crawl (URL ingestion)      │
+  // │ CLICK_LOG_DO     │ ClickLogDO       │ LTR click/impression logging    │
+  // │ EXPERIMENT_DO    │ ExperimentDO     │ /api/experiments (A/B testing)   │
+  // │ CANARY_DO        │ CanaryOrchestratorDO │ /api/canary (parser regression) │
+  // └──────────────────┴──────────────────┴─────────────────────────────────┘
+  //
+  // Step 2 — R2 bucket (file uploads):
+  //   1. Cloudflare Dashboard → R2 → Create bucket (e.g. "search-engine-uploads")
+  //   2. Pages → search-engine-api → Settings → Bindings → R2 → Add binding
+  //      (name: UPLOAD_BUCKET, bucket: search-engine-uploads)
+  //   Without this: POST/GET /api/upload returns 501.
+  //
+  // Step 3 — INDEX_QUEUE (async indexing, Phase 2.2):
+  //   1. Cloudflare Dashboard → Workers & Pages → Queues → Create queue
+  //      (name: search-index-queue)
+  //   2. Pages → search-engine-api → Settings → Bindings → Queues → Add binding
+  //      (name: INDEX_QUEUE, queue: search-index-queue)
+  //   Without this: indexing falls back to synchronous mode (slower but functional).
+  //
+  // Step 4 — Verify all bindings are active:
+  //   export WORKER_URL="https://your-domain.pages.dev"
+  //   bash scripts/verify-do-binding.sh
+  //
+  //   Expected output: 11 ✅ DO bindings + 1 ✅ R2 binding + 1 ✅ Queue binding
+  //   If any 501 errors: missing binding above → return to Step 1/2/3.
+  //
+  // Local dev shortcut: wrangler.dev.jsonc declares ALL of the above so
+  // `wrangler pages dev dist/ -c wrangler.dev.jsonc` works without Dashboard setup.
 }

@@ -448,13 +448,24 @@ export function classifyUnderstanding(
 const CLASSIFICATION_SYSTEM_PROMPT = `You are a query understanding classifier. Analyze the user's search query and output a JSON object with these fields:
 - "intent": "informational" | "navigational" | "transactional" | "commercial"
 - "subType": "definition" | "how-to" | "tutorial" | "comparison" | "analysis" | "troubleshooting" | "list" | "factual" | "news" | "academic" | "financial" | "opinion" | "location" | "download" | "general"
+- "language": "korean" | "chinese" | "japanese" | "latin" | "mixed" | "other"
 - "entities": array of { "text": string, "type": "person" | "organization" | "place" | "product" | "technology" | "date" | "number" | "concept", "confidence": 0-1 }
 - "isComplex": boolean
 - "hasTemporalContext": boolean
 - "reasoning": string (brief, one sentence)
 - "keyTerms": array of strings (important query terms for search)
 
-Respond with ONLY the JSON object, no other text.`
+Examples:
+Query: "React vs Vue performance benchmark 2025"
+{"intent": "informational", "subType": "comparison", "language": "latin", "entities": [{"text": "React", "type": "technology", "confidence": 0.9}, {"text": "Vue", "type": "technology", "confidence": 0.9}, {"text": "2025", "type": "date", "confidence": 0.8}], "isComplex": true, "hasTemporalContext": true, "reasoning": "Framework comparison with year constraint", "keyTerms": ["React", "Vue", "performance", "benchmark"]}
+
+Query: "삼성전자 주가"
+{"intent": "transactional", "subType": "financial", "language": "korean", "entities": [{"text": "삼성전자", "type": "organization", "confidence": 0.95}], "isComplex": false, "hasTemporalContext": false, "reasoning": "Korean stock price lookup", "keyTerms": ["삼성전자", "주가"]}
+
+Query: "什么是量子计算"
+{"intent": "informational", "subType": "definition", "language": "chinese", "entities": [{"text": "量子计算", "type": "concept", "confidence": 0.7}], "isComplex": false, "hasTemporalContext": false, "reasoning": "Chinese definition question about quantum computing", "keyTerms": ["量子计算"]}
+
+Respond with ONLY the JSON object for the user's query, no other text.`
 
 export interface LLMEntity {
   text: string
@@ -508,6 +519,12 @@ export async function classifyUnderstandingWithAI(
       ? parsed.subType as QuerySubType
       : base.subType
 
+    const llmLanguage = [
+      'korean', 'chinese', 'japanese', 'latin', 'mixed', 'other',
+    ].includes(parsed.language)
+      ? parsed.language as ScriptType
+      : base.script
+
     const entities: LLMEntity[] = Array.isArray(parsed.entities)
       ? parsed.entities.filter(
           (e: { text?: unknown; type?: unknown; confidence?: unknown }) =>
@@ -523,6 +540,7 @@ export async function classifyUnderstandingWithAI(
       ...base,
       intent: llmIntent,
       subType: llmSubType,
+      script: llmLanguage,
       isComplex: parsed.isComplex ?? base.isComplex,
       hasTemporalContext: parsed.hasTemporalContext ?? base.hasTemporalContext,
       reasoning: parsed.reasoning || base.reasoning,

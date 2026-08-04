@@ -12,6 +12,7 @@ import { logger, toError } from '../lib/logger'
 import { cors } from 'hono/cors'
 import type { AppBindings, ErrorResponse, CrawlRequest, CrawlStartResponse, CrawlStatusResponse } from '../types'
 import { getCrawlerStub, generateCrawlId } from '../lib/crawler-do'
+import { RefreshScheduler } from '../lib/index/scheduler'
 import { requireAuth } from '../lib/auth'
 
 const crawlRoute = new Hono<{ Bindings: AppBindings }>()
@@ -91,6 +92,51 @@ crawlRoute.post('/', async (c) => {
     logger.error('Start crawl error:', { error: toError(err) })
     return c.json<ErrorResponse>(
       { detail: err instanceof Error ? err.message : 'Failed to start crawl', code: 'crawl_error' },
+      500,
+    )
+  }
+})
+
+// ============================================================
+// POST /api/crawl/refresh — Run importance-based refresh scheduler
+// ============================================================
+crawlRoute.post('/refresh', async (c) => {
+  if (!c.env.SEARCH_INDEX_DB) {
+    return c.json<ErrorResponse>(
+      {
+        detail: 'Refresh scheduler requires SEARCH_INDEX_DB (D1) binding. Configure via Cloudflare Dashboard → Pages → ssak-search → Settings → Functions → D1.',
+        code: 'binding_missing',
+      },
+      501,
+    )
+  }
+
+  try {
+    const scheduler = new RefreshScheduler({}, c.env)
+
+    // 1. Find documents due for refresh (importance-based frequency)
+    const candidates = await scheduler.findCandidates()
+
+    // 2. Schedule each due document for re-indexing
+    for (const candidate of candidates) {
+      await scheduler.scheduleRefresh(candidate.id, candidate.reason, Math.round(candidate.priority))
+    }
+
+    // 3. Process pending refresh jobs (pushes REINDEX_URL to INDEX_QUEUE)
+    const processed = await scheduler.processSchedule()
+    const stats = await scheduler.getStats()
+
+    return c.json({
+      candidates_found: candidates.length,
+      processed: processed.processed,
+      succeeded: processed.succeeded,
+      failed: processed.failed,
+      scheduler_stats: stats,
+    })
+  } catch (err) {
+    logger.error('Refresh scheduler error:', { error: toError(err) })
+    return c.json<ErrorResponse>(
+      { detail: 'Failed to run refresh scheduler', code: 'refresh_error' },
       500,
     )
   }

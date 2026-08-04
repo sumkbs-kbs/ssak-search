@@ -8,6 +8,7 @@ import { usageRoute } from './routes/usage'
 import { imagesRoute } from './routes/images'
 import { newsRoute } from './routes/news'
 import { canaryRoute } from './routes/canary'
+import { CanaryOrchestratorDO } from './lib/canary/canary-orchestrator'
 import { suggestRoute } from './routes/suggest'
 import { researchRoute } from './routes/research'
 import { chatRoute } from './routes/chat'
@@ -40,6 +41,10 @@ import { openaiRoute } from './routes/openai'
 import { analyticsProxyRoute } from './routes/analytics-proxy'
 import { CrawlerDO } from './lib/crawler-do'
 import { crawlRoute } from './routes/crawl'
+import { ClickLogDO } from './lib/ltr/click-logger'
+import { ltrRoute } from './routes/ltr'
+import { ExperimentDO } from './lib/experiments/ab-test'
+import { experimentsRoute } from './routes/experiments'
 import { indexRoute } from './routes/index'
 import { blacklistRoute } from './routes/blacklist'
 import { queueRoute } from './routes/queue'
@@ -58,6 +63,9 @@ export { UserProfileDO }
 export { SpaceDO }
 export { ApiKeyDO }
 export { CrawlerDO }
+export { ClickLogDO }
+export { ExperimentDO }
+export { CanaryOrchestratorDO }
 
 const app = new Hono<{ Bindings: AppBindings }>()
 
@@ -118,6 +126,8 @@ app.route('/api/keys', keysRoute)
 app.route('/api/monitor', monitorRoute)
 app.route('/api/analytics-proxy', analyticsProxyRoute)
 app.route('/api/crawl', crawlRoute)
+app.route('/api/ltr', ltrRoute)
+app.route('/api/experiments', experimentsRoute)
 app.route('/api/index', indexRoute)
 app.route('/api/blacklist', blacklistRoute)
 app.route('/api/queue', queueRoute)

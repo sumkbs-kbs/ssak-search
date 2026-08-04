@@ -69,6 +69,22 @@ export interface QPSMetrics {
   peakQps: number
 }
 
+/** Cache hit-rate measurement (cold/warm double-run). */
+export interface CacheHitMetrics {
+  /** Fraction of warm-pass queries served from cache (0-1) */
+  hitRate: number
+  /** Number of warm-pass queries served from cache */
+  hits: number
+  /** Number of warm-pass queries that missed the cache */
+  misses: number
+  /** Avg latency of the first (cold) pass, ms */
+  avgColdMs: number
+  /** Avg latency of the second (warm) pass, ms */
+  avgWarmMs: number
+  /** Latency below which a warm run counts as a cache hit */
+  hitThresholdMs: number
+}
+
 /** Aggregate eval run results. */
 export interface EvalReport {
   timestamp: string
@@ -83,6 +99,9 @@ export interface EvalReport {
   latencyPercentiles: LatencyPercentiles
   /** QPS metrics across the entire eval run */
   qps: QPSMetrics
+  /** Cache hit-rate measurement (cold/warm double-run). Undefined when the
+   *  eval run did not request cache measurement (--cache flag). */
+  cache?: CacheHitMetrics
   /** Aggregate ranking-quality metrics (averaged over queries with gold standards) */
   ranking?: AggregateRankingMetrics
   results: EvalResult[]

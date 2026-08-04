@@ -1,4 +1,4 @@
-# FastAPI sidecar service — powered by Scrapling
+# FastAPI sidecar service — powered by Scrapling + BGE-Reranker
 # Install: pip install -r requirements.txt
 
 fastapi>=0.115.0
@@ -7,3 +7,23 @@ pydantic>=2.10.0
 scrapling[fetchers]>=0.4.0
 httpx>=0.28.0
 python-dotenv>=1.0.0
+
+# ============================================================
+# Phase B.1 — BGE-Reranker-v2-m3 (optional, self-hosted cross-encoder)
+# ============================================================
+# These are optional. The /rerank endpoint falls back to a heuristic
+# when torch / sentence-transformers are missing or the model fails to load.
+# For lightweight deployments (e.g. preview envs), comment them out.
+
+torch>=2.2.0
+sentence-transformers>=3.0.0
+transformers>=4.40.0
+
+# ============================================================
+# Phase C.1 — LightGBM LambdaRank LTR (optional, self-hosted ranker)
+# ============================================================
+# Optional. The /ltr/rank endpoint returns "model: none" (webapp falls
+# back to base scores) when lightgbm is missing or no model is trained.
+
+lightgbm>=4.5.0
+numpy>=1.26.0

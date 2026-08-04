@@ -21,6 +21,7 @@ interface CliArgs {
   summary?: boolean
   ci?: boolean
   ciSlack?: boolean
+  cache?: boolean
   tag?: string
 }
 
@@ -36,6 +37,7 @@ function parseArgs(): CliArgs {
       case '--summary': opts.summary = true; break
       case '--ci': opts.ci = true; opts.json = true; break
       case '--ci-slack': opts.ciSlack = true; opts.ci = true; opts.json = true; break
+      case '--cache': opts.cache = true; break
       case '--tag':
         opts.tag = args[++i]
         break
@@ -58,6 +60,7 @@ Options:
   --json       Output JSON report (default: human-readable)
   --summary    Output GitHub Summary markdown (to stderr for logging)
   --ci         CI mode: JSON output + exit code only (for automation)
+  --cache      Measure cache hit rate (re-runs all queries once — doubles runtime)
   --tag <tag>  Run only queries with the specified tag (e.g. 'korean', 'english')
 `)
     process.exit(0)
@@ -74,7 +77,7 @@ Options:
   }
 
   console.error(`Running ${queries.length} eval queries...\n`)
-  const report = await runEval(queries)
+  const report = await runEval(queries, { measureCache: opts.cache })
   const regressions = compareWithBaseline(report)
 
   // Save baseline if requested — must run BEFORE output format block
@@ -82,6 +85,22 @@ Options:
   if (opts.save) {
     saveBaseline(report)
     console.error(`Baseline saved (${report.timestamp})\n`)
+  }
+
+  // Always persist the latest report to eval/results/latest.json so the
+  // weekly README updater and CI artifacts can consume it without re-running.
+  try {
+    const fs = await import('node:fs')
+    const path = await import('node:path')
+    const resultsDir = path.join(process.cwd(), 'eval', 'results')
+    fs.mkdirSync(resultsDir, { recursive: true })
+    fs.writeFileSync(
+      path.join(resultsDir, 'latest.json'),
+      formatReportJSON(report, regressions),
+      'utf-8',
+    )
+  } catch (e) {
+    console.error('Failed to write eval/results/latest.json:', e)
   }
 
   // Output formats

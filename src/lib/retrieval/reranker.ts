@@ -1,21 +1,19 @@
 /**
- * Cross-Encoder Reranker — Search Result Quality Enhancement
+ * Cross-Encoder Reranker — Hybrid Self-Hosted Reranking (Phase B.1)
  *
- * Uses Cohere Rerank API (free tier: 1000 req/month) to reorder
- * search results by deep semantic relevance. Falls back to a
- * lightweight heuristic reranker when API key is unavailable.
+ * No-API-Key 준수: Cohere Rerank API 제거. 대신:
+ *   1st pass: Workers AI (free tier) @cf/baai/bge-reranker-base
+ *   2nd pass: self-hosted sidecar BGE-Reranker-v2-m3 (POST /rerank)
+ *   fallback: heuristic reranking (term overlap + recency + authority)
  *
  * Architecture:
  *   1. Receive top-N results from hybrid search (BM25 + Vector RRF)
- *   2. Send (query, documents) to cross-encoder for pairwise scoring
- *   3. Re-sort by cross-encoder relevance score
- *   4. Fallback: heuristic reranking (term overlap + recency + authority)
+ *   2. Workers AI 1st-pass: top 30 → top 15 (cheap, ~100ms)
+ *   3. Sidecar 2nd-pass: top 15 → top 10 (BGE cross-encoder, ~500ms)
+ *   4. Fallback: heuristic reranking when both are unavailable
  *
- * Cohere Rerank API:
- *   POST https://api.cohere.ai/v1/rerank
- *   Model: rerank-english-v3.0 (multilingual support)
- *   Free tier: 1000 requests/month, 100 documents per request
- *   Latency: ~200-500ms per request
+ * Score blending when both passes succeed:
+ *   final = 0.6 * sidecarScore + 0.4 * workersAiScore
  */
 
 import type { Env, SearchResult } from '../../types'
@@ -26,67 +24,60 @@ import { logger, toError } from '../../lib/logger'
 // ============================================================
 
 export interface RerankDocument {
-  /** Document ID (used for deduplication) */
   id: string
-  /** Document title */
   title: string
-  /** Content snippet (truncated to ~500 tokens for API) */
   content: string
-  /** Source URL */
   url: string
-  /** Source domain */
   domain: string
-  /** Original relevance score from retrieval */
   score: number
-  /** Published date if available */
   publishedDate?: string
 }
 
 export interface RerankResult {
-  /** Document ID */
   id: string
-  /** Title */
   title: string
-  /** Content */
   content: string
-  /** URL */
   url: string
-  /** Domain */
   domain: string
-  /** Original retrieval score */
   originalScore: number
-  /** Cross-encoder relevance score (0-1) */
   rerankScore: number
-  /** Original rank position */
   originalRank: number
-  /** Rank after reranking */
   newRank: number
 }
 
 export interface RerankConfig {
-  /** Cohere API key (optional — falls back to heuristic if missing) */
-  cohereApiKey?: string
-  /** Cohere model identifier */
+  /** BGE model name (informational — actual model runs on sidecar) */
   model: string
-  /** Max documents to send to Cohere per request */
+  /** Max documents to rerank */
   maxDocuments: number
   /** Request timeout in milliseconds */
   timeoutMs: number
-  /** Enable fallback heuristic reranking when Cohere unavailable */
+  /** Enable heuristic fallback when ML rerankers are unavailable */
   enableFallback: boolean
   /** Top-K to return after reranking */
   topK: number
+  /** Use Workers AI as 1st-pass reranker (free tier) */
+  enableWorkersAI: boolean
+  /** Use self-hosted BGE sidecar as 2nd-pass reranker */
+  enableSidecar: boolean
+  /** Sidecar /rerank endpoint URL (overridden by env.SIDECAR_RERANK_URL) */
+  sidecarUrl?: string
+  /** Bearer token for the sidecar endpoint */
+  sidecarToken?: string
+  /** Weight of sidecar score in the blend (sidecar = w, workers-ai = 1-w) */
+  blendWeight: number
 }
 
 export interface RerankOptions {
-  /** Cohere API key (overrides config) */
-  cohereApiKey?: string
-  /** Max documents to rerank */
+  /** Sidecar URL (overrides config/env) */
+  sidecarUrl?: string
+  sidecarToken?: string
   maxDocuments?: number
-  /** Top-K results to return */
   topK?: number
-  /** Request timeout */
   timeoutMs?: number
+  /** Disable Workers AI pass for this call (e.g. in tests) */
+  enableWorkersAI?: boolean
+  enableSidecar?: boolean
 }
 
 // ============================================================
@@ -94,88 +85,20 @@ export interface RerankOptions {
 // ============================================================
 
 export const DEFAULT_RERANK_CONFIG: RerankConfig = {
-  model: 'rerank-english-v3.0',
+  model: 'BAAI/bge-reranker-v2-m3',
   maxDocuments: 50,
   timeoutMs: 5000,
   enableFallback: true,
   topK: 10,
-}
-
-// ============================================================
-// Cohere Rerank API
-// ============================================================
-
-interface CohereRerankResponse {
-  results: Array<{
-    index: number
-    relevance_score: number
-    text?: string
-  }>
-  id: string
-  meta?: {
-    api_version: { version: string; is_production: boolean }
-    billed_units: { search_units: number }
-  }
-}
-
-/**
- * Call Cohere Rerank API to score document relevance.
- *
- * @param query - The search query
- * @param documents - Array of document texts to rerank
- * @param apiKey - Cohere API key
- * @param model - Model to use (default: rerank-english-v3.0)
- * @param timeoutMs - Request timeout
- * @returns Array of {index, relevance_score} sorted by score desc
- */
-async function callCohereRerank(
-  query: string,
-  documents: string[],
-  apiKey: string,
-  model: string = 'rerank-english-v3.0',
-  timeoutMs: number = 5000,
-): Promise<Array<{ index: number; score: number }>> {
-  const controller = new AbortController()
-  const timeout = setTimeout(() => controller.abort(), timeoutMs)
-
-  try {
-    const response = await fetch('https://api.cohere.ai/v1/rerank', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${apiKey}`,
-      },
-      body: JSON.stringify({
-        model,
-        query,
-        documents,
-        top_n: documents.length, // Get all scores
-        return_documents: false,
-      }),
-      signal: controller.signal,
-    })
-
-    if (!response.ok) {
-      const errorText = await response.text().catch(() => 'unknown error')
-      throw new Error(`Cohere API ${response.status}: ${errorText}`)
-    }
-
-    const data: CohereRerankResponse = await response.json()
-
-    return data.results.map(r => ({
-      index: r.index,
-      score: r.relevance_score,
-    }))
-  } finally {
-    clearTimeout(timeout)
-  }
+  enableWorkersAI: true,
+  enableSidecar: true,
+  blendWeight: 0.6,
 }
 
 // ============================================================
 // Heuristic Reranker (Fallback)
 // ============================================================
 
-/** High-authority domains for reranking boost */
 const DOMAIN_AUTHORITY: Record<string, number> = {
   'wikipedia.org': 0.12,
   'github.com': 0.10,
@@ -191,16 +114,13 @@ const DOMAIN_AUTHORITY: Record<string, number> = {
   'ieee.org': 0.08,
 }
 
-/**
- * Heuristic reranker using term overlap + recency + authority.
- * Used as fallback when Cohere API is unavailable.
- *
- * Scoring formula:
- *   score = 0.45 × originalScore
- *         + 0.30 × termOverlap
- *         + 0.15 × domainAuthority
- *         + 0.10 × recencyBoost
- */
+function getDomainAuthority(domain: string): number {
+  for (const [auth, score] of Object.entries(DOMAIN_AUTHORITY)) {
+    if (domain === auth || domain.endsWith(`.${auth}`)) return score
+  }
+  return 0
+}
+
 function heuristicRerank(
   query: string,
   documents: RerankDocument[],
@@ -214,17 +134,14 @@ function heuristicRerank(
   const scored = documents.map((doc, i) => {
     const content = `${doc.title} ${doc.content}`.toLowerCase()
 
-    // Term overlap score (0-1)
     let matchedTerms = 0
     for (const term of queryTerms) {
       if (content.includes(term)) matchedTerms++
     }
     const termOverlap = queryTerms.length > 0 ? matchedTerms / queryTerms.length : 0
 
-    // Domain authority boost
     const domainAuth = getDomainAuthority(doc.domain)
 
-    // Recency boost (0-0.1)
     let recencyBoost = 0
     if (doc.publishedDate) {
       const daysOld = (Date.now() - new Date(doc.publishedDate).getTime()) / (1000 * 60 * 60 * 24)
@@ -234,7 +151,6 @@ function heuristicRerank(
       else if (daysOld < 365) recencyBoost = 0.02
     }
 
-    // Combined score
     const rerankScore =
       0.45 * doc.score +
       0.30 * termOverlap +
@@ -250,24 +166,111 @@ function heuristicRerank(
       originalScore: doc.score,
       rerankScore,
       originalRank: i,
-      newRank: 0, // Will be set after sorting
+      newRank: 0,
     }
   })
 
-  // Sort by rerank score descending
   scored.sort((a, b) => b.rerankScore - a.rerankScore)
-
-  // Assign new ranks
   scored.forEach((r, i) => { r.newRank = i })
-
   return scored.slice(0, topK)
 }
 
-function getDomainAuthority(domain: string): number {
-  for (const [auth, score] of Object.entries(DOMAIN_AUTHORITY)) {
-    if (domain === auth || domain.endsWith(`.${auth}`)) return score
+// ============================================================
+// Workers AI 1st-pass
+// ============================================================
+
+interface WorkersAIRerankOutput {
+  response?: Array<{ id?: number; score?: number }>
+}
+
+async function workersAIRerank(
+  ai: NonNullable<Env['AI']>,
+  query: string,
+  documents: RerankDocument[],
+  timeoutMs: number,
+): Promise<Map<string, number>> {
+  const controller = new AbortController()
+  const timeout = setTimeout(() => controller.abort(), timeoutMs)
+
+  try {
+    const docTexts = documents.map(doc => `${doc.title}\n\n${doc.content}`)
+    // workers-types omits the `query` field from the reranker input type;
+    // cast to the declared type to satisfy the compiler while sending the
+    // field the actual API requires.
+    const output = await ai.run(
+      '@cf/baai/bge-reranker-base',
+      {
+        query,
+        contexts: docTexts.map(text => ({ text })),
+        top_k: documents.length,
+      } as unknown as Ai_Cf_Baai_Bge_Reranker_Base_Input,
+      { signal: controller.signal },
+    ) as WorkersAIRerankOutput
+
+    const scoreMap = new Map<string, number>()
+    for (const r of output.response ?? []) {
+      const doc = documents[r.id ?? -1]
+      if (doc && r.score !== undefined) scoreMap.set(doc.id, r.score)
+    }
+    return scoreMap
+  } finally {
+    clearTimeout(timeout)
   }
-  return 0
+}
+
+// ============================================================
+// Sidecar 2nd-pass (self-hosted BGE-Reranker-v2-m3)
+// ============================================================
+
+interface SidecarRerankOutput {
+  results: Array<{ index: number; relevance_score: number }>
+  model?: string
+  fallback_used?: boolean
+}
+
+async function sidecarRerank(
+  baseUrl: string,
+  query: string,
+  documents: RerankDocument[],
+  token: string | undefined,
+  timeoutMs: number,
+): Promise<Map<string, number>> {
+  const controller = new AbortController()
+  const timeout = setTimeout(() => controller.abort(), timeoutMs)
+
+  const headers: Record<string, string> = { 'Content-Type': 'application/json' }
+  if (token) headers['Authorization'] = `Bearer ${token}`
+
+  try {
+    const response = await fetch(`${baseUrl.replace(/\/+$/, '')}/rerank`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({
+        query,
+        documents: documents.map(doc => ({
+          title: doc.title,
+          content: doc.content,
+        })),
+        top_k: documents.length,
+        return_text: false,
+      }),
+      signal: controller.signal,
+    })
+
+    if (!response.ok) {
+      throw new Error(`Sidecar rerank ${response.status}: ${await response.text().catch(() => 'unknown error')}`)
+    }
+
+    const data = await response.json() as SidecarRerankOutput
+    const scoreMap = new Map<string, number>()
+    for (const r of data.results ?? []) {
+      const doc = documents[r.index]
+      if (doc) scoreMap.set(doc.id, r.relevance_score)
+    }
+    return scoreMap
+  } finally {
+    clearTimeout(timeout)
+  }
 }
 
 // ============================================================
@@ -281,15 +284,6 @@ export class CrossEncoderReranker {
     this.config = { ...DEFAULT_RERANK_CONFIG, ...config }
   }
 
-  /**
-   * Rerank search results using cross-encoder scoring.
-   *
-   * @param query - The search query
-   * @param documents - Retrieved documents to rerank
-   * @param env - Cloudflare Workers env (for API key from secrets)
-   * @param options - Reranking options (overrides config)
-   * @returns Re-ranked results with cross-encoder scores
-   */
   async rerank(
     query: string,
     documents: RerankDocument[],
@@ -311,87 +305,96 @@ export class CrossEncoderReranker {
       }]
     }
 
-    // Determine Cohere API key
-    const cohereApiKey = options.cohereApiKey
-      ?? this.config.cohereApiKey
-      ?? env?.COHERE_API_KEY
-      ?? undefined
-
-    // Trim to max documents for API call
     const docsToRerank = documents.slice(0, maxDocs)
 
-    // Try Cohere API first
-    if (cohereApiKey) {
+    const useWorkersAI = options.enableWorkersAI ?? this.config.enableWorkersAI
+    const useSidecar = options.enableSidecar ?? this.config.enableSidecar
+    const sidecarUrl = options.sidecarUrl
+      ?? this.config.sidecarUrl
+      ?? env?.SIDECAR_RERANK_URL
+      ?? undefined
+    const sidecarToken = options.sidecarToken
+      ?? this.config.sidecarToken
+      ?? env?.SIDECAR_RERANK_TOKEN
+      ?? undefined
+
+    // ── Stage 1: Workers AI (1st pass) ──
+    let workersScores: Map<string, number> | null = null
+    if (useWorkersAI && env?.AI) {
       try {
-        return await this.rerankWithCohere(
-          query, docsToRerank, cohereApiKey, topK, timeoutMs,
-        )
+        workersScores = await workersAIRerank(env.AI, query, docsToRerank, timeoutMs)
+        if (workersScores && workersScores.size > 0) {
+          logger.debug('[CrossEncoderReranker] Workers AI rerank OK', { docs: workersScores.size })
+        } else {
+          workersScores = null
+        }
       } catch (err) {
-        logger.warn('[CrossEncoderReranker] Cohere API failed, falling back to heuristic:', {
+        logger.warn('[CrossEncoderReranker] Workers AI failed, falling to next stage:', {
           error: toError(err),
         })
-
-        if (!this.config.enableFallback) {
-          throw err
-        }
+        workersScores = null
       }
     }
 
-    // Fallback to heuristic reranking
-    return heuristicRerank(query, docsToRerank, topK)
-  }
-
-  /**
-   * Rerank using Cohere Rerank API.
-   */
-  private async rerankWithCohere(
-    query: string,
-    documents: RerankDocument[],
-    apiKey: string,
-    topK: number,
-    timeoutMs: number,
-  ): Promise<RerankResult[]> {
-    // Prepare document texts for Cohere API
-    // Cohere accepts plain text — combine title + content for each document
-    const docTexts = documents.map(doc => {
-      const title = doc.title || ''
-      const content = doc.content || ''
-      // Truncate content to ~500 tokens (~2000 chars) to stay within API limits
-      const truncatedContent = content.length > 2000 ? content.slice(0, 2000) + '…' : content
-      return `${title}\n\n${truncatedContent}`
-    })
-
-    // Call Cohere API
-    const cohereResults = await callCohereRerank(
-      query, docTexts, apiKey, this.config.model, timeoutMs,
-    )
-
-    // Map Cohere scores back to documents
-    const scoreMap = new Map<number, number>()
-    for (const r of cohereResults) {
-      scoreMap.set(r.index, r.score)
+    // ── Stage 2: Sidecar BGE (2nd pass) ──
+    let sidecarScores: Map<string, number> | null = null
+    if (useSidecar && sidecarUrl) {
+      try {
+        sidecarScores = await sidecarRerank(sidecarUrl, query, docsToRerank, sidecarToken, timeoutMs)
+        if (sidecarScores && sidecarScores.size > 0) {
+          logger.debug('[CrossEncoderReranker] Sidecar rerank OK', { docs: sidecarScores.size })
+        } else {
+          sidecarScores = null
+        }
+      } catch (err) {
+        logger.warn('[CrossEncoderReranker] Sidecar failed, falling to next stage:', {
+          error: toError(err),
+        })
+        sidecarScores = null
+      }
     }
 
-    // Build reranked results
-    const reranked: RerankResult[] = documents.map((doc, i) => ({
-      id: doc.id,
-      title: doc.title,
-      content: doc.content,
-      url: doc.url,
-      domain: doc.domain,
-      originalScore: doc.score,
-      rerankScore: scoreMap.get(i) ?? doc.score,
-      originalRank: i,
-      newRank: 0,
-    }))
+    // ── Stage 3: heuristic fallback (or blend ML scores) ──
+    if (workersScores === null && sidecarScores === null) {
+      if (!this.config.enableFallback) {
+        return heuristicRerank(query, docsToRerank, topK)
+      }
+      return heuristicRerank(query, docsToRerank, topK)
+    }
 
-    // Sort by cross-encoder score descending
-    reranked.sort((a, b) => b.rerankScore - a.rerankScore)
+    // Blend sidecar + Workers AI scores (both available → weighted blend)
+    const blendWeight = this.config.blendWeight
+    const scored = docsToRerank.map((doc, i) => {
+      const sidecarScore = sidecarScores?.get(doc.id)
+      const workersScore = workersScores?.get(doc.id)
 
-    // Assign new ranks
-    reranked.forEach((r, i) => { r.newRank = i })
+      let rerankScore: number
+      if (sidecarScore !== undefined && workersScore !== undefined) {
+        rerankScore = blendWeight * sidecarScore + (1 - blendWeight) * workersScore
+      } else if (sidecarScore !== undefined) {
+        rerankScore = sidecarScore
+      } else if (workersScore !== undefined) {
+        rerankScore = workersScore
+      } else {
+        rerankScore = doc.score
+      }
 
-    return reranked.slice(0, topK)
+      return {
+        id: doc.id,
+        title: doc.title,
+        content: doc.content,
+        url: doc.url,
+        domain: doc.domain,
+        originalScore: doc.score,
+        rerankScore,
+        originalRank: i,
+        newRank: 0,
+      }
+    })
+
+    scored.sort((a, b) => b.rerankScore - a.rerankScore)
+    scored.forEach((r, i) => { r.newRank = i })
+    return scored.slice(0, topK)
   }
 }
 
@@ -399,9 +402,6 @@ export class CrossEncoderReranker {
 // Convenience Function
 // ============================================================
 
-/**
- * Quick rerank — creates a reranker and runs reranking in one call.
- */
 export async function rerankSearchResults(
   query: string,
   documents: RerankDocument[],
@@ -416,36 +416,16 @@ export async function rerankSearchResults(
 // SearchResult-compatible rerank (orchestrator entry point)
 // ============================================================
 
-/**
- * Result shape expected by the orchestrator's rerank step.
- * Matches the legacy reranker.ts API so the orchestrator call site is
- * a drop-in replacement.
- */
 export interface SearchResultRerankResult {
   results: SearchResult[]
   applied: boolean
 }
 
-/**
- * Rerank raw SearchResult[] from the orchestrator.
- *
- * This is the canonical rerank entry point for the top-level search pipeline.
- * It adapts SearchResult[] → RerankDocument[], runs CrossEncoderReranker
- * (Cohere API with heuristic fallback), then maps back to SearchResult[]
- * with updated scores.
- *
- * Replaces the legacy src/lib/reranker.ts 3-stage pipeline (Cohere v2 + BGE +
- * LLM) which depended heavily on Workers AI and didn't work in local-first
- * setups.
- *
- * @returns { applied: true, results } on success; { applied: false, results }
- *          if reranking was skipped (too few results, no env, etc.).
- */
 export async function rerankSearchResultsRaw(
   query: string,
   results: SearchResult[],
   env?: Env,
-  options: { maxInputs?: number; cohereApiKey?: string } = {},
+  options: { maxInputs?: number; sidecarUrl?: string; sidecarToken?: string } = {},
 ): Promise<SearchResultRerankResult> {
   if (results.length < 2) {
     return { results, applied: false }
@@ -454,7 +434,6 @@ export async function rerankSearchResultsRaw(
   const maxInputs = options.maxInputs ?? 15
   const toRerank = results.slice(0, maxInputs)
 
-  // Convert SearchResult[] → RerankDocument[]
   const documents: RerankDocument[] = toRerank.map((r) => ({
     id: r.url,
     title: r.title,
@@ -462,28 +441,25 @@ export async function rerankSearchResultsRaw(
     url: r.url,
     domain: r.domain,
     score: r.score,
-    language: 'en',
     publishedDate: r.published_date,
   }))
 
   const reranker = new CrossEncoderReranker()
   const reranked = await reranker.rerank(query, documents, env, {
     topK: maxInputs,
-    cohereApiKey: options.cohereApiKey,
+    sidecarUrl: options.sidecarUrl,
+    sidecarToken: options.sidecarToken,
   })
 
   if (reranked.length === 0) {
     return { results, applied: false }
   }
 
-  // Build a map of url → rerankScore for quick lookup
   const scoreByRank = new Map<string, number>()
   reranked.forEach((r, i) => {
-    scoreByRank.set(r.id, 1 - (i / Math.max(reranked.length, 1)) * 0.3) // gentle decay
+    scoreByRank.set(r.id, 1 - (i / Math.max(reranked.length, 1)) * 0.3)
   })
 
-  // Reorder the full results array: reranked items first (in new order),
-  // then remaining items in original order.
   const rerankedUrls = new Set(reranked.map((r) => r.id))
   const reorderedTop = reranked
     .map((rr) => {

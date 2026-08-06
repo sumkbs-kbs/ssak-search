@@ -21,7 +21,7 @@
 
 set -euo pipefail
 
-WORKER_URL="${WORKER_URL:-https://ssak-search.pages.dev}"
+WORKER_URL="${WORKER_URL:-https://search-engine-api.pages.dev}"
 
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo " Verifying ALL Durable Object Bindings"
@@ -60,7 +60,7 @@ print(d.get('rate_limiter',{}).get('mode','unknown'))
   echo " ✅ RATE_LIMITER is ACTIVE (mode: ${RL_MODE})"
 else
   echo " ⚠️  RATE_LIMITER is INACTIVE (in-memory fallback)"
-  echo "    To enable: Cloudflare Dashboard → Pages → ssak-search"
+  echo "    To enable: Cloudflare Dashboard → Pages → search-engine-api"
   echo "    → Settings → Functions → Durable Objects → Add binding"
   echo "    (name: RATE_LIMITER, class: RateLimiterDO)"
   echo "    Then redeploy."
@@ -118,17 +118,22 @@ for i in "${!DO_BINDINGS[@]}"; do
   route="${DO_ROUTES[$i]}"
   status=$(curl -s -o /dev/null -w "%{http_code}" "${WORKER_URL}/api/${route}" 2>&1)
 
+  # NOTE: ${var:15s} is NOT bash padding (it's a substring expr and throws
+  # "value too great for base" under set -u). Use printf padding instead.
+  bind_pad=$(printf '%-15s' "${binding}")
+  route_pad=$(printf '%-10s' "/api/${route}")
+
   if [ "${status}" = "501" ]; then
-    echo " ⚠️  ${binding:15s} → /api/${route:10s} HTTP 501 (DO not bound)"
+    echo " ⚠️  ${bind_pad} → ${route_pad} HTTP 501 (DO not bound)"
     FAIL_COUNT=$((FAIL_COUNT + 1))
   elif [ "${status}" = "200" ] || [ "${status}" = "400" ] || [ "${status}" = "404" ] || [ "${status}" = "405" ]; then
-    echo " ✅ ${binding:15s} → /api/${route:10s} HTTP ${status} (DO bound)"
+    echo " ✅ ${bind_pad} → ${route_pad} HTTP ${status} (DO bound)"
     PASS_COUNT=$((PASS_COUNT + 1))
   elif [ "${status}" = "000" ]; then
-    echo " ⚠️  ${binding:15s} → /api/${route:10s} connection failed (worker not reachable)"
+    echo " ⚠️  ${bind_pad} → ${route_pad} connection failed (worker not reachable)"
     SKIP_COUNT=$((SKIP_COUNT + 1))
   else
-    echo "   ${binding:15s} → /api/${route:10s} HTTP ${status} (unexpected)"
+    echo "   ${bind_pad} → ${route_pad} HTTP ${status} (unexpected)"
     SKIP_COUNT=$((SKIP_COUNT + 1))
   fi
 done
@@ -178,7 +183,7 @@ if [ "${FAIL_COUNT}" -eq 0 ] && [ "${DO_ACTIVE}" = "true" ]; then
 elif [ "${FAIL_COUNT}" -gt 0 ]; then
   echo ""
   echo " ⚠️  ${FAIL_COUNT} DO binding(s) missing."
-  echo "    To fix: Cloudflare Dashboard → Pages → ssak-search"
+  echo "    To fix: Cloudflare Dashboard → Pages → search-engine-api"
   echo "    → Settings → Functions → Durable Objects → Add binding"
   echo ""
   echo "    Required bindings (binding_name → class_name):"

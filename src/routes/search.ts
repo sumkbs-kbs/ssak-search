@@ -30,6 +30,16 @@ import { normalizeQuery, SubrequestTracker, installSubrequestTracker } from '../
 import { expandCompanyAlias } from '../lib/stock-finance'
 
 /**
+ * Resolve the per-request subrequest budget. The header value must mirror the
+ * actual enforcement/alerting quota (monitor.ts uses the same env var), so a
+ * Pages variable change propagates everywhere instead of drifting from the
+ * hardcoded free-tier default of 50.
+ */
+function resolveSubrequestLimit(env?: { SUBREQUEST_QUOTA_PER_REQUEST?: string }): number {
+  const parsed = parseInt(env?.SUBREQUEST_QUOTA_PER_REQUEST ?? '', 10)
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : 50
+}
+/**
  * Resolve the effective search depth.
  *
  * - If the user explicitly sets 'basic' or 'advanced', respect that.
@@ -301,9 +311,9 @@ searchRoute.post('/', async (c) => {
     const response = c.json<SearchResponse>(experiment ? { ...result, experiment } : result, statusCode)
     response.headers.set('X-Search-Mode', searchMode)
     response.headers.set('X-Subrequests-Used', String(reportedSubrequests))
-    response.headers.set('X-Subrequests-Limit', '50')
-    if (reportedSubrequests >= 40) {
-      logger.warn(`[QUOTA] High subrequest usage: ${reportedSubrequests}/50`)
+    response.headers.set('X-Subrequests-Limit', String(resolveSubrequestLimit(c.env)))
+    if (reportedSubrequests >= resolveSubrequestLimit(c.env) * 0.8) {
+      logger.warn(`[QUOTA] High subrequest usage: ${reportedSubrequests}/${resolveSubrequestLimit(c.env)}`)
     }
     return response
   } catch (err) {
@@ -323,7 +333,7 @@ searchRoute.post('/', async (c) => {
     // Surface the real subrequest count even on failure so agents/ops can see
     // whether the error was quota-induced.
     response.headers.set('X-Subrequests-Used', String(Math.max(tracker.count, subrequestEstimate)))
-    response.headers.set('X-Subrequests-Limit', '50')
+    response.headers.set('X-Subrequests-Limit', String(resolveSubrequestLimit(c.env)))
     return response
   }
 })
@@ -463,10 +473,10 @@ searchRoute.get('/', async (c) => {
     const statusCode = result.no_results ? 404 : 200
     const response = c.json<SearchResponse>(experiment ? { ...result, experiment } : result, statusCode)
     response.headers.set('X-Subrequests-Used', String(reportedSubrequests))
-    response.headers.set('X-Subrequests-Limit', '50')
+    response.headers.set('X-Subrequests-Limit', String(resolveSubrequestLimit(c.env)))
     response.headers.set('X-Cache', 'MISS')
-    if (reportedSubrequests >= 40) {
-      logger.warn(`[QUOTA] High subrequest usage: ${reportedSubrequests}/50`)
+    if (reportedSubrequests >= resolveSubrequestLimit(c.env) * 0.8) {
+      logger.warn(`[QUOTA] High subrequest usage: ${reportedSubrequests}/${resolveSubrequestLimit(c.env)}`)
     }
     return response
   } catch (err) {
@@ -484,7 +494,7 @@ searchRoute.get('/', async (c) => {
       500,
     )
     response.headers.set('X-Subrequests-Used', String(Math.max(tracker.count, subrequestEstimate)))
-    response.headers.set('X-Subrequests-Limit', '50')
+    response.headers.set('X-Subrequests-Limit', String(resolveSubrequestLimit(c.env)))
     return response
   }
 })
@@ -581,8 +591,11 @@ searchRoute.get('/stream', async (c) => {
     })
 
         const subrequestEstimate = (result as SearchResponse & { subrequest_estimate?: number }).subrequest_estimate ?? 0
-        if (subrequestEstimate >= 40) {
-          logger.warn(`[QUOTA] High subrequest usage: ${subrequestEstimate}/50`)
+        // Same env-driven quota as POST/GET — the SSE path must not drift from
+        // the configured SUBREQUEST_QUOTA_PER_REQUEST (free 50, paid 1000).
+        const subrequestLimit = resolveSubrequestLimit(c.env)
+        if (subrequestEstimate >= subrequestLimit * 0.8) {
+          logger.warn(`[QUOTA] High subrequest usage: ${subrequestEstimate}/${subrequestLimit}`)
         }
 
         send('results', {
@@ -686,6 +699,9 @@ searchRoute.get('/stream', async (c) => {
       'Cache-Control': 'no-cache',
       'Connection': 'keep-alive',
       'X-Accel-Buffering': 'no',
+      // SSE responses have their own subrequest budget — surface the quota the
+      // same way JSON responses do so agents/ops can monitor SSE cost.
+      'X-Subrequests-Limit': String(resolveSubrequestLimit(c.env)),
     },
   })
 })

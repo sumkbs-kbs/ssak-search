@@ -282,6 +282,30 @@ describe('Route Handlers', () => {
         expect(res.headers.has('X-Tenant-Id')).toBe(true)
         expect(res.headers.has('X-RateLimit-Remaining')).toBe(true)
       })
+
+      it('reports X-Subrequests-Limit from SUBREQUEST_QUOTA_PER_REQUEST env', async () => {
+        const original = mockEnv.SUBREQUEST_QUOTA_PER_REQUEST
+        mockEnv.SUBREQUEST_QUOTA_PER_REQUEST = '1000'
+        try {
+          const res = await requestWithEnv(app, '/api/search?q=test&topic=general')
+          expect([200, 404]).toContain(res.status)
+          expect(res.headers.get('X-Subrequests-Limit')).toBe('1000')
+        } finally {
+          mockEnv.SUBREQUEST_QUOTA_PER_REQUEST = original
+        }
+      })
+
+      it('defaults X-Subrequests-Limit to 50 when env is unset', async () => {
+        const original = mockEnv.SUBREQUEST_QUOTA_PER_REQUEST
+        mockEnv.SUBREQUEST_QUOTA_PER_REQUEST = undefined
+        try {
+          const res = await requestWithEnv(app, '/api/search?q=test&topic=general')
+          expect([200, 404]).toContain(res.status)
+          expect(res.headers.get('X-Subrequests-Limit')).toBe('50')
+        } finally {
+          mockEnv.SUBREQUEST_QUOTA_PER_REQUEST = original
+        }
+      })
     })
 
     describe('POST /api/search', () => {

@@ -25,14 +25,21 @@
 
 import { parse } from 'comment-json'
 import { readFileSync, existsSync } from 'fs'
-import { resolve } from 'path'
+import { resolve, basename } from 'path'
 
 interface WranglerConfig {
   analytics_engine_datasets?: Array<{ binding: string; dataset: string }>
 }
 
 const REQUIRED_BINDING = 'ANALYTICS'
-const REQUIRED_DATASET = 'SEARCH_API_METRICS'
+// NOTE: production dataset is `ssak_search` (wrangler.jsonc). The previous
+// hardcoded 'SEARCH_API_METRICS' never matched the deployed config, so this
+// script always FAILed against production. The dataset name is account-
+// specific (rules: underscores only, hyphens rejected at deploy), so we
+// validate shape + warn, not a fixed name — the binding must simply be
+// declared with a non-empty dataset that matches what was created in the
+// Dashboard (Workers & Pages → Analytics → Analytics Engine).
+const EXPECTED_PRODUCTION_DATASET = 'ssak_search'
 
 function main() {
   const args = process.argv.slice(2)
@@ -69,7 +76,7 @@ function main() {
     console.error('')
     console.error('For production Pages: this is detected by Cloudflare but the dataset')
     console.error('must be CREATED first in Dashboard (Workers & Pages → Analytics →')
-    console.error('Create dataset, name: SEARCH_API_METRICS) before the binding works.')
+    console.error('Create dataset, name: ssak_search) before the binding works.')
     process.exit(1)
   }
 
@@ -86,6 +93,25 @@ function main() {
   if (!target.dataset || target.dataset.trim() === '') {
     console.error(`❌ FAIL: ${REQUIRED_BINDING} binding declared without dataset name`)
     process.exit(1)
+  }
+
+  // Dataset names must use underscores — a hyphen is rejected at DEPLOY time
+  // with "Invalid dataset name" (2026-08-04 verified against production).
+  // Local-dev configs (wrangler.dev.jsonc, dataset "SEARCH_API_METRICS-dev")
+  // are never deployed to Pages, so the hyphen rule is enforced only for
+  // deployable configs. NOTE: gate on the BASENAME, not a path substring — a
+  // checkout under /Users/dev/... would otherwise disable the check for the
+  // production config (code-review catch).
+  const isDeployableConfig = basename(configPath) !== 'wrangler.dev.jsonc'
+  if (isDeployableConfig && /[^A-Za-z0-9_]/.test(target.dataset)) {
+    console.error(`❌ FAIL: dataset name "${target.dataset}" contains characters other than [A-Za-z0-9_]`)
+    console.error('   Cloudflare rejects hyphenated Analytics Engine dataset names at deploy time.')
+    process.exit(1)
+  }
+
+  if (isDeployableConfig && target.dataset !== EXPECTED_PRODUCTION_DATASET) {
+    console.warn(`⚠️  dataset name is "${target.dataset}" (expected production dataset "${EXPECTED_PRODUCTION_DATASET}")`)
+    console.warn('   Verify the Dashboard dataset matches the value declared here.')
   }
 
   console.log(`✅ PASS: Analytics Engine binding declared correctly`)

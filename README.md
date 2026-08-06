@@ -8,24 +8,19 @@
 
 모든 백엔드는 외부 유료 API 없이 작동합니다. 키 불필요, 등록 불필요, 비용 없음.
 
-## 검색 품질 테스트 결과 (10/10 PERFECT)
+## 검색 품질 (정량 평가 — 500 gold-standard queries · median-of-3)
 
-전체 10개 테스트 쿼리가 **모두 10건씩** 정확하고 관련성 높은 결과를 반환합니다:
+| 지표 | 값 |
+|------|-----|
+| **NDCG@10** | 0.551 (MRR: 0.463, P@10: 0.294) |
+| **Pass Rate** | 100.0% (500/500) |
+| **Avg Time** | 1.45s (p50: 819ms, p95: 1.9s) |
+| **Bundle Size** | 1,033 kB (gzip: 299 kB) |
 
-| # | 쿼리 | 타입 | 결과 | 시간 | 상태 |
-|---|------|------|------|------|------|
-| 1 | 삼성전자 주가 | financial | 10건 | 2940ms | ✅ |
-| 2 | Apple stock price | financial | 10건 | 5042ms | ✅ |
-| 3 | Cloudflare Workers D1 tutorial 2025 | technical | 10건 | 5035ms | ✅ |
-| 4 | React state management best practices | technical | 10건 | 5047ms | ✅ |
-| 5 | transformer architecture paper | academic | 10건 | 5048ms | ✅ |
-| 6 | AI 최신 뉴스 2025 | news | 10건 | 2367ms | ✅ |
-| 7 | OpenAI GPT-5 release date | news | 10건 | 428ms | ✅ |
-| 8 | what is quantum computing | factual | 10건 | 5040ms | ✅ |
-| 9 | 什么是量子计算 | general | 10건 | 719ms | ✅ |
-| 10 | Rust vs Go performance benchmark | technical | 10건 | 5043ms | ✅ |
-
-> **OK: 10/10 · LOW: 0/10 · FAIL: 0/10**
+- 골드셋 180 → **500쿼리** 확장 (KR 70 / EN 180 / ZH 57 / JA 43 / cross 150), 전 쿼리 골드 표준 1:1
+- 3회 실행 **중앙값(median) 집계**: `npm run eval:median` — 백엔드 rate-limit 노이즈에 강건
+- wikipedia 백엔드 안정화(S9): 프로세스 내 결과 캐시 + eval 전용 페이싱 → en-fact-01 등 wikipedia 필수 쿼리 안정 통과
+- 상세 벤치마크: `npm run eval:ci` / `npm run eval:median:ci`
 
 ## 아키텍처
 
@@ -323,7 +318,7 @@ for r in results["results"]:
 - **프레임워크**: Hono v4 (TypeScript, JSX)
 - **빌드**: Vite + @hono/vite-cloudflare-pages
 - **로컬 서버**: PM2 + wrangler pages dev
-- **워커 크기**: 89.35 kB (30.47 kB gzip)
+- **워커 크기**: 1,033 kB (gzip: 299 kB)
 
 ## 개발 로드맵
 
@@ -486,7 +481,7 @@ Cloudflare Pages 배포 준비 완료. 두 가지 배포 경로 지원:
 - **`sort_by=date` score blend** — 최신 spam이 고품질 결과 누르는 현상 수정
 - **adaptive threshold floor** — 10-result default에서 tier-3 spam 유입 차단
 
-### 10/10 PERFECT 달성 (2026-07-16)
+### 검색 품질 개선 (2026-07-16)
 - **적응형 3단계 minScore** (0.10 → 0.05 → 0.01) — 결과 풍족도 보장
 - **위키백과 CJK 타임아웃 12초 + 최대 10결과** — 비결정적 실패 해결
 - **financial 쿼리 useHackerNews 추가** — Apple stock price 5→10건 해결
@@ -578,7 +573,7 @@ Without this binding, rate limiting and circuit breaker are per-isolate best-eff
 (in-memory fallback). The API works, but rate limits are not enforced across
 concurrent requests. To enable cross-isolate coordination:
 
-1. Go to https://dash.cloudflare.com/ → **Pages** → `ssak-search` → **Settings** → **Functions**
+1. Go to https://dash.cloudflare.com/ → **Pages** → `search-engine-api` → **Settings** → **Functions**
 2. Scroll to **Durable Objects** → **Add binding**
 3. **Namespace name**: `RATE_LIMITER` (must match the binding name in code)
 4. **Class name**: `RateLimiterDO` (must match `export { RateLimiterDO }` in `src/index.tsx`)
@@ -639,7 +634,7 @@ sends Slack alerts when backends are down or latency exceeds thresholds.
 
 1. Cloudflare Dashboard → **Workers & Pages** → **Analytics** → **Create dataset**
 2. Name: `ssak_search` (또는 원하는 이름 — **하이픈(`-`) 불가, 언더스코어(`_`)만 허용**; 하이픈 사용 시 배포가 "Invalid dataset name" 에러로 실패)
-3. Cloudflare Dashboard → **Pages** → `ssak-search` → **Settings** → **Bindings** → **Workers Analytics Engine Datasets** → "Add binding"
+3. Cloudflare Dashboard → **Pages** → `search-engine-api` → **Settings** → **Bindings** → **Workers Analytics Engine Datasets** → "Add binding"
 4. **Variable name**: `ANALYTICS` (코드가 기대하는 바인딩 이름)
 5. **Dataset**: 위에서 생성한 데이터셋
 6. **Save**
@@ -704,16 +699,16 @@ Workers AI 바인딩 추가 후 인덱스를 재시드하세요:
 
 ```bash
 # 1. Workers AI 바인딩이 활성화된 상태에서 배포
-npm run build && npx wrangler pages deploy dist/ --project-name=ssak-search --branch=main --commit-dirty=true
+npm run build && npx wrangler pages deploy dist/ --project-name=search-engine-api --branch=main --commit-dirty=true
 
 # 2. 스키마 재초기화 (기존 데이터 유지)
-curl -X POST https://ssak-search.pages.dev/api/index/init
+curl -X POST https://search-engine-api.pages.dev/api/index/init
 
 # 3. 전체 재시드 (Workers AI 임베딩으로 통일)
-npm run seed:index -- --api-url=https://ssak-search.pages.dev --static --batch-size=3 --concurrency=1
+npm run seed:index -- --api-url=https://search-engine-api.pages.dev --static --batch-size=3 --concurrency=1
 
 # 4. 검증: total_documents와 index_health 확인
-curl https://ssak-search.pages.dev/api/health | jq '.index'
+curl https://search-engine-api.pages.dev/api/health | jq '.index'
 ```
 
 ### 3. 로컬 개발 환경
@@ -734,21 +729,22 @@ npm run seed:index -- --api-url=http://localhost:8788 --all
 
 ```bash
 # 1. Workers AI 활성화 여부
-curl -s https://ssak-search.pages.dev/api/health | jq '.backends.workers_ai'
-# 기대값: "operational" (미설정 시 "disabled")
+curl -s https://search-engine-api.pages.dev/api/health | jq '.backends.workers_ai.status'
+# 기대값: "operational" (미설정 시 "disabled") — 다른 백엔드와 동일한 객체 형태 {status, latency_ms}
+# (바인딩 존재 여부 확인은 프로브가 없으므로 latency_ms는 항상 0)
 
 # 2. 인덱스 문서 수
-curl -s https://ssak-search.pages.dev/api/health | jq '.index.total_documents'
+curl -s https://search-engine-api.pages.dev/api/health | jq '.index.total_documents'
 # 기대값: 100+
 
 # 3. 검색 동작
-curl -s -X POST https://ssak-search.pages.dev/api/search \
+curl -s -X POST https://search-engine-api.pages.dev/api/search \
   -H 'Content-Type: application/json' \
   -d '{"query":"react hooks","max_results":3}' | jq '.backend, .total_results'
 # 기대값: 백엔드 조합, 5+ 결과
 
 # 4. 인덱스 검색 (임베딩 정상 여부)
-curl -s "https://ssak-search.pages.dev/api/index/search?query=javascript&top_k=3" | jq '.results_count'
+curl -s "https://search-engine-api.pages.dev/api/index/search?query=javascript&top_k=3" | jq '.results_count'
 # 기대값: 1+ (0이면 임베딩 불일치 — 재시드 필요)
 ```
 

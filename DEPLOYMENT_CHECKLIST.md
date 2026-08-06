@@ -95,7 +95,7 @@ echo "=== 암호화 시크릿 (설정 확인만) ==="
 npx wrangler pages secret list 2>&1
 
 echo "=== 환경 변수 (Pages Dashboard에서 확인) ==="
-echo "https://dash.cloudflare.com/ → Pages → ssak-search → Settings → Variables"
+echo "https://dash.cloudflare.com/ → Pages → search-engine-api → Settings → Variables"
 ```
 
 ---
@@ -169,7 +169,7 @@ Durable Object(DO)는 Cloudflare Workers의 상태 저장(sticky) 컴퓨팅 레�
 
 ##### Step 1: Dashboard 접속
 1. [Cloudflare Dashboard](https://dash.cloudflare.com/) 로그인
-2. 좌측 메뉴 → **Workers & Pages** → **ssak-search**
+2. 좌측 메뉴 → **Workers & Pages** → **search-engine-api**
 3. 상단 탭 → **Settings** → **Functions**
 
 ##### Step 2: DO 바인딩 추가
@@ -281,7 +281,7 @@ done
 # name: search-engine-cache
 
 # 2. Pages 바인딩 설정
-# Cloudflare Dashboard → Pages → ssak-search → Settings → Bindings
+# Cloudflare Dashboard → Pages → search-engine-api → Settings → Bindings
 # → KV → Add binding (Variable name: CACHE_KV)
 ```
 
@@ -316,7 +316,7 @@ curl -s https://your-worker.pages.dev/api/health | \
 
 ```bash
 # AI 바인딩 설정
-# Cloudflare Dashboard → Pages → ssak-search → Settings → Functions
+# Cloudflare Dashboard → Pages → search-engine-api → Settings → Functions
 # → AI → Add binding (name: AI)
 
 # 검증
@@ -338,7 +338,7 @@ curl -s https://your-worker.pages.dev/api/health | \
 # Analytics Engine 설정
 # 1. Cloudflare Dashboard → Workers & Pages → Analytics → Create dataset
 #    name: SEARCH_API_METRICS
-# 2. Pages → ssak-search → Settings → Bindings
+# 2. Pages → search-engine-api → Settings → Bindings
 #    → Workers Analytics Engine Datasets → Add binding
 #    (Variable name: ANALYTICS, Dataset: SEARCH_API_METRICS)
 # 3. Save & Redeploy
@@ -423,7 +423,7 @@ curl -s https://your-worker.pages.dev/api/monitor | python3 -m json.tool
 # GitHub → Actions → 모든 워크플로우가 ✅ 상태인지 확인
 
 # 수동 배포 테스트
-npx wrangler pages deploy dist/ --project-name=ssak-search --branch=main
+npx wrangler pages deploy dist/ --project-name=search-engine-api --branch=main
 ```
 
 ### 7.2 package.json 스크립트
@@ -632,7 +632,7 @@ curl -s "${BASE}/api/usage" | python3 -c "import sys,json; d=json.load(sys.stdin
 
 ```bash
 # 1. 이전 배포로 롤백
-# Cloudflare Dashboard → Pages → ssak-search → Deployments
+# Cloudflare Dashboard → Pages → search-engine-api → Deployments
 # → 이전 성공한 배포 → "Rollback to this deployment"
 
 # 2. 또는 GitHub Actions에서 재배포
@@ -651,7 +651,7 @@ git push origin hotfix/parser-regression
 
 ```bash
 # 로그 확인 (7일간 무료)
-# Cloudflare Dashboard → Workers & Pages → ssak-search
+# Cloudflare Dashboard → Workers & Pages → search-engine-api
 # → Logs & Analytics → Logs → Live Tail
 # 필터: "AUDIT_SECURITY:" (감사 이벤트)
 # 필터: "error" (에러 로그)
@@ -690,7 +690,7 @@ curl -sI -X POST https://your-worker.pages.dev/api/search \
 ### 배포 중
 
 - [ ] `npm run build` 실행 → `dist/` 디렉토리 생성
-- [ ] `npx wrangler pages deploy dist/ --project-name=ssak-search --branch=main`
+- [ ] `npx wrangler pages deploy dist/ --project-name=search-engine-api --branch=main`
 - [ ] 배포 로그 확인 (에러 없음)
 
 ### 배포 후 (Post-flight)

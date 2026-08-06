@@ -86,7 +86,7 @@ export function docsPage(): string {
             <tr><td class="p-2 font-mono text-indigo-600">include_domains</td><td class="p-2">string[]</td><td class="p-2">[]</td><td class="p-2">포함할 도메인</td></tr>
             <tr><td class="p-2 font-mono text-indigo-600">exclude_domains</td><td class="p-2">string[]</td><td class="p-2">[]</td><td class="p-2">제외할 도메인</td></tr>
             <tr><td class="p-2 font-mono text-indigo-600">time_range</td><td class="p-2">"day"|"week"|"month"|"year"|"any"</td><td class="p-2">"any"</td><td class="p-2">시간 범위</td></tr>
-            <tr><td class="p-2 font-mono text-indigo-600">sort_by</td><td class="p-2">"relevance" | "date"</td><td class="p-2">"relevance"</td><td class="p-2">정렬 기준</td></tr>
+            <tr><td class="p-2 font-mono text-indigo-600">sort_by</td><td class="p-2">"relevance" | "date"</td><td class="p-2">관련성+신선도 블렌드</td><td class="p-2">정렬 기준. 기본값은 관련성 70% + 최신성 30% 블렌드로 최신 데이터를 상위에 노출</td></tr>
             <tr><td class="p-2 font-mono text-indigo-600">max_tokens</td><td class="p-2">number</td><td class="p-2">4000</td><td class="p-2">결과당 최대 토큰</td></tr>
           </tbody>
         </table>
@@ -305,14 +305,22 @@ POST /api/products
         <span class="bg-blue-500 text-white text-xs font-bold px-3 py-1 rounded">GET/POST</span>
         <code class="text-lg font-mono text-slate-800">/api/video</code>
       </div>
-      <p class="text-slate-600 mb-3">YouTube 비디오 검색. 트랜스크립트 추출 지원.</p>
-      <pre class="code-block rounded-lg p-4 text-sm overflow-x-auto"><code>GET /api/video?query=React+tutorial&include_transcript=true
-POST /api/video
+      <p class="text-slate-600 mb-3">YouTube 비디오 검색. 트랜스크립트 추출 및 URL 기반 상세 콘텐츠 추출 지원.</p>
+      <pre class="code-block rounded-lg p-4 text-sm overflow-x-auto"><code># 비디오 검색 (트랜스크립트 포함)
+GET /api/video/search?query=React+tutorial&include_transcripts=true
+POST /api/video/search
 {
   "query": "machine learning course",
   "max_results": 3,
-  "include_transcript": true
-}</code></pre>
+  "include_transcripts": true
+}
+
+# URL → 상세 콘텐츠 추출 (제목/설명/키워드/채널/조회수/좋아요/게시일 + 선택적 트랜스크립트)
+GET /api/video/details?url=https://youtu.be/abcXYZ&include_transcript=true&lang=ko
+GET /api/video/details?video_id=abcXYZ&include_transcript=true
+
+# 트랜스크립트 조회 (json | text | srt)
+GET /api/video/transcript?video_id=abcXYZ&format=text</code></pre>
     </section>
 
     <!-- Spaces -->

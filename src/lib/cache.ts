@@ -51,6 +51,7 @@ export interface CacheKeyRequest {
   page?: number
   include_answer?: boolean
   include_raw_content?: boolean
+  include_fact_check?: boolean
   country?: string
   language?: string
   location?: string
@@ -70,10 +71,14 @@ function buildCacheParams(request: CacheKeyRequest, variant?: string): string[] 
     `sd=${request.search_depth ?? 'basic'}`,
     `tp=${request.topic ?? 'general'}`,
     `tr=${request.time_range ?? 'any'}`,
-    `sb=${request.sort_by ?? 'relevance'}`,
+    // Sort key: preserve the tri-state — undefined (default relevance+
+    // freshness blend), 'date', 'relevance'. Collapsing undefined onto
+    // 'relevance' would serve pure-relevance caches to blend requests.
+    `sb=${request.sort_by ?? 'blend'}`,
     `pg=${request.page ?? 1}`,
     `ia=${request.include_answer ? 1 : 0}`,
     `irc=${request.include_raw_content ? 1 : 0}`,
+    `ifc=${request.include_fact_check ? 1 : 0}`,
     `inc=${includeSorted.join(',')}`,
     `exc=${excludeSorted.join(',')}`,
     `fc=${request.focus ?? 'all'}`,

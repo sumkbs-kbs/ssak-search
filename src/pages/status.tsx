@@ -144,13 +144,17 @@ const STATUS_SCRIPT = `
             var circuit = b.circuit || null;
             var card = document.createElement('div');
             card.className = 'backend-card';
+            // Unconfigured optional backends (e.g. brave without BRAVE_API_KEY)
+            // render as a disabled/gray card — present but not part of the service.
+            var dotClass = status === 'unconfigured' ? 'disabled' : status;
+            var metaText = status === 'unconfigured' ? 'unconfigured (no API key)' : status;
             card.innerHTML = ''
               + '<div class="backend-info">'
-              + '<span class="backend-dot ' + status + '"></span>'
+              + '<span class="backend-dot ' + dotClass + '"></span>'
               + '<div><div class="backend-name">' + escapeHtml(name) + '</div>'
-              + '<div class="backend-meta">' + status + (circuit && circuit.tripped ? ' - circuit open' : '') + '</div></div></div>'
+              + '<div class="backend-meta">' + metaText + (circuit && circuit.tripped ? ' - circuit open' : '') + '</div></div></div>'
               + '<div class="backend-stats">'
-              + '<div class="backend-latency">' + latency + 'ms</div>'
+              + (status === 'unconfigured' || latency === '-' ? '' : '<div class="backend-latency">' + latency + 'ms</div>')
               + (circuit ? '<div class="backend-circuit" style="color:' + (circuit.status === 'healthy' ? 'var(--success)' : 'var(--warning)') + '">failures: ' + circuit.failures + '</div>' : '')
               + '</div>';
             grid.appendChild(card);

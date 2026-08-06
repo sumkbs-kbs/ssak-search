@@ -164,6 +164,86 @@ const DASHBOARD_CSS = `
   border: 1px solid var(--border);
 }
 
+/* ============ Stock Quote Card (Phase 6) ============ */
+.stock-quote-card {
+  background: linear-gradient(135deg, var(--surface), var(--surface-hover));
+  border: 1px solid var(--border);
+  border-left: 4px solid var(--accent);
+  border-radius: var(--radius);
+  padding: 18px 20px;
+  margin-bottom: 10px;
+  transition: border-color 0.15s, box-shadow 0.15s, transform 0.15s;
+}
+.stock-quote-card:hover {
+  border-color: var(--accent);
+  box-shadow: var(--shadow-md);
+  transform: translateY(-1px);
+}
+.stock-quote-card .sq-head {
+  display: flex; align-items: center; justify-content: space-between;
+  flex-wrap: wrap; gap: 8px;
+}
+.stock-quote-card .sq-title {
+  font-size: 1.02rem; font-weight: 700; color: var(--text);
+  display: flex; align-items: center; gap: 8px;
+}
+.stock-quote-card .sq-ticker {
+  font-family: var(--mono); font-size: 0.78rem; font-weight: 600;
+  color: var(--text-tertiary); background: var(--surface-hover);
+  border: 1px solid var(--border); padding: 2px 8px; border-radius: 999px;
+}
+.stock-quote-card .sq-badges { display: flex; gap: 6px; }
+.stock-quote-card .sq-badge {
+  font-size: 0.66rem; font-weight: 600; letter-spacing: 0.3px;
+  padding: 2px 8px; border-radius: 999px; text-transform: uppercase;
+}
+.sq-badge-source { background: var(--accent-light); color: var(--accent); }
+.sq-badge-open { background: #dcfce7; color: #16a34a; }
+.sq-badge-closed { background: var(--surface-hover); color: var(--text-tertiary); }
+.stock-quote-card .sq-price-row {
+  display: flex; align-items: baseline; gap: 12px; margin-top: 10px;
+  flex-wrap: wrap;
+}
+.stock-quote-card .sq-price {
+  font-size: 1.9rem; font-weight: 800; font-family: var(--mono);
+  color: var(--text); letter-spacing: -0.5px;
+}
+.stock-quote-card .sq-currency {
+  font-size: 0.8rem; font-weight: 500; color: var(--text-tertiary);
+  font-family: var(--mono);
+}
+.stock-quote-card .sq-change {
+  font-size: 1rem; font-weight: 700; font-family: var(--mono);
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 3px 10px; border-radius: 8px;
+}
+.sq-change-up { color: #dc2626; background: #fef2f2; }
+.sq-change-down { color: #2563eb; background: #eff6ff; }
+.sq-change-flat { color: var(--text-tertiary); background: var(--surface-hover); }
+.stock-quote-card .sq-grid {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+  gap: 10px 16px; margin-top: 14px; padding-top: 14px;
+  border-top: 1px dashed var(--border);
+}
+.stock-quote-card .sq-cell .sq-label {
+  font-size: 0.66rem; font-weight: 600; color: var(--text-tertiary);
+  text-transform: uppercase; letter-spacing: 0.4px;
+}
+.stock-quote-card .sq-cell .sq-value {
+  font-size: 0.84rem; font-weight: 600; color: var(--text);
+  font-family: var(--mono); margin-top: 2px;
+}
+.stock-quote-card .sq-foot {
+  margin-top: 12px; font-size: 0.72rem; color: var(--text-tertiary);
+  display: flex; align-items: center; justify-content: space-between;
+  flex-wrap: wrap; gap: 8px;
+}
+@media (prefers-color-scheme: dark) {
+  .stock-quote-card .sq-change-up { background: rgba(220, 38, 38, 0.15); }
+  .stock-quote-card .sq-change-down { background: rgba(37, 99, 235, 0.15); }
+  .stock-quote-card .sq-badge-open { background: rgba(22, 163, 74, 0.2); color: #4ade80; }
+}
+
 @keyframes pulse-dot { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
 
 @media (prefers-color-scheme: dark) {
@@ -354,6 +434,80 @@ async function doResearchStream(query, area, progressBar, progressFill, streamSt
 // Render functions
 // ============================================================
 
+// ============================================================
+// Stock Quote Card Renderer (Phase 6)
+// Renders a dedicated quote card for any result carrying structured
+// stock_data (Yahoo Finance / Naver). Called from renderSearchResults — the
+// quote replaces the generic result card so it leads finance queries.
+// ============================================================
+function formatPrice(v) {
+  if (v === undefined || v === null || isNaN(v)) return '-';
+  return Number(v).toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 2 });
+}
+
+function formatCompact(v) {
+  if (v === undefined || v === null || isNaN(v)) return '-';
+  const n = Number(v);
+  if (n >= 1e12) return (n / 1e12).toFixed(2) + 'T';
+  if (n >= 1e9) return (n / 1e9).toFixed(2) + 'B';
+  if (n >= 1e6) return (n / 1e6).toFixed(2) + 'M';
+  if (n >= 1e3) return (n / 1e3).toFixed(1) + 'K';
+  return formatPrice(n);
+}
+
+function renderStockCard(r, data, position) {
+  const sd = r.stock_data;
+  const dir = sd.direction === 'up' ? 'up' : sd.direction === 'down' ? 'down' : 'flat';
+  const arrow = sd.direction === 'up' ? '\u25b2' : sd.direction === 'down' ? '\u25bc' : '\u2192';
+  const changeColor = 'sq-change-' + dir;
+  const sign = sd.change > 0 ? '+' : sd.change < 0 ? '-' : '';
+  const sourceLabel = sd.source === 'naver' ? 'Naver' : 'Yahoo Finance';
+  const statusBadge = sd.market_status === 'open'
+    ? '<span class="sq-badge sq-badge-open">\u25cf Live</span>'
+    : sd.market_status === 'closed'
+      ? '<span class="sq-badge sq-badge-closed">Closed</span>'
+      : '';
+  const cells = [
+    ['Open', formatPrice(sd.open_price)],
+    ['High', formatPrice(sd.high_price)],
+    ['Low', formatPrice(sd.low_price)],
+    ['Prev Close', formatPrice(sd.prev_close)],
+    ['Volume', formatCompact(sd.volume)],
+    ['Market Cap', formatCompact(sd.marketCap)],
+  ];
+  if (sd.fifty_two_week_low !== undefined && sd.fifty_two_week_high !== undefined) {
+    cells.push(['52W Range', formatPrice(sd.fifty_two_week_low) + ' \u2013 ' + formatPrice(sd.fifty_two_week_high)]);
+  }
+  let grid = '';
+  for (let i = 0; i < cells.length; i++) {
+    grid += '<div class="sq-cell"><div class="sq-label">' + cells[i][0] + '</div><div class="sq-value">' + escapeHtml(String(cells[i][1])) + '</div></div>';
+  }
+  let html = '<div class="stock-quote-card">';
+  html += '<div class="sq-head">';
+  html += '<div class="sq-title">' + escapeHtml(sd.name) + ' <span class="sq-ticker">' + escapeHtml(sd.ticker) + '</span></div>';
+  html += '<div class="sq-badges">';
+  html += '<span class="sq-badge sq-badge-source">' + escapeHtml(sourceLabel) + '</span>';
+  if (sd.exchange) html += '<span class="sq-badge sq-badge-source">' + escapeHtml(sd.exchange) + '</span>';
+  html += statusBadge;
+  html += '</div></div>';
+  html += '<div class="sq-price-row">';
+  html += '<span class="sq-price">' + formatPrice(sd.price) + '</span>';
+  if (sd.currency) html += '<span class="sq-currency">' + escapeHtml(sd.currency) + '</span>';
+  html += '<span class="sq-change ' + changeColor + '">' + arrow + ' ' + sign + formatPrice(Math.abs(sd.change)) + ' (' + (sd.change_percent >= 0 ? '+' : '') + sd.change_percent + '%)</span>';
+  html += '</div>';
+  html += '<div class="sq-grid">' + grid + '</div>';
+  html += '<div class="sq-foot">';
+  html += '<span><i class="fas fa-link" style="width:12px;"></i> ' + escapeHtml(r.domain) + '</span>';
+  // Keep LTR/experiment click attribution in parity with regular result cards.
+  const expName = data && data.experiment ? data.experiment.name : '';
+  const expVariant = data && data.experiment ? data.experiment.variant : '';
+  const expImpression = data && data.experiment ? data.experiment.impression_id : '';
+  const q = data ? data.query : '';
+  html += '<a href="' + escapeAttr(r.url) + '" target="_blank" rel="noopener" onclick="trackClick(\\\'' + escapeAttr(q) + '\\\',\\\'' + escapeAttr(r.url) + '\\\',' + position + ',\\\'' + escapeAttr(expName) + '\\\',\\\'' + escapeAttr(expVariant) + '\\\',\\\'' + escapeAttr(expImpression) + '\\\')" style="color:var(--accent);text-decoration:none;font-weight:500;"><i class="fas fa-external-link-alt"></i> View quote</a>';
+  html += '</div></div>';
+  return html;
+}
+
 function renderSearchResults(data, area) {
   if (!area) return;
   let html = '';
@@ -398,6 +552,11 @@ function renderSearchResults(data, area) {
   // === Search Results with thumbnails ===
   for (let i = 0; i < data.results.length; i++) {
     const r = data.results[i];
+    // Results carrying structured stock_data render as a dedicated quote card.
+    if (r.stock_data) {
+      html += renderStockCard(r, data, i + 1);
+      continue;
+    }
     const scorePct = Math.round((r.score || 0) * 100);
     const pctColor = scorePct >= 70 ? 'var(--success)' : scorePct >= 40 ? 'var(--warning)' : 'var(--error)';
     html += '<div class="result-card card card-clickable" style="padding:16px;margin-bottom:10px;">';

@@ -24,6 +24,9 @@ import {
   buildSearXNGTask,
   buildDuckDuckGoTask,
   buildNaverTask,
+  buildNaverNewsTask,
+  buildBingNewsRssTask,
+  buildGoogleNewsRssTask,
   buildKoreanStockTask,
   buildYahooFinanceTask,
   buildBraveTask,
@@ -55,12 +58,36 @@ export class AllStrategy implements SearchStrategy {
     if (ctx.isFinance && !ctx.korean) {
       tasks.push(buildBingFinanceTask(ctx))
       tasks.push(buildYahooFinanceTask(ctx, 5))
+      // Finance news RSS — en-stock-08 root cause: bing-finance (query suffix)
+      // + yahoo-finance (1 match) totalled only 3 results and the adaptive
+      // threshold opened to Tier 3, letting google.co.kr/index.html through.
+      tasks.push(buildGoogleNewsRssTask(ctx, 9))
     } else if (ctx.isFinance && ctx.korean) {
       // Global stock data for Korean companies via Yahoo Finance (secondary)
       tasks.push(buildYahooFinanceTask(ctx, 5))
+      // General web fallback — the korean finance cascade previously had NO
+      // bing/DDG path (korean excludes DDG entirely, and bing only ran in the
+      // non-korean finance branch and the general branch). When naver 429s,
+      // the only survivors were the naver-finance composite pages (2 filler
+      // results) — the kr-stock-12~15 / kr-fin-08 / kr-special-03·04 eval
+      // failures (2026-08-05, median-of-3 baseline). Bing results pass the
+      // same korean quality thresholds, so they add abundance without noise.
+      tasks.push(buildBingTask(ctx))
     } else if (ctx.isNews) {
       tasks.push(buildBingNewsTask(ctx))
       tasks.push(buildBingTask(ctx))
+      // Korean news queries: Naver NEWS backend guarantees real n.news.naver.com
+      // articles (the general naver backend surfaces blogs/cafes instead — the
+      // kr-news-02/04 NDCG 0.000 root cause).
+      if (ctx.korean) tasks.push(buildNaverNewsTask(ctx))
+      // News RSS feeds run for ALL languages: en-US forces the EN market
+      // (en-news NDCG 0.000 root cause), ko-KR/zh-CN/ja-JP localize them
+      // (Phase 6.7/6.10). For Korean, the ko feeds add gold domains naver
+      // m_news doesn't surface (yna.co.kr/chosun.com/hankyung.com — verified
+      // live 2026-08-05: Bing ko-KR returns real domains directly, Google
+      // ko-KR resolves via the Korean source map).
+      tasks.push(buildBingNewsRssTask(ctx))
+      tasks.push(buildGoogleNewsRssTask(ctx))
     } else {
       tasks.push(buildBingTask(ctx))
 
@@ -90,6 +117,12 @@ export class AllStrategy implements SearchStrategy {
 
     // 3. GitHub (technical)
     if (ctx.sources.useGitHub) {
+      // Note: Phase 6.7 initially capped technical github to 5 to let docs
+      // domains through (lt-01), but that REGRESSED the github-gold queries
+      // (en-tech-11 1.855→1.324, cmp-05 1.063→0.652 — github.com IS their gold).
+      // The TECH_DOCS_AUTHORITY ranking bonus alone lifts docs above star-
+      // saturated repos when the docs reach the pool, so keep 8 and let
+      // ranking sort it out.
       tasks.push(buildGithubTask(ctx, 8))
     }
 
@@ -119,7 +152,14 @@ export class AllStrategy implements SearchStrategy {
     }
 
     // 6. DuckDuckGo (fallback: only when SearXNG is NOT configured)
-    if (!searxngConfigured && !ctx.korean && !ctx.isNews && !ctx.chinese) {
+    //
+    // chinese is NOT excluded: zh-general-04 (西安旅游攻略) failed eval with
+    // only 4 results because the chinese general path was bing+wikipedia only
+    // — no DDG breadth. DDG's zh results pass through the same cross-language
+    // penalty + quality threshold, so they add abundance without polluting
+    // (and when bing mkt=zh-CN is unavailable, DDG is the only non-wiki
+    // source left for chinese general queries).
+    if (!searxngConfigured && !ctx.korean && !ctx.isNews) {
       tasks.push(buildDuckDuckGoTask(ctx))
     }
 

@@ -421,6 +421,37 @@ export function truncateToTokens(text: string, maxTokens: number): string {
   return (lastSpace > maxChars * 0.5 ? truncated.slice(0, lastSpace) : truncated) + '…'
 }
 
+/**
+ * Split text into sentences, preserving CJK/Korean sentence boundaries.
+ * (Moved from answer.ts so fact-check.ts can reuse it without creating a
+ * circular runtime import between answer.ts and fact-check.ts.)
+ */
+export function splitIntoSentences(text: string): string[] {
+  const protected_ = text.replace(/(\b(?:Mr|Mrs|Dr|Prof|Inc|Ltd|Corp|vs|etc|e\.g|i\.e|U\.S|U\.K)\.)/g, '$1\x00')
+  const sentences = protected_
+    .split(/(?<=[.!?。！？])\s*(?=[A-Z\u00C0-\u017F\uAC00-\uD7A3\u4E00-\u9FFF])/)
+    .flatMap((s) => s.split(/(?<=[。！？])/))
+    .map((s) => s.replace(/\x00/g, '.').trim())
+    .filter((s) => s.length > 0)
+  return sentences
+}
+
+/**
+ * Jaccard similarity over whitespace-separated tokens.
+ * (Moved from answer.ts so fact-check.ts can reuse it without creating a
+ * circular runtime import between answer.ts and fact-check.ts.)
+ */
+export function similarity(a: string, b: string): number {
+  const setA = new Set(a.toLowerCase().split(/\s+/))
+  const setB = new Set(b.toLowerCase().split(/\s+/))
+  let intersection = 0
+  for (const word of setA) {
+    if (setB.has(word)) intersection++
+  }
+  const union = setA.size + setB.size - intersection
+  return union > 0 ? intersection / union : 0
+}
+
 /** Check if a string contains CJK characters (Chinese/Japanese/Korean) */
 function hasCJK(text: string): boolean {
   // \u4E00-\u9FFF: CJK Unified Ideographs (Chinese/Japanese Kanji)
@@ -441,12 +472,16 @@ function cjkBigrams(text: string): string[] {
 
 /** Compute a relevance score based on query term overlap + phrase matching + freshness + authority */
 export function computeScore(title: string, content: string, query: string, publishedDate?: string, url?: string): number {
+  // Tokenize the query preserving symbol-bearing terms. Naively stripping all
+  // non-alphanumerics mangles financial/tech queries: "S&P 500" → "sp 500"
+  // (drops the &, and "S" alone is a stopword-sized fragment), "C++" → "c",
+  // ".NET" → "net". We keep an ampersand and strip only leading/trailing
+  // punctuation so "s&p", "c++", "c#" survive as matchable terms.
   const queryTerms = query
     .toLowerCase()
     .split(/\s+/)
+    .map((t) => t.replace(/[^\p{L}\p{N}&+#]/gu, ''))
     .filter((t) => t.length > 1)
-    .map((t) => t.replace(/[^\p{L}\p{N}]/gu, ''))
-    .filter((t) => t.length > 0)
 
   const titleLower = title.toLowerCase()
   const contentLower = content.toLowerCase()

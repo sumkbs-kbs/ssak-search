@@ -127,17 +127,20 @@ export function tokenize(text: string): string[] {
     const latinTerms = text
       .toLowerCase()
       .split(/[\s,.;:!?()\[\]{}【】「」『』]+/)
-      .map(t => t.replace(/[^\w\u{4E00}-\u{9FFF}\u{AC00}-\u{D7A3}]+/gu, ''))
+      .map(t => t.replace(/[^\w&+#\u{4E00}-\u{9FFF}\u{AC00}-\u{D7A3}]+/gu, ''))
       .filter(t => t.length > 1 && !STOP_WORDS.has(t))
 
     return [...new Set([...bigrams, ...latinTerms])]
   }
 
-  // Non-CJK: standard whitespace tokenization
+  // Non-CJK: standard whitespace tokenization. Preserve symbol-bearing terms
+  // (S&P, C++, C#, .NET) — naively dropping all non-word chars turns "S&P 500"
+  // into "sp 500" and "C++" into "c", destroying match quality for financial
+  // and tech queries.
   return text
     .toLowerCase()
     .split(/[\s,.;:!?()\[\]{}]+/)
-    .map(t => t.replace(/[^\w]+/g, ''))
+    .map(t => t.replace(/[^\w&+#]+/g, ''))
     .filter(t => t.length > 1 && !STOP_WORDS.has(t))
 }
 

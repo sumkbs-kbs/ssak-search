@@ -2,6 +2,8 @@
  * Tavily-compatible Search Engine API - Type Definitions
  */
 
+import type { FactCheckReport } from './lib/fact-check'
+
 // ============================================================
 // Queue Message Types
 // ============================================================
@@ -51,6 +53,8 @@ export interface SearchRequest {
   include_answer?: boolean
   /** Include the full extracted content of each result */
   include_raw_content?: boolean
+  /** Attach a cross-source fact-check report to the AI answer (answer.ts includeFactCheck) */
+  include_fact_check?: boolean
   /** Include a list of query suggestions */
   include_domains?: string[]
   /** Exclude these domains from results */
@@ -130,9 +134,9 @@ export interface RichSnippet {
 export interface StockData {
   /** Stock name (e.g. "한화에어로스페이스") */
   name: string
-  /** Ticker symbol (e.g. "012450") */
+  /** Ticker symbol (e.g. "012450", "AAPL") */
   ticker: string
-  /** Exchange (e.g. "KOSPI", "KOSDAQ") */
+  /** Exchange (e.g. "KOSPI", "KOSDAQ", "NMS") */
   exchange: string
   /** Current price (raw number, e.g. 943000) */
   price: number
@@ -156,8 +160,14 @@ export interface StockData {
   open_price?: number
   /** Previous close price */
   prev_close?: number
+  /** 52-week high (quote-card display) */
+  fifty_two_week_high?: number
+  /** 52-week low (quote-card display) */
+  fifty_two_week_low?: number
   /** Market status (open/closed) */
   market_status?: 'open' | 'closed'
+  /** Data source — lets the UI badge the quote card ("Yahoo Finance" / "Naver") */
+  source?: 'yahoo' | 'naver'
 }
 
 export interface SearchAnswerSource {
@@ -181,6 +191,8 @@ export interface SearchAnswer {
    *  - `SearchAnswerSource[]`: rich citations with URL/title/snippet (Pro mode)
    *  Consumers should handle both forms. */
   sources: number[] | SearchAnswerSource[]
+  /** Cross-source fact-check report (when generateAnswer includeFactCheck is enabled) */
+  factCheck?: FactCheckReport
 }
 
 export interface SearchResponse {

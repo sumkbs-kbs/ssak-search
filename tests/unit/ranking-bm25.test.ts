@@ -26,6 +26,9 @@ import {
   applyFilters,
   sortResults,
   applyQualityThreshold,
+  freshnessBlendKey,
+  NEWS_FRESHNESS_WEIGHT,
+  DEFAULT_FRESHNESS_WEIGHT,
 } from '../../src/lib/search/ranking'
 import { bm25Score } from '../../src/lib/retrieval/bm25'
 import { computeScore } from '../../src/lib/util'
@@ -565,6 +568,110 @@ describe('sortResults', () => {
     expect(sorted[0].score).toBe(0.7)
     expect(sorted[1].score).toBe(0.5)
     expect(sorted[2].score).toBe(0.3)
+  })
+
+  it('default (unspecified sort_by) blend lifts a fresh near-tie above an undated one', () => {
+    const ctx = makeCtx({ request: { query: 'test', max_results: 10 } as never })
+    const results = [
+      // Undated but slightly higher relevance
+      makeResult({ score: 0.60, published_date: undefined }),
+      // Fresh (today) with nearly equal relevance — should win the tie-ish race
+      makeResult({ score: 0.59, published_date: new Date().toISOString() }),
+    ]
+    const sorted = sortResults(results, ctx)
+    // 0.7*0.59 + 0.3*1.0 = 0.713 > 0.7*0.60 + 0 = 0.42 → fresh wins
+    expect(sorted[0].published_date).toBeDefined()
+  })
+
+  it('default blend keeps a strongly-relevant undated result above a weak fresh one', () => {
+    const ctx = makeCtx({ request: { query: 'test', max_results: 10 } as never })
+    const results = [
+      // Strong relevance, no date (reference content)
+      makeResult({ score: 0.95, published_date: undefined }),
+      // Fresh but barely relevant spam
+      makeResult({ score: 0.20, published_date: new Date().toISOString() }),
+    ]
+    const sorted = sortResults(results, ctx)
+    // 0.7*0.95 = 0.665 > 0.7*0.20 + 0.3 = 0.44 → relevance wins
+    expect(sorted[0].score).toBe(0.95)
+  })
+
+  it('news queries (isNews) use the bounded freshness blend — fresh wins near-ties', () => {
+    const ctx = makeCtx({ request: { query: 'test', max_results: 10 } as never, isNews: true })
+    const results = [
+      makeResult({ score: 0.7, published_date: new Date(Date.now() - 200 * 24 * 60 * 60 * 1000).toISOString() }), // ~200 days old
+      makeResult({ score: 0.6, published_date: new Date().toISOString() }), // fresh
+    ]
+    const sorted = sortResults(results, ctx)
+    // Bounded blend (w=NEWS_FRESHNESS_WEIGHT): fresh 0.6 + w·1.0·0.4 = 0.72 > old 0.7 + ~0
+    expect(sorted[0].published_date).toBeDefined()
+    expect(sorted[0].score).toBe(0.6)
+  })
+
+  it('news queries: a fresh-but-weak snippet can NEVER overtake a perfect-score authoritative article', () => {
+    // Regression guard for the eval en-news-02 failure mode: the OLD
+    // recency-dominant blend (0.85·recency + 0.15·score) let a fresh
+    // keyword-saturated snippet (0.76) outrank a dated gold article (1.0).
+    const ctx = makeCtx({ request: { query: 'test', max_results: 10 } as never, isNews: true })
+    const results = [
+      makeResult({ score: 1.0, published_date: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString() }), // gold, a week old
+      makeResult({ score: 0.73, published_date: new Date().toISOString() }), // fresh, weaker
+    ]
+    const sorted = sortResults(results, ctx)
+    // score 1.0 → key 1.0 + w·recency·0 = 1.0 > 0.73 + w·1.0·0.27 = 0.811 (w=NEWS_FRESHNESS_WEIGHT)
+    expect(sorted[0].score).toBe(1.0)
+  })
+
+  it('default blend: bounded freshness still surfaces a fresh near-tie above an undated one', () => {
+    const ctx = makeCtx({ request: { query: 'test', max_results: 10 } as never })
+    const results = [
+      // Undated but slightly higher relevance
+      makeResult({ score: 0.60, published_date: undefined }),
+      // Fresh (today) with nearly equal relevance — should win the tie-ish race
+      makeResult({ score: 0.59, published_date: new Date().toISOString() }),
+    ]
+    const sorted = sortResults(results, ctx)
+    // 0.59 + DEFAULT_FRESHNESS_WEIGHT·1.0·0.41 = 0.6515 > 0.60 + 0 = 0.60 → fresh wins
+    expect(sorted[0].published_date).toBeDefined()
+  })
+
+  it('default blend: a strong undated reference result is never buried by a weak fresh one (en-stock-07 guard)', () => {
+    // Regression guard: OLD linear blend 0.7·score + 0.3·recency gave a fresh
+    // 0.73 news.google.com item 0.811, beating the undated 1.0 yahoo quote
+    // (0.70) — the en-stock-07 NDCG 0.23 root cause.
+    const ctx = makeCtx({ request: { query: 'test', max_results: 10 } as never })
+    const results = [
+      makeResult({ score: 1.0, published_date: undefined }), // yahoo quote — no date
+      makeResult({ score: 0.73, published_date: new Date().toISOString() }), // fresh news item
+    ]
+    const sorted = sortResults(results, ctx)
+    // bounded: 1.0 + w·recency·0 = 1.0 > 0.73 + w·1.0·0.27 = 0.7705 (w=DEFAULT_FRESHNESS_WEIGHT)
+    expect(sorted[0].score).toBe(1.0)
+  })
+
+  it('explicit date sort ranks the newest result first regardless of relevance', () => {
+    const ctx = makeCtx({ request: { sort_by: 'date' } as never })
+    const now = Date.now()
+    const results = [
+      makeResult({ score: 0.9, published_date: new Date(now - 90 * 24 * 60 * 60 * 1000).toISOString() }),
+      makeResult({ score: 0.5, published_date: new Date(now - 2 * 24 * 60 * 60 * 1000).toISOString() }),
+    ]
+    const sorted = sortResults(results, ctx)
+    expect(sorted[0].score).toBe(0.5) // newer wins
+  })
+
+  it('freshnessBlendKey caps the recency boost so a perfect score is never overtaken', () => {
+    // score 1.0 can never gain from recency
+    expect(freshnessBlendKey(1.0, 1.0, NEWS_FRESHNESS_WEIGHT)).toBe(1.0)
+    // boost SHRINKS as score approaches 1: w·1.0·0.5 vs w·1.0·0.1
+    const boostAtHalf = freshnessBlendKey(0.5, 1.0, NEWS_FRESHNESS_WEIGHT) - 0.5
+    const boostAtNine = freshnessBlendKey(0.9, 1.0, NEWS_FRESHNESS_WEIGHT) - 0.9
+    expect(boostAtHalf).toBeGreaterThan(boostAtNine)
+    // undated results get no boost
+    expect(freshnessBlendKey(0.5, 0, NEWS_FRESHNESS_WEIGHT)).toBe(0.5)
+    // the core S11 invariant: a perfect undated result is UNBEATABLE by any
+    // fresh result at any weight ≤ 1 (score 1.0 → boost term is always 0)
+    expect(freshnessBlendKey(1.0, 1.0, DEFAULT_FRESHNESS_WEIGHT)).toBe(1.0)
   })
 })
 

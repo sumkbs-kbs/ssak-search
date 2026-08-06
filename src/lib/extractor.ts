@@ -7,6 +7,8 @@
 import type { ExtractedContent, Env } from '../types'
 import { logger, toError } from './logger'
 import { jinaExtract } from './jina-search'
+import { youtubeExtract, isYouTubeUrl } from './youtube-search'
+import { naverNewsExtract, isNaverNewsUrl } from './naver-news-search'
 import { extractWithHtmlRewriter } from './html-rewriter'
 import { extractRichSnippets } from './rich-snippets'
 import { isSidecarAvailable, sidecarExtract } from './sidecar-client'
@@ -108,6 +110,39 @@ async function extractSingleUrl(
   opts: ExtractOptions,
 ): Promise<ExtractedContent> {
   const { jinaApiKey, includeImages = false, maxTokens = 8000, timeoutMs = 20000 } = opts
+
+  // Strategy 0: YouTube — watch-page description + transcript. Generic readers
+  // cannot render YouTube watch pages (shell HTML / consent walls), so video
+  // links previously contributed NO evidence to the research/chat pipeline
+  // even when include_raw_content was requested. This path parses
+  // ytInitialPlayerResponse for the description and pulls the transcript, so
+  // LLM synthesis gets real video content. Falls through to the generic
+  // readers if the video-specific extraction fails.
+  if (isYouTubeUrl(url)) {
+    try {
+      const result = await youtubeExtract(url, { maxTokens, timeoutMs })
+      if (result.success) return result
+      logger.warn(`YouTube extraction failed for ${url}, falling back to generic readers:`, { error: result.error })
+    } catch (err) {
+      logger.warn(`YouTube extraction error for ${url}, falling back to generic readers:`, { error: toError(err) })
+    }
+  }
+
+  // Strategy 0.5: Naver News article — full body from the embedded dic_area.
+  // Naver article pages (n.news.naver.com) are JS-rendered; generic readers
+  // often return shell HTML / the og:description stub instead of the full
+  // article body. This path parses the <article id="dic_area"> body directly
+  // so Korean news evidence in the research/chat pipeline gets real article
+  // text — the same first-class treatment YouTube watch pages get.
+  if (isNaverNewsUrl(url)) {
+    try {
+      const result = await naverNewsExtract(url, { maxTokens, timeoutMs, env: opts.env })
+      if (result.success) return result
+      logger.warn(`Naver news extraction failed for ${url}, falling back to generic readers:`, { error: result.error })
+    } catch (err) {
+      logger.warn(`Naver news extraction error for ${url}, falling back to generic readers:`, { error: toError(err) })
+    }
+  }
 
   // Strategy 1: Jina AI Reader (best quality)
   try {

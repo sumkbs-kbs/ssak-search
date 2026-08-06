@@ -187,10 +187,16 @@ searchRoute.post('/', async (c) => {
     max_results: maxResults,
     include_answer: body.include_answer ?? false,
     include_raw_content: body.include_raw_content ?? false,
+    // Truthy coercion matches the sibling include_answer handling — accepts
+    // boolean true and string "true" from form/query-serialized clients.
+    include_fact_check: Boolean(body.include_fact_check),
     include_domains: body.include_domains,
     exclude_domains: body.exclude_domains,
     time_range: body.time_range,
-    sort_by: body.sort_by === 'date' ? 'date' : 'relevance',
+    // Preserve unspecified (undefined) so ranking.ts can apply the default
+    // relevance+freshness blend — mapping it to 'relevance' here would force
+    // pure relevance for every request that omits sort_by.
+    sort_by: body.sort_by === 'date' ? 'date' : body.sort_by === 'relevance' ? 'relevance' : undefined,
     max_tokens: Math.min(body.max_tokens ?? 4000, 8000),
     page: Math.min(Math.max(body.page ?? 1, 1), 10),
     country: body.country,
@@ -347,6 +353,7 @@ searchRoute.get('/', async (c) => {
   const includeAnswerParam = c.req.query('include_answer')
   const includeAnswer = includeAnswerParam === undefined ? false : includeAnswerParam === 'true' || c.req.query('answer') === 'true'
   const includeRawContent = c.req.query('include_raw_content') === 'true'
+  const includeFactCheck = c.req.query('include_fact_check') === 'true'
 
   const { depth: searchDepth } = resolveSearchDepth(query, c.req.query('search_depth'), c.env)
 
@@ -355,10 +362,13 @@ searchRoute.get('/', async (c) => {
     max_results: maxResults,
     include_answer: includeAnswer,
     include_raw_content: includeRawContent,
+    include_fact_check: includeFactCheck,
     search_depth: searchDepth,
     topic: (c.req.query('topic') as SearchRequest['topic']) || 'general',
     time_range: c.req.query('time_range') as SearchRequest['time_range'],
-    sort_by: c.req.query('sort_by') === 'date' ? 'date' : 'relevance',
+    sort_by: c.req.query('sort_by') === 'date' ? 'date'
+      : c.req.query('sort_by') === 'relevance' ? 'relevance'
+      : undefined,
     page: Math.min(Math.max(parseInt(c.req.query('page') || '1', 10) || 1, 1), 10),
     country: c.req.query('country'),
     language: c.req.query('language'),

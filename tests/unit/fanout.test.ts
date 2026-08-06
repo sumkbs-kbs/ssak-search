@@ -83,6 +83,18 @@ describe('fanoutBackends', () => {
     expect(result.resultSets[1]).toHaveLength(5)
   })
 
+  it('waitFor recovers a slow yahoo-finance backend (quote retry chain)', async () => {
+    const tasks = [fastTask('bing', 10), slowTask('yahoo-finance', 2000, 1)]
+    const promise = fanoutBackends(tasks, 8, { waitFor: ['wikipedia', 'yahoo-finance'] })
+
+    await vi.advanceTimersByTimeAsync(800)
+    await vi.advanceTimersByTimeAsync(2000)
+    const result = await promise
+
+    expect(result.usedBackends).toEqual(['bing', 'yahoo-finance'])
+    expect(result.resultSets[1][0].domain).toBe('yahoo-finance.example')
+  })
+
   it('waitFor is bounded by BACKEND_TIMEOUT_MS — a never-settling task does not hang', async () => {
     // BACKEND_TIMEOUT_MS.wikipedia = 4500ms. Phase 1 breaks at 800ms, then
     // waitFor awaits the wikipedia bgPromise; its timeout timer fires at 4500ms

@@ -36,11 +36,18 @@ const IP_RATE_LIMIT = 10 // requests per window
 /**
  * Check if an IP is rate limited.
  * Returns { allowed: boolean, remaining: number }
+ *
+ * @param options.record  When false, the check does NOT consume a slot — it
+ *   only reports the current window state. Used for response-header reporting
+ *   so a single request consumes exactly ONE slot (previously the header
+ *   reporting call also recorded a timestamp, halving the effective limit).
  */
 export function checkIpRateLimit(
   clientIp: string,
   limit = IP_RATE_LIMIT,
+  options?: { record?: boolean },
 ): { allowed: boolean; remaining: number } {
+  const record = options?.record ?? true
   const now = Date.now()
   const window = IP_RATE_MAP.get(clientIp) ?? []
 
@@ -63,8 +70,10 @@ export function checkIpRateLimit(
     return { allowed: false, remaining: 0 }
   }
 
-  recent.push(now)
-  IP_RATE_MAP.set(clientIp, recent)
+  if (record) {
+    recent.push(now)
+    IP_RATE_MAP.set(clientIp, recent)
+  }
   return { allowed: true, remaining: limit - recent.length }
 }
 
@@ -142,8 +151,10 @@ export async function securityMiddleware(c: Context<{ Bindings: AppBindings }>, 
     // Skip CSP for API (not meaningful for JSON responses)
     delete secHeaders['Content-Security-Policy']
 
-    // Add rate limit headers
-    const ipLimit = checkIpRateLimit(clientIp)
+    // Add rate limit headers. record:false — this is a REPORTING call, not an
+    // enforcement call; consuming a slot here would double-count every request
+    // and silently halve the effective per-IP limit (10/min → 5/min).
+    const ipLimit = checkIpRateLimit(clientIp, IP_RATE_LIMIT, { record: false })
     c.res.headers.set('X-RateLimit-Limit', String(IP_RATE_LIMIT))
     c.res.headers.set('X-RateLimit-Remaining', String(ipLimit.remaining))
     c.res.headers.set('X-RateLimit-Reset', String(Math.ceil(Date.now() / 1000) + 60))

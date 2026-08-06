@@ -11,6 +11,7 @@ import { describe, it, expect } from 'vitest'
 import {
   isKoreanQuery,
   isChineseQuery,
+  isJapaneseQuery,
   detectWikiLanguage,
   cleanChineseQuery,
   normalizeUrlForDedup,
@@ -98,6 +99,98 @@ describe('isChineseQuery', () => {
 })
 
 // ============================================================
+// isJapaneseQuery (Phase 6.7)
+// ============================================================
+
+describe('isJapaneseQuery', () => {
+  it('returns true for kana queries', () => {
+    expect(isJapaneseQuery('量子コンピュータとは')).toBe(true)
+    expect(isJapaneseQuery('東京観光スポット')).toBe(true)
+  })
+
+  it('returns true for kana-less shinjitai-kanji queries (ja-news fix)', () => {
+    expect(isJapaneseQuery('任天堂Switch 2 発売')).toBe(true)
+    expect(isJapaneseQuery('円安 影響')).toBe(true)
+    expect(isJapaneseQuery('半導体不足 最新')).toBe(true)
+    expect(isJapaneseQuery('京都紅葉時期')).toBe(true)
+  })
+
+  it('returns false for Chinese queries', () => {
+    expect(isJapaneseQuery('中国AI最新进展')).toBe(false)
+    expect(isJapaneseQuery('华为最新手机发布')).toBe(false)
+    expect(isJapaneseQuery('北京旅游攻略')).toBe(false)
+    expect(isJapaneseQuery('上海美食推荐')).toBe(false)
+  })
+
+  it('returns false for traditional Chinese (shared-glyph protection)', () => {
+    expect(isJapaneseQuery('台灣銀行匯率')).toBe(false)
+    expect(isJapaneseQuery('香港經濟新聞')).toBe(false)
+    expect(isJapaneseQuery('日本旅遊攻略')).toBe(false)
+  })
+
+  it('catches Japanese via shinjitai glyphs AND place-word composites', () => {
+    expect(isJapaneseQuery('日本経済新聞')).toBe(true)   // 済 shinjitai
+    expect(isJapaneseQuery('京都紅葉時期')).toBe(true)    // 京都/紅葉 place words
+  })
+
+  it('catches kana-less Japanese tech compounds that were misrouted to zh (Phase 6.12)', () => {
+    // ja-tech-10/ja-news-05/ja-tech-03/ja-tech-06/ja-tech-12/ja-tech-05/ja-tech-02
+    // have NO kana and NO shinjitai glyphs, so they previously fell into the
+    // zh-CN bucket and bing served Chinese results (NDCG 0.000 root cause).
+    expect(isJapaneseQuery('機械学習入門')).toBe(true)          // 機械学習 compound
+    expect(isJapaneseQuery('Python機械学習入門')).toBe(true)
+    expect(isJapaneseQuery('TypeScript 入門')).toBe(true)      // 入門 compound
+    expect(isJapaneseQuery('Docker 入門')).toBe(true)
+    expect(isJapaneseQuery('Web API 設計')).toBe(true)         // 設計 compound
+    expect(isJapaneseQuery('AI規制 最新')).toBe(true)          // 規制 compound
+  })
+
+  it('keeps genuinely-ambiguous shared-glyph queries (Kubernetes 基本) out of the zh bucket', () => {
+    // 基本 is a shared glyph (Chinese writes 基本概念 too), so it is NOT in the
+    // compound list — a Latin+kanji tech query like this stays ambiguous and
+    // routes to zh rather than risking a Chinese false positive. Documented
+    // tradeoff: the 6 unambiguous compounds above fix the eval 0.000 cases.
+    expect(isJapaneseQuery('Kubernetes 基本')).toBe(false)
+  })
+
+  it('does NOT misroute simplified-Chinese queries that use the simplified glyphs', () => {
+    // Simplified Chinese writes the same concepts as 机器/入门/设计/规制/学习 —
+    // these are the exact glyph pairs the compound markers exclude.
+    expect(isJapaneseQuery('机器学习入门教程')).toBe(false)
+    expect(isJapaneseQuery('Docker 入门教程')).toBe(false)
+    expect(isJapaneseQuery('网页设计教程')).toBe(false)
+    expect(isJapaneseQuery('什么是机器学习')).toBe(false)
+  })
+
+  it('traditional-Chinese shared-glyph queries remain ambiguous by design (documented tradeoff)', () => {
+    // 入門/設計/規制 are shared with traditional Chinese (台灣/香港). The
+    // compound markers accept this rare ambiguity to fix the eval 0.000 cases
+    // (TypeScript 入門 / Web API 設計 / AI規制 最新). These protection cases
+    // pin the KNOWN behavior so a future change must consciously widen it.
+    expect(isJapaneseQuery('網頁設計')).toBe(true)      // shared glyph — documented ambiguity
+    expect(isJapaneseQuery('Python入門')).toBe(true)    // shared glyph — documented ambiguity
+    expect(isJapaneseQuery('台灣銀行匯率')).toBe(false)  // no compound marker → protected
+    expect(isJapaneseQuery('香港經濟新聞')).toBe(false)
+  })
+
+  it('returns false for English/Korean', () => {
+    expect(isJapaneseQuery('react hooks')).toBe(false)
+    expect(isJapaneseQuery('삼성전자 주가')).toBe(false)
+  })
+})
+
+// ============================================================
+// isChineseQuery — must NOT swallow Japanese kanji
+// ============================================================
+
+describe('isChineseQuery (Japanese exclusion)', () => {
+  it('returns false for kana-less Japanese kanji queries', () => {
+    expect(isChineseQuery('任天堂Switch 2 発売')).toBe(false)
+    expect(isChineseQuery('半導体不足 最新')).toBe(false)
+  })
+})
+
+// ============================================================
 // detectWikiLanguage
 // ============================================================
 
@@ -108,6 +201,16 @@ describe('detectWikiLanguage', () => {
 
   it('returns zh for Chinese queries', () => {
     expect(detectWikiLanguage('量子计算')).toBe('zh')
+  })
+
+  it('returns ja for kana queries', () => {
+    expect(detectWikiLanguage('量子コンピュータとは')).toBe('ja')
+  })
+
+  it('returns ja for kana-less shinjitai kanji queries', () => {
+    expect(detectWikiLanguage('任天堂Switch 2 発売')).toBe('ja')
+    expect(detectWikiLanguage('円安 影響')).toBe('ja')
+    expect(detectWikiLanguage('京都紅葉時期')).toBe('ja')
   })
 
   it('returns en for English queries', () => {

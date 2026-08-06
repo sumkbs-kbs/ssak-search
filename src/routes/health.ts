@@ -55,6 +55,47 @@ const INDEX_STATS_TIMEOUT_MS = 2_000
 // Parser regression detection should be done via separate scheduled workflow (GitHub Actions)
 // that runs against a dedicated test endpoint, not via /api/health which is called frequently.
 
+/**
+ * Optional backends only participate when the required credential is present.
+ *
+ * Brave requires BRAVE_API_KEY. Without a key the backend is simply unused —
+ * but probing it unconditionally reports `down`, which flips the GLOBAL status
+ * to `partial_outage` even though every backend the deployment actually uses
+ * is healthy (false-positive outage + spurious Slack/PagerDuty alerts).
+ */
+const OPTIONAL_BACKENDS: Record<string, (env: AppBindings) => boolean> = {
+  // Trim so a key pasted with a trailing newline/space is still "configured".
+  brave: (env) => !!env.BRAVE_API_KEY?.trim(),
+}
+
+/** True when the backend should be probed (required OR optional-but-configured). */
+export function shouldProbeBackend(name: string, env: AppBindings): boolean {
+  const requiresKey = OPTIONAL_BACKENDS[name]
+  return requiresKey ? requiresKey(env) : true
+}
+
+/**
+ * Aggregate per-backend probe results into the global health status.
+ *
+ * Unconfigured optional backends are excluded BEFORE this call (see
+ * shouldProbeBackend) so a disabled backend can never degrade the global
+ * status. An empty probe set yields 'ok' — safe today because required
+ * backends (bing/naver/...) always probe; revisit if a future refactor makes
+ * ALL backends optional.
+ * Pure function — unit-testable without any network/mocks.
+ */
+export function computeOverallStatus(
+  probeResults: ReadonlyArray<{ status: 'operational' | 'degraded' | 'down' }>,
+): 'ok' | 'degraded' | 'partial_outage' {
+  let allHealthy = true
+  let anyDegraded = false
+  for (const { status } of probeResults) {
+    if (status === 'down') allHealthy = false
+    if (status === 'degraded') anyDegraded = true
+  }
+  return allHealthy ? (anyDegraded ? 'degraded' : 'ok') : 'partial_outage'
+}
+
 const healthRoute = new Hono<{ Bindings: AppBindings }>()
 
 healthRoute.use('/*', cors({ origin: '*' }))
@@ -170,25 +211,29 @@ healthRoute.get('/', async (c) => {
     return c.json({ ...cachedHealth.data, cached: true })
   }
 
-  // Probe all backends in parallel (with short timeout)
+  // Probe only enabled backends — optional backends without their key
+  // (e.g. brave without BRAVE_API_KEY) are reported as `unconfigured` below
+  // and excluded from the global status rollup.
   const probeResults = await Promise.all(
-    Object.entries(BACKEND_PROBES).map(async ([name, config]) => {
-      // Brave requires auth header — use dedicated health check
-      if (name === 'brave') {
-        const result = await braveHealthCheck(c.env.BRAVE_API_KEY ?? '')
+    Object.entries(BACKEND_PROBES)
+      .filter(([name]) => shouldProbeBackend(name, c.env))
+      .map(async ([name, config]) => {
+        // Brave requires auth header — use dedicated health check
+        if (name === 'brave') {
+          const result = await braveHealthCheck(c.env.BRAVE_API_KEY ?? '')
+          return [name, result] as const
+        }
+        const result = await probeBackend(name, config)
         return [name, result] as const
-      }
-      const result = await probeBackend(name, config)
-      return [name, result] as const
-    }),
+      }),
   )
 
   const backends: Record<string, unknown> = {}
-  let allHealthy = true
-  let anyDegraded = false
 
   // Fetch circuit breaker state ONCE (used by the loop AND the rate_limiter field)
   const circuitHealth = await getBackendHealth(c.env)
+
+  const probedStatuses: Array<{ status: 'operational' | 'degraded' | 'down' }> = []
 
   for (const [name, result] of probeResults) {
     const hostKey = Object.keys(circuitHealth).find((h) => h.includes(name))
@@ -198,32 +243,40 @@ healthRoute.get('/', async (c) => {
       latency_ms: result.latency_ms,
       circuit: hostKey ? circuitHealth[hostKey] : undefined,
     }
+    probedStatuses.push({ status: result.status })
     if (result.status === 'down') {
-      allHealthy = false
       // Fire-and-forget Slack alert for backend failures
       const webhookUrl = c.env.SLACK_WEBHOOK
       if (webhookUrl) {
         c.executionCtx.waitUntil(alertBackendDown(webhookUrl, name, result.latency_ms, result.status))
       }
     }
-    if (result.status === 'degraded') anyDegraded = true
   }
 
-  // Workers AI status
-  backends['workers_ai'] = c.env.AI ? 'operational' : 'disabled'
+  // Surface optional backends that are intentionally not probed (missing key)
+  // so operators can still see they exist — without affecting global status.
+  for (const [name, isConfigured] of Object.entries(OPTIONAL_BACKENDS)) {
+    if (!isConfigured(c.env) && !(name in backends)) {
+      backends[name] = { status: 'unconfigured', latency_ms: 0 }
+    }
+  }
 
-  // Canary check REMOVED — quota burn risk. Parser regression detection
-  // should run via separate scheduled workflow (see .github/workflows/monitor.yml)
-  // not on every /api/health call.
+  // Workers AI availability — restored contract field (accidentally dropped in
+  // the S10 optional-backend refactor). Object shape ({status, latency_ms})
+  // unified with every other backends entry — no probe runs for a binding
+  // presence check, so latency_ms stays 0.
+  backends.workers_ai = {
+    status: c.env.AI ? 'operational' : 'disabled',
+    latency_ms: 0,
+  }
+
+  const status = computeOverallStatus(probedStatuses)
 
   // --- Self-index (Vectorize + D1) status ---
   // Probes binding presence + corpus size. Capped by INDEX_STATS_TIMEOUT_MS.
-  // Runs in parallel with backend probes below where possible, but kept here
-  // (after the parallel probe batch resolves) so a slow D1 never delays the
+  // Runs after the parallel backend probe batch so a slow D1 never delays the
   // backend status. Failure is non-fatal — index section degrades gracefully.
   const indexInfo = await probeIndexHealth(c.env)
-
-  const status = allHealthy ? (anyDegraded ? 'degraded' : 'ok') : 'partial_outage'
 
   const healthData = {
     status,

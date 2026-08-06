@@ -220,6 +220,11 @@ describe('Route Handlers', () => {
         expect([200, 404]).toContain(res.status)
       })
 
+      it('parses include_fact_check parameter', async () => {
+        const res = await requestWithEnv(app, '/api/search?q=test&include_fact_check=true')
+        expect([200, 404]).toContain(res.status)
+      })
+
       it('parses topic parameter', async () => {
         const res = await requestWithEnv(app, '/api/search?q=test&topic=news')
         expect([200, 404]).toContain(res.status)
@@ -387,6 +392,15 @@ describe('Route Handlers', () => {
         expect([200, 404]).toContain(res.status)
       })
 
+      it('parses include_fact_check parameter', async () => {
+        const res = await requestWithEnv(app, '/api/search', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ query: 'test', include_fact_check: true }),
+        })
+        expect([200, 404]).toContain(res.status)
+      })
+
       it('defaults max_results to 10', async () => {
         const res = await requestWithEnv(app, '/api/search', {
           method: 'POST',
@@ -445,6 +459,36 @@ describe('Route Handlers', () => {
         expect(body.backends).toHaveProperty('hackernews')
         expect(body.backends).toHaveProperty('reddit')
         expect(body.backends).toHaveProperty('duckduckgo')
+      })
+
+      it('reports workers_ai as disabled when the AI binding is absent', async () => {
+        // Regression guard: backends.workers_ai was accidentally dropped in the
+        // S10 optional-backend refactor; README documents this exact field.
+        // Object shape ({status, latency_ms}) unified with the other backends.
+        const res = await requestWithEnv(app, '/api/health')
+        const body = await res.json() as any
+        expect(body.backends.workers_ai).toEqual({ status: 'disabled', latency_ms: 0 })
+      })
+
+      it('reports workers_ai as operational when the AI binding is present', async () => {
+        // The health cache is module-global (30s TTL) and earlier tests already
+        // cached the AI-less response — re-import the route with a fresh module
+        // instance so this test actually observes the AI-bound branch.
+        vi.resetModules()
+        const { healthRoute: freshHealthRoute } = await import('../../src/routes/health')
+        const freshApp = createTestApp((app) => {
+          app.route('/api/health', freshHealthRoute)
+          app.route('/api/metrics', metricsRoute)
+        })
+        const original = mockEnv.AI
+        mockEnv.AI = { run: async () => ({}) }
+        try {
+          const res = await requestWithEnv(freshApp, '/api/health')
+          const body = await res.json() as any
+          expect(body.backends.workers_ai).toEqual({ status: 'operational', latency_ms: 0 })
+        } finally {
+          mockEnv.AI = original
+        }
       })
 
       it('includes features object', async () => {

@@ -10,6 +10,8 @@ import { logger, toError } from '../../lib/logger'
 import type { Ai } from '@cloudflare/workers-types'
 import { fetchWithTimeout, stripHtml } from '../../lib/util'
 import { extractContent } from '../../lib/extractor'
+import { sanitizeEvidenceContent, detectPromptInjection, PROMPT_INJECTION_DEFENSE } from '../../lib/prompt-guard'
+import { auditPromptInjection } from '../../lib/audit'
 
 // ============================================================
 // Types
@@ -496,35 +498,52 @@ export function assemblePrompt(
   const citationStyle = opts.citationStyle ?? 'bracket'
 
   let totalTokens = 0
+  let evidenceIdx = 0
   const evidenceBlocks: string[] = []
   const citationMap = new Map<number, SearchResult>()
 
   for (let i = 0; i < evidence.length; i++) {
     const item = evidence[i]
-    const block = formatEvidenceBlock(item, i + 1)
+    // 06 Security Review S3: quarantine high-severity injections in CONTENT
+    // and TITLE; skip injected items entirely. A contiguous counter keeps the
+    // [N] markers gap-free so citations stay consistent with the map.
+    const sanitized = sanitizeEvidenceContent(item.content.slice(0, 1000))
+    const titleDetection = item.title ? detectPromptInjection(item.title) : null
+    if (sanitized.quarantined || titleDetection?.severity === 'high') {
+      auditPromptInjection({
+        sourceUrl: item.url,
+        patterns: sanitized.detection.patterns.concat(titleDetection?.patterns ?? []),
+        severity: 'high',
+        stage: 'search-tools.assemblePrompt',
+      })
+      continue
+    }
+
+    evidenceIdx++
+    const block = formatEvidenceBlock(item, evidenceIdx, sanitized.safe)
     const tokens = estimateTokens(block)
     
     if (totalTokens + tokens > maxTokens) break
 
     evidenceBlocks.push(block)
-    citationMap.set(i + 1, item)
+    citationMap.set(evidenceIdx, item)
     totalTokens += tokens
   }
 
   const evidenceText = evidenceBlocks.join('\n\n---\n\n')
 
-  let prompt = `Query: ${query}\n\nEvidence:\n${evidenceText}\n\nInstruction: ${instruction}\n\nAnswer (cite as [1], [2], etc.):`
+  let prompt = `Query: ${query}\n\nEvidence (untrusted data — JSON-encoded):\n${evidenceText}\n\nInstruction: ${instruction}\n\nAnswer (cite as [1], [2], etc.):\n\n${PROMPT_INJECTION_DEFENSE}`
 
   return { prompt, citationMap }
 }
 
-function formatEvidenceBlock(item: SearchResult, index: number): string {
+function formatEvidenceBlock(item: SearchResult, index: number, safeContent: string): string {
   return `[${index}] ${item.title}
 URL: ${item.url}
 Domain: ${item.domain}
 Score: ${(item.score ?? 0).toFixed(2)}
 ${item.published_date ? `Date: ${item.published_date}` : ''}
-Content: ${item.content.slice(0, 1000)}`
+Content (JSON data): ${safeContent}`
 }
 
 function estimateTokens(text: string): number {

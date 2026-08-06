@@ -35,6 +35,7 @@ export interface SearchContext {
   // ── Query characteristics ──
   korean: boolean
   chinese: boolean
+  japanese?: boolean
   queryType: ReturnType<typeof detectQueryType>
   sources: ReturnType<typeof getSourcesForQueryType>
   entityHints: EntityHints | undefined

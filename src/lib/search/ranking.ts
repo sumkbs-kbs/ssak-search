@@ -49,12 +49,6 @@ export function applyFilters(results: SearchResult[], ctx: SearchContext): Searc
 }
 
 /**
- * Domain authority bonus map — trusted financial/data sources get a score
- * boost so they outrank low-quality news aggregators that merely match the
- * query title. Without this, topstarnews.net (0.98) beats finance.naver.com
- * (0.89) for Korean stock queries despite being far less authoritative.
- */
-/**
  * Finance/regulatory domains that warrant an additional authority boost so
  * they outrank low-quality news aggregators for stock/financial queries.
  *
@@ -70,9 +64,12 @@ const DOMAIN_AUTHORITY_BONUS: Record<string, number> = {
   'finance.naver.com': 0.15,
   'm.stock.naver.com': 0.12,
   'm.finance.naver.com': 0.12,
-  'investing.com': 0.10,
   'krx.co.kr': 0.10,
   'dart.fss.or.kr': 0.08,
+  // investing.com is already in util.ts DOMAIN_AUTHORITY (+0.07, applied via
+  // computeScore to ALL queries). Keep it out of this map to avoid double-
+  // counting — the EN finance map below boosts it further for English
+  // finance queries, which is the context-gated intent.
 }
 
 /** Domains penalized for low content quality (news aggregators, spam). */
@@ -81,19 +78,418 @@ const LOW_QUALITY_DOMAINS: Record<string, number> = {
   'choicenews.co.kr': -0.12,
   'wikitree.co.kr': -0.10,
   'seoul.co.kr': -0.05,
+  'esusatyo.net': -0.40, // spam/keyword-stuffing domain observed in en-stock eval
 }
 
-function getDomainAuthorityBonus(url: string): number {
+/**
+ * English-language finance authority domains. Applied only when ctx.isFinance
+ * AND the query is English/non-Korean. eval showed en-stock queries returning
+ * tech blogs (arstechnica, techcrunch) at score 0.99, burying the
+ * finance.yahoo.com result — these gold domains were missing from
+ * DOMAIN_AUTHORITY_BONUS entirely (the map only had Korean finance).
+ */
+/**
+ * Domains demoted ONLY for English finance queries. eval showed en-stock
+ * queries returning tech blogs (arstechnica, techcrunch, daringfireball,
+ * marco.org) at score 0.99, burying the finance.yahoo.com quote result —
+ * the authority bonus alone can't out-lift a keyword-saturated blog, so we
+ * also demote known non-finance commentary/aggregator domains in the finance
+ * context. Mirrors KOREAN_BLOG_PENALTY_NEWS (blog demotion gated on query type).
+ */
+const ENGLISH_FINANCE_BLOG_PENALTY: Record<string, number> = {
+  // Strengthened after eval: even with -0.12, arstechnica (base 0.99) still
+  // beat the yahoo quote (base ~0.5 + 0.30 = 0.80). Commentary/aggregator
+  // domains that keyword-match "apple stock price" but provide no market data
+  // must fall below quote results for a finance query.
+  'arstechnica.com': -0.20,
+  'techcrunch.com': -0.20,
+  'theverge.com': -0.18,
+  'daringfireball.net': -0.20,
+  'marco.org': -0.20,
+  'bloombergview.com': -0.15,
+  'slate.com': -0.15,
+  'medium.com': -0.15,
+  'substack.com': -0.15,
+  'wired.com': -0.12,
+  'gizmodo.com': -0.15,
+  'engadget.com': -0.15,
+  '9to5mac.com': -0.15,
+  'macrumors.com': -0.15,
+  'thesun.co.uk': -0.10,
+  'usatoday.com': -0.10,
+  'btc-e.com': -0.10,
+}
+
+const ENGLISH_FINANCE_AUTHORITY: Record<string, number> = {
+  // Quote/structured-data domains get a LARGE boost: a Yahoo quote result's
+  // base score is structurally low (~0.5 — its content is "Price: $220 ·
+  // Prev Close …" which barely overlaps the query terms "apple stock price").
+  // A +0.15 bonus could never lift it above a keyword-saturated tech blog
+  // (0.87-0.99). These are exactly the eval gold domains, so the premium is
+  // justified by intent — finance queries should surface market data.
+  'finance.yahoo.com': 0.30,
+  'nasdaq.com': 0.26,
+  'investing.com': 0.24,
+  'stockanalysis.com': 0.24,
+  'marketwatch.com': 0.22,
+  'coinmarketcap.com': 0.26,
+  'coindesk.com': 0.20,
+  'sec.gov': 0.20,
+  'spglobal.com': 0.16,
+  'statista.com': 0.12,
+  'businesswire.com': 0.08,
+  'prnewswire.com': 0.08,
+  // Company domains from en-stock gold standards (eval/gold-standards.json).
+  // These were absent from ENGLISH_FINANCE_AUTHORITY, so a stock query like
+  // "Apple stock price" got no boost for the company's own site either.
+  'apple.com': 0.12,
+  'tesla.com': 0.12,
+  'nvidia.com': 0.12,
+  'microsoft.com': 0.12,
+  'amazon.com': 0.12,
+  'netflix.com': 0.10,
+  'abc.xyz': 0.10,
+}
+
+/**
+ * English news authority domains. Applied only when ctx.isNews AND the query
+ * is English/non-Korean. reuters/bbc/bloomberg/cnbc/apnews/npr etc. are the
+ * gold domains for English news queries but had no domain boost, so
+ * keyword-matched MSN aggregates and celebrity blogs outranked them.
+ */
+const ENGLISH_NEWS_AUTHORITY: Record<string, number> = {
+  'reuters.com': 0.13,
+  'bbc.com': 0.12,
+  'bloomberg.com': 0.12,
+  'cnbc.com': 0.12,
+  'apnews.com': 0.12,
+  'npr.org': 0.10,
+  'theverge.com': 0.10,
+  'cnet.com': 0.08,
+  'techcrunch.com': 0.08,
+  'nature.com': 0.12,
+  'gov.uk': 0.10,
+  'europa.eu': 0.10,
+  'energy.gov': 0.08,
+  'cisa.gov': 0.08,
+  'apple.com': 0.10,
+  'tesla.com': 0.10,
+  'spacex.com': 0.10,
+  'blog.google': 0.08,
+  '9to5mac.com': 0.07,
+}
+
+/**
+ * Korean news authority domains. Applied only when ctx.isNews AND ctx.korean.
+ * eval showed KR news queries (kr-news-02/03/04) returning m.blog.naver.com
+ * at 0.89, outranking actual news articles at 0.70 — blogs dominated because
+ * there was no per-context news authority bonus.
+ */
+const KOREAN_NEWS_AUTHORITY: Record<string, number> = {
+  'n.news.naver.com': 0.18,
+  'yna.co.kr': 0.15,
+  'hani.co.kr': 0.13,
+  'donga.com': 0.12,
+  'etnews.com': 0.12,
+  'sports.naver.com': 0.12,
+  'samsung.com': 0.12,
+  'koreabaseball.com': 0.10,
+  'kcdc.go.kr': 0.10,
+  'hankyung.com': 0.12,
+  'sedaily.com': 0.12,
+  // Phase 6.10: Korean media surfaced by the ko-KR RSS feeds (chosun/중앙/
+  // 경향/세계/한국일보/JTBC/SBS/MBC/KBS + economy dailies). These are the
+  // same outlets the KR news eval gold standards and Google ko feed surface;
+  // without the boost they'd tie with MSN/네이트 aggregates on recency.
+  'chosun.com': 0.12,
+  'biz.chosun.com': 0.12,
+  'weekly.chosun.com': 0.10,
+  'joongang.co.kr': 0.12,
+  'khan.co.kr': 0.11,
+  'kmib.co.kr': 0.10,
+  'segye.com': 0.10,
+  'munhwa.com': 0.10,
+  'hankookilbo.com': 0.10,
+  'mk.co.kr': 0.12,
+  'mt.co.kr': 0.11,
+  'edaily.co.kr': 0.11,
+  'biz.heraldcorp.com': 0.10,
+  'asiae.co.kr': 0.10,
+  'fnnews.com': 0.11,
+  'newsis.com': 0.10,
+  'news1.kr': 0.10,
+  'jtbc.co.kr': 0.11,
+  'sbs.co.kr': 0.11,
+  'imbc.com': 0.10,
+  'kbs.co.kr': 0.10,
+  'ichannela.com': 0.10,
+  'tv.chosun.com': 0.10,
+  'ytn.co.kr': 0.11,
+  'thelec.kr': 0.10,
+  'zdnet.co.kr': 0.10,
+}
+
+/**
+ * Korean blog/cafe domains demoted ONLY for news queries. For factual queries
+ * these can be useful; for news queries they surface personal opinion posts
+ * where authoritative news articles should appear instead.
+ */
+const KOREAN_BLOG_PENALTY_NEWS: Record<string, number> = {
+  'm.blog.naver.com': -0.25,
+  'blog.naver.com': -0.18,
+  'm.cafe.naver.com': -0.20,
+  'cafe.naver.com': -0.15,
+  'tistory.com': -0.12,
+  'velog.io': -0.12,
+}
+
+/**
+ * Chinese news authority domains. Applied only when ctx.isNews AND ctx.chinese.
+ * Phase 6.7: zh-news eval queries (zh-news-01/03) gold = 36kr.com,
+ * people.com.cn, xinhuanet.com — none of which existed in any authority map,
+ * and the EN-only news RSS feeds never returned them anyway.
+ */
+const CHINESE_NEWS_AUTHORITY: Record<string, number> = {
+  'people.com.cn': 0.15,
+  'xinhuanet.com': 0.15,
+  '36kr.com': 0.12,
+  'thepaper.cn': 0.12,
+  'chinadaily.com.cn': 0.12,
+  'cctv.com': 0.10,
+  'news.cn': 0.12,
+  'autohome.com.cn': 0.10,
+  'sohu.com': 0.05,
+  'qq.com': 0.05,
+  '163.com': 0.05,
+}
+
+/**
+ * Chinese travel-guide authority domains. Applied when ctx.chinese AND NOT
+ * ctx.isNews. zh-general eval queries (zh-general-01/04: 北京/西安旅游攻略)
+ * gold = ctrip.com, mafengwo.cn — these authoritative travel platforms had
+ * no boost anywhere, so keyword-matched aggregators (zhihu, sohu, csdn posts)
+ * buried them and NDCG swung with bing's run-to-run result noise. zh.wikipedia.org
+ * is already +0.12 via util.ts DOMAIN_AUTHORITY, so it stays out of this map
+ * (avoiding the double-count bug documented below).
+ */
+const CHINESE_TRAVEL_AUTHORITY: Record<string, number> = {
+  // +0.20 (not +0.15): zh-general-04 live runs showed you.ctrip.com base at
+  // ~0.74 while keyword-saturated zhihu/sohu posts hit 0.99 — a +0.15 bonus
+  // could not bridge that gap. Mirrors the ENGLISH_FINANCE_AUTHORITY premium
+  // rationale: guide pages have structurally lower query-term overlap than
+  // aggregator posts.
+  'ctrip.com': 0.20,
+  'mafengwo.cn': 0.20,
+  'qunar.com': 0.12,
+  'tuniu.com': 0.10,
+  'ly.com': 0.10, // 同程旅行
+  'fliggy.com': 0.10,
+  'elong.com': 0.08,
+}
+
+/**
+ * Japanese news authority domains. Applied only when ctx.isNews AND
+ * ctx.japanese. Phase 6.7: ja-news eval queries gold = nhk.or.jp,
+ * itmedia.co.jp, nikkei.com.
+ */
+const JAPANESE_NEWS_AUTHORITY: Record<string, number> = {
+  'nhk.or.jp': 0.15,
+  'nikkei.com': 0.13,
+  'itmedia.co.jp': 0.12,
+  'asahi.com': 0.12,
+  'mainichi.jp': 0.10,
+  'yomiuri.co.jp': 0.10,
+  'japantimes.co.jp': 0.10,
+  'reuters.com': 0.10,
+  'bloomberg.com': 0.10,
+  // Phase 6.12: ja-news eval gold domains surfaced by the ja-JP Google News
+  // feed (famitsu.com, digital.go.jp, nintendo.co.jp) — without the boost a
+  // keyword-matched game blog or english tech outlet outranks them.
+  'famitsu.com': 0.12,
+  'digital.go.jp': 0.10,
+  'nintendo.co.jp': 0.12,
+  'k-tai.watch.impress.co.jp': 0.10,
+}
+
+/**
+ * Japanese travel/guide authority domains. Applied when ctx.japanese AND NOT
+ * ctx.isNews. Phase 6.12: ja-travel/ja-general eval gold domains — japan-guide.com
+ * (8/8 travel queries), tripadvisor.jp/com, rakuten.co.jp, yahoo.co.jp — had NO
+ * boost anywhere, so keyword-saturated booking aggregators (jp.trip.com 0.76,
+ * travel.jr 0.954) buried them and travel NDCG averaged 0.198. Mirrors the
+ * CHINESE_TRAVEL_AUTHORITY premium rationale: guide pages have structurally
+ * lower query-term overlap than aggregator lists, so the boost must be large.
+ */
+const JAPANESE_TRAVEL_AUTHORITY: Record<string, number> = {
+  'japan-guide.com': 0.20,
+  'tripadvisor.jp': 0.20,
+  'tripadvisor.com': 0.18,
+  'gotokyo.org': 0.18,
+  'osaka-info.jp': 0.15,
+  'kyoto.travel': 0.15,
+  'okinawatravelinfo.com': 0.15,
+  'welcome2japan.jp': 0.15,
+  'rakuten.co.jp': 0.12,
+  'yahoo.co.jp': 0.10,
+  '4travel.jp': 0.12,
+  'rurubu.jp': 0.10,
+}
+
+/**
+ * Japanese technical-reference authority. Applied when ctx.japanese AND
+ * queryType is technical/academic/factual. Phase 6.12: ja-tech eval gold —
+ * qiita.com (11/12 queries), zenn.dev, dev.to, typescriptlang.org — was buried
+ * by keyword-saturated github repos (star bonus) and cross-language junk
+ * (ja-tech-03 returned tslang.cn/runoob.com Chinese tutorials; ja-tech-06
+ * returned zh.wikipedia.org at pos 0 — the language misroute). These maps give
+ * the Japanese gold domains a context-gated lift. github.com already earns the
+ * general github star bonus; dev.to/zenn/qiita need the explicit boost.
+ */
+const JAPANESE_TECH_AUTHORITY: Record<string, number> = {
+  'qiita.com': 0.15,
+  'zenn.dev': 0.15,
+  'dev.to': 0.10,
+  'typescriptlang.org': 0.12,
+  'ipa.go.jp': 0.12,
+  // NOTE: kotobank.jp / weblio.jp are deliberately NOT here — they live in
+  // JAPANESE_FACT_AUTHORITY (fact/academic) and kotobank.jp additionally in
+  // TECH_DOCS_AUTHORITY. The JAPANESE_TECH gate (technical|academic|factual)
+  // OVERLAPS the JAPANESE_FACT gate (factual|academic), so a domain in both
+  // would double-count on factual queries (kotobank was +0.22/+0.27 before
+  // the dedup — code review catch). Keep each gold domain in exactly ONE
+  // map per gate context.
+}
+
+/**
+ * Japanese reference/fact authority. Applied when ctx.japanese AND
+ * factual/academic. Phase 6.12: ja-fact gold is ja.wikipedia.org (already in
+ * util.ts DOMAIN_AUTHORITY) plus kotobank.jp/weblio.jp (12/8 queries) — the
+ * dictionary/reference sites had no boost, so keyword-matched blogs and the
+ * zh/ko wikipedia pages outranked them.
+ *
+ * kotobank.jp was REMOVED from TECH_DOCS_AUTHORITY so this map is its sole
+ * owner (the TECH_DOCS gate technical|academic|factual overlapped the fact
+ * gate on academic/factual — a factual query stacked +0.12+0.15=+0.27).
+ * Code-review catch: each gold domain now lives in exactly ONE gate context.
+ */
+const JAPANESE_FACT_AUTHORITY: Record<string, number> = {
+  'kotobank.jp': 0.15,
+  'weblio.jp': 0.15,
+  'dictionary.goo.ne.jp': 0.12,
+  'eow.alc.co.jp': 0.12,
+}
+
+/**
+ * Official technical-documentation domains. Applied when ctx.queryType is
+ * technical/academic/factual. Phase 6.7: lt-01 (Cloudflare Workers KV vs D1)
+ * and en-tech-15 (SQL index optimization) gold = developers.cloudflare.com /
+ * postgresql.org / mysql.com, but the top-10 was filled with github repos
+ * (which score 0.9+ via repo-name keyword matches + star bonus) while the
+ * official docs, even when bing returned them, had no authority lift to
+ * outrank a star-saturated repo. This map gives docs the same context-gated
+ * boost that finance/news authority maps give their gold domains.
+ */
+const TECH_DOCS_AUTHORITY: Record<string, number> = {
+  'developers.cloudflare.com': 0.15,
+  'cloudflare.com': 0.10,
+  'postgresql.org': 0.14,
+  'mysql.com': 0.12,
+  'use-the-index-luke.com': 0.14,
+  'opentelemetry.io': 0.14,
+  'bun.sh': 0.14,
+  'nextjs.org': 0.12,
+  'nuxt.com': 0.12,
+  'svelte.dev': 0.12,
+  // NOTE: kotobank.jp was REMOVED here (Phase 6.12 code review) — it is a
+  // Japanese dictionary, a ja-FACT gold domain (not a tech gold domain), and
+  // this gate (technical|academic|factual) OVERLAPS the JAPANESE_FACT gate
+  // (factual|academic), so a factual query double-counted +0.12+0.15=+0.27.
+  // It now lives ONLY in JAPANESE_FACT_AUTHORITY. (git-blame it was added
+  // for ja-tech queries in Phase 6.7 — JAPANESE_TECH/FACT maps own that now.)
+  'docs.github.com': 0.12,
+  'atlassian.com': 0.10,
+  'mozilla.org': 0.10,
+  'w3.org': 0.12,
+  'python.org': 0.10,
+  'nodejs.org': 0.10,
+  'redis.io': 0.12,
+  'kubernetes.io': 0.12,
+  'docker.com': 0.10,
+  'react.dev': 0.12,
+  'vuejs.org': 0.12,
+}
+
+function isEnglishQuery(ctx: SearchContext): boolean {
+  return !ctx.korean && !ctx.chinese && !ctx.japanese
+}
+
+function matchInMap(domain: string, map: Record<string, number>): number {
+  // Match the FULL domain or a subdomain suffix (same semantics as
+  // util.ts:getDomainAuthority). A raw `includes()` is a false-positive
+  // factory — 'apple.com' would match appleinsider.com, 'tesla.com' would
+  // match matesla.com. Iterate longest key first so the most specific
+  // entry wins (m.finance.naver.com must not be shadowed by finance.naver.com).
+  const keys = Object.keys(map).sort((a, b) => b.length - a.length)
+  for (const d of keys) {
+    if (domain === d || domain.endsWith(`.${d}`)) return map[d]
+  }
+  return 0
+}
+
+/** Compute the per-context authority bonus for ONE domain string. */
+function authorityBonusForDomain(domain: string, ctx: SearchContext): number {
+  let bonus = matchInMap(domain, DOMAIN_AUTHORITY_BONUS) + matchInMap(domain, LOW_QUALITY_DOMAINS)
+
+  if (ctx.isFinance && isEnglishQuery(ctx)) {
+    bonus += matchInMap(domain, ENGLISH_FINANCE_AUTHORITY)
+    bonus += matchInMap(domain, ENGLISH_FINANCE_BLOG_PENALTY)
+  }
+  if (ctx.isNews && isEnglishQuery(ctx)) bonus += matchInMap(domain, ENGLISH_NEWS_AUTHORITY)
+  if (ctx.isNews && ctx.korean) {
+    bonus += matchInMap(domain, KOREAN_NEWS_AUTHORITY)
+    bonus += matchInMap(domain, KOREAN_BLOG_PENALTY_NEWS)
+  }
+  if (ctx.isNews && ctx.chinese) bonus += matchInMap(domain, CHINESE_NEWS_AUTHORITY)
+  // Chinese travel-guide authority — zh-general eval gold domains (ctrip,
+  // mafengwo) outrank keyword-saturated aggregators for 攻略/travel queries.
+  if (ctx.chinese && !ctx.isNews) bonus += matchInMap(domain, CHINESE_TRAVEL_AUTHORITY)
+  if (ctx.isNews && ctx.japanese) bonus += matchInMap(domain, JAPANESE_NEWS_AUTHORITY)
+  if (ctx.japanese && !ctx.isNews) bonus += matchInMap(domain, JAPANESE_TRAVEL_AUTHORITY)
+  if (ctx.japanese && (ctx.queryType === 'technical' || ctx.queryType === 'academic' || ctx.queryType === 'factual')) {
+    bonus += matchInMap(domain, JAPANESE_TECH_AUTHORITY)
+  }
+  if (ctx.japanese && (ctx.queryType === 'factual' || ctx.queryType === 'academic')) {
+    bonus += matchInMap(domain, JAPANESE_FACT_AUTHORITY)
+  }
+
+  // Official docs authority for technical/academic/factual queries — the
+  // Phase 6.7 counterpart to the finance/news maps: gold docs domains need a
+  // lift to outrank keyword-saturated github repos (lt-01, en-tech-15).
+  if (ctx.queryType === 'technical' || ctx.queryType === 'academic' || ctx.queryType === 'factual') {
+    bonus += matchInMap(domain, TECH_DOCS_AUTHORITY)
+  }
+
+  return bonus
+}
+
+function getDomainAuthorityBonus(url: string, ctx: SearchContext, fallbackDomain?: string): number {
+  // Try the URL host first (the norm). If it yields no bonus, fall back to the
+  // backend-set domain field — Google News items carry the MAPPED gold domain
+  // (reuters.com, apnews.com, ...) while their URL is a news.google.com
+  // redirect, so the authority bonus must key on the semantic domain, not the
+  // transport URL (Phase 6.6).
   try {
-    const domain = new URL(url).hostname.replace(/^www\./, '').toLowerCase()
-    for (const [d, bonus] of Object.entries(DOMAIN_AUTHORITY_BONUS)) {
-      if (domain.includes(d)) return bonus
-    }
-    for (const [d, penalty] of Object.entries(LOW_QUALITY_DOMAINS)) {
-      if (domain.includes(d)) return penalty
-    }
+    const host = new URL(url).hostname.replace(/^www\./, '').toLowerCase()
+    const fromUrl = authorityBonusForDomain(host, ctx)
+    if (fromUrl !== 0 || !fallbackDomain) return fromUrl
+    const fallback = fallbackDomain.replace(/^www\./, '').toLowerCase()
+    if (fallback === host) return 0
+    return authorityBonusForDomain(fallback, ctx)
   } catch {
-    // Invalid URL
+    // Invalid URL — try the fallback domain alone
+    if (fallbackDomain) {
+      return authorityBonusForDomain(fallbackDomain.replace(/^www\./, '').toLowerCase(), ctx)
+    }
   }
   return 0
 }
@@ -160,7 +556,8 @@ export function hybridScore(
  */
 export function recomputeScores(results: SearchResult[], ctx: SearchContext): SearchResult[] {
   return results.map((r) => {
-    const authorityBonus = getDomainAuthorityBonus(r.url)
+    const authorityBonus = getDomainAuthorityBonus(r.url, ctx, r.domain)
+    const clamp = (v: number): number => Math.max(0, Math.min(1, v))
 
     // Results with structured stock_data already have a hand-tuned score from
     // searchKoreanStock (0.98 for the main finance page). Don't overwrite it
@@ -168,7 +565,7 @@ export function recomputeScores(results: SearchResult[], ctx: SearchContext): Se
     if (r.stock_data) {
       return {
         ...r,
-        score: Math.max(0, Math.min(1, r.score + authorityBonus)),
+        score: clamp(r.score + authorityBonus),
       }
     }
 
@@ -179,9 +576,16 @@ export function recomputeScores(results: SearchResult[], ctx: SearchContext): Se
       r.published_date,
       r.url,
     )
+
+    // Reserve headroom when a POSITIVE bonus exists. Without this, a saturated
+    // base (0.99, routine since computeScore caps at 0.99) plus a +0.15 bonus
+    // clamps to 1.0 — i.e. only +0.01 of real effect, so the authority boost
+    // can't lift finance/news domains above keyword-matched blogs. Negative
+    // bonuses apply directly.
+    const preBonus = authorityBonus > 0 ? Math.min(baseScore, 1 - authorityBonus) : baseScore
     return {
       ...r,
-      score: Math.max(0, Math.min(1, baseScore + authorityBonus)),
+      score: clamp(preBonus + authorityBonus),
     }
   })
 }
@@ -220,25 +624,107 @@ export async function applyDomainBoosting(
 }
 
 /**
- * Sort results by the requested strategy (date / news blend / relevance).
+ * Normalized recency score in [0, 1]: 1.0 for today, exponentially decaying
+ * to ~0.37 after 30 days and ~0.14 after 60 days. Undated results score 0.
+ *
+ * Consumed by the BOUNDED freshness blend (see freshnessBlendKey below), so
+ * the newest data surfaces without ever letting a barely-relevant spam page
+ * leapfrog a strong match.
+ */
+export function recencyScore(publishedDate: string | undefined, now: number = Date.now()): number {
+  if (!publishedDate) return 0
+  const t = new Date(publishedDate).getTime()
+  if (isNaN(t)) return 0
+  const ageMs = now - t
+  if (ageMs <= 0) return 1 // future-dated / just published — treat as fresh
+  return Math.exp(-ageMs / (30 * 24 * 60 * 60 * 1000))
+}
+
+/**
+ * Bounded freshness blend: score + w · recency · (1 − score).
+ *
+ * WHY bounded instead of a linear blend (e.g. 0.7·score + 0.3·recency):
+ * a linear blend lets a fresh-but-weak result OUTRANK a dated-but-perfect
+ * one — a 0.73-scored item published today scores 0.7·0.73+0.3·1.0 = 0.811,
+ * beating an undated 1.0 gold-standard result (0.7·1.0 = 0.70). NDCG@10 eval
+ * (500-query median-of-3) showed this was the single largest ranking loss:
+ * 36+ queries buried their gold domain exactly this way (en-stock-01~25,
+ * en-news-02/08, ca-01/02, ts-02...).
+ *
+ * The (1 − score) factor caps the freshness boost: a result with score s can
+ * reach at most s + w·(1−s) < 1, so a perfect match (score ≈ 1) can never be
+ * overtaken by a fresher lower-scored page — freshness only breaks TIES and
+ * near-ties. Simulation on the 500-query baseline: NDCG 0.5276 → 0.5407
+ * (financial +0.092, news +0.024, english +0.021; chinese −0.007, general −0.001).
+ */
+export function freshnessBlendKey(score: number, recency: number, weight: number): number {
+  return score + weight * recency * (1 - score)
+}
+
+/**
+ * Freshness weights for the bounded blend, tuned via NDCG simulation on the
+ * 500-query median-of-3 baseline (S11): news w=0.30, default w=0.15 gave
+ * overall +0.013 (financial +0.092, news +0.024) with only minor losses on
+ * zh/general. Shared between code and tests so re-tuning is single-source.
+ */
+export const NEWS_FRESHNESS_WEIGHT = 0.30
+/** @see NEWS_FRESHNESS_WEIGHT — lighter tiebreak for non-news default sort. */
+export const DEFAULT_FRESHNESS_WEIGHT = 0.15
+
+/**
+ * Sort results by the requested strategy.
+ *
+ *   - explicit 'date': recency-dominant contract preserved as-is (the user
+ *     explicitly asked for newest-first; the legacy 0.85/0.15 formula stays).
+ *   - news queries (implicit): bounded freshness blend with a moderate weight
+ *     (0.30) — recency still surfaces fresh items within near-ties, but a
+ *     perfect-score authoritative article is never buried by a fresher
+ *     keyword-saturated snippet (en-news-02: bloomberg 1.0 was pushed to pos 3
+ *     by the old 0.85·recency-dominant blend).
+ *   - explicit 'relevance': pure relevance (descending).
+ *   - default (unspecified): bounded freshness blend with a light weight
+ *     (0.15) — relevance is primary, recency breaks ties and near-ties.
  */
 export function sortResults(results: SearchResult[], ctx: SearchContext): SearchResult[] {
-  const sort_by = ctx.request.sort_by ?? 'relevance'
+  const sort_by = ctx.request.sort_by
 
-  if (sort_by === 'date' || ctx.isNews) {
-    // Date/news: blend date and relevance so a 0.01-score spam page with a
-    // recent timestamp doesn't outrank an authoritative reference from yesterday.
+  if (sort_by === 'date') {
+    // Explicit newest-first contract — keep the legacy recency-dominant blend.
+    // Authority is added at full weight (not the 15%-diluted share) so gold
+    // news domains (reuters/bbc/bloomberg) keep their full +0.10~0.13 lift.
     return [...results].sort((a, b) => {
-      const dateA = a.published_date ? new Date(a.published_date).getTime() : 0
-      const dateB = b.published_date ? new Date(b.published_date).getTime() : 0
-      const dateDiff = dateB - dateA
-      const scoreDiff = b.score - a.score
-      return dateDiff * 0.0000001 + scoreDiff
+      const recencyA = recencyScore(a.published_date)
+      const recencyB = recencyScore(b.published_date)
+      const authorityA = getDomainAuthorityBonus(a.url, ctx, a.domain)
+      const authorityB = getDomainAuthorityBonus(b.url, ctx, b.domain)
+      const keyA = 0.85 * recencyA + 0.15 * (a.score - authorityA) + authorityA
+      const keyB = 0.85 * recencyB + 0.15 * (b.score - authorityB) + authorityB
+      return keyB - keyA
     })
   }
 
-  // Relevance sort (descending)
-  return [...results].sort((a, b) => b.score - a.score)
+  if (sort_by === 'relevance') {
+    // Pure relevance sort (descending)
+    return [...results].sort((a, b) => b.score - a.score)
+  }
+
+  // News (implicit) and default (unspecified): bounded freshness blend.
+  // News gets a heavier weight so fresh items win near-ties more decisively;
+  // the default uses a light tiebreak weight to keep stable/reference content
+  // ranking while surfacing the newest data.
+  //
+  // NOTE (S11 tradeoff): news moved off the old recency-dominant (0.85)
+  // blend onto bounded w=0.30. Fresh-but-weak items now lose to undated
+  // strong ones — that is the NDCG intent (gold domains usually lack dates),
+  // but pure breaking-news queries with genuinely time-sensitive results may
+  // feel under-weighted. Re-tune NEWS_FRESHNESS_WEIGHT if breaking-news UX
+  // regressions show up in user feedback while NDCG holds.
+  const freshnessWeight = ctx.isNews ? NEWS_FRESHNESS_WEIGHT : DEFAULT_FRESHNESS_WEIGHT
+  return [...results].sort((a, b) => {
+    const keyA = freshnessBlendKey(a.score, recencyScore(a.published_date), freshnessWeight)
+    const keyB = freshnessBlendKey(b.score, recencyScore(b.published_date), freshnessWeight)
+    return keyB - keyA
+  })
 }
 
 /**

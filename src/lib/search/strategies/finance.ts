@@ -12,6 +12,7 @@ import type { BackendTask, SearchContext } from '../context'
 import {
   buildKoreanStockTask,
   buildNaverTask,
+  buildBingTask,
   buildBingFinanceDetailedTask,
   buildYahooFinanceTask,
   buildHackerNewsTask,
@@ -29,6 +30,10 @@ export class FinanceStrategy implements SearchStrategy {
       tasks.push(buildKoreanStockTask(ctx, 5))
       // Naver web search — 관련 뉴스/블로그
       tasks.push(buildNaverTask(ctx, ctx.maxResults * 2))
+      // General web fallback — same gap as AllStrategy: naver 429 leaves only
+      // the naver-finance composite (2 filler pages). Bing results pass the
+      // same korean quality thresholds.
+      tasks.push(buildBingTask(ctx))
     } else {
       // Global stocks: Bing + Yahoo Finance
       tasks.push(buildBingFinanceDetailedTask(ctx))

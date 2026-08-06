@@ -87,6 +87,54 @@ describe('isPublicHostname', () => {
   })
 })
 
+describe('computeScore — symbol-bearing token preservation (B2 fix)', () => {
+  it('matches S&P 500 against a title containing the literal ampersand', () => {
+    // Regression: the old tokenizer stripped & → "s&p" became "sp", and a
+    // search for "S&P 500" scored badly against titles that literally say
+    // "S&P 500" (phrase bonus was the only thing catching it).
+    const high = computeScore(
+      'S&P 500 Index Funds — how they work',
+      'S&P 500 index funds: the complete guide for 2026. Expense ratios, dividends.',
+      'S&P 500 index funds',
+    )
+    const low = computeScore(
+      'Why the 500 best albums are ranked',
+      'The 500 best albums ranked by critics this year.',
+      'S&P 500 index funds',
+    )
+    // Note: "500" alone also matches an unrelated "500 best albums" title
+    // (0.27) — the fix is that "S&P 500 index funds" now CLEARLY outscores
+    // it thanks to the preserved "s&p" token + phrase bonus, instead of
+    // being dragged down to near-tie by the mangled "sp 500" tokenization.
+    expect(high).toBeGreaterThan(low)
+    expect(high - low).toBeGreaterThan(0.3)
+  })
+
+  it('keeps C++ / C# style tokens matchable', () => {
+    const cpp = computeScore(
+      'C++ reference — cppreference.com',
+      'C++ standard library reference documentation.',
+      'C++ reference',
+    )
+    const c = computeScore(
+      'C programming language — intro',
+      'The C programming language explained for beginners.',
+      'C++ reference',
+    )
+    // "c++" must beat plain "c" for a C++ query.
+    expect(cpp).toBeGreaterThan(c)
+  })
+})
+
+describe('simplifyQuery', () => {
+  it('keeps significant terms and strips filler', () => {
+    expect(simplifyQuery('Cloudflare Workers D1 tutorial 2025')).toBe('cloudflare workers d1')
+    // "practices" is a content word (not noise) — only filler is stripped.
+    expect(simplifyQuery('React state management best practices')).toBe('react state management practices')
+  })
+})
+
+
 describe('assertSafeFetchUrl — SSRF DNS-rebinding guards (P0-6 hardening)', () => {
   afterEach(() => vi.restoreAllMocks()) // eslint-disable-line no-undef
 

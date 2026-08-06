@@ -7,10 +7,34 @@
  * inspect the task list, not run it).
  */
 
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { getStrategy, buildBackendTasks } from '../../src/lib/search/strategies'
 import type { SearchContext, BackendTask } from '../../src/lib/search/context'
 import type { SearchRequest, FocusMode } from '../../src/types'
+
+// Mock naverNewsSearch so buildNaverNewsTask.run() never performs a real fetch.
+// The real isRecencyNewsQuery stays intact — the recency-intent wiring under
+// test is exactly the query-marker / time_range / sort_by logic in the builder.
+vi.mock('../../src/lib/naver-news-search', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../../src/lib/naver-news-search')>()
+  return { ...actual, naverNewsSearch: vi.fn(actual.naverNewsSearch) }
+})
+
+// Mock the EN news RSS backends so the locale-wiring tests can assert on the
+// opts passed through WITHOUT hitting the real feeds.
+vi.mock('../../src/lib/en-news-search', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../../src/lib/en-news-search')>()
+  return {
+    ...actual,
+    bingNewsRssSearch: vi.fn(actual.bingNewsRssSearch),
+    googleNewsRssSearch: vi.fn(actual.googleNewsRssSearch),
+  }
+})
+import { bingNewsRssSearch, googleNewsRssSearch } from '../../src/lib/en-news-search'
+const mockBingRss = vi.mocked(bingNewsRssSearch)
+const mockGoogleRss = vi.mocked(googleNewsRssSearch)
+import { naverNewsSearch } from '../../src/lib/naver-news-search'
+const mockNaverNewsSearch = vi.mocked(naverNewsSearch)
 
 /** Names of tasks produced by a strategy — sorted for stable comparison. */
 function taskNames(tasks: BackendTask[]): string[] {
@@ -31,6 +55,7 @@ function makeCtx(overrides: Partial<SearchContext> & { focus?: FocusMode } = {})
     env: undefined,
     korean: false,
     chinese: false,
+    japanese: false,
     queryType: 'general' as never,
     sources: {
       useWikipedia: true, useGitHub: true, useHackerNews: true,
@@ -62,10 +87,10 @@ describe('Search Strategies — task composition', () => {
   })
 
   describe('VideoStrategy', () => {
-    it('produces bing + bing-youtube + wikipedia tasks', () => {
+    it('produces bing + bing-youtube + youtube + wikipedia tasks', () => {
       const ctx = makeCtx({ focus: 'video' })
       const tasks = getStrategy('video').buildTasks(ctx)
-      expect(taskNames(tasks)).toEqual(['bing', 'bing-youtube', 'wikipedia'])
+      expect(taskNames(tasks)).toEqual(['bing', 'bing-youtube', 'wikipedia', 'youtube'])
     })
   })
 
@@ -111,6 +136,14 @@ describe('Search Strategies — task composition', () => {
       expect(names).toContain('naver')
     })
 
+    it('adds a bing web fallback for Korean finance queries (naver-429 fix)', () => {
+      const ctx = makeCtx({ focus: 'finance', korean: true })
+      const names = taskNames(getStrategy('finance').buildTasks(ctx))
+      expect(names).toContain('naver-finance')
+      expect(names).toContain('naver')
+      expect(names).toContain('bing')
+    })
+
     it('routes to global backends for non-Korean queries', () => {
       const ctx = makeCtx({ focus: 'finance', korean: false })
       const tasks = getStrategy('finance').buildTasks(ctx)
@@ -121,10 +154,96 @@ describe('Search Strategies — task composition', () => {
   })
 
   describe('NewsStrategy', () => {
-    it('produces bing-news + bing + hackernews + reddit tasks', () => {
-      const ctx = makeCtx({ focus: 'news' })
+    it('adds the EN RSS backends for English news queries (en-news NDCG fix)', () => {
+      const ctx = makeCtx({ focus: 'news', korean: false })
       const tasks = getStrategy('news').buildTasks(ctx)
-      expect(taskNames(tasks)).toEqual(['bing', 'bing-news', 'hackernews', 'reddit'])
+      expect(taskNames(tasks)).toEqual(['bing', 'bing-news', 'bing-news-rss', 'google-news-rss', 'hackernews', 'reddit'])
+    })
+
+    it('adds naver-news AND the ko-RSS feeds for Korean news queries (Phase 6.10)', () => {
+      const ctx = makeCtx({ focus: 'news', korean: true })
+      const tasks = getStrategy('news').buildTasks(ctx)
+      const names = taskNames(tasks)
+      expect(names).toContain('naver-news')
+      expect(names).toContain('bing-news')
+      // Phase 6.10: ko-KR RSS feeds run alongside naver-news for gold domains
+      // naver m_news misses (yna.co.kr/hankyung.com/chosun.com)
+      expect(names).toContain('bing-news-rss')
+      expect(names).toContain('google-news-rss')
+    })
+
+    it('adds the RSS backends with a ja-JP locale for Japanese news queries (Phase 6.7)', async () => {
+      const { buildBingNewsRssTask, buildGoogleNewsRssTask } = await import('../../src/lib/search/backend-tasks')
+      mockBingRss.mockReset().mockResolvedValue([])
+      mockGoogleRss.mockReset().mockResolvedValue([])
+
+      const ctx = makeCtx({ focus: 'news', japanese: true, query: '最新AIニュース 2025' })
+      const bingTask = buildBingNewsRssTask(ctx)
+      await bingTask.run()
+      expect(mockBingRss.mock.calls[0][1]?.locale).toBe('ja-JP')
+      const googleTask = buildGoogleNewsRssTask(ctx)
+      await googleTask.run()
+      expect(mockGoogleRss.mock.calls[0][1]?.locale).toBe('ja-JP')
+    })
+
+    it('passes zh-CN locale for Chinese news queries', async () => {
+      const { buildBingNewsRssTask } = await import('../../src/lib/search/backend-tasks')
+      mockBingRss.mockReset().mockResolvedValue([])
+      const ctx = makeCtx({ focus: 'news', chinese: true, query: '中国AI最新进展' })
+      const task = buildBingNewsRssTask(ctx)
+      await task.run()
+      expect(mockBingRss.mock.calls.at(-1)?.[1]?.locale).toBe('zh-CN')
+    })
+
+    it('passes ko-KR locale for Korean news queries (Phase 6.10)', async () => {
+      const { buildBingNewsRssTask, buildGoogleNewsRssTask } = await import('../../src/lib/search/backend-tasks')
+      mockBingRss.mockReset().mockResolvedValue([])
+      mockGoogleRss.mockReset().mockResolvedValue([])
+
+      const ctx = makeCtx({ focus: 'news', korean: true, query: '삼성전자 뉴스 최신' })
+      const bingTask = buildBingNewsRssTask(ctx)
+      await bingTask.run()
+      expect(mockBingRss.mock.calls[0][1]?.locale).toBe('ko-KR')
+      const googleTask = buildGoogleNewsRssTask(ctx)
+      await googleTask.run()
+      expect(mockGoogleRss.mock.calls[0][1]?.locale).toBe('ko-KR')
+    })
+  })
+
+  describe('buildNaverNewsTask — recency-intent dual-fetch wiring', () => {
+    beforeEach(() => {
+      mockNaverNewsSearch.mockResolvedValue([])
+      mockNaverNewsSearch.mockClear()
+    })
+
+    it('enables sortByRecency when the query contains 최신 markers', async () => {
+      const { buildNaverNewsTask } = await import('../../src/lib/search/backend-tasks')
+      const ctx = makeCtx({ focus: 'news', korean: true, query: '삼성전자 뉴스 최신' })
+      const task = buildNaverNewsTask(ctx)
+      expect(task.name).toBe('naver-news')
+
+      await task.run()
+      const opts = mockNaverNewsSearch.mock.calls[0][1]
+      expect(opts?.sortByRecency).toBe(true)
+    })
+
+    it('enables sortByRecency when request.time_range is day', async () => {
+      const { buildNaverNewsTask } = await import('../../src/lib/search/backend-tasks')
+      const ctx = makeCtx({ focus: 'news', korean: true, query: '부동산 시장 동향' })
+      ctx.request.time_range = 'day'
+      const task = buildNaverNewsTask(ctx)
+
+      await task.run()
+      expect(mockNaverNewsSearch.mock.calls[0][1]?.sortByRecency).toBe(true)
+    })
+
+    it('keeps sortByRecency false for plain Korean news queries', async () => {
+      const { buildNaverNewsTask } = await import('../../src/lib/search/backend-tasks')
+      const ctx = makeCtx({ focus: 'news', korean: true, query: '부동산 시장 동향' })
+      const task = buildNaverNewsTask(ctx)
+
+      await task.run()
+      expect(mockNaverNewsSearch.mock.calls[0][1]?.sortByRecency).toBe(false)
     })
   })
 
@@ -149,6 +268,44 @@ describe('Search Strategies — task composition', () => {
       expect(taskNames(tasks)).toContain('naver-finance')
     })
 
+    it('adds a bing web fallback for Korean finance queries (kr-finance naver-429 fix)', () => {
+      // Previously the korean finance cascade was naver + naver-finance +
+      // yahoo only — a naver 429 left just the 2 composite filler pages.
+      const ctx = makeCtx({ focus: 'all', korean: true, isFinance: true })
+      const names = taskNames(getStrategy('all').buildTasks(ctx))
+      expect(names).toContain('naver')
+      expect(names).toContain('naver-finance')
+      expect(names).toContain('bing')
+      expect(names).toContain('yahoo-finance')
+    })
+
+    it('adds naver-news for Korean news queries (kr-news NDCG fix)', () => {
+      const ctx = makeCtx({ focus: 'all', korean: true, isNews: true })
+      const tasks = getStrategy('all').buildTasks(ctx)
+      const names = taskNames(tasks)
+      expect(names).toContain('naver-news')
+      expect(names).toContain('naver')
+      expect(names).toContain('bing-news')
+    })
+
+    it('omits naver-news but adds the EN RSS backends for non-Korean news', () => {
+      const ctx = makeCtx({ focus: 'all', korean: false, isNews: true })
+      const tasks = getStrategy('all').buildTasks(ctx)
+      const names = taskNames(tasks)
+      expect(names).not.toContain('naver-news')
+      expect(names).toContain('bing-news-rss')
+      expect(names).toContain('google-news-rss')
+    })
+
+    it('adds the ko-RSS backends alongside naver-news for Korean news (Phase 6.10)', () => {
+      const ctx = makeCtx({ focus: 'all', korean: true, isNews: true })
+      const tasks = getStrategy('all').buildTasks(ctx)
+      const names = taskNames(tasks)
+      expect(names).toContain('naver-news')
+      expect(names).toContain('bing-news-rss')
+      expect(names).toContain('google-news-rss')
+    })
+
     it('includes duckduckgo when searxng is not configured', () => {
       const ctx = makeCtx({ focus: 'all' })
       const tasks = getStrategy('all').buildTasks(ctx)
@@ -163,6 +320,30 @@ describe('Search Strategies — task composition', () => {
       const tasks = getStrategy('all').buildTasks(ctx)
       expect(taskNames(tasks)).toContain('searxng')
       expect(taskNames(tasks)).not.toContain('duckduckgo')
+    })
+
+    it('includes duckduckgo for chinese general queries (zh-general-04 coverage fix)', () => {
+      // zh-general-04 (西安旅游攻略) failed eval at 4 results because the
+      // chinese general path was bing+wikipedia only. DDG adds breadth.
+      const ctx = makeCtx({ focus: 'all', chinese: true, query: '西安旅游攻略' })
+      const tasks = getStrategy('all').buildTasks(ctx)
+      const names = taskNames(tasks)
+      expect(names).toContain('bing')
+      expect(names).toContain('wikipedia')
+      expect(names).toContain('duckduckgo')
+    })
+
+    it('still omits duckduckgo for chinese when searxng is configured', () => {
+      const ctx = makeCtx({
+        focus: 'all',
+        chinese: true,
+        query: '西安旅游攻略',
+        env: { SEARXNG_URL: 'http://localhost:8888' } as never,
+      })
+      const tasks = getStrategy('all').buildTasks(ctx)
+      const names = taskNames(tasks)
+      expect(names).toContain('searxng')
+      expect(names).not.toContain('duckduckgo')
     })
   })
 

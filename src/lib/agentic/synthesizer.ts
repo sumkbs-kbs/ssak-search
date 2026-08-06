@@ -12,6 +12,8 @@ import type { SubQueryPlan, Citation } from './planner'
 import { logger, toError } from '../../lib/logger'
 import type { StepResult } from './executor'
 import type { Ai } from '@cloudflare/workers-types'
+import { sanitizeEvidenceContent, detectPromptInjection, PROMPT_INJECTION_DEFENSE } from '../../lib/prompt-guard'
+import { auditPromptInjection } from '../../lib/audit'
 
 // ============================================================
 // Types
@@ -66,7 +68,9 @@ Use exactly the bracketed number when citing. Example: "[1]" for the first sourc
 
 OUTPUT FORMAT:
 Answer text with inline citations [1], [2], etc. No preamble, no "Based on the evidence" filler.
-Every sentence containing a factual claim must end with or contain a citation marker.`
+Every sentence containing a factual claim must end with or contain a citation marker.
+
+${PROMPT_INJECTION_DEFENSE}`
 
 /**
  * Assemble the structured prompt for the synthesizer LLM
@@ -96,6 +100,22 @@ export function assembleSynthesizerPrompt(
     const snippets = evidence.slice(0, maxSnippets)
     
     for (const item of snippets) {
+      // 06 Security Review S3: sanitize untrusted evidence — CONTENT and TITLE
+      // (a malicious title like "Ignore previous instructions" must not stay
+      // plain text). High-severity injections are quarantined (excluded +
+      // audited); everything else is JSON-encoded so the LLM reads it as DATA.
+      const sanitized = sanitizeEvidenceContent(truncateForCitation(item.content, 800))
+      const titleDetection = item.title ? detectPromptInjection(item.title) : null
+      if (sanitized.quarantined || titleDetection?.severity === 'high') {
+        auditPromptInjection({
+          sourceUrl: item.url,
+          patterns: sanitized.detection.patterns.concat(titleDetection?.patterns ?? []),
+          severity: 'high',
+          stage: 'synthesizer.assemblePrompt',
+        })
+        continue
+      }
+
       evidenceIdx++
       const citation: Citation = {
         stepId: result.stepId,
@@ -111,11 +131,11 @@ export function assembleSynthesizerPrompt(
       existing.push(citation)
       evidenceMap.set(result.stepId, existing)
 
-      // Build evidence block with marker
+      // Build evidence block with marker — content passed as JSON data
       const block = `[${evidenceIdx}] Source: ${item.title}
 URL: ${item.url}
 Domain: ${item.domain}
-Content: ${truncateForCitation(item.content, 800)}`
+Content (JSON data): ${sanitized.safe}`
 
       const blockTokens = estimateTokens(block)
       if (totalTokens + blockTokens > tokenBudget) {

@@ -10,7 +10,9 @@
 import type { SearchResult, Env, TimeRange } from '../../types'
 import type { BackendTask, SearchContext } from './context'
 import { bingSearch, bingNewsSearch } from '../bing-search'
+import { bingNewsRssSearch, googleNewsRssSearch } from '../en-news-search'
 import { naverSearch } from '../naver-search'
+import { naverNewsSearch, isRecencyNewsQuery } from '../naver-news-search'
 import {
   wikipediaSearch,
   githubSearch,
@@ -24,6 +26,7 @@ import { searxngSearch } from '../searxng-search'
 import { yahooFinanceSearch } from '../yahoo-finance-search'
 import { searchKoreanStock } from '../stock-finance'
 import { braveSearch, isBraveAvailable } from '../brave-search'
+import { youtubeSearch } from '../youtube-search'
 import { isChineseQuery, cleanChineseQuery } from '../orchestrator'
 
 /** If the query is Chinese, return the cleaned version; otherwise the original. */
@@ -57,6 +60,56 @@ export function buildBingNewsTask(ctx: SearchContext): BackendTask {
   }
 }
 
+/**
+ * News RSS locale from the search context — the feeds must run in the QUERY
+ * language, not always en-US. Phase 6.7: zh/ja news queries previously got
+ * English feeds (mkt/hl=en-US), missing gold domains like 36kr.com,
+ * people.com.cn, nhk.or.jp, nikkei.com. Phase 6.10: ko-KR added — Korean news
+ * queries previously ran only the naver-news backend; the ko-KR Google News
+ * feed adds coverage for gold domains naver m_news doesn't surface
+ * (chosun.com/joongang.co.kr, verified live 2026-08-05).
+ */
+function newsRssLocale(ctx: SearchContext): string {
+  if (ctx.korean) return 'ko-KR'
+  if (ctx.japanese) return 'ja-JP'
+  if (ctx.chinese) return 'zh-CN'
+  return 'en-US'
+}
+
+/**
+ * Bing News RSS — English news feed with the REAL article URLs extracted
+ * from the apiclick redirect (zero subrequests). mkt=en-US forces English
+ * (the en-news NDCG 0.000 fix — generic bing served Korean/Asian outlets
+ * for English queries). See en-news-search.ts.
+ */
+export function buildBingNewsRssTask(ctx: SearchContext, maxResults?: number): BackendTask {
+  return {
+    name: 'bing-news-rss',
+    run: () => bingNewsRssSearch(ctx.query, {
+      maxResults: maxResults ?? ctx.overFetch,
+      env: ctx.env,
+      locale: newsRssLocale(ctx),
+    }),
+  }
+}
+
+/**
+ * Google News RSS — English news feed with the strongest gold-domain recall
+ * (authoritative outlet at rank 1 in live probes). URL stays a google
+ * redirect; domain resolves via the title-suffix source map. See
+ * en-news-search.ts.
+ */
+export function buildGoogleNewsRssTask(ctx: SearchContext, maxResults?: number): BackendTask {
+  return {
+    name: 'google-news-rss',
+    run: () => googleNewsRssSearch(ctx.query, {
+      maxResults: maxResults ?? ctx.overFetch,
+      env: ctx.env,
+      locale: newsRssLocale(ctx),
+    }),
+  }
+}
+
 export function buildBingYouTubeTask(ctx: SearchContext): BackendTask {
   return {
     name: 'bing-youtube',
@@ -66,6 +119,14 @@ export function buildBingYouTubeTask(ctx: SearchContext): BackendTask {
       region: ctx.bingRegion,
       env: ctx.env,
     }),
+  }
+}
+
+/** Direct YouTube search backend — returns videos with title/channel/duration/views/description. */
+export function buildYoutubeTask(ctx: SearchContext, maxResults = 8): BackendTask {
+  return {
+    name: 'youtube',
+    run: () => youtubeSearch(ctx.query, maxResults, false),
   }
 }
 
@@ -183,6 +244,33 @@ export function buildNaverTask(ctx: SearchContext, maxResults?: number): Backend
   return {
     name: 'naver',
     run: () => naverSearch(ctx.query, { maxResults: maxResults ?? ctx.overFetch, env: ctx.env }),
+  }
+}
+
+/**
+ * Naver NEWS search backend — collects ONLY n.news.naver.com article links
+ * (where=m_news). The general naver backend surfaces blogs/cafes for news
+ * queries; this one guarantees real news articles, which is what kr-news
+ * eval gold domains (n.news.naver.com/yna.co.kr/donga.com) require.
+ *
+ * Recency intent ('최신'/'오늘'/'속보' markers, time_range=day, or
+ * sort_by=date) flips the backend into dual-fetch mode: relevance page
+ * (coverage) + sort=1 newest-first page (freshness), merged — so queries
+ * like '삼성전자 뉴스 최신' surface genuinely fresh articles instead of
+ * Naver's relevance-sorted picks that can be a week old.
+ */
+export function buildNaverNewsTask(ctx: SearchContext, maxResults?: number): BackendTask {
+  const recencyIntent =
+    ctx.request.time_range === 'day' ||
+    ctx.request.sort_by === 'date' ||
+    isRecencyNewsQuery(ctx.query)
+  return {
+    name: 'naver-news',
+    run: () => naverNewsSearch(ctx.query, {
+      maxResults: maxResults ?? ctx.overFetch,
+      env: ctx.env,
+      sortByRecency: recencyIntent,
+    }),
   }
 }
 

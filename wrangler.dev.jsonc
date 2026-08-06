@@ -32,6 +32,22 @@
       { "name": "CANARY_DO", "class_name": "CanaryOrchestratorDO" }
     ]
   },
+  // wrangler 4.112.0+ requires live exports entries for Durable Objects
+  // referenced by the Worker (verified 2026-08-05 local dev). Without this,
+  // `wrangler pages dev` fails with "not exported in your entrypoint file".
+  "exports": {
+    "RateLimiterDO": { "type": "durable-object", "storage": "sqlite" },
+    "ThreadDO": { "type": "durable-object", "storage": "sqlite" },
+    "PagesDO": { "type": "durable-object", "storage": "sqlite" },
+    "LibraryDO": { "type": "durable-object", "storage": "sqlite" },
+    "UserProfileDO": { "type": "durable-object", "storage": "sqlite" },
+    "SpaceDO": { "type": "durable-object", "storage": "sqlite" },
+    "ApiKeyDO": { "type": "durable-object", "storage": "sqlite" },
+    "CrawlerDO": { "type": "durable-object", "storage": "sqlite" },
+    "ClickLogDO": { "type": "durable-object", "storage": "sqlite" },
+    "ExperimentDO": { "type": "durable-object", "storage": "sqlite" },
+    "CanaryOrchestratorDO": { "type": "durable-object", "storage": "sqlite" }
+  },
   "r2_buckets": [
     { "binding": "UPLOAD_BUCKET", "bucket_name": "search-engine-uploads-dev" }
   ],

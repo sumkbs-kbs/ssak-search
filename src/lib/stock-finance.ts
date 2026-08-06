@@ -346,6 +346,7 @@ function buildStockData(api: NaverStockApiResponse['datas'][0], exchange: string
     // previousClose는 API에 없으므로 closePrice - compareToPreviousClosePrice로 계산
     prev_close: price !== 0 && change !== 0 ? price - change : undefined,
     market_status: api.marketStatus === 'OPEN' ? 'open' : 'closed',
+    source: 'naver',
   }
 }
 

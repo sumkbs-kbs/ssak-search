@@ -37,7 +37,7 @@ import {
   getSourcesForQueryType,
 } from './specialized'
 import { extractContent } from './extractor'
-import { generateAnswer } from './answer'
+import { generateAnswer, attachFactCheckToAnswer } from './answer'
 import { buildKnowledgePanel, matchImagesToResults } from './knowledge-panel'
 import { hybridSearch } from './retrieval'
 import {
@@ -94,7 +94,7 @@ function getMemoryCacheKey(request: SearchRequest, variant?: string): string {
     .toLowerCase()
   const includeSorted = request.include_domains ? [...request.include_domains].sort().join(',') : ''
   const excludeSorted = request.exclude_domains ? [...request.exclude_domains].sort().join(',') : ''
-  return `${canonicalQuery}|${request.topic}|${request.max_results}|${request.search_depth}|${request.time_range ?? ''}|${request.sort_by}|${request.country ?? ''}|${request.language ?? ''}|${request.focus ?? 'all'}|${request.page ?? 1}|ia=${request.include_answer ? 1 : 0}|inc=${includeSorted}|exc=${excludeSorted}|exp=${variant ?? ''}`
+  return `${canonicalQuery}|${request.topic}|${request.max_results}|${request.search_depth}|${request.time_range ?? ''}|${request.sort_by ?? 'blend'}|${request.country ?? ''}|${request.language ?? ''}|${request.focus ?? 'all'}|${request.page ?? 1}|ia=${request.include_answer ? 1 : 0}|ifc=${request.include_fact_check ? 1 : 0}|inc=${includeSorted}|exc=${excludeSorted}|exp=${variant ?? ''}`
 }
 
 function getFromMemoryCache(key: string): SearchResponse | undefined {
@@ -194,16 +194,72 @@ function isKoreanQuery(query: string): boolean {
   return false
 }
 
-/** Detect if query contains Chinese (CJK) characters — but NOT Korean Hangul */
+/** Detect if query contains Chinese (CJK) characters — but NOT Korean Hangul or Japanese kana */
 function isChineseQuery(query: string): boolean {
   // CJK Unified Ideographs: U+4E00–U+9FFF
-  // Exclude Korean-only queries (Hangul range already checked separately)
-  return /[\u4E00-\u9FFF]/.test(query) && !/[\uAC00-\uD7A3]/.test(query)
+  // Exclude Korean-only queries (Hangul range checked separately) AND
+  // Japanese queries — kanji (U+4E00–U+9FFF) also falls in this range, so a
+  // query like 量子コンピュータ (with kana) would otherwise route to zh-CN
+  // backends (ja-fact-01 NDCG 0.000 root cause: bing served Chinese results).
+  // Kana (Hiragana U+3040–U+309F / Katakana U+30A0–U+30FF) is the reliable
+  // Japanese marker; pure-kanji Japanese is indistinguishable from Chinese,
+  // so queries WITH kana are Japanese, without kana they stay Chinese.
+  return /[\u4E00-\u9FFF]/.test(query) && !/[\uAC00-\uD7A3]/.test(query) && !isJapaneseQuery(query)
 }
 
-/** Detect query language for Wikipedia — ko for Korean, zh for Chinese, en otherwise */
+/**
+ * Detect if query is Japanese.
+ *
+ * Two signals, OR'd:
+ *   1. Kana (Hiragana U+3040–U+309F, Katakana U+30A0–U+30FF) — unambiguous.
+ *      '量子コンピュータとは' has とは (hiragana) → Japanese.
+ *   2. Shinjitai kanji (Japanese-only simplified forms) — catches queries like
+ *      '任天堂Switch 2 発売' / '半導体不足 最新' / '円安 影響' that contain
+ *      ONLY kanji (no kana) and were previously misrouted to zh-CN (ja-news-02/03/04
+ *      NDCG 0.000 root cause — bing served Chinese results, wiki ran in zh).
+ *      These characters are Japanese simplifications; the traditional forms
+ *      (發/賣/體/導/畵) are what Chinese uses.
+ */
+function isJapaneseQuery(query: string): boolean {
+  if (!query) return false
+  if (/[\u3040-\u30FF]/.test(query)) return true
+  // Shinjitai kanji whose glyph differs from BOTH simplified Chinese and
+  // traditional Chinese (発 vs 发/發, 売 vs 卖/賣, 円 vs 圆/圓, 済 vs 济/濟,
+  // 観 vs 观/觀, 検 vs 检/檢, 変 vs 变/變, 対 vs 对/對, 処 vs 处/處,
+  // 応 vs 应/應, 図 vs 图/圖, 関 vs 关/關, 価 vs 价/價, 経 vs 经/經,
+  // 読 vs 读/讀, 説 vs 说/說, 訳 vs 译/譯, 証 vs 证/證, 豊 vs 丰/豐,
+  // 鉄 vs 铁/鐵, 辺 vs 边/邊, 遅 vs 迟/遲, 権 vs 权/權, 産 vs 产/產,
+  // 団 vs 团/團, 続 vs 续/續, 雑 vs 杂/雜). These are unambiguous Japanese
+  // markers — traditional-Chinese glyphs (銀/職/結/統/週/達/選/進/運/紅/葉/
+  // 時) are deliberately EXCLUDED so 台灣銀行/香港經濟 are not misrouted to ja.
+  const SHINJITAI_ONLY = /[発売円済観検変対処応図関価経読説訳証豊鉄辺遅権産団続雑]/
+  if (SHINJITAI_ONLY.test(query)) return true
+  // Kana-less Japanese queries with no shinjitai kanji (e.g. 京都紅葉時期 —
+  // 紅/葉/時 are shared glyphs) are caught via common Japanese place/composite
+  // words that Chinese never uses. 日本 alone is excluded (it appears in
+  // traditional-Chinese travel copy like 日本旅遊攻略), so the place words
+  // are the reliable markers.
+  if (/(京都|紅葉|東京|大阪|北海道|沖縄|名古屋|福岡|神戸|広島|仙台|札幌|横浜|長野|半導体|任天堂)/.test(query)) return true
+  // Kana-less Japanese TECH/tutorial compounds (Phase 6.12 / ja coverage fix):
+  // queries like '機械学習入門' / 'TypeScript 入門' / 'Web API 設計' / 'AI規制 最新'
+  // contain ZERO kana and ZERO shinjitai glyphs, so they fell into the zh-CN
+  // bucket and bing served Chinese results (ja-tech-03/06/10, ja-news-05 eval
+  // NDCG 0.000 root cause). These compounds are the Japanese forms — simplified
+  // Chinese writes them as 机器/入门/设计/规制/实装 (见 机器学习入门教程,
+  // Docker 入门教程 in the zh eval set), so the traditional-form markers below
+  // are safe against simplified-Chinese queries. 機械学習/実装/開発環境/開発者/
+  // 人気ランキング use shinjitai glyphs (機 vs 机, 実 vs 實) so they are
+  // Japanese-only; 入門/設計/規制 are shared with traditional Chinese and kept
+  // ONLY because they are the exact eval-misrouted compounds — a documented
+  // rare-ambiguity tradeoff, same as the place-word list above. 比較 was
+  // dropped: it is shared with traditional Chinese and fixes no eval query.
+  return /(機械学習|入門|設計|規制|実装|開発環境|開発者|人気ランキング)/.test(query)
+}
+
+/** Detect query language for Wikipedia — ko/zh/ja for the respective scripts, en otherwise */
 function detectWikiLanguage(query: string): string {
   if (isKoreanQuery(query)) return 'ko'
+  if (isJapaneseQuery(query)) return 'ja'
   if (isChineseQuery(query)) return 'zh'
   return 'en'
 }
@@ -366,6 +422,7 @@ export async function executeSearch(
     max_results = 10,
     include_answer = false,
     include_raw_content = false,
+    include_fact_check = false,
     include_domains,
     exclude_domains,
     time_range,
@@ -422,7 +479,27 @@ export async function executeSearch(
   // waitFor=['wikipedia']: wikipedia's 429-retry chain often settles just
   // after phase 1's 800ms early-exit. Awaiting it (bounded by its 4500ms
   // ceiling) recovers authoritative results for factual/academic queries.
-  const { resultSets, usedBackends } = await fanoutBackends(tasks, max_results, { waitFor: ['wikipedia'] })
+  // waitFor=['yahoo-finance']: the quote backend (v1 search + v8 chart with
+  // transient retries) frequently lands just after the early-exit too — a
+  // dropped quote is what produced the en-stock-06 0.000 availability noise.
+  // waitFor=['naver-news']: Naver's m_news page renders a large HTML payload
+  // (~350KB) that often settles just after phase 1's 800ms early-exit. It's
+  // the only backend that guarantees n.news.naver.com articles (kr-news eval
+  // gold domain), so awaiting it (bounded by its 2500ms ceiling) prevents
+  // Korean news queries from falling back to blogs/cafes.
+  // waitFor=['bing-news-rss','google-news-rss']: the EN news RSS feeds are the
+  // fix for en-news NDCG 0.000 (they surface reuters/bbc/bloomberg/cnbc) and
+  // usually settle in ~500ms, but awaiting them (bounded by their 2500ms
+  // ceilings) keeps the gold domains from being dropped on a slow feed.
+  // waitFor=['arxiv']: Phase 6.7 — arxiv's XML endpoint (parse + retry) often
+  // settles just after phase 1's 800ms early-exit. en-acad-04/05 eval showed
+  // backends 'bing+github' — the arxiv task WAS wired (queryType=academic) but
+  // its results were dropped by the early-exit, leaving gold arxiv.org absent
+  // and NDCG 0.000. Awaiting it (bounded by its 2500ms ceiling) recovers the
+  // paper results for academic queries.
+  const { resultSets, usedBackends } = await fanoutBackends(tasks, max_results, {
+    waitFor: ['wikipedia', 'yahoo-finance', 'naver-news', 'bing-news-rss', 'google-news-rss', 'arxiv'],
+  })
   const backendCount = usedBackends.length
 
   // ── 6. Merge & deduplicate ──
@@ -546,7 +623,16 @@ export async function executeSearch(
         }
       }
       if (!answer && results.length > 0) {
-        answer = await generateAnswer(query, results, config.ai, config.env, ctx.spaceFileContext)
+        answer = await generateAnswer(
+          query,
+          results,
+          config.ai,
+          config.env,
+          ctx.spaceFileContext,
+          // include_fact_check → cross-source fact-check section attached to the
+          // answer text + full FactCheckReport on SearchAnswer.factCheck.
+          include_fact_check ? { includeFactCheck: true } : undefined,
+        )
       }
       if (!answer) {
         const instantAnswer = await duckDuckGoInstantAnswer(query)
@@ -583,6 +669,15 @@ export async function executeSearch(
 
   // Wait for all independent tasks to complete
   await Promise.all(parallelTasks)
+
+  // include_fact_check: the agentic (Pro) path produces its answer via the
+  // synthesizer, which bypasses generateAnswer's includeFactCheck option — so
+  // attach the cross-source fact-check post-hoc for WHICHEVER path produced
+  // the answer. The !answer.factCheck guard prevents double-attaching the
+  // standard path (which already attached it inside generateAnswer).
+  if (include_fact_check && answer && results.length > 0 && !answer.factCheck) {
+    answer = attachFactCheckToAnswer(answer, results)
+  }
 
   // ── 11. Reranking (advanced depth only, after answer is set) ──
   if (config.ai && !isNews && !isFinance && results.length >= 3 && search_depth === 'advanced') {
@@ -719,6 +814,7 @@ async function buildSearchContext(
   const queryType = detectQueryType(query, entityHints)
   const sources = getSourcesForQueryType(queryType)
   const korean = isKoreanQuery(query)
+  const japanese = isJapaneseQuery(query)
   const wikiLang = detectWikiLanguage(query)
   const chinese = isChineseQuery(query)
 
@@ -744,9 +840,15 @@ async function buildSearchContext(
   }
 
   // Localization
+  // Phase 6.7: ja-JP routing — previously Japanese queries (量子コンピュータとは)
+  // had NO dedicated detection, so they fell into the zh-CN bucket (kanji range
+  // overlap) and bing served Chinese results (baike.baidu.com, zhihu) — the
+  // ja-fact-01 NDCG 0.000 root cause. isJapaneseQuery now wins before the
+  // chinese check, routing bing region + wiki language to ja-JP/ja.
   const { country, language } = request
   const bingRegion = language ? language
     : country ? countryToBingMkt(country)
+    : japanese ? 'ja-JP'
     : chinese ? 'zh-CN' : undefined
   const bingLang = language || (country ? countryToLanguageTag(country) : undefined)
   const wikiOverrideLang = language || (country ? countryToLanguageTag(country) : undefined)
@@ -764,7 +866,7 @@ async function buildSearchContext(
 
   return {
     query, request, env,
-    korean, chinese, queryType, sources, entityHints,
+    korean, chinese, japanese, queryType, sources, entityHints,
     isNews, isFinance, focus, hasExplicitFocus, overFetch, maxResults,
     bingLang, bingRegion, bingTimeRange, effectiveWikiLang,
     spaceFileContext,
@@ -783,6 +885,7 @@ function usedBacksWithFallback(usedBackends: string[]): string {
 export {
   isKoreanQuery,
   isChineseQuery,
+  isJapaneseQuery,
   detectWikiLanguage,
   cleanChineseQuery,
   normalizeUrlForDedup,

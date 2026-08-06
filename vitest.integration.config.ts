@@ -12,7 +12,10 @@ export default defineConfig({
       main: './src/index.tsx',
       miniflare: {
         compatibilityFlags: ['nodejs_compat'],
-        compatibilityDate: '2026-07-10',
+        // Installed workerd binary supports compat dates only up to 2026-07-02
+        // (verified 2026-08-05) — 2026-07-10 fails with ERR_RUNTIME_FAILURE
+        // "newest date supported by this server binary is 2026-07-02".
+        compatibilityDate: '2026-07-02',
       },
     }),
   ],

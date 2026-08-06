@@ -2169,7 +2169,11 @@ components:
             properties:
               status:
                 type: string
-                enum: [operational, degraded, down, disabled, unknown]
+                enum: [operational, degraded, down, unconfigured, disabled, unknown]
+              description: |
+                `unconfigured` = optional backend whose required credential is
+                absent (e.g. brave without BRAVE_API_KEY); excluded from the
+                global status rollup.
               latency_ms:
                 type: integer
         features:

@@ -258,6 +258,7 @@ export function parseStockCard(html: string, query: string): SearchResult[] {
     change: changeAmt ? parseInt(changeAmt.replace(/,/g, ''), 10) * (changeDir === '하락' ? -1 : 1) : 0,
     change_percent: changePct ? parseFloat(changePct) : 0,
     direction: changeDir === '하락' ? 'down' : changeDir === '상승' ? 'up' : 'flat',
+    source: 'naver',
   } : undefined
 
   // Naver stock detail page

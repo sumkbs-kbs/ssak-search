@@ -30,6 +30,7 @@ export type AuditEventType =
   | 'admin_action'
   | 'config_change'
   | 'secret_access'
+  | 'prompt_injection'
 
 export type AuditSeverity = 'low' | 'medium' | 'high' | 'critical'
 
@@ -181,6 +182,29 @@ export function auditCircuitTripped(host: string, failures: number): void {
     outcome: 'failure',
     resource: host,
     context: { host, failures },
+  })
+}
+
+/**
+ * Convenience: log a prompt-injection attempt detected in untrusted search
+ * content (06 Security Review — S3). The offending source is quarantined from
+ * the LLM evidence pool and the event is shipped to Logpush/SIEM.
+ */
+export function auditPromptInjection(opts: {
+  sourceUrl: string
+  patterns: string[]
+  severity: 'low' | 'medium' | 'high'
+  stage: string
+}): void {
+  audit({
+    eventType: 'prompt_injection',
+    severity: opts.severity,
+    outcome: 'blocked',
+    resource: opts.sourceUrl,
+    context: {
+      patterns: opts.patterns.join(','),
+      stage: opts.stage,
+    },
   })
 }
 

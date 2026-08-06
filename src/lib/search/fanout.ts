@@ -42,15 +42,33 @@ const PHASES = [
 // retries, silently dropping wikipedia from the final results — the phase
 // collection broke early and the task's pending timer marked it rejected.
 // The 4.5s ceiling + fanout waitFor (below) lets the retry chain finish.
+//
+// yahoo-finance gets the same treatment: the backend now runs transient-failure
+// retries (see fetchYahooJson in yahoo-finance-search.ts), and a 2s ceiling
+// silently dropped the quote whenever the v1-search + v8-chart chain needed a
+// retry — the en-stock-06 "0.000" availability noise. 4.5s + waitFor lets the
+// retry chain finish inside the fanout window.
 const BACKEND_TIMEOUT_MS: Record<string, number> = {
   'self-index': 2500,
   'bing': 2000,
   'bing-news': 2000,
+  // English news RSS feeds — a single fast XML round-trip (~300–800ms).
+  // 2500ms leaves room for a slow feed without delaying the fan-out.
+  'bing-news-rss': 2500,
+  'google-news-rss': 2500,
   'bing-cleaned': 2000,
   'bing-finance': 2000,
   'bing-writing': 2000,
   'bing-youtube': 2000,
   'naver': 2500,
+  // naver-news dual-fetch mode (recency intent) loads TWO m_news pages in
+  // parallel — wall time ≈ max(page1, page2), but each page can retry on
+  // 429/5xx with up to 2s of jitter (fetch ≈800ms + jitter ≤2s + retry ≈800ms
+  // ≈ 3.6s worst case). 4000ms keeps both pages + a slow retry inside the
+  // fanout window so fresh articles aren't dropped on recency queries. The
+  // waitFor only extends recency queries; single-fetch queries resolve in
+  // ~300–800ms and are unaffected by this ceiling.
+  'naver-news': 4000,
   'naver-finance': 4000,
   'wikipedia': 4500,
   'github': 2000,
@@ -61,7 +79,8 @@ const BACKEND_TIMEOUT_MS: Record<string, number> = {
   'searxng': 3000,
   'duckduckgo': 2000,
   'brave': 2000,
-  'yahoo-finance': 2000,
+  'yahoo-finance': 4500,
+  'youtube': 2500,
 }
 
 interface TaskResult {

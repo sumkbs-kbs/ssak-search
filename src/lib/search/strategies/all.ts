@@ -30,8 +30,12 @@ import {
   buildKoreanStockTask,
   buildYahooFinanceTask,
   buildBraveTask,
+  buildStackExchangeTask,
+  buildQiitaTask,
+  buildJuejinTask,
 } from '../backend-tasks'
 import { bingSearch } from '../../bing-search'
+import { duckDuckGoSearch } from '../../duckduckgo'
 
 export class AllStrategy implements SearchStrategy {
   readonly focus = 'all' as const
@@ -124,6 +128,55 @@ export class AllStrategy implements SearchStrategy {
       // saturated repos when the docs reach the pool, so keep 8 and let
       // ranking sort it out.
       tasks.push(buildGithubTask(ctx, 8))
+
+      // Phase 3a (lever 3): official-doc routing for ENGLISH technical queries
+      // only. bing ignores site: operators entirely and DDG site: trips the 202
+      // anti-bot challenge under burst, so the official Stack Exchange API is
+      // the only ToS-safe way to surface the stackoverflow.com gold domains
+      // (en-tech/lt/adv eval, TECH_DOCS_AUTHORITY). Quota-guarded (300/day/IP).
+      //
+      // Gate is queryType === 'technical' (NOT useGitHub — that also fires for
+      // academic, whose gold is arxiv/github) AND English-only: zh/ja technical
+      // gold domains are community sites (zhihu/juejin/qiita/zenn), and English
+      // Stack Overflow questions would crowd them out of the 10-slot pool.
+      // S16 (lever 3 remainder): zh/ja tech community gold routing. bing
+      // zh/ja tech queries return all-wikipedia pools (zh-tech-08/09/13 NDCG
+      // 0.000) — no backend surfaces the zhihu.com/juejin.cn (zh) or
+      // qiita.com (ja) gold domains. zhihu.com search is 403/400 anti-bot;
+      // the two keyless official APIs that work are Juejin search (zh) and
+      // Qiita v2 items (ja) — verified live 2026-08-06 (qiita 200/53KB,
+      // juejin /search_api/v1/search 200/data[..]). zenn.dev/zhihu/csdn have
+      // no usable keyless API and stay on the bing path. Same gate rule as
+      // Stack Exchange: technical queries only, language-specific target.
+      if (ctx.queryType === 'technical' && ctx.japanese) {
+        tasks.push(buildQiitaTask(ctx, 5))
+      }
+      if (ctx.queryType === 'technical' && ctx.chinese) {
+        tasks.push(buildJuejinTask(ctx, 5))
+      }
+
+      if (ctx.queryType === 'technical' && !ctx.korean && !ctx.chinese && !ctx.japanese) {
+        tasks.push(buildStackExchangeTask(ctx, 5))
+
+        // MDN official-doc routing. MDN's /api/v1/search is disallowed by
+        // robots.txt (Disallow: /api/) so it is deliberately NOT used. DDG
+        // site:developer.mozilla.org works (first-batch verified: 10/10 MDN
+        // hits) but the IP anti-bot 202-challenge can kick in under burst — the
+        // task is additive, so a rate-limited DDG returns [] and the pool falls
+        // back to other backends. Restricted to doc/reference-style queries to
+        // limit shared-DDG budget pressure (the main duckduckgo backend uses
+        // the same endpoint/IP).
+        if (/\b(docs?|documentation|reference|guide|tutorial|example|examples|api|how\s+to|explain(ed)?|what\s+is)\b/i.test(ctx.query)) {
+          tasks.push({
+            name: 'ddg-site-mdn',
+            run: () => duckDuckGoSearch(`site:developer.mozilla.org ${ctx.query}`, {
+              maxResults: 5,
+              timeoutMs: 6000,
+              env: ctx.env,
+            }),
+          })
+        }
+      }
     }
 
     // 4. HackerNews

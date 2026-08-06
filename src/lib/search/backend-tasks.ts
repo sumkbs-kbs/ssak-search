@@ -25,6 +25,8 @@ import { duckDuckGoSearch } from '../duckduckgo'
 import { searxngSearch } from '../searxng-search'
 import { yahooFinanceSearch } from '../yahoo-finance-search'
 import { searchKoreanStock } from '../stock-finance'
+import { stackExchangeSearch } from '../stack-exchange'
+import { qiitaSearch, juejinSearch } from '../community-search'
 import { braveSearch, isBraveAvailable } from '../brave-search'
 import { youtubeSearch } from '../youtube-search'
 import { isChineseQuery, cleanChineseQuery } from '../orchestrator'
@@ -193,6 +195,46 @@ export function buildArxivTask(ctx: SearchContext, maxResults = 8): BackendTask 
   return {
     name: 'arxiv',
     run: () => arxivSearch(ctx.query, { maxResults, env: ctx.env }),
+  }
+}
+
+/**
+ * Stack Exchange API — official keyless Stack Overflow questions backend
+ * (Phase 3a lever 3: tech official-doc routing). bing ignores site:
+ * operators, DDG site: trips the 202 anti-bot challenge, so the only
+ * ToS-safe way to surface stackoverflow.com gold domains is the official
+ * API. See stack-exchange.ts. Quota-guarded (300/day/IP, logs + skips at
+ * the floor) so the 500×3 eval run cannot burn the daily budget.
+ */
+export function buildStackExchangeTask(ctx: SearchContext, maxResults = 5): BackendTask {
+  return {
+    name: 'stack-exchange',
+    run: () => stackExchangeSearch(ctx.query, { maxResults, env: ctx.env }),
+  }
+}
+
+/**
+ * Qiita v2 API — official keyless Japanese tech community backend (S16).
+ * bing ja-tech queries return zh.wikipedia.org + github repos, never the
+ * qiita.com gold (ja-tech eval). The public v2 /items API returns real
+ * qiita.com URLs directly. See community-search.ts.
+ */
+export function buildQiitaTask(ctx: SearchContext, maxResults = 5): BackendTask {
+  return {
+    name: 'qiita',
+    run: () => qiitaSearch(ctx.query, { maxResults, env: ctx.env }),
+  }
+}
+
+/**
+ * Juejin search API — public keyless Chinese tech community backend (S16).
+ * bing zh-tech queries return all-wikipedia pools (zh-tech-08/09/13 NDCG
+ * 0.000) — juejin.cn is the strongest keyless zh gold. See community-search.ts.
+ */
+export function buildJuejinTask(ctx: SearchContext, maxResults = 5): BackendTask {
+  return {
+    name: 'juejin',
+    run: () => juejinSearch(ctx.query, { maxResults, env: ctx.env }),
   }
 }
 

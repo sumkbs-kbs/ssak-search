@@ -280,6 +280,64 @@ export const NEWS_SOURCE_DOMAINS: Record<string, string> = {
   'theelec': 'thelec.kr',
   'chosun': 'chosun.com',
   'joongang': 'joongang.co.kr',
+  // Lever 2a (2026-08-06): 24 more gold domains missing from the map. Before
+  // these, their Google News items fell back to the news.google.com redirect
+  // domain — the gold matcher saw a redirect and the eval query lost every hit
+  // (en-news-01/03/05/06/07 3/3 gold misses; zh-news/ja-news gold too).
+  // Spellings verified live against the actual feeds (zh-CN/ja-JP/en-US)
+  // where noted; short Latin keys ('sec','who','kbo','ces') are EXACT matches
+  // on the lowercased suffix (Google renders these org names verbatim), same
+  // precedent as the existing 'ft'/'iea'/'semi' keys.
+  // n.news.naver.com / sports.naver.com (the top news gold misses) are
+  // DELIBERATELY absent — those domains are the naver-news backend's own
+  // output, never Google News source suffixes.
+  // Chinese outlets (it之家/中国新闻网 spellings are assumed — the live zh
+  // probe surfaced 新浪/搜狐/金融界 suffixes, not IT之家/中国新闻网 verbatim;
+  // the chinanews.com.cn / ecns.cn variants WERE live-verified and map to the
+  // same China News Service parent, whose eval gold is chinanews.com):
+  'it之家': 'ithome.com',
+  'ithome': 'ithome.com',
+  '新浪网': 'sina.com.cn',
+  '新浪新闻': 'sina.com.cn',
+  '新浪新闻_手机新浪网': 'sina.com.cn',
+  '中国新闻网': 'chinanews.com',
+  'chinanews': 'chinanews.com',
+  'chinanews.com.cn': 'chinanews.com',
+  'ecns': 'chinanews.com',
+  'ecns.cn': 'chinanews.com',
+  'cnbeta': 'cnbeta.com',
+  'cnbeta.com': 'cnbeta.com',
+  // Japanese outlets:
+  'ファミ通': 'famitsu.com',
+  'デジタル庁': 'digital.go.jp',
+  // English / tech / industry outlets:
+  'the japan times': 'japantimes.co.jp',
+  'japan times': 'japantimes.co.jp',
+  '9to5mac': '9to5mac.com',
+  'macrumors': 'macrumors.com',
+  'electrek': 'electrek.co',
+  'coindesk': 'coindesk.com',
+  'light reading': 'lightreading.com',
+  'gartner': 'gartner.com',
+  'data center dynamics': 'datacenterdynamics.com',
+  'nasaspaceflight': 'nasaspaceflight.com',
+  'waymo': 'waymo.com',
+  'uploadvr': 'uploadvr.com',
+  'road to vr': 'roadtovr.com',
+  // Institutional / governmental gold (en-news-04 europa.eu, en-news-06
+  // unfccc already mapped, who.int/fao.org/sec.gov/ces.tech/koreabaseball.com):
+  'europa': 'europa.eu',
+  'european commission': 'europa.eu',
+  'who': 'who.int',
+  'world health organization': 'who.int',
+  'fao': 'fao.org',
+  'food and agriculture organization': 'fao.org',
+  'sec': 'sec.gov',
+  'securities and exchange commission': 'sec.gov',
+  'u.s. securities and exchange commission': 'sec.gov',
+  'ces': 'ces.tech',
+  'kbo': 'koreabaseball.com',
+  'korea baseball organization': 'koreabaseball.com',
 }
 
 /** Strip a trailing "- SourceName" (Google News) returning [headline, source]. */

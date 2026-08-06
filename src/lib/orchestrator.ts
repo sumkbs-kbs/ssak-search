@@ -497,8 +497,13 @@ export async function executeSearch(
   // its results were dropped by the early-exit, leaving gold arxiv.org absent
   // and NDCG 0.000. Awaiting it (bounded by its 2500ms ceiling) recovers the
   // paper results for academic queries.
+  // waitFor=['qiita','juejin']: S16 — the community backends for zh/ja tech
+  // queries are single-fetch APIs that usually land within phase 1, but the
+  // same 800ms early-exit race that dropped arxiv results could drop them on a
+  // slow network, leaving the qiita.com/juejin.cn gold absent. Bounded by
+  // their 2500ms ceilings like the other waitFor entries.
   const { resultSets, usedBackends } = await fanoutBackends(tasks, max_results, {
-    waitFor: ['wikipedia', 'yahoo-finance', 'naver-news', 'bing-news-rss', 'google-news-rss', 'arxiv'],
+    waitFor: ['wikipedia', 'yahoo-finance', 'naver-news', 'bing-news-rss', 'google-news-rss', 'arxiv', 'qiita', 'juejin'],
   })
   const backendCount = usedBackends.length
 

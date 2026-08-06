@@ -221,6 +221,82 @@ describe('parseGoogleNewsRss', () => {
     expect(results[0].title).toBe('Advancing the price-performance frontier with GPT-5.6')
   })
 
+  // Lever 2a — 24 gold domains added to NEWS_SOURCE_DOMAINS (2026-08-06).
+  // Spellings verified live against the actual zh-CN/ja-JP/en-US feeds.
+  // Before the map, these items fell back to the news.google.com redirect
+  // domain — the gold matcher saw a redirect and the eval query lost hits
+  // (en-news-01/03/05/06/07 3/3 gold misses).
+  it('maps the 24 lever-2a gold source names to their domains', () => {
+    const items = [
+      // zh outlets (headlines must be ≥5 chars — parseGoogleNewsRss skips
+      // shorter titles, which would shift the whole results array)
+      'IT之家最新报道 - IT之家',
+      '最新科技新闻汇总 - 新浪网',
+      '今日国内要闻速览 - 中国新闻网',
+      '最新硬件评测出炉 - cnBeta.COM',
+      // ja outlets
+      'ゲーム新作情報 - ファミ通',
+      '行政デジタル化 - デジタル庁',
+      // EN tech/industry outlets
+      'Japan tech roundup - The Japan Times',
+      'Apple analyst notes - 9to5Mac',
+      'Rumors roundup - MacRumors',
+      'EV charging update - Electrek',
+      'Crypto market wrap - CoinDesk',
+      'Fiber optics deep dive - Light Reading',
+      'Enterprise IT forecast - Gartner',
+      'Hyperscale DC news - Data Center Dynamics',
+      'Starship flight test - NASASpaceflight',
+      'Robotaxi rollout - Waymo',
+      'VR headset review - UploadVR',
+      'VR hardware news - Road to VR',
+      // institutional / governmental
+      'EU digital rulebook - European Commission',
+      'Global health alert - WHO',
+      'Food security report - FAO',
+      'Markets enforcement - SEC',
+      'Consumer tech expo - CES',
+      'Baseball league update - KBO',
+    ]
+    const rss = `<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0">
+<channel>
+${items.map((t, i) => `<item>\n<title>${t}</title>\n<link>https://news.google.com/rss/articles/CBMg${i}?oc=5</link>\n<pubDate>Mon, 04 Aug 2026 10:00:00 GMT</pubDate>\n</item>`).join('\n')}
+</channel>
+</rss>`
+    const results = parseGoogleNewsRss(rss, '뉴스', 30)
+    const expectedDomains = [
+      'ithome.com',
+      'sina.com.cn',
+      'chinanews.com',
+      'cnbeta.com',
+      'famitsu.com',
+      'digital.go.jp',
+      'japantimes.co.jp',
+      '9to5mac.com',
+      'macrumors.com',
+      'electrek.co',
+      'coindesk.com',
+      'lightreading.com',
+      'gartner.com',
+      'datacenterdynamics.com',
+      'nasaspaceflight.com',
+      'waymo.com',
+      'uploadvr.com',
+      'roadtovr.com',
+      'europa.eu',
+      'who.int',
+      'fao.org',
+      'sec.gov',
+      'ces.tech',
+      'koreabaseball.com',
+    ]
+    expect(results.length).toBe(24)
+    for (let i = 0; i < expectedDomains.length; i++) {
+      expect(results[i].domain).toBe(expectedDomains[i])
+    }
+  })
+
   // Phase 6.10 — Korean media source map. hl=ko feeds render the trailing
   // source name in Korean (" - 연합뉴스", " - JTBC", " - 주간조선"); before
   // the map these fell back to the news.google.com redirect domain and got

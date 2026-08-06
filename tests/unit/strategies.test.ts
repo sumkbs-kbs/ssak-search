@@ -306,6 +306,92 @@ describe('Search Strategies — task composition', () => {
       expect(names).toContain('google-news-rss')
     })
 
+    it('routes EN technical queries to the Stack Exchange API + DDG site:MDN (Phase 3a)', () => {
+      // Technical routing must surface the stackoverflow.com gold domain via
+      // the official keyless API (bing ignores site:, DDG 202s) and MDN via
+      // the doc-lookup-gated DDG site: task.
+      const ctx = makeCtx({ focus: 'all', queryType: 'technical', query: 'React useState docs' })
+      const tasks = getStrategy('all').buildTasks(ctx)
+      const names = taskNames(tasks)
+      expect(names).toContain('stack-exchange')
+      expect(names).toContain('ddg-site-mdn')
+      expect(names).toContain('github')
+    })
+
+    it('omits the DDG site:MDN task for EN technical queries WITHOUT doc-lookup markers', () => {
+      const ctx = makeCtx({ focus: 'all', queryType: 'technical', query: 'React performance' })
+      expect(taskNames(getStrategy('all').buildTasks(ctx))).not.toContain('ddg-site-mdn')
+      // stack-exchange still fires — the doc gate applies to MDN only
+      expect(taskNames(getStrategy('all').buildTasks(ctx))).toContain('stack-exchange')
+    })
+
+    it('omits both docs tasks for non-English technical queries (zh/ja gold is community sites)', () => {
+      const ctxKr = makeCtx({ focus: 'all', queryType: 'technical', korean: true, query: 'React 문서' })
+      const krNames = taskNames(getStrategy('all').buildTasks(ctxKr))
+      expect(krNames).not.toContain('stack-exchange')
+      expect(krNames).not.toContain('ddg-site-mdn')
+
+      const ctxZh = makeCtx({ focus: 'all', queryType: 'technical', chinese: true, query: 'react 文档' })
+      const zhNames = taskNames(getStrategy('all').buildTasks(ctxZh))
+      expect(zhNames).not.toContain('stack-exchange')
+      expect(zhNames).not.toContain('ddg-site-mdn')
+    })
+
+    it('routes Japanese technical queries to the Qiita API (S16 zh/ja community gold)', () => {
+      // bing ja-tech queries never return the qiita.com gold domain — the
+      // official keyless Qiita v2 API is the ToS-safe path. Same gate rule as
+      // Stack Exchange: technical queries only, language-specific target.
+      const ctx = makeCtx({ focus: 'all', queryType: 'technical', japanese: true, query: 'React useState チュートリアル' })
+      const names = taskNames(getStrategy('all').buildTasks(ctx))
+      expect(names).toContain('qiita')
+      // no English-only docs tasks
+      expect(names).not.toContain('stack-exchange')
+      expect(names).not.toContain('ddg-site-mdn')
+    })
+
+    it('routes Chinese technical queries to the Juejin API (S16 zh/ja community gold)', () => {
+      // zh-tech-08/09/13 were all-wikipedia pools (NDCG 0.000) — juejin.cn is
+      // the strongest keyless zh tech community gold.
+      const ctx = makeCtx({ focus: 'all', queryType: 'technical', chinese: true, query: 'react hooks 教程' })
+      const names = taskNames(getStrategy('all').buildTasks(ctx))
+      expect(names).toContain('juejin')
+      expect(names).not.toContain('stack-exchange')
+      expect(names).not.toContain('ddg-site-mdn')
+    })
+
+    it('keeps qiita/juejin tasks out of non-technical Japanese/Chinese queries', () => {
+      const ctxJa = makeCtx({ focus: 'all', queryType: 'general', japanese: true, query: '最新のニュース' })
+      expect(taskNames(getStrategy('all').buildTasks(ctxJa))).not.toContain('qiita')
+
+      const ctxZh = makeCtx({ focus: 'all', queryType: 'general', chinese: true, query: '今日新闻' })
+      expect(taskNames(getStrategy('all').buildTasks(ctxZh))).not.toContain('juejin')
+    })
+
+    it('keeps qiita/juejin tasks out of English technical queries (EN gold is SO/MDN)', () => {
+      const ctx = makeCtx({ focus: 'all', queryType: 'technical', query: 'React hooks tutorial' })
+      const names = taskNames(getStrategy('all').buildTasks(ctx))
+      expect(names).toContain('stack-exchange')
+      expect(names).not.toContain('qiita')
+      expect(names).not.toContain('juejin')
+    })
+
+    it('omits both docs tasks for academic queries (useGitHub fires but gate is technical)', () => {
+      // The real gate is queryType === 'technical', NOT useGitHub (which also
+      // fires for academic per getSourcesForQueryType). An academic query must
+      // keep its github task but never get the stack-exchange/ddg-site-mdn tasks.
+      const ctx = makeCtx({ focus: 'all', queryType: 'academic', query: 'transformers paper' })
+      const names = taskNames(getStrategy('all').buildTasks(ctx))
+      expect(names).toContain('github')
+      expect(names).not.toContain('stack-exchange')
+      expect(names).not.toContain('ddg-site-mdn')
+    })
+
+    it('does not route the Stack Exchange API to non-technical queries', () => {
+      const ctx = makeCtx({ focus: 'all', queryType: 'general', query: 'best restaurants' })
+      expect(taskNames(getStrategy('all').buildTasks(ctx))).not.toContain('stack-exchange')
+      expect(taskNames(getStrategy('all').buildTasks(ctx))).not.toContain('ddg-site-mdn')
+    })
+
     it('includes duckduckgo when searxng is not configured', () => {
       const ctx = makeCtx({ focus: 'all' })
       const tasks = getStrategy('all').buildTasks(ctx)

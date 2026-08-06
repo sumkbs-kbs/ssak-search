@@ -377,3 +377,85 @@
   못 가져오는 41건(커버리지 미스)은 랭킹으로 해결 불가 — 백엔드 개선(레버 2) 필요
 - **후속 작업**: NDCG 0.60 검증용 eval:median 재실행 → 뉴스 백엔드(레버 2) → 기술 공식문서(레버 3)
 
+
+### S15: 기술 공식문서 라우팅 — Stack Exchange API + DDG site:MDN (NDCG 0.60 목표 3차 레버, 2026-08-06)
+
+- **분석**: 기술문서 gold(MDN/stackoverflow/nodejs/react.dev 등) 포함 쿼리 79건 중 docs gold 히트 12건(15%)
+  - NDCG=0 17건, NDCG<0.6 40건+ — 전체 500쿼리의 13%
+  - 근본 원인 3종: ① bingSearch가 site: 연산자 미지원(`buildBingYouTubeTask` dead code,
+    site:youtube.com도 0건) ② 어떤 백엔드도 MDN/stackoverflow 미반환 (도메인 키워드 직접 주입에도 0건) ③ 기술 라우팅이 bing+wikipedia+github+hn만 사용
+- **경로 실측** (전부 라이브 검증):
+  - ✅ **Stack Exchange API**(api.stackexchange.com/2.3/search/advanced): HTTP 200, quota 299/300,
+    stackoverflow.com 질문 반환 — 공식·무료·키 불필요·ToS 안전
+  - ❌ **MDN /api/v1/search**: HTTP 200+문서 반환하나 **robots.txt `Disallow: /api/`** — 프로젝트 원칙상 미사용
+  - ⚠️ **DDG site:**(html/lite): 첫 배치 MDN 10/10 성공 후 **202 anti-bot 차단**, 45초 후에도 미회복 —
+    burst 환경 비신뢰, 단일 쿼리 수준에서는 유효
+  - ❌ **MDN /en-US/search?q= HTML**: robots 허용이나 정적 HTML에 결과 없음(JS 렌더링, nav 링크만)
+- **변경** (src/lib/stack-exchange.ts 신규 + backend-tasks.ts + all.ts + 테스트 14건):
+  1. `stackExchangeSearch()` — 공식 API, simplifyQuery(6), 권위 부스트 +0.15, `parseStackExchangeResponse` export
+  2. **쿼터 가드**: keyless 300/day/IP — 모듈 레벨 quotaRemaining, floor 10 도달 시 스킵(500×3 eval 예산 보호), backoff 존중, `resetStackExchangeQuota()` 테스트 훅
+  3. `buildStackExchangeTask` + all.ts 라우팅: **게이트 = queryType==='technical' && EN** (useGitHub 아님 — academic gold는 arxiv/github,
+     zh/ja gold는 zhihu/juejin/qiita 커뮤니티라 영어 SO 오염 방지)
+  4. `ddg-site-mdn` 태스크: EN 기술 + doc-조회 마커(docs/documentation/reference/guide/tutorial/how to 등) 있을 때만 —
+     공유 DDG IP 예산 보호 (주요 duckduckgo 백엔드와 동일 엔드포인트), 타임아웃 6000ms, 실패 시 [] 무해
+- **라이브 검증** (실제 파이프라인 executeSearch): React useState 3건, TypeScript generics 2건+MDN 1건, debounce 5건 stackoverflow.com 풀 반영
+- **테스트**: stack-exchange.test.ts 10건(파서/쿼터/가용성) + strategies.test.ts 4건(게이트 조건 전부)
+  유닛 전체 **1,289건 / 69파일 통과**, typecheck 0 에러
+- **한계**: ① MDN은 DDG site:에 의존 — eval burst에서 202 차단 시 MDN gold 수익은 제한적
+  (robots 준수 대가). ② nodejs.org/postgresql.org 등 나머지 docs gold는 아직 라우팅 없음. ③ stack-exchange
+  쿼터 300/day는 eval 3회 median 실행을 커버하나 일일 다회 실행 시 소진 가능
+- **잔여**: 레버 3 잔여 — zh/ja 기술 커뮤니티 gold(zhihu/juejin/qiita), nodejs.org 등 추가 docs 도메인, lt/adv 스팸 필터
+
+### S16: zh/ja 기술 커뮤니티 gold 라우팅 — Qiita v2 + Juejin search API (2026-08-06)
+
+- **분석**: zh/ja 기술 gold는 zhihu/juejin.cn(csdn/segmentfault/cnblogs) + qiita.com(zenn.dev) 커뮤니티 도메인인데
+  어떤 기존 백엔드도 반환하지 못함 — bing zh/ja 기술 쿼리는 zh.wikipedia.org + github repo만 반환
+  (zh-tech-08/09/13 NDCG 0.000, top8이 전부 zh.wikipedia). zhihu.com 검색은 403/400 anti-bot.
+- **경로 실측** (전부 라이브 검증):
+  - ✅ **Qiita v2 API** (qiita.com/api/v2/items?query=): HTTP 200 + 53KB, 5건 전부 qiita.com 도메인 — 공식·무료·키 불필요
+  - ✅ **Juejin search API** (api.juejin.cn/search_api/v1/search?query=): HTTP 200 + data[..] 88KB,
+    result_model.article_info.{link_url, article_id} → juejin.cn/post/<id> — 브라우저가 쓰는 공개 검색 엔드포인트
+  - ❌ **zhihu**: 400(인증) / 403(HTML anti-bot) — bing 경로 의존 유지
+- **구현**:
+  1. `src/lib/community-search.ts` (신규) — qiitaSearch/juejinSearch + 파서 export, +0.15 커뮤니티 권위 부스트
+     - **gold-domain 규칙**: article_id 있으면 항상 juejin.cn/post/<id> 우선 (link_url은 off-site 집계 기사
+       가능 — 외부 도메인 주입 차단), qiita 응답엔 실제 qiita.com URL 그대로
+     - **Qiita quota 가드**: 무인증 60/hour → 소프트 플로어 55 + 슬라이딩 윈도우 리셋 (stack-exchange 패턴)
+     - juejin err_no≠0 (라우팅/anti-bot 오류) 가드
+  2. `backend-tasks.ts` — buildQiitaTask/buildJuejinTask (이름 'qiita'/'juejin', maxResults 5)
+  3. `all.ts` — 기술 라우팅에 zh→juejin, ja→qiita 연결 (게이트 = queryType==='technical', stack-exchange와 동일 규칙)
+  4. `orchestrator.ts` — fanout waitFor에 'qiita','juejin' 추가 (arxiv 전례: 800ms early-exit로 결과 폐기 방지)
+- **테스트**: community-search.test.ts 14건 + strategies.test.ts 4건 (off-domain link_url 드롭, err_no≠0,
+  qiita quota 가드 포함), 유닛 전체 1,305건 통과, typecheck 0 에러
+- **라이브 파이프라인 검증** (executeSearch, EVAL_MODE):
+  - zh-tech-08 (React Hooks 使用指南): juejin.cn 2건 (기존 all-wikipedia → 개선)
+  - zh-tech-13 (前端性能优化实践): juejin.cn 2건 + zhihu 1건
+  - ja-tech-01 (React チュートリアル): qiita.com 3건, backends 'bing+wikipedia+github+qiita'
+  - ja-tech-10 (TypeScript 入門): qiita.com 4건 + zenn.dev 1건
+- **한계**: zhihu/csdn/segmentfault/cnblogs/zenn.dev는 무료 공개 API 없음 — bing 경로 의존.
+  Qiita 무인증 60/hour 한도 내에서만 동작 (소프트 플로어 55).
+  전체 NDCG 효과는 eval:median 재실행(약 60분)으로 측정 필요.
+
+### S17: 뉴스 gold 소스 맵 확장 — NEWS_SOURCE_DOMAINS 24개 추가 (레버 2a, 2026-08-06)
+
+- **문제**: Google News RSS 파서(parseGoogleNewsRss)는 title-suffix "- SourceName"을
+  NEWS_SOURCE_DOMAINS 맵으로 도메인 해석. 맵에 없는 gold는 news.google.com 리디렉션
+  도메인으로 폴백 → eval gold 매처가 미스 (en-news-01/03/05/06/07 gold 3/3 전부 미스,
+  zh-news/ja-news gold 포함). baseline 분석: 뉴스 gold 106개 도메인 중 미매핑 60여 개
+  (ithome.com 12회, sina.com.cn/chinanews.com/cnbeta.com 10회, japantimes.co.jp 8회 등)
+- **경로 실측** (라이브 zh-CN/ja-JP/en-US 피드):
+  - ✅ The Japan Times / 9to5Mac / MacRumors / Electrek / ファミ通 / デジタル庁 /
+    cnBeta.COM / 新浪网 / chinanews.com.cn / ecns.cn — 실제 suffix 확인
+  - ⚠️ it之家 / 中国新闻网 — 라이브 프로브에 미등장 (가정 스펠링, 주석 명시)
+- **구현**: `src/lib/en-news-search.ts` NEWS_SOURCE_DOMAINS에 gold 24개 추가
+  (zh: it之家/新浪网/新浪新闻/中国新闻网/chinanews(.com.cn)/ecns(.cn)/cnbeta ·
+   ja: ファミ通/デジタル庁 · EN: the japan times/9to5mac/macrumors/electrek/coindesk/
+   light reading/gartner/data center dynamics/nasaspaceflight/waymo/uploadvr/road to vr ·
+   기관: european commission→europa.eu, who, fao, sec, ces, kbo)
+  - 짧은 영문 키('sec','who','kbo','ces')는 lowercase exact-match — Google은 조직명 그대로 렌더
+  - n.news.naver.com / sports.naver.com 제외 (naver-news 백엔드 전용 도메인, Google suffix 아님)
+- **테스트**: en-news-search.test.ts에 24개 매핑 1:1 검증 추가 (headline ≥5자 제약 준수),
+  유닛 전체 1,310건 통과, typecheck 0 에러
+- **한계**: 매핑은 suffix가 정확히 일치할 때만 동작 (Google 렌더링 변형은 미커버),
+  it之家/中国新闻网는 가정 스펠링이라 실제 피드에서 매칭 안 될 수 있음.
+  전체 NDCG 효과는 eval:median 재실행(~60분)으로 측정 필요.

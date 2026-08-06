@@ -50,7 +50,9 @@ const HOST_CONFIGS: Record<string, HostConfig> = {
   'www.bing.com': { maxConcurrent: 3, failureThreshold: 5, resetTimeoutMs: 60_000, rateLimitPerMinute: 60 },
   'html.duckduckgo.com': { maxConcurrent: 1, failureThreshold: 3, resetTimeoutMs: 120_000, rateLimitPerMinute: 20 },
   'search.naver.com': { maxConcurrent: 3, failureThreshold: 5, resetTimeoutMs: 60_000, rateLimitPerMinute: 80 },
-  'en.wikipedia.org': { maxConcurrent: 3, failureThreshold: 5, resetTimeoutMs: 30_000, rateLimitPerMinute: 80 },
+  // Shared wikipedia budget — ko/zh/ja/… subdomains hit the same upstream IP
+  // and burst-ban together, so they must share ONE rate window.
+  'en.wikipedia.org': { maxConcurrent: 3, failureThreshold: 5, resetTimeoutMs: 30_000, rateLimitPerMinute: 100 },
   'api.github.com': { maxConcurrent: 2, failureThreshold: 3, resetTimeoutMs: 60_000, rateLimitPerMinute: 100 },
   'hacker-news.firebaseio.com': { maxConcurrent: 3, failureThreshold: 5, resetTimeoutMs: 30_000, rateLimitPerMinute: 100 },
   'www.reddit.com': { maxConcurrent: 2, failureThreshold: 5, resetTimeoutMs: 60_000, rateLimitPerMinute: 40 },
@@ -65,7 +67,17 @@ const DEFAULT_CONFIG: HostConfig = {
   rateLimitPerMinute: 60,
 }
 
+/** True for any Wikipedia language subdomain — they share one upstream IP budget. */
+function isWikipediaHost(host: string): boolean {
+  return host === 'wikipedia.org' || host.endsWith('.wikipedia.org')
+}
+
 function getConfig(host: string): HostConfig {
+  // All Wikipedia language subdomains (en/ko/zh/ja/…) resolve to the same
+  // upstream IP and burst-ban together (~17 rapid requests → 429 for 60s+,
+  // verified 2026-08-05), so they share ONE rate budget regardless of which
+  // language wiki is being queried.
+  if (isWikipediaHost(host)) return HOST_CONFIGS['en.wikipedia.org']
   return HOST_CONFIGS[host] ?? DEFAULT_CONFIG
 }
 
@@ -105,6 +117,31 @@ function getLocalCircuit(host: string) {
   return c
 }
 
+/** Eval harness: bypass circuit breaker + rate limit so successive queries don't poison each other. */
+function isEvalMode(env: AppBindings | undefined): boolean {
+  return env?.EVAL_MODE === 'true' || env?.EVAL_MODE === '1'
+}
+
+/**
+ * Shared wikipedia rate-window key. All language subdomains hit the same
+ * upstream IP and burst-ban together, so canRequest() records and
+ * getRateLimitStatus() must look up ONE window ('wikipedia.org') regardless
+ * of which language wiki the URL points at.
+ */
+const WIKIPEDIA_RATE_KEY = 'wikipedia.org'
+
+/**
+ * Clear all module-level local-fallback state. Exported for tests — unit
+ * tests exercise the wikipedia 100/min window and circuit breakers, and each
+ * test must start from a clean slate (otherwise one test's accumulated
+ * timestamps/failures leak into the next and assertions become order-dependent).
+ */
+export function __resetRateLimiterStateForTests(): void {
+  LOCAL_INFLIGHT.clear()
+  LOCAL_CIRCUITS.clear()
+  LOCAL_RATE_WINDOWS.clear()
+}
+
 // ============================================================
 // DO Client Wrapper
 // ============================================================
@@ -118,10 +155,17 @@ interface RateLimiterDOClient {
   forceOpen(host: string): Promise<void>
 }
 
-let doClient: RateLimiterDOClient | null = null
-
+/**
+ * Create a fresh DO client per call — never cache the stub at module level.
+ *
+ * Durable Object stubs are bound to the request context that created them;
+ * reusing a cached stub from a later request throws "Cannot perform I/O on
+ * behalf of a different request" (verified 2026-08-05: the second /api/health
+ * in the same isolate where this module cached the stub returned 500 with an
+ * RpcProperty error). idFromName + get are cheap metadata lookups.
+ */
 function getDOClient(env: AppBindings): RateLimiterDOClient | null {
-  if (doClient) return doClient
+  if (isEvalMode(env)) return null
   if (!env.RATE_LIMITER) {
     logger.warn('[rate-limiter] RATE_LIMITER binding not available — using local fallback')
     return null
@@ -130,8 +174,7 @@ function getDOClient(env: AppBindings): RateLimiterDOClient | null {
     // Single DO instance named "global" coordinates all hosts
     const id = env.RATE_LIMITER.idFromName('global')
     const stub = env.RATE_LIMITER.get(id)
-    doClient = stub as unknown as RateLimiterDOClient
-    return doClient
+    return stub as unknown as RateLimiterDOClient
   } catch (e) {
     logger.warn('[rate-limiter] Failed to create DO client:', { error: toError(e) })
     return null
@@ -156,15 +199,49 @@ export async function canRequest(env: AppBindings, url: string): Promise<boolean
   // Local fallback
   const circuit = getLocalCircuit(host)
   const now = Date.now()
-  if (circuit.tripped) {
+  // EVAL_MODE bypasses the circuit breaker entirely: the harness paces queries
+  // itself (EVAL_QUERY_DELAY_MS) and must measure search QUALITY, not whether
+  // a single 429 burst from one run poisoned the module-level LOCAL_CIRCUITS
+  // for every subsequent query (the types.ts contract: EVAL_MODE disables both
+  // the circuit breaker AND the per-host rate limit).
+  if (!isEvalMode(env) && circuit.tripped) {
     const elapsed = now - circuit.openedAt
     if (elapsed < getBackoffMs(circuit.tripCount)) return false
     if (circuit.probeInFlight) return false
     circuit.probeInFlight = true
     circuit.failures = 0
   }
+
+  // Concurrency limit FIRST — mirrors RateLimiterDO.canRequest's check order
+  // (concurrency → rate window). A request rejected by concurrency must not
+  // consume a rate-window slot, or the local fallback and the DO would drift.
   const current = LOCAL_INFLIGHT.get(host) ?? 0
-  return current < config.maxConcurrent
+  if (current >= config.maxConcurrent) {
+    return false
+  }
+
+  // Per-minute sliding-window rate limit (mirrors RateLimiterDO.canRequest).
+  // Enforced in the local fallback ONLY for wikipedia hosts: local dev runs
+  // without the DO binding, and wikipedia is the one backend that burst-bans
+  // under sustained sequential load (17 rapid requests → 429 for a minute+).
+  // Other hosts keep concurrency-only enforcement, preserving eval dynamics.
+  //
+  // SKIPPED in eval mode: the eval harness supplies its OWN pacing
+  // (EVAL_QUERY_DELAY_MS, default 400ms between queries) and passes EVAL_MODE
+  // via runner.ts, so a per-minute window here would starve later queries
+  // (wikipedia contributes 2-6 requests per query; a 500×3 eval dwarfs the
+  // 100/min budget and would zero out wikipedia for the rest of the run — the
+  // exact regression seen when this check lacked the isEvalMode guard).
+  if (!isEvalMode(env) && config.rateLimitPerMinute && isWikipediaHost(host)) {
+    const window = LOCAL_RATE_WINDOWS.get(WIKIPEDIA_RATE_KEY) ?? []
+    const recent = window.filter((ts) => ts > now - 60_000)
+    if (recent.length >= config.rateLimitPerMinute) {
+      return false
+    }
+    LOCAL_RATE_WINDOWS.set(WIKIPEDIA_RATE_KEY, [...recent, now])
+  }
+
+  return true
 }
 
 /** Mark a request as started. */
@@ -192,6 +269,13 @@ export async function release(env: AppBindings, url: string, success: boolean): 
   LOCAL_INFLIGHT.set(host, Math.max(0, current - 1))
 
   const circuit = getLocalCircuit(host)
+  // EVAL_MODE: do not accumulate failures or trip circuits — the harness paces
+  // queries itself and a tripped module-level circuit would zero out a backend
+  // for the rest of the run (wikipedia en-fact-01 regression).
+  if (isEvalMode(env)) {
+    if (circuit.probeInFlight) circuit.probeInFlight = false
+    return
+  }
   if (circuit.probeInFlight) {
     circuit.probeInFlight = false
     if (success) {
@@ -308,7 +392,11 @@ export async function getRateLimitStatus(env: AppBindings, host: string): Promis
   // Local fallback
   const config = getConfig(host)
   const now = Date.now()
-  const window = LOCAL_RATE_WINDOWS.get(host) ?? []
+  // wikipedia hosts must read the SHARED window — canRequest() records under
+  // 'wikipedia.org' for every language subdomain, so looking up the raw host
+  // would report a full 100/min budget that the shared window never consumed.
+  const windowHost = isWikipediaHost(host) ? WIKIPEDIA_RATE_KEY : host
+  const window = LOCAL_RATE_WINDOWS.get(windowHost) ?? []
   const recent = window.filter((ts) => ts > now - 60_000)
   const remaining = Math.max(0, (config.rateLimitPerMinute ?? 60) - recent.length)
   const resetAt = recent.length > 0 ? recent[0] + 60_000 : now + 60_000

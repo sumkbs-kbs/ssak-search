@@ -10,14 +10,17 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 // Clear the module-level state between tests
 vi.resetModules()
 
-import { canRequest, acquire, release, getBackendHealth, getRateLimitStatus } from '../../src/lib/rate-limiter'
+import { canRequest, acquire, release, getBackendHealth, getRateLimitStatus, __resetRateLimiterStateForTests } from '../../src/lib/rate-limiter'
 import type { AppBindings } from '../../src/types'
 
 const mockEnv: AppBindings = {} as AppBindings
 
 describe('Rate Limiter — Local Fallback', () => {
   beforeEach(() => {
-    // We test the local fallback path (no RATE_LIMITER binding)
+    // Fresh module state per test: the wikipedia 100/min sliding window and
+    // circuit counters are module-level Maps, and one test's accumulated
+    // timestamps must not leak into the next (order-independent assertions).
+    __resetRateLimiterStateForTests()
   })
 
   describe('canRequest', () => {
@@ -109,6 +112,155 @@ describe('Rate Limiter — Local Fallback', () => {
       const status = await getRateLimitStatus(mockEnv, 'unknown-host.com')
       expect(status.allowed).toBe(true)
       expect(status.remaining).toBe(60) // default rateLimitPerMinute
+    })
+  })
+
+  describe('wikipedia per-minute rate limit (local fallback, en-fact-01 fix)', () => {
+    it('rejects requests beyond the shared 100/min wikipedia budget across languages', async () => {
+      // en.wikipedia.org config: rateLimitPerMinute: 100 — all language wikis
+      // share this one window (they hit the same upstream IP and burst-ban
+      // together: ~17 rapid requests → 429 for 60s+).
+      for (let i = 0; i < 100; i++) {
+        const allowed = await canRequest(mockEnv, `https://en.wikipedia.org/wiki/Test_${i}`)
+        expect(allowed).toBe(true)
+      }
+      // The 101st request — on ANY language subdomain — must be rejected.
+      const koAllowed = await canRequest(mockEnv, 'https://ko.wikipedia.org/wiki/한국은행')
+      expect(koAllowed).toBe(false)
+      const zhAllowed = await canRequest(mockEnv, 'https://zh.wikipedia.org/wiki/量子计算')
+      expect(zhAllowed).toBe(false)
+    })
+
+    it('does NOT rate-limit non-wikipedia hosts in the local fallback', async () => {
+      // bing's config is 60/min, but local-fallback enforcement is deliberately
+      // wikipedia-only — other backends keep concurrency-only behavior to
+      // preserve eval/local dynamics (bing does not burst-ban like wikipedia).
+      for (let i = 0; i < 70; i++) {
+        const allowed = await canRequest(mockEnv, `https://www.bing.com/search?q=test${i}`)
+        expect(allowed).toBe(true)
+      }
+    })
+
+    it('bypasses the wikipedia window in EVAL_MODE (harness paces queries itself)', async () => {
+      // The eval harness supplies its own 400ms pacing (EVAL_QUERY_DELAY_MS)
+      // and sets EVAL_MODE — a second per-minute window would starve later
+      // queries of wikipedia entirely (500×3 eval dwarfs the 100/min budget).
+      const evalEnv = { EVAL_MODE: 'true' } as AppBindings
+      for (let i = 0; i < 150; i++) {
+        const allowed = await canRequest(evalEnv, `https://en.wikipedia.org/wiki/Test_${i}`)
+        expect(allowed).toBe(true)
+      }
+      // Language subdomains are equally unthrottled under EVAL_MODE
+      const koAllowed = await canRequest(evalEnv, 'https://ko.wikipedia.org/wiki/한국은행')
+      expect(koAllowed).toBe(true)
+    })
+
+    it('does not trip the circuit breaker in EVAL_MODE (en-fact-01 fix)', async () => {
+      // A burst of upstream 429s must NOT trip the module-level circuit in the
+      // eval process — otherwise every later query silently loses that backend
+      // (the exact en-fact-01 regression: 'Upstream unavailable (circuit open
+      // or at capacity)' after a wikipedia 429 burst).
+      const evalEnv = { EVAL_MODE: 'true' } as AppBindings
+      for (let i = 0; i < 10; i++) {
+        await acquire(evalEnv, 'https://en.wikipedia.org/wiki/Test_circuit')
+        await release(evalEnv, 'https://en.wikipedia.org/wiki/Test_circuit', false)
+      }
+      // Failure threshold is 5 — without the eval guard this would be tripped
+      const allowed = await canRequest(evalEnv, 'https://en.wikipedia.org/wiki/Test_circuit')
+      expect(allowed).toBe(true)
+    })
+  })
+
+  describe('wikipedia suffix sharing — reverse direction & shared status', () => {
+    it('shares the budget in BOTH directions (ko/zh consumption blocks en too)', async () => {
+      // Burn the full 100/min budget from the KO subdomain.
+      for (let i = 0; i < 100; i++) {
+        const allowed = await canRequest(mockEnv, `https://ko.wikipedia.org/wiki/한국어_${i}`)
+        expect(allowed).toBe(true)
+      }
+      // en.wikipedia.org must now be rejected — one shared upstream budget.
+      const enAllowed = await canRequest(mockEnv, 'https://en.wikipedia.org/wiki/Quantum_computing')
+      expect(enAllowed).toBe(false)
+      // And a bare wikipedia.org hostname shares the same window.
+      const bareAllowed = await canRequest(mockEnv, 'https://wikipedia.org/wiki/Test')
+      expect(bareAllowed).toBe(false)
+      // A sub-subdomain (ja) is equally throttled.
+      const jaAllowed = await canRequest(mockEnv, 'https://ja.wikipedia.org/wiki/量子コンピュータ')
+      expect(jaAllowed).toBe(false)
+    })
+
+    it('getRateLimitStatus reports the SHARED wikipedia window for any language subdomain', async () => {
+      // Consume exactly 30 of the 100/min shared budget via ko.wikipedia.org.
+      for (let i = 0; i < 30; i++) {
+        await canRequest(mockEnv, `https://ko.wikipedia.org/wiki/항목_${i}`)
+      }
+      // en.wikipedia.org must report 70 remaining — the shared window, not 100.
+      const enStatus = await getRateLimitStatus(mockEnv, 'en.wikipedia.org')
+      expect(enStatus.remaining).toBe(70)
+      expect(enStatus.allowed).toBe(true)
+      // Bare wikipedia.org reports the same shared window.
+      const bareStatus = await getRateLimitStatus(mockEnv, 'wikipedia.org')
+      expect(bareStatus.remaining).toBe(70)
+      // zh subdomain too.
+      const zhStatus = await getRateLimitStatus(mockEnv, 'zh.wikipedia.org')
+      expect(zhStatus.remaining).toBe(70)
+    })
+
+    it('getRateLimitStatus returns a full budget for untouched non-wikipedia hosts', async () => {
+      // bing config is 60/min locally — and it is NOT part of the wikipedia
+      // shared window, so it must report an untouched 60.
+      const bingStatus = await getRateLimitStatus(mockEnv, 'www.bing.com')
+      expect(bingStatus.remaining).toBe(60)
+    })
+  })
+
+  describe('wikipedia sliding-window expiry (local fallback)', () => {
+    it('re-admits requests after the 60s window slides past', async () => {
+      // 1. Burn the full budget at time T0.
+      vi.useFakeTimers()
+      vi.setSystemTime(1_000_000)
+      try {
+        for (let i = 0; i < 100; i++) {
+          const allowed = await canRequest(mockEnv, `https://en.wikipedia.org/wiki/Slide_${i}`)
+          expect(allowed).toBe(true)
+        }
+        // Budget exhausted — next request rejected at T0.
+        expect(await canRequest(mockEnv, 'https://en.wikipedia.org/wiki/Slide_extra')).toBe(false)
+
+        // 2. 59s later still rejected (oldest timestamp still inside window).
+        vi.setSystemTime(1_000_000 + 59_000)
+        expect(await canRequest(mockEnv, 'https://en.wikipedia.org/wiki/Slide_extra')).toBe(false)
+
+        // 3. After the oldest timestamp ages past 60s, the window slides and
+        //    a new request is admitted again.
+        vi.setSystemTime(1_000_000 + 60_001)
+        const allowed = await canRequest(mockEnv, 'https://en.wikipedia.org/wiki/Slide_extra')
+        expect(allowed).toBe(true)
+      } finally {
+        vi.useRealTimers()
+      }
+    })
+
+    it('does not accumulate stale timestamps forever (filter prunes expired entries)', async () => {
+      vi.useFakeTimers()
+      vi.setSystemTime(1_000_000)
+      try {
+        // Consume 10 requests at T0.
+        for (let i = 0; i < 10; i++) {
+          await canRequest(mockEnv, `https://en.wikipedia.org/wiki/Prune_${i}`)
+        }
+        // Status before expiry: 90 remaining.
+        expect((await getRateLimitStatus(mockEnv, 'en.wikipedia.org')).remaining).toBe(90)
+
+        // Advance past the window — the 10 timestamps expire, leaving 100 again.
+        vi.setSystemTime(1_000_000 + 61_000)
+        expect((await getRateLimitStatus(mockEnv, 'en.wikipedia.org')).remaining).toBe(100)
+
+        // And requests are admitted again (the window was actually pruned).
+        expect(await canRequest(mockEnv, 'https://en.wikipedia.org/wiki/Prune_fresh')).toBe(true)
+      } finally {
+        vi.useRealTimers()
+      }
     })
   })
 })

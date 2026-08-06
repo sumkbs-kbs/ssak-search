@@ -11,6 +11,9 @@ export function formatReport(report: EvalReport, regressions: RegressionDiff[]):
   lines.push('='.repeat(60))
   lines.push('')
   lines.push(`  Timestamp:     ${report.timestamp}`)
+  if (report.runs && report.runs.count > 1) {
+    lines.push(`  Mode:          MEDIAN of ${report.runs.count} runs (robust to backend noise)`)
+  }
   lines.push(`  Total queries: ${report.totalQueries}`)
   lines.push(`  Passed:        ${report.passedQueries}`)
   lines.push(`  Failed:        ${report.failedQueries}`)
@@ -104,6 +107,9 @@ export function formatReportSummary(report: EvalReport, regressions: RegressionD
   lines.push('| Metric | Value |')
   lines.push('|--------|-------|')
   lines.push(`| **Timestamp** | ${report.timestamp} |`)
+  if (report.runs && report.runs.count > 1) {
+    lines.push(`| **Mode** | Median of ${report.runs.count} runs (${report.runs.timestamps.length} source reports) |`)
+  }
   lines.push(`| **Total Queries** | ${report.totalQueries} |`)
   lines.push(`| **Passed** | ${report.passedQueries} |`)
   lines.push(`| **Failed** | ${report.failedQueries} |`)

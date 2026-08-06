@@ -104,6 +104,13 @@ export interface EvalReport {
   cache?: CacheHitMetrics
   /** Aggregate ranking-quality metrics (averaged over queries with gold standards) */
   ranking?: AggregateRankingMetrics
+  /** Multi-run (--runs N) median-aggregation metadata. Present when the report
+   *  was produced by computeMedianReport() over N single runs; timestamps
+   *  identify each source run. */
+  runs?: {
+    count: number
+    timestamps: string[]
+  }
   results: EvalResult[]
 }
 

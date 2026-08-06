@@ -4,7 +4,7 @@
  * Tests the pure helper functions exported from orchestrator.ts:
  * isKoreanQuery, isChineseQuery, detectWikiLanguage, cleanChineseQuery,
  * normalizeUrlForDedup, normalizeTitleForDedup, mergeAndDeduplicate,
- * toBingTimeRange.
+ * toBingTimeRange, isEvalMode.
  */
 
 import { describe, it, expect } from 'vitest'
@@ -17,8 +17,40 @@ import {
   normalizeTitleForDedup,
   mergeAndDeduplicate,
   toBingTimeRange,
+  isEvalMode,
 } from '../../src/lib/orchestrator'
 import type { SearchResult } from '../../src/types'
+
+// ============================================================
+// isEvalMode (S9 — knowledge-panel skip gate + rate-limiter bypass)
+// ============================================================
+
+describe('isEvalMode', () => {
+  it('returns true for EVAL_MODE=true (the eval harness flag)', () => {
+    expect(isEvalMode({ EVAL_MODE: 'true' })).toBe(true)
+  })
+
+  it('returns true for EVAL_MODE=1 (boolean-string variant)', () => {
+    expect(isEvalMode({ EVAL_MODE: '1' })).toBe(true)
+  })
+
+  it('returns false when EVAL_MODE is unset', () => {
+    expect(isEvalMode({})).toBe(false)
+    expect(isEvalMode(undefined)).toBe(false)
+  })
+
+  it('returns false for non-eval values', () => {
+    expect(isEvalMode({ EVAL_MODE: 'false' })).toBe(false)
+    expect(isEvalMode({ EVAL_MODE: '0' })).toBe(false)
+  })
+
+  it('matches the rate-limiter isEvalMode judgment (shared flag semantics)', () => {
+    // The orchestrator skips the knowledge panel and the rate limiter bypasses
+    // its wikipedia window/circuit under the SAME flag — keep them in sync or
+    // eval runs would either trip wikipedia 429s or starve the panel path.
+    expect(isEvalMode({ EVAL_MODE: 'true' })).toBe(isEvalMode({ EVAL_MODE: '1' }))
+  })
+})
 
 // ============================================================
 // isKoreanQuery

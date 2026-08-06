@@ -179,4 +179,55 @@ describe('RateLimiterDO self-healing circuit breaker (D.2)', () => {
     // Probe alarm scheduled
     expect(doState.storage.setAlarm).toHaveBeenCalled()
   })
+
+  // ── wikipedia suffix sharing (S9: ko/zh/ja share one upstream IP budget) ──
+
+  it('shares ONE rate window across all wikipedia language subdomains', async () => {
+    instantiate()
+    // Burn the 100/min budget from the ko subdomain.
+    for (let i = 0; i < 100; i++) {
+      const res = await doInstance.canRequest(`ko.wikipedia.org`)
+      expect(res.allowed).toBe(true)
+    }
+    // en.wikipedia.org must now be rate-limited — shared window, not a fresh one.
+    const enRes = await doInstance.canRequest('en.wikipedia.org')
+    expect(enRes.allowed).toBe(false)
+    expect(enRes.reason).toBe('rate_limit')
+    // ja subdomain equally throttled.
+    const jaRes = await doInstance.canRequest('ja.wikipedia.org')
+    expect(jaRes.allowed).toBe(false)
+    // A non-wikipedia host is unaffected (still has its own untouched window).
+    const bingRes = await doInstance.canRequest('www.bing.com')
+    expect(bingRes.allowed).toBe(true)
+  })
+
+  it('getRateLimitStatus reports the SHARED wikipedia window for any language subdomain', async () => {
+    instantiate()
+    // Consume exactly 30 from the shared window via zh.wikipedia.org.
+    for (let i = 0; i < 30; i++) {
+      await doInstance.canRequest(`zh.wikipedia.org`)
+    }
+    const enStatus = await doInstance.getRateLimitStatus('en.wikipedia.org')
+    expect(enStatus.remaining).toBe(70)
+    const bareStatus = await doInstance.getRateLimitStatus('wikipedia.org')
+    expect(bareStatus.remaining).toBe(70)
+  })
+
+  it('slides the shared wikipedia window after 60s', async () => {
+    instantiate()
+    for (let i = 0; i < 100; i++) {
+      await doInstance.canRequest(`en.wikipedia.org`)
+    }
+    // Exhausted at T0.
+    expect((await doInstance.canRequest('ko.wikipedia.org')).allowed).toBe(false)
+
+    // 59s later still exhausted.
+    vi.advanceTimersByTime(59_000)
+    expect((await doInstance.canRequest('ko.wikipedia.org')).allowed).toBe(false)
+
+    // After the oldest timestamp slides past 60s, a new request is admitted.
+    vi.advanceTimersByTime(2_000)
+    const res = await doInstance.canRequest('ja.wikipedia.org')
+    expect(res.allowed).toBe(true)
+  })
 })

@@ -146,8 +146,35 @@ export class RateLimiterDO extends DurableObject<Env> {
     })
   }
 
+  /**
+   * Canonical wikipedia window key: every language subdomain
+   * (en/ko/zh/ja/…) shares ONE rate window because they resolve to the same
+   * upstream IP and burst-ban together. Mirrors rate-limiter.ts's
+   * WIKIPEDIA_RATE_KEY so the DO and the local fallback behave identically.
+   */
+  private static readonly WIKIPEDIA_RATE_KEY = 'wikipedia.org'
+
+  /** True for any Wikipedia language subdomain — they share one upstream IP budget. */
+  private isWikipediaHost(host: string): boolean {
+    return host === 'wikipedia.org' || host.endsWith('.wikipedia.org')
+  }
+
   private getConfig(host: string): HostConfig {
+    // All Wikipedia language subdomains (en/ko/zh/ja/…) share one upstream IP
+    // and burst-ban together — give them ONE shared budget (mirrors the local
+    // fallback in rate-limiter.ts).
+    if (this.isWikipediaHost(host)) {
+      return HOST_CONFIGS['en.wikipedia.org']
+    }
     return HOST_CONFIGS[host] ?? DEFAULT_HOST_CONFIG
+  }
+
+  /** Window storage key for a host — wikipedia subdomains collapse to one key. */
+  private rateWindowKey(host: string): string {
+    if (this.isWikipediaHost(host)) {
+      return RateLimiterDO.WIKIPEDIA_RATE_KEY
+    }
+    return host
   }
 
   private getCircuit(host: string): CircuitState {
@@ -199,7 +226,8 @@ export class RateLimiterDO extends DurableObject<Env> {
 
     // Rate limit (sliding window per minute)
     if (config.rateLimitPerMinute) {
-      const window = this.state.rateLimitWindows.get(host) ?? []
+      const windowKey = this.rateWindowKey(host)
+      const window = this.state.rateLimitWindows.get(windowKey) ?? []
       const windowStart = now - 60_000
       const recent = window.filter((ts) => ts > windowStart)
       if (recent.length >= config.rateLimitPerMinute) {
@@ -210,7 +238,7 @@ export class RateLimiterDO extends DurableObject<Env> {
         return { allowed: false, reason: 'rate_limit', retryAfter }
       }
       // Update window
-      this.state.rateLimitWindows.set(host, [...recent, now])
+      this.state.rateLimitWindows.set(windowKey, [...recent, now])
     }
 
     await this.persist()
@@ -388,7 +416,8 @@ export class RateLimiterDO extends DurableObject<Env> {
   async getRateLimitStatus(host: string): Promise<RateLimitResult> {
     const config = this.getConfig(host)
     const now = Date.now()
-    const window = this.state.rateLimitWindows.get(host) ?? []
+    const windowKey = this.rateWindowKey(host)
+    const window = this.state.rateLimitWindows.get(windowKey) ?? []
     const recent = window.filter((ts) => ts > now - 60_000)
     const remaining = Math.max(0, (config.rateLimitPerMinute ?? 60) - recent.length)
     const resetAt = recent.length > 0 ? recent[0] + 60_000 : now + 60_000

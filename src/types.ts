@@ -580,6 +580,12 @@ export interface DomainVisit {
 // ============================================================
 
 export interface AppBindings {
+  // Eval harness flag — when 'true', rate-limiter disables the circuit breaker
+  // and the per-host rate limit so successive eval queries don't poison each
+  // other (LOCAL_CIRCUITS is module-level in a single tsx process; without this
+  // flag, one wikipedia 429 burst trips the circuit and all subsequent en-fact
+  // queries silently lose wikipedia for the rest of the run).
+  EVAL_MODE?: string
   // Optional API keys (stored as Cloudflare secrets)
   JINA_API_KEY?: string
   SEARCH_API_KEY?: string

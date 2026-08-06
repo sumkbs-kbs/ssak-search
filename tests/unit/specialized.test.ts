@@ -13,7 +13,7 @@ vi.mock('../../src/lib/util', async (importOriginal) => {
   return { ...actual, fetchWithTimeout: (...args: unknown[]) => mockFetchWithTimeout(...args) }
 })
 
-import { detectQueryType, getSourcesForQueryType, wikipediaSearch, githubSearch, hackerNewsSearch, arxivSearch, redditSearch, extractTimelineFromClaims, extractStatsFromClaims, fetchDbpediaEntity, getKnowledgeGraph } from '../../src/lib/specialized'
+import { detectQueryType, getSourcesForQueryType, wikipediaSearch, clearWikipediaCache, githubSearch, hackerNewsSearch, arxivSearch, redditSearch, extractTimelineFromClaims, extractStatsFromClaims, fetchDbpediaEntity, getKnowledgeGraph } from '../../src/lib/specialized'
 
 // ============================================================
 // detectQueryType — pure function, many edge cases
@@ -71,12 +71,42 @@ describe('detectQueryType', () => {
     expect(detectQueryType('recent updates from Google')).toBe('news')
   })
 
+  it('detects Korean news queries (Phase P1 — 한국어 뉴스 마커 추가)', () => {
+    expect(detectQueryType('AI 최신 뉴스')).toBe('news')
+    expect(detectQueryType('삼성전자 뉴스')).toBe('news')
+    expect(detectQueryType('오늘의 속보')).toBe('news')
+    expect(detectQueryType('정치 보도')).toBe('news')
+    expect(detectQueryType('AI 기사')).toBe('news')
+  })
+
+  it('detects CJK news queries (Phase 6.7 — zh/ja 뉴스 마커)', () => {
+    expect(detectQueryType('AI最新ニュース')).toBe('news')
+    expect(detectQueryType('AI 最新 新闻')).toBe('news')
+    expect(detectQueryType('速報 ニュース AI')).toBe('news')
+  })
+
   it('detects academic queries', () => {
     expect(detectQueryType('quantum computing research paper')).toBe('academic')
     expect(detectQueryType('machine learning study')).toBe('academic')
     expect(detectQueryType('physics theory analysis')).toBe('academic')
     expect(detectQueryType('arxiv transformer architecture')).toBe('academic')
     expect(detectQueryType('biology medicine journal')).toBe('academic')
+  })
+
+  it('detects academic queries from ML vocabulary (Phase 6.7 — ds-01 fix)', () => {
+    expect(detectQueryType('LLM fine-tuning techniques LoRA')).toBe('academic')
+    expect(detectQueryType('diffusion models generative AI research')).toBe('academic')
+    expect(detectQueryType('GPT-4 architecture paper')).toBe('academic')
+  })
+
+  it('detects short question forms as factual before technical keywords (gk-04 fix)', () => {
+    expect(detectQueryType('what is serverless architecture')).toBe('factual')
+    expect(detectQueryType('what is a CDN')).toBe('factual')
+    expect(detectQueryType('how does DNS resolution work')).toBe('factual')
+    // But 'how to X' stays technical (implementation intent)
+    expect(detectQueryType('how to deploy docker')).toBe('technical')
+    // And long multi-term questions stay technical (React intent)
+    expect(detectQueryType('what is the best way to learn React state management')).toBe('technical')
   })
 
   it('detects factual queries (English)', () => {
@@ -123,9 +153,12 @@ describe('detectQueryType', () => {
     expect(detectQueryType('personal finance guide')).toBe('financial')
   })
 
-  it('handles long factual queries that exceed 4 words', () => {
-    // More than 4 words → factual requires <= 4 words, so this won't match
-    expect(detectQueryType('what is the definition of recursion')).not.toBe('factual')
+  it('handles long factual queries that exceed the question-form word limit', () => {
+    // Phase 6.7: short question forms (<= 6 words) route to factual so
+    // 'what is serverless architecture' keeps wikipedia. Longer multi-term
+    // questions ('what is the best way to learn React') stay technical.
+    expect(detectQueryType('what is the best way to learn React state management')).toBe('technical')
+    expect(detectQueryType('what is the definition of quantum entanglement and superposition')).not.toBe('factual')
   })
 
   it('handles queries with mixed Korean and English', () => {
@@ -143,7 +176,9 @@ describe('getSourcesForQueryType', () => {
     const sources = getSourcesForQueryType('technical')
     expect(sources.useGitHub).toBe(true)
     expect(sources.useHackerNews).toBe(true)
-    expect(sources.useWikipedia).toBe(false)
+    // Phase 6.7: wikipedia ON for technical — ds-04/gk-04 gold domains include
+    // wikipedia.org, and technical used to skip it (top-10 = github repos only).
+    expect(sources.useWikipedia).toBe(true)
   })
 
   it('returns correct sources for factual', () => {
@@ -172,7 +207,9 @@ describe('getSourcesForQueryType', () => {
     expect(sources.useWikipedia).toBe(true)
     expect(sources.useArxiv).toBe(true)
     expect(sources.useGoogleScholar).toBe(true)
-    expect(sources.useGitHub).toBe(false)
+    // Phase 6.7: github ON for academic — ds-01 (LLM fine-tuning LoRA) gold
+    // includes github.com (huggingface repos), which academic used to skip.
+    expect(sources.useGitHub).toBe(true)
   })
 
   it('returns default sources for general', () => {
@@ -188,7 +225,13 @@ describe('getSourcesForQueryType', () => {
 // ============================================================
 
 describe('wikipediaSearch', () => {
-  beforeEach(() => { mockFetchWithTimeout.mockReset() })
+  beforeEach(() => {
+    mockFetchWithTimeout.mockReset()
+    // In-process result cache must be cleared between tests — otherwise one
+    // test's mocked results leak into the next and the mock is never called
+    // (cache hit short-circuits fetchWithTimeout).
+    clearWikipediaCache()
+  })
   afterEach(() => { vi.restoreAllMocks() })
 
   it('returns results from REST API', async () => {
@@ -239,6 +282,106 @@ describe('wikipediaSearch', () => {
     const results = await wikipediaSearch('test query')
     expect(results).toHaveLength(1)
     expect(results[0].title).toBe('Fallback Result')
+  })
+
+  it('skips the Action API fallback when REST is rate-limited (429) — same-IP block verified live', async () => {
+    // wikipedia.org rate-limits the IP across BOTH the REST and Action endpoints
+    // (verified live: Action keeps returning 429 for 8s+ after REST trips). Firing
+    // the fallback on REST-429 amplifies the block with wasted requests, so the
+    // search returns empty instead — letting the rate-limit window recover.
+    mockFetchWithTimeout.mockResolvedValueOnce({ ok: false, status: 429 })
+    mockFetchWithTimeout.mockResolvedValueOnce({ ok: false, status: 429 })
+    mockFetchWithTimeout.mockResolvedValueOnce({ ok: false, status: 429 })
+    // NOTE: no 4th mock — the Action fallback must NOT fire after REST-429.
+    const results = await wikipediaSearch('what is quantum computing')
+    expect(results).toEqual([])
+    // Exactly 3 REST attempts, zero Action attempts.
+    expect(mockFetchWithTimeout).toHaveBeenCalledTimes(3)
+  })
+
+  it('falls back to Action API on non-429 REST failure (5xx)', async () => {
+    mockFetchWithTimeout.mockResolvedValueOnce({ ok: false, status: 500 })
+    mockFetchWithTimeout.mockResolvedValueOnce({
+      ok: true,
+      json: () => Promise.resolve({
+        query: { search: [{ title: 'Recovered', snippet: 'ok' }] },
+      }),
+    })
+    const results = await wikipediaSearch('anything')
+    expect(results).toHaveLength(1)
+    expect(results[0].title).toBe('Recovered')
+  })
+
+  it('falls back to Action API when REST throws (network error)', async () => {
+    mockFetchWithTimeout.mockRejectedValueOnce(new Error('network down'))
+    mockFetchWithTimeout.mockResolvedValueOnce({
+      ok: true,
+      json: () => Promise.resolve({
+        query: { search: [{ title: 'NetworkRecovered', snippet: 'ok' }] },
+      }),
+    })
+    const results = await wikipediaSearch('anything')
+    expect(results).toHaveLength(1)
+    expect(results[0].title).toBe('NetworkRecovered')
+  })
+
+  it('returns empty when both REST and Action API fail', async () => {
+    mockFetchWithTimeout.mockResolvedValueOnce({ ok: false, status: 429 })
+    mockFetchWithTimeout.mockResolvedValueOnce({ ok: false, status: 429 })
+    mockFetchWithTimeout.mockResolvedValueOnce({ ok: false, status: 429 })
+    mockFetchWithTimeout.mockResolvedValueOnce({ ok: false, status: 429 })
+    mockFetchWithTimeout.mockResolvedValueOnce({ ok: false, status: 429 }) // Action API also 429
+    const results = await wikipediaSearch('anything')
+    expect(results).toEqual([])
+  })
+
+  // ── In-process result cache (3× median eval wikipedia regression fix) ──
+
+  it('serves a second identical call from cache without hitting the network', async () => {
+    mockFetchWithTimeout.mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({
+        pages: [
+          { title: 'Quantum Computing', key: 'Quantum computing', excerpt: 'Quantum computing uses <span>qubits</span>' },
+        ],
+      }),
+    })
+    const first = await wikipediaSearch('quantum computing')
+    expect(first).toHaveLength(1)
+    const callsAfterFirst = mockFetchWithTimeout.mock.calls.length
+
+    // Second call: SAME language + query + maxResults → cache hit, no fetch
+    const second = await wikipediaSearch('quantum computing')
+    expect(second).toHaveLength(1)
+    expect(mockFetchWithTimeout.mock.calls.length).toBe(callsAfterFirst)
+  })
+
+  it('caches by language and query — different query misses the cache', async () => {
+    mockFetchWithTimeout.mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({ pages: [{ title: 'A', key: 'A', excerpt: 'first' }] }),
+    })
+    await wikipediaSearch('alpha')
+    const callsAfterFirst = mockFetchWithTimeout.mock.calls.length
+
+    await wikipediaSearch('beta')
+    expect(mockFetchWithTimeout.mock.calls.length).toBeGreaterThan(callsAfterFirst)
+  })
+
+  it('does NOT cache empty results — a later call retries the network (429 recovery)', async () => {
+    // Run 1: wikipedia is rate-limited → empty results
+    mockFetchWithTimeout.mockResolvedValueOnce({ ok: false, status: 429 })
+    mockFetchWithTimeout.mockResolvedValueOnce({ ok: false, status: 429 })
+    mockFetchWithTimeout.mockResolvedValueOnce({ ok: false, status: 429 })
+    const first = await wikipediaSearch('recovery test')
+    expect(first).toEqual([])
+
+    // Run 2 (e.g. next eval run): upstream recovered → real fetch again
+    mockFetchWithTimeout.mockReset()
+    mockFetchWithTimeout.mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({ pages: [{ title: 'Recovered', key: 'Recovered', excerpt: 'ok' }] }) })
+    const second = await wikipediaSearch('recovery test')
+    expect(second).toHaveLength(1)
+    expect(second[0].title).toBe('Recovered')
   })
 })
 

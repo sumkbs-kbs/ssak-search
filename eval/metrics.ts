@@ -320,10 +320,21 @@ function extractDomain(url: string): string {
   }
 }
 
-/** Check if a result URL matches any of the relevant domains (substring match). */
-function isRelevant(url: string, relevantDomains: string[]): boolean {
-  const domain = extractDomain(url)
-  return relevantDomains.some((rd) => domain.includes(rd.toLowerCase()))
+/**
+ * Check if a result matches any of the relevant domains (substring match).
+ *
+ * Matches on BOTH the URL host AND the backend-set domain field. Most
+ * backends set domain = extractDomain(url), so this is a no-op change for
+ * them — but Google News RSS items carry the MAPPED gold domain (reuters.com
+ * etc.) while their URL is a news.google.com redirect, and the domain field
+ * is the semantically correct one for those (Phase 6.6).
+ */
+function isRelevant(r: { url: string; domain?: string }, relevantDomains: string[]): boolean {
+  const candidates = [
+    extractDomain(r.url),
+    r.domain ? r.domain.toLowerCase().replace(/^www\./, '') : '',
+  ]
+  return relevantDomains.some((rd) => candidates.some((d) => d.includes(rd.toLowerCase())))
 }
 
 /**
@@ -352,7 +363,7 @@ export function computeNdcg(
   // DCG: sum of rel_i / log2(rank_i + 1), where rank is 1-based
   let dcg = 0
   for (let i = 0; i < topK.length; i++) {
-    const rel = isRelevant(topK[i].url, relevantDomains) ? 1 : 0
+    const rel = isRelevant(topK[i], relevantDomains) ? 1 : 0
     if (rel > 0) {
       dcg += rel / Math.log2(i + 2) // +2 because rank is 1-based and log2(1+1)=1
     }
@@ -388,7 +399,7 @@ export function computeMrr(
   relevantDomains: string[],
 ): number {
   for (let i = 0; i < results.length; i++) {
-    if (isRelevant(results[i].url, relevantDomains)) {
+    if (isRelevant(results[i], relevantDomains)) {
       return 1 / (i + 1)
     }
   }
@@ -411,7 +422,7 @@ export function computePrecisionAtK(
   if (relevantDomains.length === 0) return 0
   const topK = results.slice(0, k)
   if (topK.length === 0) return 0
-  const relevant = topK.filter((r) => isRelevant(r.url, relevantDomains)).length
+  const relevant = topK.filter((r) => isRelevant(r, relevantDomains)).length
   return relevant / topK.length
 }
 
@@ -426,7 +437,7 @@ export function computeRankingMetrics(
   if (!relevantDomains || relevantDomains.length === 0) return undefined
 
   const top10 = results.slice(0, 10)
-  const relevantHits = top10.filter((r) => isRelevant(r.url, relevantDomains)).length
+  const relevantHits = top10.filter((r) => isRelevant(r, relevantDomains)).length
 
   return {
     ndcgAt10: computeNdcg(results, relevantDomains, 10),

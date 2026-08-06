@@ -9,8 +9,10 @@
  *   npx tsx eval/index.ts --help           # show help
  */
 
+import type { EvalReport } from './types'
 import { EVAL_QUERIES } from './queries'
 import { runEval } from './runner'
+import { computeMedianReport } from './median'
 import { saveBaseline, compareWithBaseline } from './baseline'
 import { formatReport, formatReportJSON, formatReportSummary } from './reporter'
 
@@ -23,6 +25,8 @@ interface CliArgs {
   ciSlack?: boolean
   cache?: boolean
   tag?: string
+  /** Run the eval N times and report per-query MEDIAN values (default: 1) */
+  runs?: number
 }
 
 function parseArgs(): CliArgs {
@@ -38,6 +42,13 @@ function parseArgs(): CliArgs {
       case '--ci': opts.ci = true; opts.json = true; break
       case '--ci-slack': opts.ciSlack = true; opts.ci = true; opts.json = true; break
       case '--cache': opts.cache = true; break
+      case '--runs':
+        opts.runs = Number(args[++i])
+        if (!Number.isInteger(opts.runs) || opts.runs < 1 || opts.runs > 9) {
+          console.error('--runs must be an integer between 1 and 9')
+          process.exit(1)
+        }
+        break
       case '--tag':
         opts.tag = args[++i]
         break
@@ -62,6 +73,8 @@ Options:
   --ci         CI mode: JSON output + exit code only (for automation)
   --cache      Measure cache hit rate (re-runs all queries once — doubles runtime)
   --tag <tag>  Run only queries with the specified tag (e.g. 'korean', 'english')
+  --runs <n>   Run the eval n times (1-9) and report per-query MEDIAN values,
+               robust to backend availability noise (default: 1)
 `)
     process.exit(0)
   }
@@ -76,8 +89,42 @@ Options:
     process.exit(1)
   }
 
-  console.error(`Running ${queries.length} eval queries...\n`)
-  const report = await runEval(queries, { measureCache: opts.cache })
+  const runCount = opts.runs ?? 1
+  if (runCount > 1) {
+    console.error(`Running ${queries.length} eval queries × ${runCount} runs (median aggregation)...\n`)
+  } else {
+    console.error(`Running ${queries.length} eval queries...\n`)
+  }
+
+  // Single run, or N runs aggregated by per-query median (robust to backend noise)
+  let report: EvalReport
+  if (runCount > 1) {
+    const reports: EvalReport[] = []
+    const fs = await import('node:fs')
+    const path = await import('node:path')
+    const resultsDir = path.join(process.cwd(), 'eval', 'results')
+    fs.mkdirSync(resultsDir, { recursive: true })
+    for (let i = 1; i <= runCount; i++) {
+      console.error(`  ─ run ${i}/${runCount} ─`)
+      const rep = await runEval(queries, { measureCache: opts.cache })
+      reports.push(rep)
+      // Persist each raw run for auditability (run-1.json … run-N.json).
+      // Regressions are intentionally NOT computed here — per-run diffs against
+      // a moving baseline are ambiguous; the median report is the signal.
+      try {
+        fs.writeFileSync(
+          path.join(resultsDir, `run-${i}.json`),
+          JSON.stringify({ report: rep }, null, 2),
+          'utf-8',
+        )
+      } catch (e) {
+        console.error(`Failed to write eval/results/run-${i}.json:`, e)
+      }
+    }
+    report = computeMedianReport(reports, queries)
+  } else {
+    report = await runEval(queries, { measureCache: opts.cache })
+  }
   const regressions = compareWithBaseline(report)
 
   // Save baseline if requested — must run BEFORE output format block

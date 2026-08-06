@@ -348,3 +348,32 @@
   REST-429 재시도 영향 (캐시가 run 1에만 적용, wikipedia 업스트림 상태에 의존). 3회 중앙값에서는 안정.
 - **운영 권장**: 프로덕션 DO 배포 시 `rateLimitPerMinute` 100 유지 — 캐시로 실제 wikipedia 트래픽이 크게 줄어
   한도 여유 확보. eval CI는 `--runs 3` 중앙값 게이트 사용 권장 (단일 run은 가용성 노이즈에 취약)
+
+
+### S14: 랭킹 레버 — 뉴스·사실 gold 도메인 부스트 누락 해소 (NDCG 0.60 목표 1차 실행, 2026-08-06)
+
+- **분석**: baseline(NDCG 0.5327) 커버리지 미스 118건을 gold-standards와 대조 분류
+  - 커버리지 미스 = gold 도메인이 결과 풀에 **전혀 없음** (백엔드 결여/라우팅) vs
+    **결과에는 있으나 낮은 순위** (랭킹 문제) 두 유형으로 구분
+  - 랭킹 레버(결과에 gold 존재, 4위 이후) **114건** — 이 중 뉴스 계열 30건·기술 29건·사실 12건
+- **근본 원인**: EN 뉴스 gold(nytimes 25/cnn 13/theguardian 13/wired 13/washingtonpost)와
+  EN 사실 gold(britannica 36/nasa 29/howstuffworks 25/scientificamerican 25/nationalgeographic)
+  가 **어떤 권위 맵에도 없음** → 키워드 포화 bing-news 스니펫·msn 집계·wikipedia 하위페이지가
+  0.9+로 상위를 차지하고 gold는 7-10위로 밀림 (en-news-24 NDCG 0.064, en-fact-37 0.079)
+- **변경** (src/lib/search/ranking.ts + ranking-authority.test.ts 4건):
+  1. `ENGLISH_NEWS_AUTHORITY` 확장 — nytimes/cnn/theguardian +0.12, wired/washingtonpost/
+     politico +0.10, nbcnews/thehill +0.08 (reuters/bbc 기존 0.10-0.13 tier와 동일)
+  2. `ENGLISH_REFERENCE_AUTHORITY` 신설 — britannica +0.12, howstuffworks/scientificamerican/
+     nationalgeographic/nasa/mayoclinic/nih/cdc +0.10, usgs/noaa +0.08 (factual/academic 게이트,
+     isEnglishQuery 조건 — ja/ko/zh 맵과 상호배타)
+  3. healthline/webmd는 **의도적으로 제외** — 결과 풀에 아예 없어 부스트가 dead code
+     (커버리지/백엔드 작업 영역임을 주석으로 문서화)
+- **시뮬레이션 효과** (baseline 저장 결과에 부스트 적용·재정렬): 개선 **67건**, 평균 NDCG
+  **0.5327 → 0.5736 (+0.041)**, gold 1위 상승 53건. en-news-24/27/40 +0.711, en-stock-19 +0.613
+- **테스트**: ranking-authority +4건 (nytimes 뉴스 부스트 / theguardian·cnn / factual britannica·
+  howstuffworks / general 비누수 가드 — 코드 리뷰 반영으로 중간 base 점수 사용해 +0.12 누수 관찰 가능)
+  → 유닛 전체 **1,275건 통과** (68파일), typecheck 0
+- **검증 한계**: 시뮬레이션은 저장된 결과 풀을 재정렬한 것이며, 뉴스 백엔드가 gold를 아예
+  못 가져오는 41건(커버리지 미스)은 랭킹으로 해결 불가 — 백엔드 개선(레버 2) 필요
+- **후속 작업**: NDCG 0.60 검증용 eval:median 재실행 → 뉴스 백엔드(레버 2) → 기술 공식문서(레버 3)
+

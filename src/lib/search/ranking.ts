@@ -177,6 +177,22 @@ const ENGLISH_NEWS_AUTHORITY: Record<string, number> = {
   'spacex.com': 0.10,
   'blog.google': 0.08,
   '9to5mac.com': 0.07,
+  // Phase S14 (NDCG 0.60 lever): the remaining EN news gold domains were
+  // missing from this map — en-news eval queries returned these at positions
+  // 7-10 (NDCG ~0.06-0.14) because keyword-saturated bing-news snippets and
+  // msn.com aggregates (base ~0.9+) outranked them with no authority lift.
+  // nytimes.com/cnn.com/theguardian.com/wired.com/washingtonpost.com appear in
+  // 25/13/13/13/8 gold standards respectively. Values mirror the existing
+  // reuters/bbc tier (0.10-0.13) — these are the same class of global
+  // authoritative outlet.
+  'nytimes.com': 0.12,
+  'cnn.com': 0.12,
+  'theguardian.com': 0.12,
+  'wired.com': 0.10,
+  'washingtonpost.com': 0.10,
+  'politico.com': 0.10,
+  'nbcnews.com': 0.08,
+  'thehill.com': 0.08,
 }
 
 /**
@@ -389,6 +405,35 @@ const JAPANESE_FACT_AUTHORITY: Record<string, number> = {
  * outrank a star-saturated repo. This map gives docs the same context-gated
  * boost that finance/news authority maps give their gold domains.
  */
+/**
+ * English reference/fact authority. Applied when the query is English AND
+ * factual/academic — en-fact/en-health eval gold domains (britannica.com,
+ * howstuffworks.com, scientificamerican.com, nationalgeographic.com, nasa.gov,
+ * mayoclinic.org, nih.gov) had NO authority boost anywhere, so keyword-
+ * saturated wikipedia variants and blogs buried the canonical reference
+ * pages (en-fact-37 metaverse: en.wikipedia at pos 10). These are the
+ * reference-class domains users expect for "what is X" queries.
+ *
+ * NOTE: wikipedia.org is already in util.ts DOMAIN_AUTHORITY (+0.12) and stays
+ * out of this map (no double-count — same convention as the other maps).
+ */
+const ENGLISH_REFERENCE_AUTHORITY: Record<string, number> = {
+  'britannica.com': 0.12,
+  'howstuffworks.com': 0.10,
+  'scientificamerican.com': 0.10,
+  'nationalgeographic.com': 0.10,
+  'nasa.gov': 0.10,
+  'mayoclinic.org': 0.10,
+  'nih.gov': 0.10,
+  'cdc.gov': 0.10,
+  'usgs.gov': 0.08,
+  'noaa.gov': 0.08,
+  // NOTE: healthline.com / webmd.com are deliberately NOT here — they are
+  // en-health gold domains but never appear in any backend result pool
+  // (bing/wikipedia/DDG don't surface them), so a boost would be dead code.
+  // Adding them is a COVERAGE (backend) fix, not a ranking fix.
+}
+
 const TECH_DOCS_AUTHORITY: Record<string, number> = {
   'developers.cloudflare.com': 0.15,
   'cloudflare.com': 0.10,
@@ -445,6 +490,13 @@ function authorityBonusForDomain(domain: string, ctx: SearchContext): number {
     bonus += matchInMap(domain, ENGLISH_FINANCE_BLOG_PENALTY)
   }
   if (ctx.isNews && isEnglishQuery(ctx)) bonus += matchInMap(domain, ENGLISH_NEWS_AUTHORITY)
+  // English reference authority for factual/academic queries — Phase S14.
+  // Mirrors the news/finance context-gated maps: gold reference domains need
+  // a lift to outrank keyword-saturated wikipedia subpages/blogs for en-fact/
+  // en-health queries (en-fact-37, en-health-02).
+  if (isEnglishQuery(ctx) && (ctx.queryType === 'factual' || ctx.queryType === 'academic')) {
+    bonus += matchInMap(domain, ENGLISH_REFERENCE_AUTHORITY)
+  }
   if (ctx.isNews && ctx.korean) {
     bonus += matchInMap(domain, KOREAN_NEWS_AUTHORITY)
     bonus += matchInMap(domain, KOREAN_BLOG_PENALTY_NEWS)

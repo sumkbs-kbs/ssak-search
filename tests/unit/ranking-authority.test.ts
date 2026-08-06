@@ -355,6 +355,115 @@ describe('ranking — query-context-aware domain authority (S2/S3)', () => {
     // so the CHINESE_NEWS_AUTHORITY bonus (xinhuanet +0.15) decides the order.
     expect(xinhuaRanked.score).toBeGreaterThan(ctripRanked.score)
   })
+
+  it('English NEWS query boosts the Phase S14 gold domains (nytimes/cnn/theguardian) above msn aggregates', () => {
+    // en-news eval queries returned these gold domains at positions 7-10
+    // (NDCG ~0.06-0.14) because they had NO boost while msn.com aggregates
+    // keyword-saturated to ~0.9+. The map now covers the remaining global
+    // outlets — the +0.10~0.12 lift must flip the order.
+    const ctx = makeCtx({ korean: false, chinese: false, isNews: true, query: 'EU AI regulation 2025' })
+    const nytimes = makeResult(
+      'https://www.nytimes.com/2025/01/01/technology/eu-ai.html',
+      'EU AI regulation 2025 — New York Times',
+      'EU AI regulation 2025: European Union final agreement.',
+    )
+    const msn = makeResult(
+      'https://www.msn.com/eu-ai-coverage',
+      'EU AI regulation 2025 — aggregated links',
+      'EU AI regulation 2025: links from various sources aggregated here.',
+    )
+
+    const both = recomputeScores([msn, nytimes], ctx)
+    const nytimesRanked = both.find((r) => r.url === nytimes.url)!
+    const msnRanked = both.find((r) => r.url === msn.url)!
+
+    expect(nytimesRanked.score).toBeGreaterThan(msnRanked.score)
+  })
+
+  it('English NEWS query also boosts theguardian.com and cnn.com', () => {
+    const ctx = makeCtx({ korean: false, chinese: false, isNews: true, query: 'climate change summit results' })
+    const guardian = makeResult(
+      'https://www.theguardian.com/environment/climate-summit',
+      'Climate summit results — The Guardian',
+      'Climate change summit results: countries agree on targets.',
+    )
+    const cnn = makeResult(
+      'https://edition.cnn.com/climate-summit-2025',
+      'Climate summit results — CNN',
+      'Climate change summit results: what was decided.',
+    )
+    const msn = makeResult(
+      'https://www.msn.com/climate-summit',
+      'Climate summit results — MSN aggregation',
+      'Climate summit results: aggregated coverage.',
+    )
+
+    const both = recomputeScores([msn, guardian, cnn], ctx)
+    const guardianRanked = both.find((r) => r.url === guardian.url)!
+    const cnnRanked = both.find((r) => r.url === cnn.url)!
+    const msnRanked = both.find((r) => r.url === msn.url)!
+
+    expect(guardianRanked.score).toBeGreaterThan(msnRanked.score)
+    expect(cnnRanked.score).toBeGreaterThan(msnRanked.score)
+  })
+
+  it('English factual query boosts britannica.com/howstuffworks.com above a keyword-saturated wikipedia subpage (en-fact-37)', () => {
+    // en-fact-37 (what is the metaverse): en.wikipedia.org was at pos 10 with
+    // no lift while saturated variants saturated to 0.99. The reference gold
+    // domains had NO authority map at all. The new ENGLISH_REFERENCE_AUTHORITY
+    // must lift britannica/howstuffworks for factual queries.
+    const ctx = makeCtx({ korean: false, chinese: false, isNews: false, queryType: 'factual' as never, query: 'what is the metaverse' })
+    const britannica = makeResult(
+      'https://www.britannica.com/topic/metaverse',
+      'Metaverse | Definition, History, & Facts | Britannica',
+      'Metaverse definition: a virtual-reality shared space.',
+    )
+    const howstuffworks = makeResult(
+      'https://computer.howstuffworks.com/metaverse.htm',
+      'How the Metaverse Works — HowStuffWorks',
+      'How the metaverse works: explained simply.',
+    )
+    const wikiSub = makeResult(
+      'https://en.wikipedia.org/wiki/Metaverse_technology',
+      'Metaverse technology Metaverse Metaverse Metaverse Metaverse',
+      'Metaverse Metaverse Metaverse Metaverse Metaverse Metaverse technology.',
+    )
+
+    const both = recomputeScores([wikiSub, britannica, howstuffworks], ctx)
+    const britannicaRanked = both.find((r) => r.url === britannica.url)!
+    const hswRanked = both.find((r) => r.url === howstuffworks.url)!
+    const wikiRanked = both.find((r) => r.url === wikiSub.url)!
+
+    expect(britannicaRanked.score).toBeGreaterThan(wikiRanked.score)
+    expect(hswRanked.score).toBeGreaterThan(wikiRanked.score)
+  })
+
+  it('English NON-factual general query does NOT apply the reference authority', () => {
+    const ctx = makeCtx({ korean: false, chinese: false, isNews: false, queryType: 'general' as never, query: 'best laptops 2025' })
+    // Mid-range base scores (partial query overlap) so a leaked +0.12 bonus
+    // would be OBSERVABLE — unlike saturated ~0.99 bases that clamp to the
+    // same cap whether or not the bonus leaked (code-review catch: the weak
+    // <0.05 assertion couldn't distinguish a +0.12 leak from no leak).
+    const britannica = makeResult(
+      'https://www.britannica.com/laptops',
+      'Best laptops 2025 — Britannica',
+      'Laptop buying guide with technical specifications and comparisons.',
+    )
+    const cnet = makeResult(
+      'https://www.cnet.com/best-laptops/',
+      'Best laptops 2025 — CNET',
+      'Laptop buying guide with technical specifications and comparisons.',
+    )
+
+    const both = recomputeScores([britannica, cnet], ctx)
+    const britannicaRanked = both.find((r) => r.url === britannica.url)!
+    const cnetRanked = both.find((r) => r.url === cnet.url)!
+
+    // No reference boost under 'general' — both results are textually
+    // identical, so scores must be equal (delta ≈ 0, well under 0.01). A
+    // leaked +0.12 would push the delta to ~0.12 and fail this guard.
+    expect(britannicaRanked.score - cnetRanked.score).toBeLessThan(0.01)
+  })
 })
 
 // ============================================================

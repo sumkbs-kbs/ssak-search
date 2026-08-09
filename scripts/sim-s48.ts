@@ -10,6 +10,9 @@ const rep = (r.report ?? r) as { results?: Array<{ query?: { id?: string }; resp
 const q = (rep.results ?? []).find((x) => x.query?.id === 'kr-stock-14')
 const respResults = q?.response?.results
 const rawPool = Array.isArray(respResults) ? respResults : []
+// S82: the stored run-3.json pool is untyped JSON; the ranking pipeline needs
+// SearchResult[] — map through Record and let the caller's cast be explicit
+// (TS2345 under the widened include).
 const pool: Array<Record<string, unknown>> = (rawPool as Array<Record<string, unknown>>).map((x) => ({ ...x }))
 const gold = ['finance.naver.com', 'm.stock.naver.com', 'investing.com']
 
@@ -38,7 +41,9 @@ const ctx = {
 } as SearchContext
 
 // ── BEFORE: stored final pool as-is ──
-const beforeNdcg = computeNdcg(pool.slice(0, 10), gold, 10)
+// S82: Record[] → SearchResult[] needs `as unknown as` (no type overlap).
+const poolAsResults = pool.slice(0, 10) as unknown as Parameters<typeof computeNdcg>[0]
+const beforeNdcg = computeNdcg(poolAsResults, gold, 10)
 
 // ── AFTER: swap the naver-finance artifact (rank-9 news_list 시황) for the
 //    two S48 ETF pages, then re-run the ranking pipeline ──
@@ -59,7 +64,10 @@ after.push(
     domain: 'm.stock.naver.com',
   },
 )
-const ranked = applyQualityThreshold(sortResults(recomputeScores(after, ctx), ctx), ctx)
+const ranked = applyQualityThreshold(
+  sortResults(recomputeScores(after as unknown as Parameters<typeof recomputeScores>[0], ctx), ctx),
+  ctx,
+)
 const afterNdcg = computeNdcg(ranked.slice(0, 10), gold, 10)
 
 console.log('BEFORE NDCG@10:', beforeNdcg.toFixed(4))

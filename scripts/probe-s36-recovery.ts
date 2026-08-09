@@ -18,15 +18,19 @@ const VULNERABLE: Record<string, string> = {
   'zh-fact-15': '什么是5G网络',
 }
 
+type GoldEntry = { relevantDomains?: string[] }
+type GoldMap = Record<string, GoldEntry>
+
 async function main(): Promise<void> {
   const gold = await import('../eval/gold-standards.json')
-  const goldMap = gold.default ?? gold
-  const arr = Array.isArray(goldMap) ? goldMap : Object.entries(goldMap)
+  // S82: the JSON import is untyped — normalize to a typed GoldMap so the
+  // `goldMap[id]` index (TS7053) type-checks under the widened include.
+  const goldMap: GoldMap = ((gold.default ?? gold) as GoldMap) ?? {}
 
   let recovered = 0
   let total = 0
   for (const [id, queryText] of Object.entries(VULNERABLE)) {
-    const entry = Array.isArray(goldMap) ? arr.find((x: unknown) => (x as { id?: string }).id === id) : goldMap[id]
+    const entry = goldMap[id]
     const domains: string[] = entry?.relevantDomains ?? []
     const lang = id.startsWith('ja') ? 'ja' : 'zh'
     const results = await wikidataWikiSearch(queryText, { language: lang, maxResults: 5 })

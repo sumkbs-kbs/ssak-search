@@ -65,8 +65,18 @@ export async function runEval(
     jinaApiKey?: string
     ai?: Ai
     env?: Record<string, unknown>
-    /** Run every query twice and measure the cache hit rate of the warm pass */
+    /** Run every query twice — cold then an IMMEDIATE warm re-run (S80
+     *  interleave) — and measure the cache hit rate of the warm pass */
     measureCache?: boolean
+    /** S80-①: skip the warm re-run for queries whose COLD run failed
+     *  (default true). A failed cold stores no cache entry, so the warm run
+     *  is a guaranteed miss that would only re-fan-out to the network —
+     *  during a wikipedia 429 window that's an extra hammer on an already
+     *  rate-limited upstream, for zero information. Skipped queries are
+     *  excluded from the hitRate denominator and counted in
+     *  CacheHitMetrics.skipped. Set false to keep the legacy behavior
+     *  (warm run always fires, failed cold → long warm time → miss). */
+    skipWarmOnColdError?: boolean
   } = {},
 ): Promise<EvalReport> {
   const results: EvalResult[] = []
@@ -133,8 +143,39 @@ export async function runEval(
   // touch wikipedia, so they keep the faster 400ms pace — otherwise the
   // 500-query×3-run eval would burn ~30 min of pure sleep on queries that
   // don't need it. Override with EVAL_QUERY_DELAY_MS=0 to disable entirely.
-  const wikiPaceMs = Math.max(0, Number(process.env.EVAL_QUERY_DELAY_MS ?? 1200) || 1200)
-  const fastPaceMs = Math.max(0, Number(process.env.EVAL_QUERY_DELAY_MS ?? 400) || 400)
+  // Parse the pacing override ONCE. The documented contract is
+  // EVAL_QUERY_DELAY_MS=0 DISABLES pacing — but the old `Number(x) || 1200`
+  // treated '0' as falsy and silently fell back to 1200ms (S80 test caught
+  // it: EVAL_QUERY_DELAY_MS=0 still slept 400ms/news-query). Only an explicit
+  // number is honored: non-numeric strings ('abc') and unset keep the
+  // defaults (note: Number('') = 0, so an empty string disables pacing — ''
+  // was never a documented value, only '0' is).
+  const delayOverride = process.env.EVAL_QUERY_DELAY_MS === undefined ? NaN : Number(process.env.EVAL_QUERY_DELAY_MS)
+  const useOverride = Number.isFinite(delayOverride)
+  const wikiPaceMs = useOverride ? Math.max(0, delayOverride) : 1200
+  const fastPaceMs = useOverride ? Math.max(0, delayOverride) : 400
+
+  // S80 (2026-08-09): INTERLEAVED warm pass. The old design ran the warm pass
+  // AFTER the entire cold pass — for a 500-query eval the cold pass takes ~23
+  // min, but the orchestrator's in-process cache TTL is only 120s (general) /
+  // 30s (news/finance), so EVERY entry had expired by warm-pass time → hitRate
+  // structurally ~0% (S79 measured 0.0247, 2/81 on a korean subset). Re-running
+  // the SAME query immediately after its cold run (a few ms later, well within
+  // the TTL) measures the cache as real repeat traffic experiences it: a warm
+  // hit resolves in ~1-5ms from the in-process map instead of a full fan-out.
+  // The warm run is excluded from totalDurationMs below so QPS/latency metrics
+  // keep measuring the cold pass only (same semantics as the old post-loop
+  // pass, which also ran outside the measured window).
+  const coldTimesMs: number[] = []
+  const warmTimesMs: number[] = []
+  let totalWarmMs = 0
+  // S80-①: warm re-runs skipped because their cold run failed (no cache
+  // entry was stored → a warm run is a guaranteed miss). Reported in
+  // CacheHitMetrics.skipped so the report shows how many queries were
+  // excluded from the hitRate denominator.
+  let skippedWarmRuns = 0
+  // Default true — see the config option doc above for the rationale.
+  const skipWarmOnColdError = config.skipWarmOnColdError ?? true
 
   for (const q of queries) {
     const startTime = Date.now()
@@ -173,12 +214,13 @@ export async function runEval(
       failures.push(`error: ${error}`)
     }
 
+    const coldTimeMs = Date.now() - startTime
     results.push({
       query: q,
       response,
       error,
       resultCount,
-      responseTimeMs: Date.now() - startTime,
+      responseTimeMs: coldTimeMs,
       backends,
       passed: failures.length === 0,
       failures,
@@ -186,6 +228,38 @@ export async function runEval(
       // Phase 4: compute ranking metrics if a gold standard exists for this query
       ranking: response?.results ? computeRankingMetrics(response.results, goldStandards[q.id]) : undefined,
     })
+
+    // S80: interleaved warm run — immediately after THIS query's cold run,
+    // while the orchestrator's in-process cache entry (set at the end of the
+    // cold executeSearch) is still within its 120s/30s TTL. Cache hits resolve
+    // in a few ms.
+    //
+    // S80-①: a COLD FAILURE (executeSearch threw → `error` is set, response
+    // is null) means the orchestrator stored NO cache entry — the warm re-run
+    // is a guaranteed miss that would only re-fan-out to the network
+    // (re-hammering a possibly rate-limited upstream like wikipedia for zero
+    // information). skipWarmOnColdError (default true) skips it: the query is
+    // excluded from the hitRate denominator and counted in skippedWarmRuns.
+    // With the flag false, the legacy behavior is preserved — the warm run
+    // fires anyway and its long latency counts as a miss.
+    const coldFailed = error !== undefined
+    if (config.measureCache) {
+      if (skipWarmOnColdError && coldFailed) {
+        skippedWarmRuns++
+      } else {
+        const warmStart = Date.now()
+        try {
+          await executeSearch(buildRequest(q), buildConfig())
+        } catch {
+          // Cache is measured on latency alone — search failures just
+          // contribute a long warm time (counted as a miss)
+        }
+        const warmMs = Date.now() - warmStart
+        totalWarmMs += warmMs
+        coldTimesMs.push(coldTimeMs)
+        warmTimesMs.push(warmMs)
+      }
+    }
 
     // Pacing AFTER measurement — lets free no-key backends (wikipedia) recover
     // their rate-limit window between queries instead of being hammered.
@@ -200,27 +274,19 @@ export async function runEval(
     }
   }
 
-  const totalDurationMs = Date.now() - runStartTime
+  // totalDurationMs EXCLUDES the interleaved warm runs (S80) so QPS keeps
+  // measuring the cold pass — identical semantics to the old post-loop warm
+  // pass, which also ran outside the measured window.
+  const totalDurationMs = Date.now() - runStartTime - totalWarmMs
 
-  // Cache hit-rate measurement: re-run every query immediately after the
-  // cold pass. Warm runs served from the in-process memory cache complete
-  // in a few ms; the orchestrator's memory cache TTL (120s/30s) covers the
-  // gap, so a fast warm run means the cache worked.
+  // Cache hit-rate measurement — computed from the interleaved cold/warm
+  // pairs collected per query above (S80). S80-①: skipped warm runs (cold
+  // failures) are reported separately so the denominator is transparent:
+  // hitRate = hits / (hits + misses), and hits + misses = measuredPairs
+  // (not totalQueries when cold runs failed).
   let cache: CacheHitMetrics | undefined
   if (config.measureCache && queries.length > 0) {
-    const coldTimesMs = results.map((r) => r.responseTimeMs)
-    const warmTimesMs: number[] = []
-    for (const q of queries) {
-      const warmStart = Date.now()
-      try {
-        await executeSearch(buildRequest(q), buildConfig())
-      } catch {
-        // Cache is measured on latency alone — search failures just
-        // contribute a long warm time (counted as a miss)
-      }
-      warmTimesMs.push(Date.now() - warmStart)
-    }
-    cache = computeCacheHitRate(coldTimesMs, warmTimesMs)
+    cache = computeCacheHitRate(coldTimesMs, warmTimesMs, 200, skippedWarmRuns)
   }
 
   // Aggregate statistics

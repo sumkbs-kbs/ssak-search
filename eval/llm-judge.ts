@@ -13,7 +13,7 @@
  */
 
 import type { EvalResult } from './types'
-import type { SearchAnswerSource } from '../src/types'
+import type { SearchAnswer, SearchAnswerSource } from '../src/types'
 import { logger } from '../src/lib/logger'
 
 // ============================================================

@@ -71,4 +71,20 @@ describe('computeCacheHitRate', () => {
     expect(loose.hitRate).toBe(1)
     expect(strict.hitRate).toBe(0)
   })
+
+  it('reports skipped warm runs separately — never in the denominator (S80-①)', () => {
+    // One measured pair (hit) + two skipped runs (failed colds). The skipped
+    // count is surfaced on the metrics but does NOT inflate misses or shrink
+    // hitRate: denominator = measured pairs only.
+    const m = computeCacheHitRate([3000], [12], 200, 2)
+    expect(m.hitRate).toBe(1)
+    expect(m.hits).toBe(1)
+    expect(m.misses).toBe(0)
+    expect(m.skipped).toBe(2)
+  })
+
+  it('skipped defaults to 0 for callers that do not track it', () => {
+    const m = computeCacheHitRate([3000], [12])
+    expect(m.skipped).toBe(0)
+  })
 })

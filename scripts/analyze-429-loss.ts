@@ -64,9 +64,11 @@
  */
 import { readFileSync, readdirSync } from 'fs'
 import { resolve } from 'path'
-import { computeNdcg } from '../eval/metrics'
+import { computeNdcg, recomputeNdcgAt10 } from '../eval/metrics'
+import { loadBaseline, diffBaselineStabilized } from '../eval/baseline'
 import { EVAL_QUERIES } from '../eval/queries'
 import type { SearchResult } from '../src/types'
+import type { EvalReport, EvalBaseline } from '../eval/types'
 
 const ID_BY_QUERY = new Map<string, string>()
 for (const q of EVAL_QUERIES) ID_BY_QUERY.set(q.query, q.id)
@@ -77,7 +79,7 @@ const GOLD_PATH = resolve(process.cwd(), 'eval', 'gold-standards.json')
 /** S35/S36/S38 wikipedia mirror backends — excluded from the composition key. */
 const MIRROR_BACKENDS = ['dbpedia', 'wikidata', 'dbpedia-lang']
 
-interface RunInfo {
+export interface RunInfo {
   backends: string[]
   ndcg: number
 }
@@ -134,6 +136,19 @@ export interface BackendMirrorStats {
   successRate: number
 }
 
+/** S75: gate verdict × wikipedia-429 availability cross-reference. */
+export interface Gate429CrossRef {
+  /** baseline found on disk (or injected by the runner) */
+  hasBaseline: boolean
+  runCount: number
+  /** gate-flagged ndcgAt10 regressions where EVERY regressed run was wikipedia-absent */
+  flaggedBy429: Gate429Row[]
+  /** gate-flagged regressions with >=1 NON-429 regressed run (genuine candidates) */
+  flaggedClean: Gate429Row[]
+  /** gate-passed but ALL runs wikipedia-absent AND all below baseline */
+  passedWith429: Gate429Row[]
+}
+
 export interface LossSummary {
   runCount: number
   attributableCount: number // queries with a same-composition present/absent pair
@@ -167,6 +182,8 @@ export interface LossSummary {
   mirrorStats: BackendMirrorStats[]
   nonEnMirrorRecoveredLog: number // distinct ja/zh/kr ids with a wikidata/dbpedia-lang recovered event
   neverPresentRecoveredByLog: number // never-present ids with ANY log recovered event
+  // S75: S73 2-run gate × wikipedia-429 cross-reference
+  gate429: Gate429CrossRef
   rows: LossRow[] // sorted by gain desc
 }
 
@@ -226,6 +243,26 @@ function loadRuns(resultsDir: string, gold: Map<string, string[]>): Array<Map<st
     }
     return m
   })
+}
+
+/**
+ * Load each run-*.json as a FULL EvalReport (S75 — the S73 gate cross-ref
+ * needs the per-run response pools + ranking fields, not just backends/ndcg).
+ */
+function loadRunReports(resultsDir: string): EvalReport[] {
+  const files = readdirSync(resultsDir)
+    .filter((f) => /^run-\d+\.json$/.test(f))
+    .sort((a, b) => Number(a.match(/\d+/)?.[0]) - Number(b.match(/\d+/)?.[0]))
+  const out: EvalReport[] = []
+  for (const f of files) {
+    try {
+      const raw = JSON.parse(readFileSync(resolve(resultsDir, f), 'utf8'))
+      if (raw?.report?.results) out.push(raw.report as EvalReport)
+    } catch {
+      /* malformed run file — skip (loadRuns already surfaces the hard failure) */
+    }
+  }
+  return out
 }
 
 /**
@@ -472,6 +509,117 @@ function isRecovered(loss: number, presentAvg: number): boolean {
   return presentAvg >= 0.1 && loss <= Math.max(0.1, presentAvg * 0.2)
 }
 
+/** One query's S73-gate × wikipedia-429 cross-reference row (S75). */
+export interface Gate429Row {
+  id: string
+  goldWiki: boolean
+  /** baseline NDCG recomputed under CURRENT gold (S54) — rows with an
+   *  uncomputable baseline are skipped, so this is always a number */
+  baselineNdcg: number
+  /** per run: the run's recomputed NDCG */
+  runNdcgs: number[]
+  /** per run: wikipedia missing from the run's backends (429 → mirror/absent) */
+  run429: boolean[]
+  /** per run: baseline − ndcg > 0.05 — the S73 gate's per-run regression test */
+  runRegressed: boolean[]
+  /** S34 composition-controlled weighted loss for this query (0 if unattributable) */
+  weighted: number
+  /** wikipedia-429 log evidence count (0 without a log) */
+  c429: number
+  tags: string[]
+}
+
+/**
+ * Gate × wikipedia-429 cross-reference (S75).
+ *
+ * S73's diffBaselineStabilized flags a query only when >= minAgree runs agree
+ * on a >= 0.05 NDCG drop — but a drop caused by wikipedia 429 (backend absent
+ * in every regressed run) is availability noise, NOT a ranking regression. And
+ * the reverse: stabilization can let a wikipedia-429 drop THROUGH the gate
+ * (the runs agree on wikipedia absence but not on the 0.05 threshold). This
+ * classification surfaces both so a reviewer can tell 429 noise from real
+ * regressions in the S37 loss report:
+ *   - flaggedBy429  — gate-flagged AND every regressed run was wikipedia-absent
+ *                     → the flag is explained by availability (dismissable)
+ *   - flaggedClean   — gate-flagged with >=1 NON-429 regressed run → genuine
+ *                     ranking-regression candidate. NOTE: this is a coarse
+ *                     label — a barely-over-threshold (0.051) non-429 run
+ *                     labels the flag "genuine" even when a 429 run dropped
+ *                     far more; judge from the per-run detail rows (run429 /
+ *                     runNdcgs) when the cause is mixed.
+ *   - passedWith429  — gate-passed BUT every run was wikipedia-absent AND every
+ *                     run scored below baseline → the 2-run stabilization
+ *                     masked a wikipedia-429 NDCG drop (pass is availability
+ *                     luck, not quality — the reviewer must look)
+ */
+export function crossReferenceGate429(
+  reports: EvalReport[],
+  baseline: EvalBaseline | null,
+  runs: ReadonlyArray<ReadonlyMap<string, RunInfo>>,
+  gold: ReadonlyMap<string, string[]>,
+  lossRows: readonly LossRow[],
+  c429ById: ReadonlyMap<string, { runs: Set<number>; count: number }>,
+): Gate429CrossRef {
+  const base: Gate429CrossRef = {
+    hasBaseline: baseline !== null,
+    runCount: runs.length,
+    flaggedBy429: [],
+    flaggedClean: [],
+    passedWith429: [],
+  }
+  if (!baseline || runs.length < 2 || reports.length < 2) return base
+
+  const goldRec: Record<string, string[]> = Object.fromEntries(gold)
+  const flagged = new Set(
+    diffBaselineStabilized(reports, baseline, goldRec)
+      .filter((d) => d.metric === 'ndcgAt10')
+      .map((d) => d.queryId),
+  )
+  const weightedById = new Map(lossRows.map((r) => [r.id, r.weighted]))
+
+  const allIds = new Set<string>()
+  for (const r of runs) for (const id of r.keys()) allIds.add(id)
+  for (const id of allIds) {
+    const bres = baseline.report.results.find((r) => r.query.id === id)
+    if (!bres) continue
+    const bndcg = recomputeNdcgAt10(bres, goldRec[id])
+    if (bndcg === undefined) continue
+    const infos = runs.map((r) => r.get(id)).filter((x): x is RunInfo => x !== undefined)
+    if (infos.length < 2) continue
+    const runNdcgs = infos.map((i) => i.ndcg)
+    const run429 = infos.map((i) => !i.backends.includes('wikipedia'))
+    const runRegressed = runNdcgs.map((n) => bndcg - n > 0.05)
+    const goldDomains = gold.get(id) ?? []
+    const row: Gate429Row = {
+      id,
+      goldWiki: goldDomains.some((d) => d.includes('wikipedia.org')),
+      baselineNdcg: bndcg,
+      runNdcgs,
+      run429,
+      runRegressed,
+      weighted: weightedById.get(id) ?? 0,
+      c429: c429ById.get(id)?.count ?? 0,
+      tags: EVAL_QUERIES.find((q) => q.id === id)?.tags ?? [],
+    }
+    if (flagged.has(id)) {
+      const regressedIdx = runRegressed.map((r, i) => (r ? i : -1)).filter((i) => i >= 0)
+      if (regressedIdx.length > 0 && regressedIdx.every((i) => run429[i])) {
+        base.flaggedBy429.push(row)
+      } else {
+        base.flaggedClean.push(row)
+      }
+    } else if (run429.every(Boolean) && runNdcgs.every((n) => n < row.baselineNdcg)) {
+      base.passedWith429.push(row)
+    }
+  }
+
+  const byWeight = (a: Gate429Row, b: Gate429Row) => b.weighted - a.weighted
+  base.flaggedBy429.sort(byWeight)
+  base.flaggedClean.sort(byWeight)
+  base.passedWith429.sort(byWeight)
+  return base
+}
+
 /**
  * Compute the S34 wikipedia-429 loss summary from eval/results/run-*.json.
  *
@@ -485,7 +633,11 @@ function isRecovered(loss: number, presentAvg: number): boolean {
  * mirror pairs with its wikipedia-present twin. Each absent run is then
  * classified as mirror-recovered / mirror-still-lost / no-mirror.
  */
-export function computeLossReport(resultsDir: string = DEFAULT_RESULTS_DIR, logText?: string): LossSummary {
+export function computeLossReport(
+  resultsDir: string = DEFAULT_RESULTS_DIR,
+  logText?: string,
+  baseline?: EvalBaseline | null,
+): LossSummary {
   // S54: gold is loaded FIRST — loadRuns recomputes NDCG against it.
   const gold = loadGold()
   const runs = loadRuns(resultsDir, gold)
@@ -710,6 +862,17 @@ export function computeLossReport(resultsDir: string = DEFAULT_RESULTS_DIR, logT
     mirrorEvents.some((e) => e.id === id && e.kind === 'recovered'),
   ).length
 
+  // S75: S73 2-run gate × wikipedia-429 cross-reference. The baseline is
+  // injected when the runner has one loaded (eval/index.ts passes the SAME
+  // snapshot the gate compared against — a --save run must NOT self-compare
+  // against the baseline it is about to write); the CLI defaults to disk.
+  // NOTE: for a historical --results-dir the disk baseline may postdate the
+  // analyzed runs — the cross-ref then compares era-mismatched snapshots
+  // (acceptable for trend analysis; pass a baseline explicitly for precision).
+  const baselineSnapshot = baseline === undefined ? loadBaseline() : baseline
+  const reports = loadRunReports(resultsDir)
+  const gate429 = crossReferenceGate429(reports, baselineSnapshot, runs, gold, outRows, perQuery429)
+
   return {
     runCount: runs.length,
     attributableCount: outRows.length,
@@ -741,6 +904,7 @@ export function computeLossReport(resultsDir: string = DEFAULT_RESULTS_DIR, logT
     mirrorStats,
     nonEnMirrorRecoveredLog: nonEnMirrorRecovered.size,
     neverPresentRecoveredByLog,
+    gate429,
     rows: outRows,
   }
 }
@@ -886,6 +1050,41 @@ function main(): void {
   console.log(
     `\nNote: queries with wikipedia flapping but NO same-composition pair are excluded (unattributable co-failure) — the attributable numbers above are a conservative lower bound. The never-present mirror split above covers the queries wikipedia never served.`,
   )
+
+  // S75: S73 2-run gate × wikipedia-429 cross-reference — tells the reviewer
+  // whether gate flags are 429 noise and whether gate passes masked a 429 drop.
+  console.log('\nGate × wikipedia-429 cross-reference (S75, S73 2-run stabilization):')
+  if (!s.gate429.hasBaseline) {
+    console.log('  no baseline on disk — cross-reference skipped')
+  } else if (s.gate429.runCount < 2) {
+    console.log('  fewer than 2 runs — stabilization gate not applicable')
+  } else {
+    console.log(
+      `  gate-flagged AND every regressed run wikipedia-absent (429-explainable flags): ${s.gate429.flaggedBy429.length}`,
+    )
+    console.log(
+      `  gate-flagged with a NON-429 regressed run (genuine regression candidates): ${s.gate429.flaggedClean.length}`,
+    )
+    console.log(
+      `  gate-PASSED but ALL runs wikipedia-absent and below baseline (stabilization masked a 429 drop): ${s.gate429.passedWith429.length}`,
+    )
+    const fmt = (r: Gate429Row) =>
+      `    ${r.id.padEnd(18)} base:${r.baselineNdcg.toFixed(3)}  runs:[${r.runNdcgs
+        .map((n, i) => `${r.run429[i] ? '429' : 'wiki'}${n.toFixed(2)}`)
+        .join(' ')}]  S34w:${r.weighted.toFixed(3)} 429×${r.c429} [${r.tags.join(',')}]`
+    if (s.gate429.flaggedBy429.length) {
+      console.log('  flagged-by-429 (dismissable availability noise — verify on next run):')
+      for (const r of s.gate429.flaggedBy429.slice(0, 15)) console.log(fmt(r))
+    }
+    if (s.gate429.flaggedClean.length) {
+      console.log('  GENUINE regression candidates (at least one non-429 regressed run):')
+      for (const r of s.gate429.flaggedClean.slice(0, 15)) console.log(fmt(r))
+    }
+    if (s.gate429.passedWith429.length) {
+      console.log('  passed-with-429 (gate pass is availability luck — 429 drop masked by stabilization):')
+      for (const r of s.gate429.passedWith429.slice(0, 15)) console.log(fmt(r))
+    }
+  }
 
   // S37: workflow warning when the weighted loss exceeds the threshold.
   if (s.weightedLoss > threshold) {

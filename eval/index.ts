@@ -12,8 +12,8 @@
 import type { EvalReport } from './types'
 import { EVAL_QUERIES } from './queries'
 import { runEval } from './runner'
-import { computeMedianReport } from './median'
-import { saveBaseline, compareWithBaseline } from './baseline'
+import { computeMedianReport, resolveCacheMeasurement } from './median'
+import { saveBaseline, loadBaseline, diffBaseline, diffBaselineStabilized } from './baseline'
 import { formatReport, formatReportJSON, formatReportSummary } from './reporter'
 
 interface CliArgs {
@@ -103,6 +103,9 @@ Options:
   --summary    Output GitHub Summary markdown (to stderr for logging)
   --ci         CI mode: JSON output + exit code only (for automation)
   --cache      Measure cache hit rate (re-runs all queries once — doubles runtime)
+               NOTE: with --runs >= 3 the cache measurement is SKIPPED (S77
+               guard — cache+median is a 4-pass budget that risks the CI step
+               timeout in a wide wikipedia-429 window). Use --runs 1-2 for it.
   --tag <tag>  Run only queries with the specified tag (e.g. 'korean', 'english')
   --runs <n>   Run the eval n times (1-9) and report per-query MEDIAN values,
                robust to backend availability noise (default: 1)
@@ -130,17 +133,39 @@ Options:
     console.error(`Running ${queries.length} eval queries...\n`)
   }
 
+  // S77 (S74 잔여 ①): --cache + --runs >= 3 is a 4-pass budget (~70-100min)
+  // that can exceed the CI step timeout in a wide 429 window — guard skips
+  // cache for median-of-3+ and prints an actionable warning.
+  const cachePlan = resolveCacheMeasurement(!!opts.cache, runCount)
+  if (cachePlan.warn) console.error(`⚠️ ${cachePlan.warn}\n`)
+  // S77: also surface as a GitHub Actions annotation (S37 convention) so a
+  // manual dispatch that hits the guard is visible in the Actions UI.
+  if (cachePlan.warn && process.env.GITHUB_ACTIONS) console.error(`::warning::${cachePlan.warn}`)
+
   // Single run, or N runs aggregated by per-query median (robust to backend noise)
   let report: EvalReport
+  // S78: `reports` is HOISTED to this scope — it was block-scoped inside the
+  // runCount > 1 branch, so the S73 gate's diffBaselineStabilized(reports,
+  // ...) reference below hit a ReferenceError at runtime. eval/ is NOT in
+  // tsconfig's include set, so tsc never type-checked eval/index.ts and the
+  // scope bug passed every gate until the S78 smoke test caught it.
+  const reports: EvalReport[] = []
   if (runCount > 1) {
-    const reports: EvalReport[] = []
     const fs = await import('node:fs')
     const path = await import('node:path')
     const resultsDir = path.join(process.cwd(), 'eval', 'results')
     fs.mkdirSync(resultsDir, { recursive: true })
     for (let i = 1; i <= runCount; i++) {
       console.error(`  ─ run ${i}/${runCount} ─`)
-      const rep = await runEval(queries, { measureCache: opts.cache })
+      // S74: cache is measured on run 1 ONLY. computeMedianReport keeps
+      // `cache: reports[0].cache` — runs 2..N's warm pass is discarded work
+      // (500 extra queries per run for a metric that never surfaces). With
+      // schedule mode (--cache + --runs 2, S73 G2) this costs 2 cold + 1 warm
+      // pass (~51 min measured budget) instead of 2×(cold+warm) (~54 min),
+      // and it keeps the cache metric identical to the single-run semantics.
+      // S77: cachePlan.measure is false for runs >= 3 (the timeout guard), so
+      // a --cache --runs 3 dispatch runs 3 cold passes with NO cache metric.
+      const rep = await runEval(queries, { measureCache: cachePlan.measure && i === 1 })
       reports.push(rep)
       // Persist each raw run for auditability (run-1.json … run-N.json).
       // Regressions are intentionally NOT computed here — per-run diffs against
@@ -153,9 +178,30 @@ Options:
     }
     report = computeMedianReport(reports, queries)
   } else {
-    report = await runEval(queries, { measureCache: opts.cache })
+    // S77: use cachePlan.measure (not opts.cache) so the single-run path is
+    // consistent with the guarded multi-run path — identical today (runs=1 →
+    // measure when cache requested) but robust to future policy changes.
+    report = await runEval(queries, { measureCache: cachePlan.measure })
   }
-  const regressions = compareWithBaseline(report)
+
+  // G2 (S73): with >=2 runs the regression gate requires at least 2 runs to
+  // AGREE on each regression (single-run pool noise was ~13% of queries, S67
+  // G2). diffBaselineStabilized flags ndcgAt10/resultCount/responseTime/
+  // passStatus only when both CI runs (or a majority of median runs) show it.
+  //
+  // The baseline is loaded ONCE so the gate AND the S37/S75 loss report
+  // cross-reference the SAME snapshot — with --save the baseline file is
+  // overwritten below, so the loss report must not self-compare against the
+  // just-written baseline.
+  const baselineSnapshot = loadBaseline()
+  const regressions =
+    runCount >= 2
+      ? baselineSnapshot
+        ? diffBaselineStabilized(reports, baselineSnapshot)
+        : []
+      : baselineSnapshot
+        ? diffBaseline(report, baselineSnapshot)
+        : []
 
   // Save baseline if requested — must run BEFORE output format block
   // so it works with --save alone (human-readable) or --save --ci (JSON)
@@ -189,13 +235,16 @@ Options:
   if (runCount > 1 && (opts.lossThreshold ?? 5.0) > 0) {
     try {
       const { computeLossReport } = await import('../scripts/analyze-429-loss')
-      const loss = computeLossReport()
+      // S75: pass the gate-time baseline so the cross-reference classifies
+      // flags/passes against what the gate actually compared (a --save run
+      // would otherwise self-compare against the baseline just written).
+      const loss = computeLossReport(undefined, undefined, baselineSnapshot)
       const threshold = opts.lossThreshold ?? 5.0
       // NOTE: no log is captured in-process, so never-present+429 is reported
       // as 0 — that is UNMEASURED (needs the eval log), not actually zero. The
       // weighted-loss gate below does NOT depend on it (run-*.json only).
       console.error(
-        `S37 wikipedia-429 loss report (median run): weighted ${loss.weightedLoss.toFixed(3)} · gain-sum ${loss.sumGain.toFixed(3)} · affected ${loss.nGain}/${loss.attributableCount} · coverable(EN+gold-wiki) ${loss.coverable} · still-vulnerable ${loss.stillVulnerable} · mirror-recovered(S39) ${loss.mirrorRecoveredRuns} runs/${loss.mirrorRecoveredQueries} queries · mirror-still-lost ${loss.mirrorStillLostRuns} runs/${loss.mirrorStillLostQueries} queries · never-present+429 ${loss.neverPresent}(log uncaptured — rerun scripts/analyze-429-loss.ts <log>)`,
+        `S37 wikipedia-429 loss report (median run): weighted ${loss.weightedLoss.toFixed(3)} · gain-sum ${loss.sumGain.toFixed(3)} · affected ${loss.nGain}/${loss.attributableCount} · coverable(EN+gold-wiki) ${loss.coverable} · still-vulnerable ${loss.stillVulnerable} · mirror-recovered(S39) ${loss.mirrorRecoveredRuns} runs/${loss.mirrorRecoveredQueries} queries · mirror-still-lost ${loss.mirrorStillLostRuns} runs/${loss.mirrorStillLostQueries} queries · never-present+429 ${loss.neverPresent}(log uncaptured — rerun scripts/analyze-429-loss.ts <log>) · gate×429(S75): flagged-by-429 ${loss.gate429.flaggedBy429.length} · clean-flags ${loss.gate429.flaggedClean.length} · passed-with-429 ${loss.gate429.passedWith429.length}`,
       )
       if (loss.weightedLoss > threshold) {
         console.error(

@@ -48,6 +48,12 @@ export function formatReport(report: EvalReport, regressions: RegressionDiff[]):
     const c = report.cache
     lines.push('  ─ Cache Hit Rate ─')
     lines.push(`  Hit rate:      ${(c.hitRate * 100).toFixed(1)}% (${c.hits}/${c.hits + c.misses})`)
+    // S80-①: cold-run failures are skipped from the warm pass (no cache entry
+    // was stored → a warm re-run is a guaranteed miss), so hits+misses is the
+    // number of MEASURED pairs, not total queries. Surface the excluded count.
+    if (c.skipped > 0) {
+      lines.push(`  Skipped:       ${c.skipped} (cold run failed — excluded from denominator)`)
+    }
     lines.push(`  Avg cold:      ${c.avgColdMs}ms  →  Avg warm: ${c.avgWarmMs}ms`)
     lines.push('')
   }
@@ -177,6 +183,12 @@ export function formatReportSummary(report: EvalReport, regressions: RegressionD
     lines.push('| Metric | Value |')
     lines.push('|--------|-------|')
     lines.push(`| **Hit Rate** | ${(c.hitRate * 100).toFixed(1)}% (${c.hits}/${c.hits + c.misses}) |`)
+    // S80-①: hits+misses = measured pairs, not total queries — cold failures
+    // skip the warm pass (guaranteed miss) and are excluded from the
+    // denominator.
+    if (c.skipped > 0) {
+      lines.push(`| **Warm Runs Skipped** | ${c.skipped} (cold run failed — excluded from denominator) |`)
+    }
     lines.push(`| **Avg Cold Latency** | ${c.avgColdMs}ms |`)
     lines.push(`| **Avg Warm Latency** | ${c.avgWarmMs}ms |`)
     lines.push('')
@@ -193,7 +205,7 @@ export function formatReportSummary(report: EvalReport, regressions: RegressionD
     const failures = r.failures.length > 0 ? r.failures.join('; ') : '—'
     // S28: availability warnings (missing required backends with an adequate
     // pool) are non-fatal but must stay visible.
-    const warnings = (r.warnings ?? []).length > 0 ? r.warnings.join('; ') : '—'
+    const warnings = (r.warnings ?? []).join('; ') || '—'
     lines.push(
       `| ${r.query.id} | ${status} | ${r.resultCount} | ${r.responseTimeMs}ms | ${backends} | ${failures} | ${warnings} |`,
     )

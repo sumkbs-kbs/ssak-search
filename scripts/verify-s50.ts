@@ -38,7 +38,10 @@ for (const [qid, g] of Object.entries(gold)) {
     return pool.length ? ndcgOf(pool, gs) : null
   })
   if (vals.some((v) => v === null)) continue
-  const m = med(...(vals as number[]))
+  const v0 = (vals[0] as number | undefined) ?? 0
+  const v1 = (vals[1] as number | undefined) ?? 0
+  const v2 = (vals[2] as number | undefined) ?? 0
+  const m = med(v0, v1, v2)
   sum += m
   n++
   if (m > 1.0001) {
@@ -57,5 +60,8 @@ for (const qid of ['en-tech-07', 'kr-stock-03', 'kr-news-02', 'en-fact-01', 'zh-
     return pool.length ? ndcgOf(pool, gs) : null
   })
   if (vals.some((v) => v === null)) continue
-  console.log(`${qid}: ${med(...(vals as number[])).toFixed(3)}  (구 규칙 2.231/1.202/1.497/0.975/0.000)`)
+  const a0 = (vals[0] as number | undefined) ?? 0
+  const a1 = (vals[1] as number | undefined) ?? 0
+  const a2 = (vals[2] as number | undefined) ?? 0
+  console.log(`${qid}: ${med(a0, a1, a2).toFixed(3)}  (구 규칙 2.231/1.202/1.497/0.975/0.000)`)
 }

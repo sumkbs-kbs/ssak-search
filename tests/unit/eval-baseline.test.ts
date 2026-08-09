@@ -13,7 +13,7 @@
 
 import { describe, it, expect } from 'vitest'
 import { recomputeNdcgAt10, computeNdcg } from '../../eval/metrics'
-import { diffBaseline } from '../../eval/baseline'
+import { diffBaseline, diffBaselineStabilized } from '../../eval/baseline'
 import type { EvalReport, EvalBaseline, EvalResult } from '../../eval/types'
 import type { SearchResult, SearchResponse } from '../../src/types'
 
@@ -205,5 +205,128 @@ describe('diffBaseline (S58 — NDCG comparison is gold/rules-robust)', () => {
     const current = mkReport(['q1'], [mkEvalResult('q1', { pool: [mkResult('https://example.com/a')] })])
     const empty = mkBaseline(mkReport([], []))
     expect(diffBaseline(current, empty, { q1: ['example.com'] })).toHaveLength(0)
+  })
+})
+
+describe('diffBaselineStabilized (G2/S73 — 2-run stabilization: both runs must agree)', () => {
+  // NDCG reference pools under gold ['wikipedia.org']:
+  //   goodPool  → wikipedia rank 1             NDCG 1.0
+  //   midPool   → wikipedia rank 2             NDCG 1/log2(3) ≈ 0.6309
+  //   badPool   → wikipedia rank 3             NDCG 1/log2(4) = 0.5
+  //   worsePool → no wikipedia in top-10       NDCG 0.0
+  const goodPool = [mkResult('https://en.wikipedia.org/wiki/DNA'), mkResult('https://example.com/a')]
+  const midPool = [mkResult('https://example.com/a'), mkResult('https://en.wikipedia.org/wiki/DNA')]
+  const badPool = [
+    mkResult('https://example.com/a'),
+    mkResult('https://example.com/b'),
+    mkResult('https://en.wikipedia.org/wiki/DNA'),
+  ]
+  const worsePool = [mkResult('https://example.com/a'), mkResult('https://example.com/b')]
+  const baseline = mkBaseline(mkReport(['q1'], [mkEvalResult('q1', { pool: goodPool })]))
+  const GOLD = { q1: ['wikipedia.org'] }
+
+  it('does NOT flag when only ONE of two runs regresses (the G2 core case)', () => {
+    // Single-run pool noise: one run flapped to a wikipedia-less pool, the
+    // other run is healthy. The old single-run gate flagged this as a
+    // regression; stabilization requires BOTH runs to drop >= 0.05.
+    const healthy = mkReport(['q1'], [mkEvalResult('q1', { pool: goodPool })])
+    const flaky = mkReport(['q1'], [mkEvalResult('q1', { pool: worsePool })])
+    expect(diffBaselineStabilized([healthy, flaky], baseline, GOLD)).toHaveLength(0)
+    expect(diffBaselineStabilized([flaky, healthy], baseline, GOLD)).toHaveLength(0)
+  })
+
+  it('flags a query when BOTH runs regress >= 0.05 NDCG', () => {
+    const bad = mkReport(['q1'], [mkEvalResult('q1', { pool: worsePool })])
+    const diffs = diffBaselineStabilized([bad, bad], baseline, GOLD)
+    const ndcg = diffs.filter((d) => d.metric === 'ndcgAt10')
+    expect(ndcg).toHaveLength(1)
+    expect(ndcg[0].queryId).toBe('q1')
+    expect(ndcg[0].baseline).toBe('1.0000') // recomputed from baseline pool
+    expect(ndcg[0].current).toBe('0.0000') // recomputed from worse current pool
+    expect(ndcg[0].regressed).toBe(true)
+  })
+
+  it('reports the WORST of the two agreeing runs (conservative current value)', () => {
+    // Both runs regress, but to different depths: midPool 0.6309 vs badPool
+    // 0.5. The flag must report the worse (0.5), not the average/median.
+    const mid = mkReport(['q1'], [mkEvalResult('q1', { pool: midPool })])
+    const bad = mkReport(['q1'], [mkEvalResult('q1', { pool: badPool })])
+    const diffs = diffBaselineStabilized([mid, bad], baseline, GOLD)
+    const ndcg = diffs.filter((d) => d.metric === 'ndcgAt10')
+    expect(ndcg).toHaveLength(1)
+    expect(ndcg[0].current).toBe('0.5000')
+    expect(ndcg[0].delta).toBe('-0.5000')
+  })
+
+  it('flags only the query that regressed in BOTH runs (mixed-pool report)', () => {
+    // q1 regresses in both runs; q2 regresses in only one → only q1 flagged.
+    const baseline2 = mkBaseline(
+      mkReport(['q1', 'q2'], [mkEvalResult('q1', { pool: goodPool }), mkEvalResult('q2', { pool: goodPool })]),
+    )
+    const GOLD2 = { q1: ['wikipedia.org'], q2: ['wikipedia.org'] }
+    const bad = mkReport(
+      ['q1', 'q2'],
+      [mkEvalResult('q1', { pool: worsePool }), mkEvalResult('q2', { pool: worsePool })],
+    )
+    const flaky = mkReport(
+      ['q1', 'q2'],
+      [mkEvalResult('q1', { pool: worsePool }), mkEvalResult('q2', { pool: goodPool })],
+    )
+    const diffs = diffBaselineStabilized([bad, flaky], baseline2, GOLD2)
+    expect(diffs.filter((d) => d.metric === 'ndcgAt10').map((d) => d.queryId)).toEqual(['q1'])
+  })
+
+  it('requires BOTH runs to agree for runtime metrics (resultCount/responseTime/passStatus)', () => {
+    // resultCount: only run1 dropped → no flag.
+    const rtBase = mkBaseline(
+      mkReport(['q1'], [mkEvalResult('q1', { pool: goodPool, resultCount: 8, responseTimeMs: 1000 })]),
+    )
+    const run1 = mkReport(
+      ['q1'],
+      [mkEvalResult('q1', { pool: goodPool, resultCount: 3, responseTimeMs: 2000, passed: false })],
+    )
+    const run2 = mkReport(['q1'], [mkEvalResult('q1', { pool: goodPool, resultCount: 8, responseTimeMs: 1000 })])
+    expect(diffBaselineStabilized([run1, run2], rtBase, GOLD)).toHaveLength(0)
+
+    // Both runs agree on every runtime regression → all three flagged.
+    const run2bad = mkReport(
+      ['q1'],
+      [mkEvalResult('q1', { pool: goodPool, resultCount: 4, responseTimeMs: 1500, passed: false })],
+    )
+    const diffs = diffBaselineStabilized([run1, run2bad], rtBase, GOLD)
+    const metrics = new Set(diffs.map((d) => d.metric))
+    expect(metrics.has('resultCount')).toBe(true)
+    expect(metrics.has('responseTimeMs')).toBe(true)
+    expect(metrics.has('passStatus')).toBe(true)
+    expect(metrics.has('ndcgAt10')).toBe(false) // pools identical → no ndcg delta
+    expect(diffs.find((d) => d.metric === 'resultCount')?.current).toBe(3) // worse of 3/4
+    expect(diffs.find((d) => d.metric === 'responseTimeMs')?.current).toBe(2000) // worse of 2000/1500
+  })
+
+  it('median mode (3 runs): flags on a 2-of-3 majority, not a single dissenter', () => {
+    const bad = mkReport(['q1'], [mkEvalResult('q1', { pool: worsePool })])
+    const good = mkReport(['q1'], [mkEvalResult('q1', { pool: goodPool })])
+    // 2 of 3 regressed → flagged (majority).
+    expect(
+      diffBaselineStabilized([bad, bad, good], baseline, GOLD).filter((d) => d.metric === 'ndcgAt10'),
+    ).toHaveLength(1)
+    // 1 of 3 regressed → not flagged.
+    expect(diffBaselineStabilized([bad, good, good], baseline, GOLD)).toHaveLength(0)
+  })
+
+  it('runs whose NDCG is not computable never count toward agreement', () => {
+    // run1 regresses; run2 has no pool AND no stored ranking → its NDCG is
+    // undefined, so only 1 computable run agrees → not flagged.
+    const bad = mkReport(['q1'], [mkEvalResult('q1', { pool: worsePool })])
+    const noPool = mkReport(['q1'], [mkEvalResult('q1')])
+    expect(diffBaselineStabilized([bad, noPool], baseline, GOLD)).toHaveLength(0)
+  })
+
+  it('falls back to the single-run diff when fewer than 2 runs are given', () => {
+    const bad = mkReport(['q1'], [mkEvalResult('q1', { pool: worsePool })])
+    const single = diffBaselineStabilized([bad], baseline, GOLD)
+    expect(single.filter((d) => d.metric === 'ndcgAt10')).toHaveLength(1)
+    // Same result as the plain single-run gate for the same input.
+    expect(diffBaseline(bad, baseline, GOLD)).toEqual(single)
   })
 })

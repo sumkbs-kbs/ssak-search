@@ -13,14 +13,17 @@ const VULNERABLE_JA: Array<{ id: string; query: string }> = [
   { id: 'ja-fact-10', query: '地球温暖化の仕組み' },
 ]
 
+type GoldEntry = { relevantDomains?: string[] }
+type GoldMap = Record<string, GoldEntry>
+
 async function main(): Promise<void> {
   const gold = await import('../eval/gold-standards.json')
-  const goldMap = gold.default ?? gold
-  const arr = Array.isArray(goldMap) ? goldMap : Object.entries(goldMap)
+  // S82: normalize the untyped JSON import to a typed GoldMap (TS7053).
+  const goldMap: GoldMap = ((gold.default ?? gold) as GoldMap) ?? {}
 
   let recovered = 0
   for (const { id, query } of VULNERABLE_JA) {
-    const entry = Array.isArray(goldMap) ? arr.find((x: unknown) => (x as { id?: string }).id === id) : goldMap[id]
+    const entry = goldMap[id]
     const domains: string[] = entry?.relevantDomains ?? []
 
     // Tier 1: wikidata (S36)

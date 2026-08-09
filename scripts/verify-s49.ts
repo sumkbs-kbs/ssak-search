@@ -35,7 +35,14 @@ for (const qid of targets) {
   }
   const vals = runs.map((run) => ndcgOf(poolOf(run, qid), g))
   if (vals.every((v) => Number.isFinite(v) && v >= 0)) {
-    console.log(`${qid}: median NDCG = ${med(...vals).toFixed(3)}  (runs ${vals.map((v) => v.toFixed(3)).join('/')})`)
+    // Tuple-indexed spread — TS2556 (S82): `med(...vals)` requires a tuple;
+    // vals is number[] here, so index explicitly (3 runs, fixed arity).
+    const v0 = vals[0] ?? 0
+    const v1 = vals[1] ?? 0
+    const v2 = vals[2] ?? 0
+    console.log(
+      `${qid}: median NDCG = ${med(v0, v1, v2).toFixed(3)}  (runs ${vals.map((v) => v.toFixed(3)).join('/')})`,
+    )
   }
 }
 // 전체 gold 쿼리 평균 재계산 (R1 + gold fix 반영)
@@ -49,7 +56,10 @@ for (const [qid, g] of Object.entries(gold)) {
     return pool.length ? ndcgOf(pool, gs) : null
   })
   if (vals.some((v) => v === null)) continue
-  sum += med(...(vals as number[]))
+  const v0 = (vals[0] as number | undefined) ?? 0
+  const v1 = (vals[1] as number | undefined) ?? 0
+  const v2 = (vals[2] as number | undefined) ?? 0
+  sum += med(v0, v1, v2)
   n++
 }
 console.log(

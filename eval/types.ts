@@ -80,6 +80,14 @@ export interface CacheHitMetrics {
   hits: number
   /** Number of warm-pass queries that missed the cache */
   misses: number
+  /** S80-①: number of warm re-runs SKIPPED because their cold run FAILED
+   *  (a failed cold stores no cache entry, so a warm re-run is a guaranteed
+   *  miss that would only re-fan-out to the network — during a wikipedia
+   *  429 window that is an extra hammer on an already rate-limited upstream
+   *  for zero information). Skipped queries are EXCLUDED from the hitRate
+   *  denominator: hitRate = hits / (hits + misses), never / totalQueries.
+   *  A non-zero skipped count therefore makes `hits + misses < totalQueries`. */
+  skipped: number
   /** Avg latency of the first (cold) pass, ms */
   avgColdMs: number
   /** Avg latency of the second (warm) pass, ms */

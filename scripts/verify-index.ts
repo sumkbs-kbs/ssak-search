@@ -32,7 +32,10 @@ function main() {
   let config: WranglerConfig
   try {
     const content = readFileSync(configPath, 'utf-8')
-    config = parse(content)
+    // S82: comment-json's parse returns CommentJSONValue — structurally
+    // assignable to the local WranglerConfig subset (vectorize/d1_databases),
+    // so route through unknown to satisfy tsc under the widened include.
+    config = parse(content) as unknown as WranglerConfig
   } catch (err) {
     console.error('❌ FAIL: Could not read/parse wrangler.jsonc')
     console.error(err instanceof Error ? err.message : err)

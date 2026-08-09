@@ -17,6 +17,11 @@
  * Exit codes: 0 = OK, 1 = error, 2 = usage error
  */
 
+// S82: module-ify (see verify-metrics-persistence.ts) — prevents the global
+// `main`/`parseArgs`/`Args` from colliding with sibling scripts under the
+// widened tsconfig include (TS2393).
+export {}
+
 interface Args {
   apiUrl: string
   limit: number

@@ -27,12 +27,12 @@ on:
         default: 'false'
         type: boolean
       cache:
-        description: 'Measure cache hit rate (doubles runtime)'
+        description: 'Measure cache hit rate (doubles runtime). S77: ignored (skipped with a warning) when runs >= 3 — the timeout guard.'
         required: false
         default: 'false'
         type: boolean
       runs:
-        description: 'Median runs (3 = median-of-3, ~60min). Emits the S37 wikipedia-429 loss gate warning. Empty = single run.'
+        description: 'Median runs (3 = median-of-3, ~60min). Emits the S37 wikipedia-429 loss gate warning. Empty = single run. S77: with cache=true, runs >= 3 skips the cache measurement (4-pass budget risks the step timeout).'
         required: false
         default: ''
       loss_threshold:
@@ -53,7 +53,12 @@ jobs:
     # ~60-75min (S31/S32 measured ~75min). The old 30min budget killed a
     # median workflow_dispatch before the step finished. Single runs finish
     # in ~15-20min, so 95min only binds for explicit median invocations.
-    timeout-minutes: 95
+    # S74 (2026-08-09): budget re-measured on the S68 snapshot — 22-24min per
+    # cold run (totalDurationMs 1.33-1.45M). Schedule (2 runs + cache-once,
+    # S73 G2) ≈ 2×23 + warm ≈ 51min nominal, ~64min worst case (wide 429
+    # window). Bumped to 110min so an extreme weekly 429 window cannot kill
+    # the schedule step (setup+install+format eat ~7min of the job budget).
+    timeout-minutes: 110
     steps:
       - uses: actions/checkout@v4
 
@@ -100,10 +105,21 @@ jobs:
           # the wikipedia-429 loss gate — eval/index.ts computes the S34
           # composition-controlled weighted loss AFTER the median run and
           # prints a GitHub ::warning:: annotation when it exceeds the
-          # threshold (availability noise, NOT a failure).
+          # threshold (availability noise, NOT a failure). S74: schedule's
+          # --runs 2 now also emits this warning (runCount > 1) — weekly
+          # availability visibility, still non-blocking.
           RUNS_FLAG=""
           if [ -n "${{ github.event.inputs.runs }}" ]; then
             RUNS_FLAG="--runs ${{ github.event.inputs.runs }}"
+          elif [ "${{ github.event_name }}" = "push" ] || [ "${{ github.event_name }}" = "pull_request" ] || [ "${{ github.event_name }}" = "schedule" ]; then
+            # G2 (2026-08-09): 2-run stabilization on the regression gate.
+            # eval/index.ts uses compareWithBaselineStabilized whenever
+            # --runs >= 2 — a query is flagged only when BOTH runs drop
+            # >= 0.05 NDCG (single-run noise was ~13% of queries, S67 G2).
+            # S74: schedule is included so the WEEKLY full eval (cache mode)
+            # gets the same stabilized gate; cache is measured on run 1 only
+            # (eval/index.ts), so the budget stays ~51min not ~54min.
+            RUNS_FLAG="--runs 2"
           fi
           LOSS_FLAG=""
           if [ -n "${{ github.event.inputs.runs }}" ] && [ -n "${{ github.event.inputs.loss_threshold }}" ]; then
@@ -113,7 +129,9 @@ jobs:
           # Weekly/manual-cache runs use the full search-quality eval (direct mode):
           # it supports --cache, computes NDCG/MRR/Precision@10 from gold standards,
           # and writes eval/results/latest.json for the weekly README update.
-          # Push/PR runs keep the fast deterministic self-index benchmark as before.
+          # Push/PR runs run the SAME full eval (G10 — the old "self-index
+          # benchmark" comment was wrong); with --runs 2 they get the G2
+          # 2-run-stabilized regression gate below.
           RUN_MODE="eval:ci:slack"
           if [ "${{ github.event_name }}" = "schedule" ] || [ "${{ github.event.inputs.cache }}" = "true" ]; then
             RUN_MODE="eval:ci"
@@ -138,7 +156,9 @@ jobs:
         id: eval
         continue-on-error: true
         # S37: 50→90min — median-of-3 runs ~60-75min; step must outlive the run.
-        timeout-minutes: 90
+        # S74: 90→100min — schedule (2 runs + cache-once) measured ~51min
+        # nominal / ~64min worst case; margin absorbs an extreme 429 window.
+        timeout-minutes: 100
         run: |
           npm run ${{ steps.config.outputs.run_mode }} -- ${{ steps.config.outputs.tag_flag }} ${{ steps.config.outputs.save_flag }} ${{ steps.config.outputs.cache_flag }} ${{ steps.config.outputs.runs_flag }} ${{ steps.config.outputs.loss_flag }} 2>&1
 

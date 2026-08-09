@@ -103,17 +103,17 @@ export default tseslint.config(
     },
   },
 
-  // === Eval file overrides ===
-  // S61 (2026-08-09): eval/ was previously in the global ignores — the
-  // overrides below existed but were dead until the directory was added to
-  // the lint gate. Eval scripts legitimately use console for CLI output and
-  // loose typing for versioned artifact shapes; other rules (non-null,
-  // unused, imports) are enforced to keep the whole codebase at 0 warnings.
-  {
-    files: ['eval/**/*.ts'],
-    rules: {
-      '@typescript-eslint/no-explicit-any': 'off',
-      'no-console': 'off',
-    },
-  },
+  // === Eval file overrides (REMOVED — S70) ===
+  // S61 (2026-08-09) added eval/ to the lint gate with a local override that
+  // turned off no-explicit-any and no-console. S70 (2026-08-09) audited the
+  // actual usage and found the override was fully redundant:
+  //   - no-explicit-any: exactly ONE real type-level `any` existed in eval/
+  //     (eval/runner-self.ts `{} as any` — now `{} as unknown as Env`); all
+  //     other "any" grep hits were the English word in comments/strings.
+  //   - no-console: all 75 usages use ONLY console.error/log/warn, which the
+  //     base project rule already allows. No eval script uses console.info/
+  //     debug/table/time, so nothing regresses under the base rule.
+  // Both rules now fall through to the project defaults (no-explicit-any:
+  // warn, no-console: warn with allow list) — eval/ must stay at 0 warnings
+  // like every other directory.
 )

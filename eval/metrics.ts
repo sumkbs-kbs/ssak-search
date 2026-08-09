@@ -619,11 +619,20 @@ export function aggregateRankingMetrics(results: EvalResult[]): AggregateRanking
  * served from the in-process memory cache (or Cache API where available)
  * return in a few milliseconds; anything above the hit threshold counts
  * as a miss.
+ *
+ * S80-①: `skipped` (default 0) counts warm re-runs that were NOT executed
+ * because their cold run failed — a failed cold stores no cache entry, so
+ * the warm run is a guaranteed miss and skipping it avoids a wasteful
+ * network re-fan-out. Skipped queries are NOT pushed into cold/warmTimesMs
+ * by the runner, so they never enter the denominator: hitRate = hits /
+ * (hits + misses), and `hits + misses` is the number of MEASURED pairs,
+ * not the total query count.
  */
 export function computeCacheHitRate(
   coldTimesMs: number[],
   warmTimesMs: number[],
   hitThresholdMs = 200,
+  skipped = 0,
 ): CacheHitMetrics {
   const avg = (arr: number[]): number => (arr.length > 0 ? arr.reduce((s, t) => s + t, 0) / arr.length : 0)
 
@@ -639,6 +648,7 @@ export function computeCacheHitRate(
     hitRate: total > 0 ? hits / total : 0,
     hits,
     misses: total - hits,
+    skipped,
     avgColdMs: Math.round(avg(coldTimesMs)),
     avgWarmMs: Math.round(avg(warmTimesMs)),
     hitThresholdMs,

@@ -8,6 +8,12 @@
  * Exit codes: 0 = OK (persistence active), 1 = Not active, 2 = Error
  */
 
+// S82: `export {}` makes this a MODULE so its top-level `main` does not
+// collide with other scripts' globals under the widened tsconfig include
+// (TS2393 Duplicate function implementation — every script declared `main`
+// in the shared global scope). Shebang scripts stay executable via tsx.
+export {}
+
 async function main() {
   const url = process.argv[2] || 'http://localhost:8788'
   const healthUrl = `${url.replace(/\/$/, '')}/api/metrics`

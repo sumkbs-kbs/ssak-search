@@ -59,9 +59,12 @@ const med = (a: number, b: number, c: number) => [a, b, c].sort((x, y) => x - y)
 const g03 = ['finance.naver.com', 'naver.com', 'investing.com']
 const g03fix = ['finance.naver.com', 'm.stock.naver.com', 'investing.com']
 const perRun = runs.map((run) => pool(run, 'kr-stock-03'))
-const cur = med(...perRun.map((p) => ndcg(p, g03, false)))
-const fix = med(...perRun.map((p) => ndcg(p, g03fix, false)))
-const cap = med(...perRun.map((p) => ndcg(p, g03, true)))
+// Tuple-indexed medians — TS2556 (S82): `med(...arr)` needs a tuple, so index
+// the 3 fixed runs explicitly instead of spreading number[].
+const med3 = (arr: number[]): number => med(arr[0] ?? 0, arr[1] ?? 0, arr[2] ?? 0)
+const cur = med3(perRun.map((p) => ndcg(p, g03, false)))
+const fix = med3(perRun.map((p) => ndcg(p, g03fix, false)))
+const cap = med3(perRun.map((p) => ndcg(p, g03, true)))
 console.log(`kr-stock-03  A) current gold+substring:      ${cur.toFixed(3)}`)
 console.log(`kr-stock-03  B) gold fix naver.com→m.stock:  ${fix.toFixed(3)}`)
 console.log(`kr-stock-03  C) per-gold DCG cap:            ${cap.toFixed(3)}`)
@@ -81,8 +84,8 @@ for (const [qid, g] of Object.entries(gold)) {
   if (gs.length === 0) continue
   const perRunP = runs.map((run) => pool(run, qid))
   if (perRunP.some((p) => p.length === 0)) continue
-  const a = med(...perRunP.map((p) => ndcg(p, gs, false)))
-  const c = med(...perRunP.map((p) => ndcg(p, gs, true)))
+  const a = med3(perRunP.map((p) => ndcg(p, gs, false)))
+  const c = med3(perRunP.map((p) => ndcg(p, gs, true)))
   n++
   sumA += a
   sumC += c

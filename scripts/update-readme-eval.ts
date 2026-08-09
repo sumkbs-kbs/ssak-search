@@ -10,7 +10,7 @@
  */
 
 import { readFileSync, writeFileSync, existsSync } from 'node:fs'
-import { join } from 'node:path'
+import { join, resolve } from 'node:path'
 
 const README_PATH = join(process.cwd(), 'README.md')
 const RESULTS_PATH = join(process.cwd(), 'eval', 'results', 'latest.json')
@@ -26,12 +26,22 @@ interface LatestReport {
     avgResultCount: number
     latencyPercentiles: { p50: number; p95: number; p99: number }
     qps: { avgQps: number }
-    cache?: { hitRate: number; hits: number; misses: number; avgColdMs: number; avgWarmMs: number }
+    // S80-①: `skipped` — warm re-runs skipped because their cold run failed
+    // (no cache entry stored). Excluded from the hitRate denominator and
+    // reported so hits+misses < totalQueries stays transparent.
+    cache?: {
+      hitRate: number
+      hits: number
+      misses: number
+      skipped: number
+      avgColdMs: number
+      avgWarmMs: number
+    }
     ranking?: { queriesWithGoldStandard: number; avgNdcgAt10: number; avgMrr: number; avgPrecisionAt10: number }
   }
 }
 
-function buildMetricsSection(r: NonNullable<LatestReport['report']>): string {
+export function buildMetricsSection(r: NonNullable<LatestReport['report']>): string {
   const rows: string[] = []
   rows.push('## 검색 품질 테스트 결과 (자동 측정)')
   rows.push('')
@@ -53,8 +63,18 @@ function buildMetricsSection(r: NonNullable<LatestReport['report']>): string {
     rows.push(`| **Precision@10** | ${r.ranking.avgPrecisionAt10.toFixed(4)} |`)
   }
   if (r.cache) {
+    // S80-①: `skipped` (warm re-runs skipped because their cold run failed)
+    // is ALWAYS shown next to hitRate when present — even 0 — so the
+    // denominator stays transparent: hitRate = hits/(hits+misses) and
+    // hits+misses < totalQueries exactly when skipped > 0. Pre-S80-①
+    // artifacts have no `skipped` field → omit the suffix entirely (the
+    // field's absence already means "0 skips, legacy denominator").
+    // NOTE: eval/reporter.ts shows `Skipped: N` only when skipped > 0 — this
+    // README row intentionally always shows it (denominator transparency for
+    // a machine-regenerated table), a deliberate difference.
+    const skippedNote = r.cache.skipped !== undefined ? ` (skipped ${r.cache.skipped})` : ''
     rows.push(
-      `| **Cache Hit Rate** | ${(r.cache.hitRate * 100).toFixed(1)}% (${r.cache.hits}/${r.cache.hits + r.cache.misses}) |`,
+      `| **Cache Hit Rate** | ${(r.cache.hitRate * 100).toFixed(1)}% (${r.cache.hits}/${r.cache.hits + r.cache.misses})${skippedNote} |`,
     )
     rows.push(`| **Cache avg cold→warm** | ${r.cache.avgColdMs}ms → ${r.cache.avgWarmMs}ms |`)
   }
@@ -93,4 +113,7 @@ function main(): void {
   console.log('README.md metrics section updated.')
 }
 
-main()
+// Run only when executed directly (not when imported by tests).
+const isDirectRun =
+  process.argv[1] && resolve(process.argv[1]) === resolve(process.cwd(), 'scripts', 'update-readme-eval.ts')
+if (isDirectRun) main()

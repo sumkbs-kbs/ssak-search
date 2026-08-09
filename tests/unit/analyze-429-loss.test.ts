@@ -15,6 +15,7 @@ import { mkdtempSync, writeFileSync, rmSync, mkdirSync } from 'fs'
 import { tmpdir } from 'os'
 import { join } from 'path'
 import type { SearchResult } from '../../src/types'
+import type { EvalBaseline } from '../../eval/types'
 import { computeLossReport, parseMirrorEvents, aggregateMirrorStats } from '../../scripts/analyze-429-loss'
 
 function makeRunDir(): string {
@@ -528,6 +529,102 @@ describe('computeLossReport', () => {
     expect(s.mirrorStats).toEqual([])
     expect(s.nonEnMirrorRecoveredLog).toBe(0)
     expect(s.neverPresentRecoveredByLog).toBe(0)
+  })
+})
+
+describe('gate × wikipedia-429 cross-reference (S75)', () => {
+  // en-fact-01 gold = [wikipedia.org, britannica.com] (real gold-standards.json).
+  // Pool-less fixtures exercise the S54 stored-ranking fallback on BOTH sides
+  // (run files carry ranking.ndcgAt10; the baseline carries ranking too), so
+  // the cross-reference sees exactly the numbers the gate sees.
+  const baseline = (storedNdcg: number): EvalBaseline => ({
+    timestamp: '2026-01-01T00:00:00.000Z',
+    report: {
+      timestamp: '2026-01-01T00:00:00.000Z',
+      totalQueries: 1,
+      passedQueries: 1,
+      failedQueries: 0,
+      passRate: 1,
+      avgTimeMs: 100,
+      avgResultCount: 5,
+      backendCoverage: {},
+      latencyPercentiles: { p50: 0, p75: 0, p90: 0, p95: 0, p99: 0, max: 0, min: 0 },
+      qps: { avgQps: 0, totalQueries: 0, totalDurationMs: 0, byTag: {}, peakQps: 0 },
+      results: [
+        {
+          query: { id: 'en-fact-01', query: 'x' },
+          response: null,
+          resultCount: 5,
+          responseTimeMs: 100,
+          backends: ['wikipedia'],
+          passed: true,
+          failures: [],
+          ranking: { ndcgAt10: storedNdcg, mrr: 0, precisionAt10: 0, relevantHits: 0 },
+        },
+      ],
+    },
+  })
+
+  let dir: string
+  beforeEach(() => {
+    dir = makeRunDir()
+  })
+  afterEach(() => {
+    rmSync(dir, { recursive: true, force: true })
+  })
+
+  it('gate-flagged AND both runs wikipedia-absent → flaggedBy429 (dismissable noise)', () => {
+    // Baseline 0.613; both runs drop to 0.1/0.05 (>> 0.05) with NO wikipedia
+    // in backends → the 2-run gate flags, and every regressed run is 429.
+    writeRuns(dir, [{ id: 'en-fact-01', backends: [['bing'], ['bing']], ndcgs: [0.1, 0.05] }], 2)
+    const s = computeLossReport(dir, undefined, baseline(0.613))
+    expect(s.gate429.flaggedBy429.map((r) => r.id)).toEqual(['en-fact-01'])
+    expect(s.gate429.flaggedBy429[0].run429).toEqual([true, true])
+    expect(s.gate429.flaggedClean).toHaveLength(0)
+    expect(s.gate429.passedWith429).toHaveLength(0)
+  })
+
+  it('gate-PASSED but both runs wikipedia-absent and below baseline → passedWith429', () => {
+    // The G2 core ask: 2-run stabilization let a wikipedia-429 drop through.
+    // run1 drops 0.013 (< 0.05), run2 drops 0.063 (>= 0.05) → only 1 of 2
+    // regressed → the gate does NOT flag. But BOTH runs are wikipedia-absent
+    // and both score below baseline → the pass is availability luck.
+    writeRuns(dir, [{ id: 'en-fact-01', backends: [['bing'], ['bing']], ndcgs: [0.6, 0.55] }], 2)
+    const s = computeLossReport(dir, undefined, baseline(0.613))
+    expect(s.gate429.flaggedBy429).toHaveLength(0)
+    expect(s.gate429.flaggedClean).toHaveLength(0)
+    expect(s.gate429.passedWith429.map((r) => r.id)).toEqual(['en-fact-01'])
+    expect(s.gate429.passedWith429[0].baselineNdcg).toBe(0.613)
+    expect(s.gate429.passedWith429[0].runNdcgs).toEqual([0.6, 0.55])
+  })
+
+  it('gate-flagged with a NON-429 regressed run → flaggedClean (genuine candidate)', () => {
+    // run1 regresses with wikipedia PRESENT (real drop), run2 regresses with
+    // wikipedia absent — the flag is NOT fully explained by availability.
+    writeRuns(dir, [{ id: 'en-fact-01', backends: [['wikipedia', 'bing'], ['bing']], ndcgs: [0.2, 0.55] }], 2)
+    const s = computeLossReport(dir, undefined, baseline(0.613))
+    expect(s.gate429.flaggedBy429).toHaveLength(0)
+    expect(s.gate429.flaggedClean.map((r) => r.id)).toEqual(['en-fact-01'])
+    expect(s.gate429.flaggedClean[0].run429).toEqual([false, true])
+    expect(s.gate429.passedWith429).toHaveLength(0)
+  })
+
+  it('no baseline → cross-reference skipped (hasBaseline false, sets empty)', () => {
+    writeRuns(dir, [{ id: 'en-fact-01', backends: [['bing'], ['bing']], ndcgs: [0.1, 0.05] }], 2)
+    const s = computeLossReport(dir, undefined, null)
+    expect(s.gate429.hasBaseline).toBe(false)
+    expect(s.gate429.flaggedBy429).toHaveLength(0)
+    expect(s.gate429.flaggedClean).toHaveLength(0)
+    expect(s.gate429.passedWith429).toHaveLength(0)
+  })
+
+  it('single run → stabilization gate not applicable (sets empty)', () => {
+    writeRuns(dir, [{ id: 'en-fact-01', backends: [['bing']], ndcgs: [0.1] }], 1)
+    const s = computeLossReport(dir, undefined, baseline(0.613))
+    expect(s.gate429.hasBaseline).toBe(true)
+    expect(s.gate429.runCount).toBe(1)
+    expect(s.gate429.flaggedBy429).toHaveLength(0)
+    expect(s.gate429.passedWith429).toHaveLength(0)
   })
 })
 

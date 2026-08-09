@@ -11,6 +11,7 @@
 
 import type { EvalResult, EvalReport, RegressionDiff, EvalBaseline } from './types'
 import type { SelfIndexEvalQuery } from './queries-self'
+import type { Env } from '../src/types'
 import { computeBm25Score, computeRrfScore, searchIndexPaginated } from '../src/lib/index/pipeline'
 import { calculateLatencyPercentiles, calculateQPS } from './metrics'
 
@@ -175,7 +176,10 @@ async function runSearchIndexIntegration(query: SelfIndexEvalQuery): Promise<Eva
 
   try {
     const result = await searchIndexPaginated(
-      {} as any, // Empty env
+      {} as unknown as Env, // Empty env — S70: `as any` removed; the empty env
+      // is intentionally binding-free (this integration test only verifies the
+      // graceful no-D1/no-Vectorize path), so the cast is explicit about the
+      // lie rather than hiding it behind `any`.
       {
         query: query.query,
         page: 1,

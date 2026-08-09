@@ -93,7 +93,10 @@ function loadRuns(): RunData[] {
       return na - nb
     })
   if (!files.length) throw new Error(`no run-N.json in ${RESULTS_DIR}`)
-  return files.map((f) => {
+  return files.map((f, idx) => {
+    // S82: `idx` was referenced but never a parameter (TS2304 under the
+    // widened include) — the map callback only declared `f`. Run ids are
+    // 1-based in file order.
     const raw = JSON.parse(readFileSync(resolve(RESULTS_DIR, f), 'utf8'))
     const results: Array<{
       query?: { id?: string }
@@ -103,10 +106,17 @@ function loadRuns(): RunData[] {
     }> = raw.report?.results ?? raw.results ?? []
     const byQuery = new Map<string, QueryRunInfo>()
     for (const q of results) {
+      // S82: ranking/resultCount arrive as `unknown` from the JSON files —
+      // coerce with Number() so tsc accepts the number-typed fields (TS2322
+      // under the widened include).
+      const n = (v: unknown): number => {
+        const x = typeof v === 'number' ? v : Number(v)
+        return Number.isFinite(x) ? x : 0
+      }
       byQuery.set(q.query?.id ?? '', {
         backends: Array.isArray(q.backends) ? q.backends : [],
-        ndcg: q.ranking?.ndcgAt10 ?? q.ranking?.ndcg10 ?? 0,
-        resultCount: q.resultCount ?? 0,
+        ndcg: n(q.ranking?.ndcgAt10 ?? q.ranking?.ndcg10),
+        resultCount: n(q.resultCount),
       })
     }
     return { id: idx + 1, byQuery }
@@ -203,9 +213,15 @@ function main(): void {
   // (see header) for a real before/after comparison.
   const baselineByQuery = new Map<string, number>()
   if (existsSync(BASELINE_PATH)) {
-    const b = JSON.parse(readFileSync(BASELINE_PATH, 'utf8'))
+    const b = JSON.parse(readFileSync(BASELINE_PATH, 'utf8')) as {
+      report?: { results?: Array<{ query?: { id?: string }; ranking?: Record<string, unknown> }> }
+    }
+    const n = (v: unknown): number => {
+      const x = typeof v === 'number' ? v : Number(v)
+      return Number.isFinite(x) ? x : 0
+    }
     for (const q of b.report?.results ?? []) {
-      baselineByQuery.set(q.query?.id, q.ranking?.ndcgAt10 ?? q.ranking?.ndcg10 ?? 0)
+      baselineByQuery.set(q.query?.id ?? '', n(q.ranking?.ndcgAt10 ?? q.ranking?.ndcg10))
     }
   }
 

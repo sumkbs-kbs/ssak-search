@@ -8,20 +8,23 @@
 
 모든 백엔드는 외부 유료 API 없이 작동합니다. 키 불필요, 등록 불필요, 비용 없음.
 
-## 검색 품질 (정량 평가 — 500 gold-standard queries · median-of-3)
+## 검색 품질 테스트 결과 (자동 측정)
 
-| 지표 | 값 |
-|------|-----|
-| **NDCG@10** | 0.51~0.55 (런별 편차; 최신 median-of-3 0.5113 — MRR 0.502, P@10 0.277) |
-| **Pass Rate** | 99.6% (498/500, 08-06 최신 런 — en-fact-01 wikipedia 일시 429, zh-general-12 커버리지) |
-| **Avg Time** | 1.66s (p50: 1.85s, p95: 3.5s) |
-| **Bundle Size** | 1,033 kB (gzip: 299 kB) |
+> 주간 eval 하네스가 자동 생성한 정량 메트릭 (2026-08-09T11:32:46.041Z). 수동 수정 금지 — 
+> `npm run eval -- --cache --json` 실행 시 `scripts/update-readme-eval.ts`가 이 섹션을 갱신합니다.
 
-- 골드셋 180 → **500쿼리** 확장 (KR 70 / EN 180 / ZH 57 / JA 43 / cross 150), 전 쿼리 골드 표준 1:1
-- 유닛 테스트 **1,381건** (71파일) · **CI 린트 게이트 그린** (`lint:eslint:ci`, **--max-warnings=0** — 회귀 시 CI 즉시 실패, ci.yml에 연결)
-- 3회 실행 **중앙값(median) 집계**: `npm run eval:median` — 백엔드 rate-limit 노이즈에 강건
-- wikipedia 백엔드 안정화(S9): 프로세스 내 결과 캐시 + eval 전용 페이싱 → en-fact-01 등 wikipedia 필수 쿼리 안정 통과
-- 상세 벤치마크: `npm run eval:ci` / `npm run eval:median:ci`
+| 메트릭 | 값 |
+|--------|-----|
+| **Pass Rate** | 82.4% (412/500) |
+| **평균 결과 수** | 9.9건 |
+| **p50 / p95 / p99 지연시간** | 5913ms / 10046ms / 10100ms |
+| **평균 응답 시간** | 6792ms |
+| **Avg QPS** | 0.09 |
+| **NDCG@10** | 0.2839 (gold 500개) |
+| **MRR@10** | 0.5179 |
+| **Precision@10** | 0.3140 |
+| **Cache Hit Rate** | 100.0% (500/500) (skipped 0) |
+| **Cache avg cold→warm** | 10027ms → 0ms |
 
 ## 아키텍처
 

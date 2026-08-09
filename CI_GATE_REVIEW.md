@@ -92,3 +92,68 @@ push마다 baseline을 갱신해 "회귀" 기준이 매 push 이동 — A→B �
 - 5대 게이트: 위 표 명령 그대로 (전부 exit 0)
 - eval 회귀 게이트 단독 스모크: `npx tsx eval/index.ts --ci --summary` (단일 run ~15-20분, 이번 턴 미실행 —
   baseline 유효성은 2026-08-09 저장값으로 확인)
+
+---
+
+# CI 게이트 커버리지 매트릭스 재점검 (S71, 2026-08-09)
+
+S67 이후 변경(S64 format 게이트 eval 확장, S70 eslint override 제거) 반영 + 워크플로우 소스 전수 재읽기.
+**신규 갭 G7~G10 발견 — G7은 HIGH 실버그.**
+
+## 7. 트리거 × 게이트 매트릭스 (S71 확정판)
+
+| 게이트 | push→main | PR | schedule(주간) | workflow_dispatch |
+|---|---|---|---|---|
+| eslint lint (0-warning) | ✅ ci | ✅ ci | ❌ | ❌ |
+| typecheck | ✅ ci | ✅ ci | ❌ | ❌ |
+| format | ✅ ci + ✅ eval | ✅ ci | ✅ eval | ✅ eval |
+| unit 테스트 | ✅ ci | ✅ ci | ❌ | ❌ |
+| build | ✅ ci | ✅ ci + ✅ int | ❌ | ❌ (int에서만) |
+| integration 테스트 | **❌ G1** | ✅ int | ❌ | ✅ int |
+| eval 회귀 게이트 | ✅ eval (단일 run, paths 한정) | ✅ eval (단일 run, paths 한정) | ✅ eval (단일 run) | ✅ eval (단일 run) |
+| **eval baseline 저장** | ⚠️ **G7: 실패해도 커밋** | ❌ | ❌ | ⚙️ input |
+| binding-verify | ✅ ci | ✅ ci | ❌ | ❌ |
+| coverage 임계 | ❌ (G3) | ❌ | ❌ | ❌ |
+
+**paths 필터 (소스 확인)**:
+- ci.yml: **paths 없음** — 모든 push/PR 전체 실행
+- eval.yml push: `src/**`, `eval/**`, `package.json` / **PR: `src/**`, `eval/**`** (package.json 누락 — G8)
+- integration-tests.yml PR: `src/**`, `tests/integration/**`, `wrangler.jsonc`, `package.json`, `vitest.integration.config.ts`
+
+## 8. 신규 갭 (S71)
+
+### G7. eval 실패 시에도 baseline이 커밋됨 — 회귀가 스스로 새 기준이 되는 버그 🔴 HIGH
+**eval.yml 스텝 순서 실측**: `Commit updated baseline`(157) → `Check results`(185) → `Fail workflow`(206).
+커밋 스텝 조건에 `steps.eval.outcome`/`steps.check.outputs.status` 가드가 **없음**. eval/index.ts에서도
+`saveBaseline(report)`(163)가 `hasRegressions → exit 1`(302)보다 **앞**에 있어 회귀 감지 run의 결과가
+그대로 `eval/baselines/latest.json`으로 저장됨. → **push에서 회귀를 감지해 workflow가 실패해도, 그
+회귀 결과가 이미 새 baseline으로 커밋·push됨** — 다음 push는 회귀 전 값을 기준으로 비교하므로 "회귀
+자가 소멸". S67이 G6로 "설계 특성"으로 기록한 것을 S71에서 **실버그로 정정** (이동 baseline은 정상이지만
+실패 run 커밋은 게이트 무력화).
+- 수정: ① 커밋 스텝 조건에 `&& steps.eval.outcome == 'success'` 추가 ② (보강) eval/index.ts에서
+  `opts.save && regressions.length === 0`일 때만 saveBaseline. 검증: 회귀 유발 push → baseline 미변경.
+
+### G8. eval.yml PR paths에 package.json 누락 — push와 비대칭 🟡 MEDIUM
+push paths는 `src/**`, `eval/**`, `package.json`인데 PR paths는 `src/**`, `eval/**`뿐. package.json만
+바꾸는 PR(예: eval 스크립트 변경, 의존성 변경)은 PR 단계에서 eval 게이트 미실행 → 병합 후 push에서만
+발동 (검증이 한 단계 늦음). 수정: PR paths에 `package.json` 추가 (1줄).
+
+### G9. eval/index.ts가 scripts/analyze-429-loss를 동적 import하는데 paths에 scripts/** 없음 🟡 MEDIUM
+eval/index.ts:191 `await import('../scripts/analyze-429-loss')` — S37 손실 게이트가 scripts/ 파일에 의존.
+그러나 eval.yml paths에 `scripts/**`가 없어 scripts/analyze-429-loss.ts만 변경하면 eval 워크플로우가
+트리거되지 않음 (ci.yml은 lint/typecheck/unit 커버하지만 **eval 게이트 자체는 반응 안 함**). 수정:
+paths에 `scripts/**` 추가 또는 최소한 `scripts/analyze-429-loss.ts` 명시.
+
+### G10. eval.yml "self-index benchmark" 주석이 실제와 불일치 — push 모드는 전체 500쿼리 eval 🟢 LOW-MED
+eval.yml:116 주석은 "Push/PR runs keep the fast deterministic self-index benchmark"라지만 실제
+`RUN_MODE="eval:ci:slack"` → `eval/index.ts --ci-slack` → `runEval(queries)` (line 156) —**전체 500쿼리 검색 품질 eval** (`runEval` line 156 — self-index는 index-self.ts). S67 G2(단일 run 노이즈 13%)와 결합하면
+**src/ 변경 push마다 15-20분 full eval이 돌고 회귀 플래그가 거의 항상 뜰 위험이 실재** — 주석이 실행과
+달라 운영자가 비용/실패율을 오해. 수정: 주석 정정 + G2 우선 조치.
+
+## 9. 갭 우선순위 (S71 갱신)
+1. **G7** (신규 HIGH) — 실패 baseline 커밋 가드 (2줄) + G2 (단일 run 노이즈) 함께 처리
+2. **G2** (S67 HIGH) — 2-run 안정화 / 가용성 플래그 위임
+3. **G1** (S67 HIGH) — integration push 트리거
+4. **G8/G9** (S71 MEDIUM) — paths 보강 (package.json, scripts/**)
+5. **G10** (S71) — 주석 정정
+6. G3/G4/G5/G6 — 정책 결정/문서화 (G6은 G7로 인해 실버그 승격)

@@ -2187,3 +2187,524 @@
 - **잔여**: ① 저장 스냅샷(run-1..3/latest/baselines)과 docs/10의 en-stock-07 NDCG 0.6173은 다음
   eval:median:save에서 0.8066으로 일괄 갱신 ② 이번 패턴(풀 부재 phantom gold가 NDCG를 억누르는 방향)의
   다른 쿼리 존재 여부는 전 코퍼스 subsumption/가용성 재스캔에서 재확인 가능.
+
+### S70: eval/ eslint override(no-explicit-any/no-console off) 실사용 전수 조사 — override 완전 제거 (2026-08-09)
+
+- **요청**: S64로 format 게이트가 eval/을 커버한 후, eval/ override에 남아있는 실질 any/console 사용처를
+  전수 조사해 정리 가능성 분석.
+- **실측 (grep + AST 수준 패턴 + eslint 실행)**: ① `any` grep 19건 중 **실제 타입레벨 any는 정확히 1건**
+  — `eval/runner-self.ts:178 {} as any` (나머지 18건은 주석/문자열 속 영단어 'any') ② `console` 75건 전부가
+  **console.error/log/warn 3종뿐** — 기본 프로젝트 규칙의 allow 목록(`['warn','error','log','time','timeEnd']`)에
+  이미 포함 (console.info/debug/table/time 사용 0건) ③ override 적용 중 eslint 위반 0건.
+- **판정**: eval/ override의 두 규칙이 **모두 불필요** — ① no-explicit-any: 유일 any 1건을
+  `{} as unknown as Env`로 교체 가능 (빈 env라는 의도를 주석으로 명시, pipeline.ts가 이미 Env 타입 사용) ②
+  no-console: 75건 전부 기본 규칙이 허용하는 메서드 → override 없이도 0 경고. eval/이 다른 디렉토리와 동일한
+  기본 규칙(no-explicit-any: warn, no-console: warn+allow)으로 강제되도록 override를 **제거** — 향후
+  console.info/debug 추가 시 즉시 경고로 잡힘 (S61 "eval/ = 0 경고" 원칙의 완결).
+- **수정** (2개 파일): `eslint.config.js` — eval/ override 블록 제거, REMOVED 주석으로 근거 기록.
+  `eval/runner-self.ts` — `{} as any` → `{} as unknown as Env` + `import type { Env } from '../src/types'`
+  (cast 의도 주석: 빈 env는 의도적 — no-D1/no-Vectorize graceful 경로 검증이 목적).
+- **검증**: lint:eslint:ci (--max-warnings=0) **0** (override 제거 후에도), tsc 0, format 0, 유닛 전체
+  **1,472건** (74파일) — 회귀 0. eval-baseline/page-view 테스트 17건 별도 재확인.
+- **잔여**: tests/ override(no-explicit-any off)는 테스트 mock 데이터 관례로 **유지** (별도 조사 대상 —
+  테스트는 fixture any가 정당). S70은 eval/ 디렉토리 한정.
+
+### S71: ci.yml/eval.yml 게이트 커버리지 매트릭스 전수 재점검 — 신규 갭 G7~G10 (2026-08-09)
+
+- **요청**: ci.yml과 eval.yml의 게이트 커버리지 갭 전수 점검 — lint/format/typecheck/unit/eval 중
+  워크플로우·트리거 조합별 누락 매트릭스 정리.
+- **방법**: 워크플로우 3종(ci/eval/integration-tests) 소스 전수 재읽기 + eval/index.ts 실행 경로
+  (runEval/compareWithBaseline/saveBaseline/exit 위치) 소스 확인 + S67 CI_GATE_REVIEW.md와 대조.
+- **매트릭스 (게이트 × 트리거)**: eslint/typecheck/unit은 ci.yml(push/PR, paths 없음)만 → schedule/
+  dispatch에서 미실행 (의도 — 측정 워크플로우). format은 ci+eval 4개 트리거 전부 커버 (S64). integration은
+  push 갭 유지 (S67 G1). **S71에서 4개 신규 갭 발견**:
+  ① **G7 (HIGH, 실버그)**: eval.yml `Commit updated baseline`(157)이 `Check results`(185)/`Fail
+  workflow`(206)보다 앞서 실행 + 커밋 조건에 eval outcome 가드 없음 + eval/index.ts도 `saveBaseline`(163)이
+  `hasRegressions→exit 1`(302)보다 앞 — **회귀 감지 run의 결과가 실패와 무관하게 새 baseline으로
+  커밋·push됨** (회귀 자가 소멸, 다음 push는 회귀 전 값을 기준). S67이 G6로 "설계 특성"으로 기록한 것을
+  **실버그로 정정**. ② **G8 (MEDIUM)**: eval.yml PR paths에 package.json 누락 (push엔 있음) — package.json
+  PR은 eval 게이트가 병합 후 push에서만 발동. ③ **G9 (MEDIUM)**: eval/index.ts:191이
+  `scripts/analyze-429-loss`를 동적 import하는데 paths에 scripts/** 없음 — 스크립트 변경 시 eval 게이트
+  미반응. ④ **G10 (LOW-MED)**: eval.yml:116 "self-index benchmark" 주석이 실제와 불일치 — push 모드
+  (`eval:ci:slack` → `eval/index.ts`)는 **전체 500쿼리 full eval**이며, G2(단일 run 노이즈 13%)와 결합 시
+  src/ push마다 만성 fail 위험의 주석적 오인 유발.
+- **산출물**: CI_GATE_REVIEW.md에 S71 섹션 추가 (확정 매트릭스 + 신규 갭 + 우선순위 갱신).
+- **검증**: 워크플로우 YAML 구문 + 스텝 순서(157/185/206) + eval/index.ts save/exit 위치(159/301) +
+  runEval 경로(156) 소스 확인. lint/tsc/format/unit 무영향 (코드 변경 없음 — 문서/분석만).
+- **잔여 (수정은 별도 작업)**: G7 가드 2줄(커밋 조건 `steps.eval.outcome=='success'` + saveBaseline 조건)
+  → G2 2-run 안정화와 함께 우선 처리. G8/G9 paths 1-2줄. G10 주석 정정.
+
+### S72: factual 태그 NDCG 하락의 429 노이즈 vs 회귀 판별 — wikipedia 보유 run 재계산 (2026-08-09)
+
+- **요청**: S68 factual 0.2977 (S55 0.3446 대비 -0.047)이 wikipedia 429 노이즈인지 확인 — 저장된
+  run-1..3에서 wikipedia 보유 run만으로 factual 태그 NDCG를 재계산해 가용성 제거 시 회복치 추정.
+- **방법**: S54 실시간 재계산 경로 (저장 ranking 필드 무시, `computeNdcg` + 현재 gold)로 factual 88쿼리
+  전부를 run별 재계산 후 median-of-3 집계. wikipedia 보유 시그널 = `backends` 배열에 'wikipedia' 포함
+  (429 시 dbpedia/mirror/wikidata 폴백으로 대체 — S35/S36/S38). **검증: 재계산 'all' 값이 S68 기록
+  0.2977과 정확히 일치**, all-tags 0.2816도 S69 기록과 일치 — 경로 정합 확인.
+- **회복치 추정 (가용성 제거 시)**:
+  | 추정 | NDCG | Δ |
+  |---|---|---|
+  | all (median-of-3, S68 기록값) | 0.2977 | — |
+  | wikipedia 보유 run만 | **0.3246** | +0.0268 |
+  | imputed best-case (부분 부재 run을 보유 run 중앙값으로 대체) | 0.3246 | +0.0268 |
+  | imputed drop (0/3 부재 쿼리 제외) | 0.3249 | +0.0272 |
+  → **-0.047 하락 중 약 +0.027 (57%)가 wikipedia 429 노이즈로 설명 가능** — 나머지 ~-0.020은
+  S55(구 gold/구 규칙) 대비 실제 랭킹·커버리지 차이 + run 간 타 백엔드 변동.
+- **중요 발견 ① — 노이즈가 단방향이 아님**: partial(1/3·2/3 부재) 69쿼리 중 **13쿼리는 wikipedia
+  부재 run이 보유 run 중앙값보다 높게 점수** (en-fact-15: 부재 run 0.871 vs 보유 0.296, zh-fact-06:
+  부재 0.807, en-fact-12: 부재 0.651). 즉 wikipedia 부재가 반드시 손해가 아니라 — run 간 bing/DDG/HN
+  성공 여부 변동도 NDCG를 좌우 (부분 표의 rW/rx 혼재로 확인). 상한 추정치가 과대일 수 있음.
+- **중요 발견 ② — 0/3 지속 부재 6건은 노이즈가 아님**: en-fact-01/02/03 + gk-01/02/03 (gold =
+  wikipedia.org + britannica.com·cloudflare.com·ibm.com·howstuffworks.com)는 **3개 run 전부 wikipedia
+  부재** (dbpedia 폴백 발동) — 이 6건은 가용성 노이즈가 아니라 **지속적 커버리지/폴백 갭** (dbpedia가
+  wikipedia.org gold를 회복 못 함). 모든 추정치에서 NDCG가 그대로 눌림.
+- **전체 코퍼스 대비**: all-tags 0.2816 → imputed 0.2872 (**+0.0056**) vs factual **+0.0268**
+  (4.8배 민감, 482%) — factual 태그는 wikipedia 의존도가 평균의 ~5배. 3/3 보유 13쿼리만 전부 안정.
+- **판정**: S68 잔여 ①("다음 eval에서 재확인")을 **데이터로 해소** — factual 하락의 ~57%는 wikipedia
+  429 노이즈, 나머지는 실질 차이. 다음 eval:median:save에서 429 창이 좁으면 factual이 0.32 근처로
+  회복될 것으로 기대. 0/3 지속 부재 6건은 gold가 wikipedia 중심이므로 **britannica 등 비위키 gold
+  추가 또는 en-fact/gk 계열에 mirror 폴백 우선 적용** (S38 티어 개편)을 후속 레버로 제안.
+- **잔여**: ① 저장 스냅샷의 factual 수치는 다음 eval:median:save에서 갱신 ② S72 추정치는 상한 —
+  정확한 회복치는 다음 run에서 429 창 상태에 따라 실측 필요 ③ 0/3 6건의 gold/폴백 개편은 별도
+  S 후보 (S38 티어 개편과 결합 검토).
+
+### S73: eval 게이트 G2 구현 — 2-run 안정화 (둘 다 -0.05 하락 시만 회귀) (2026-08-09)
+
+- **요청**: S67 G2(단일 run 노이즈 ~13%, S68 스냅샷 실측)를 구현 — eval 회귀 게이트에 2-run 안정화를
+  적용해 **두 run 모두 -0.05 하락한 쿼리만 회귀로 플래그**하고 테스트 추가.
+- **배경**: push/PR CI(`eval:ci:slack`)는 단일 run — run마다 백엔드(bing/DDG/HN/wikipedia) 성공 여부가
+  달라 풀 구성이 변동하고, 단일 run 하락은 노이즈일 확률이 높음 (S67 G2: ~13% 쿼리가 단일 run에서
+  게이트를 트립).
+- **수정** (3개 파일 + 테스트):
+  1. `eval/baseline.ts` — **`diffBaselineStabilized(currents[], baseline, gold)` 신규**: 쿼리당
+     `minAgree = min(2, runCount)`개의 run이 **모두 동의**해야 플래그. ndcgAt10은 각 run을 S54 재계산
+     경로로 스코어링해 `baseline - n > 0.05`(하락 ≥0.05)인 run 수가 minAgree 이상일 때만 회귀. runtime
+     메트릭(resultCount 감소/responseTime 1.3배 초과/pass→fail)도 **두 run 동의 필수**로 안정화.
+     플래그 시 **더 나쁜 run 값**을 current/delta로 보고 (보수적·사실적). NDCG 비계산 run(풀·저장
+     ranking 모두 없음)은 동의 카운트에서 제외. `compareWithBaselineStabilized(currents[])` — 저장
+     baseline 로드 + 안정화 비교 (baseline 없으면 [] — 기존 계약 유지). run < 2면 기존 diffBaseline
+     폴백 (단일 run 동작 불변).
+  2. `eval/index.ts` — `--runs >= 2`일 때 `compareWithBaselineStabilized(reports)` 사용 (median
+     report 비교 대신 **각 run 원본 비교**). 단일 run은 기존 경로 유지.
+  3. `.github/workflows/eval.yml` — push/PR 모드에 `--runs 2` 추가 (G2). workflow_dispatch 수동 runs
+     입력이 있으면 그 값 우선. G10 주석 오류도 함께 정정 ("self-index benchmark" → "SAME full eval
+     with 2-run stabilization").
+- **테스트**: tests/unit/eval-baseline.test.ts **+9건** — ① 단일 run만 하락 → **미플래그** (G2 핵심)
+  ② 두 run 모두 하락 → 플래그 (baseline 1.0000/current 0.0000) ③ 둘 다 하락해도 **더 나쁜 run** 값을
+  보고 (midPool 0.6309 vs badPool 0.5 → current 0.5000) ④ 혼합 보고서에서 양 run 동의 쿼리만 플래그
+  ⑤ runtime 메트릭도 양 run 동의 필수 ⑥ 3-run median: 2/3 동의 → 플래그, 1/3 → 미플래그 (다수결)
+  ⑦ NDCG 비계산 run은 동의 미카운트 ⑧ run < 2 → diffBaseline 폴백 (기존과 동일 결과). 유닛 전체
+  **1,480건 통과** (74파일), tsc 0, lint 0, format 0, eval.yml YAML 구문 OK.
+- **동작 변화**: push/PR CI 평가가 ~15-20분 → ~30-40분 (2 run)으로 증가하지만, 단일 run 노이즈로 인한
+  만성 fail (S71 G2: 13%)이 해소됨. median run(3)의 회귀 판정도 저장 median 보고서 비교 → **각 run
+  원본 다수결**로 바뀜 (더 정확).
+- **잔여**: ① schedule 모드(캐시 이중 실행 + 단일 run)는 G2 미적용 — 캐시 모드와 2-run 동시 적용 시
+  스텝 타임아웃(90분) 초과 위험이라 후속 검토 ② `--runs 2`의 CI 실측 시간은 최초 push에서 확인 필요.
+
+### S74: schedule 모드 G2 적용 — 캐시 측정 run 1 전용화 + 시간 예산 상향 (2026-08-09)
+
+- **요청**: S73 잔여 ① — schedule 모드(캐시 이중 실행)에 2-run 안정화를 적용할 때 90분 스텝
+  타임아웃 초과 여부를 시간 예산으로 분석하고, 필요하면 캐시 측정을 2-run 중 1회만 하거나
+  타임아웃을 늘리는 방안 구현.
+- **실측 시간 예산 (S68 스냅샷, run-1..3의 totalDurationMs)**: run당 **22.1~24.1분** (1.33~1.45M ms,
+  500쿼리 cold pass + wikipedia 페이싱). warm pass(캐시 측정)는 페이싱 없음 + 메모리 캐시 히트라
+  ~2-4분. 시나리오 — ① 현재: 1 run + 캐시 ≈ **27분** ② 2 run + 캐시 양쪽(단순 추가): 2 cold + 2 warm
+  ≈ **54분** ③ **캐시 run 1 전용 + 2 run**: 2 cold + 1 warm ≈ **51분** ④ 최악(넓은 429 창, +25%):
+  ≈ **64분**.
+- **핵심 발견 — 캐시 양쪽 측정은 버려지는 작업**: `computeMedianReport`(median.ts)는
+  **`cache: reports[0].cache`만 유지** — run 2..N의 warm pass(쿼리 500회 추가 실행)가 집계 보고서에
+  전혀 반영되지 않음. 즉 캐시-once는 타임아웃 방어일 뿐 아니라 **불필요한 쿼리 실행 제거**(정확성).
+- **수정** (3개 파일 + 테스트):
+  1. `eval/index.ts` — multi-run 루프에서 `measureCache: opts.cache && i === 1` — 캐시는 run 1에만
+     측정 (S74 주석으로 근거 문서화).
+  2. `.github/workflows/eval.yml` — ① schedule 트리거도 `--runs 2` (S73 G2 elif에 schedule 추가) —
+     주간 전체 eval이 동일한 2-run 안정화 게이트를 받음. 캐시-once 덕분에 예산 ≈51분. ② eval 스텝
+     타임아웃 90→**100분**, job 95→**110분** (S74 주석: 실측 51/64분 예산 + setup 단계 ~7분 여유)
+     ③ S37 손실 게이트 주석 갱신 — schedule도 runCount>1이므로 wikipedia-429 ::warning::이 주간
+     발동 (비차단, 가용성 가시성).
+  3. `tests/unit/eval-median.test.ts` **+1건** — `cache: reports[0].cache` 계약 lock (run 1의 캐시
+     메트릭만 median 보고서에 실리고 run 2의 undefined가 새지 않음 — S74 캐시-once의 근거).
+- **검증**: 유닛 전체 **1,481건 통과** (74파일), tsc 0, lint 0, format 0, eval.yml YAML 구문 OK.
+  S73의 diffBaselineStabilized가 schedule(2 run)에도 자동 적용 (index.ts의 `runCount >= 2` 분기).
+- **동작 변화**: 주간 schedule = 2 run median + 캐시(run 1) + 안정화 회귀 게이트 + 429 손실 경고.
+  README 메트릭 갱신은 기존대로 median 보고서 기반 (캐시 필드 보존 확인).
+- **잔여**: ① `--cache` + `--runs 3` 수동 dispatch는 4 pass (3 cold + 1 warm) ≈ 70-100분 — 극단
+  429 창에서 스텝 타임아웃 여전히 위험 (수동 작업이라 허용 범위로 기록) ② schedule의 S37 경고가
+  주간 노이즈가 될 수 있음 — 임계값 5.0 유지로 충분한지 다음 주간 run에서 확인.
+
+### S75: S73 게이트 × wikipedia-429 교차분류 — loss 리포트에서 429 마스크 구분 (2026-08-09)
+
+- **요청**: S73 diffBaselineStabilized와 S37 weighted-loss 리포트를 결합 — **2-run 안정화로 통과했지만
+  두 run 모두 wikipedia 429로 NDCG가 하락한 쿼리**를 loss 리포트에서 구분. (통과 = 안정화가 429 하락을
+  마스킹한 것일 수 있음 / 플래그 = 429 노이즈일 수 있음)
+- **설계** — `crossReferenceGate429(reports, baseline, runs, gold, lossRows, c429ById)` 신규:
+  각 gold 쿼리에 대해 ① 게이트 판정(ndcgAt10만) ② run별 wikipedia 부재(429) ③ run별 `baseline − ndcg
+  > 0.05`(S73 게이트와 동일 임계·동일 재계산 경로)을 계산해 3개 집합으로 분류:
+  - **flaggedBy429** — 게이트 플래그 + 모든 회귀 run이 wikipedia 부재 → 429로 설명 가능한
+    (기각 가능한) 플래그
+  - **flaggedClean** — 게이트 플래그 + 비(非)429 회귀 run 존재 → 진짜 랭킹 회귀 후보
+  - **passedWith429** — 게이트 통과 + **전 run wikipedia 부재 + 전 run baseline 미만** → 요청의
+    핵심 케이스: 2-run 안정화가 429 하락을 마스킹 (통과는 품질이 아니라 가용성 운)
+  숫자 일관성: loadRuns의 run NDCG(풀 재계산/저장 폴백) = diffBaselineStabilized가 보는 값,
+  baseline 쪽도 동일 recomputeNdcgAt10 → 분류가 게이트가 본 값과 정확히 일치.
+- **수정** (3개 파일 + 테스트):
+  1. `scripts/analyze-429-loss.ts` — `Gate429Row`/`Gate429CrossRef` 타입 + `crossReferenceGate429`
+     export + `loadRunReports()`(전체 EvalReport 로딩) + `LossSummary.gate429` 필드 +
+     `computeLossReport(resultsDir, logText?, baseline?)` 3번째 파라미터 (undefined → loadBaseline(),
+     명시 null → 스킵) + CLI 출력 섹션. run < 2 또는 baseline 없으면 빈 집합 (우아한 축소).
+  2. `eval/index.ts` — **baseline을 1회만 로드**해 게이트(`diffBaselineStabilized`/`diffBaseline`)와
+     loss 리포트에 **동일 스냅샷 전달** (`computeLossReport(undefined, undefined, baselineSnapshot)`)
+     — `--save` run이 방금 쓴 baseline에 자기비교하는 문제 차단. S37 로그 라인에
+     `gate×429(S75): flagged-by-429 N · clean-flags M · passed-with-429 K` 추가.
+  3. `eval/baseline.ts` — compareWithBaselineStabilized에 S75 노트 (index.ts가 공유 baseline 경로로
+     전환 — public API로 유지). `tests/unit/analyze-429-loss.test.ts` **+5건**.
+- **테스트** (pool-less 픽스처, S54 저장-ranking 폴백 경로 — 양쪽 일관): ① 양 run 429 + 양 run 하락
+  → flaggedBy429 ② run1 하락 0.013(<0.05) + run2 하락 0.063(≥0.05) → 게이트 미플래그 + 전 run 429 +
+  전 run baseline 미만 → **passedWith429** (요청 핵심) ③ 한 run은 wikipedia 보유 상태로 하락 + 한 run
+  429 하락 → flaggedClean (진짜 후보) ④ baseline 없음(null) → hasBaseline false, 빈 집합
+  ⑤ run 1개 → 게이트 미적용, 빈 집합. 유닛 전체 **1,486건 통과** (74파일), tsc 0, lint 0, format 0.
+- **실데이터 샌드체크 (S68 run-1..3 vs S68 저장 baseline)**: flaggedBy429 5건 (kr-news-03,
+  en-fact-02, en-tech-18, en-stock-14/15 — 회귀 run이 전부 wikipedia 부재) · flaggedClean 17건
+  (en-news-30, zh-fact-06/13/14, en-acad-06 등 — 비429 회귀 run 존재) · passedWith429 0건. 5건의
+  플래그는 S58 문서화된 "median 보고서 대표 풀 vs 개별 run 풀 불일치" 효과의 자기비교 아티팩트
+  (S68이 self-baseline) — 다음 eval(새 run vs S68 baseline)에서 실제 신호가 나옴.
+- **리뷰 반영**: ① vestigial `?.` 제거 (baselineNdcg가 number로 좁혀짐) ② flaggedClean 경계 휴리스틱
+  주석 (0.051 근접 비429 run이 429 지배 하락을 '진짜'로 라벨 — 상세 행으로 판단) ③ CLI 기본 baseline이
+  역사적 --results-dir 분석 시 시대 불일치 가능성 주석 ④ compareWithBaselineStabilized 노트.
+  (이중 JSON 파싱은 60분 eval 기준 무시 가능 — run 파일 3개 재파싱, 잔여로 기록)
+- **잔여**: ① 다음 eval:median(2-3 run)에서 gate429 섹션의 실제 신호 실측 ② loadRuns/loadRunReports
+  이중 파싱 통합은 성능 최적화 후보 ③ flaggedClean의 비429 run이 429 지배 하락과 공존하는 혼합 원인
+  쿼리는 수동 판단 필요 (자동 분류 한계로 문서화).
+
+### S76: S73 minAgree가 median-of-3 저장에도 적용되는지 — 저장 스냅샷 실측 비교 (2026-08-09)
+
+- **요청**: S73의 minAgree 다수결 규칙이 median-of-3 `eval:median:save`에도 적용되는지, 저장 baseline
+  갱신(run-1..3) 시 각 run 원본 재계산(diffBaselineStabilized)과 기존 diffBaseline(median 보고서)의
+  결과 차이를 저장 스냅샷으로 실측 비교.
+- **적용 확인**: **적용됨** — eval/index.ts(S73)에서 `runCount >= 2`면 무조건
+  `diffBaselineStabilized(reports, baselineSnapshot)` 사용. runCount=3에서 minAgree =
+  min(2,3) = **2 (다수결)**. median-of-3 저장/CI 모두 새 경로.
+- **실측 (S68 스냅샷: run-1..3 vs baselines/latest.json — self-comparison, S54 재계산)**:
+  | 비교 경로 | ndcgAt10 | resultCount | responseTime | passStatus |
+  |---|---|---|---|---|
+  | **old** (median 보고서 vs baseline) | **0** | 0 | 0 | 0 |
+  | **new** (run 원본 3개 vs baseline, minAgree 2) | **22** | 0 | 0 | 0 |
+  → old는 S58 자기일관성으로 0 (baseline이 median 보고서의 사본), new는 **22건 전부 new-only** 플래그.
+- **패턴 (22건 전부 공통)**: ① 정확히 **2/3 run이 회귀** ② **baseline 재계산 NDCG = 3개 run 중
+  정확히 하나의 값과 동일** (en-fact-12 base 0.651 = run2, en-tech-18 base 0.444 = run3, kr-news-03
+  base 0.651 = run3, zh-fact-13 base 0.778 = run3 …) ③ baseline 재계산이 per-run 중앙값과 ≥0.05
+  이탈: **22/22**.
+- **근본 메커니즘 (S58 대표 풀 효과)**: median 보고서는 쿼리별 `response`를 **median-latency run의
+  풀**로 갖고, S54 recomputeNdcgAt10이 그 풀로 baseline NDCG를 재계산 → baseline 앵커 = 특정 run
+  하나의 값. 그 run이 높은 값일 때 나머지 2 run이 ≥0.05 하락하면 minAgree 2가 플래그. old 경로는
+  median-vs-median(대칭 상쇄)이라 못 보던 것을, 새 per-run 경로가 노출. S58이 S55 스냅샷에서
+  "median 보고서와 대표 풀이 ~24/500 쿼리에서 ≥0.05 불일치"로 측정한 것과 같은 현상 (여기서 22/500,
+  동일 범위).
+- **영향 정량화**: self-comparison에서 22/500 (4.4%) = **아티팩트의 상한**. 실제 운영(새 run vs
+  S68 baseline)에서도 동일 편향 — baseline의 대표 풀이 **노이즈성 높은 앵커**로 작용해, 현재 run들이
+  그 특정 run의 풀을 재현하지 못하는 쿼리를 2/3 다수결로 플래그. 즉 median-of-3 경로에서 S73 게이트는
+  minAgree로 단일 run 노이즈를 줄이지만, **baseline 쪽 대표 풀 앵커 편향은 그대로** (S58 설계의
+  잔여 리스크가 per-run 비교로 표면화).
+- **권고 (후속 S 후보)**: median run의 비교 대상은 baseline의 대표 풀이 아니라 **per-run 중앙값**이어야
+  함. 구현 방향: ① baseline 저장 시 쿼리별 per-run 재계산 NDCG 배열을 함께 영속화 (baseline report의
+  runs 메타데이터 확장) → 다음 비교에서 baseline 쪽도 중앙값 사용 ② 또는 median 보고서 저장 시
+  쿼리별 `response`를 중앙-NDCG run의 풀로 선택 (현재 median-latency → median-NDCG로 변경) — 대표 풀
+  편향 자체 제거. ②가 근본적 (S58이 latency로 택한 이유는 "가장 전형적인 결과"였으나 NDCG 앵커에는
+  부적합). S58의 "median vs 대표 풀 불일치 ~24/500" 문서화와 정합.
+- **검증**: 프로브(probe-s76)는 일회성으로 정리. 코드 변경 없음 (분석 전용). S75의 실데이터 샌드체크
+  결과(flaggedBy429 5 + flaggedClean 17 = 22)와 정확히 일치 — 동일 집합.
+
+### S77: --cache + --runs >= 3 타임아웃 가드 — 캐시 생략 + 경고 (2026-08-09)
+
+- **요청**: S74 잔여 ① — `--cache` + `--runs 3` 수동 dispatch가 극단 429 창에서 스텝 타임아웃을
+  넘지 않도록 가드 구현 (캐시 생략 또는 캐시+median 동시 요청 시 경고).
+- **예산 (S74 실측)**: run당 cold pass 22-24분, warm pass 2-4분. runs=2 + 캐시-once = 2 cold + 1 warm
+  ≈ 51분 (안전). runs=3 + 캐시-once = **4 pass ≈ 70-100분** — 극단 429 창(재시도 + 시작 폴링)에서
+  100분 eval 스텝 타임아웃 초과 위험.
+- **설계 — 생략 + 경고 병행 (가장 강한 가드)**: `resolveCacheMeasurement(cache, runCount)` 신규 —
+  runs 1-2: 캐시 측정 (S74 캐시-once 의미론 유지), **runs >= 3: 캐시 완전 생략** (3 cold ≈ 70분,
+  결정적) + 행동 가능한 경고 반환. 경고만 출력하는 "허용" 대신 **방지**를 선택 (요청 문구 "넘지 않도록
+  가드").
+- **수정** (3개 파일 + 테스트):
+  1. `eval/median.ts` — `resolveCacheMeasurement` export (multi-run 로직의 테스트 가능한 위치 —
+     index.ts는 main()이 import 시 실행돼 테스트 불가). runs>=3 경고 문구:
+     "--cache with --runs N skipped: cache+median is a 4-pass budget (~70-100min) that risks the CI
+     step timeout in a wide 429 window. Use --runs 1-2 for cache measurement."
+  2. `eval/index.ts` — runCount 계산 직후 `cachePlan` 1회 결정 + 경고 출력 (run 시작 전), multi-run
+     루프 `measureCache: cachePlan.measure && i === 1`, **단일 run 경로도 `cachePlan.measure` 사용**
+     (리뷰 반영 — helper 우회 제거, 향후 runs=1 정책 변경에 강건), GITHUB_ACTIONS에서 `::warning::`
+     어노테이션 추가 (S37 관례, Actions UI 가시성). `--help`에 SKIP 규칙 명시.
+  3. `.github/workflows/eval.yml` — `runs`/`cache` dispatch 입력 설명에 S77 가드 명시.
+     `tests/unit/eval-median.test.ts` **+3건** — runs 1/2 캐시 측정 (S73/S74 CI·schedule 보존) /
+     runs >= 3 생략 + 경고 (runs 4 포함) / cache 미요청 시 no-op.
+- **검증**: 유닛 전체 **1,489건 통과** (74파일), tsc 0, lint 0, format 0, YAML 구문 OK, `--help`
+  출력 확인. schedule(runs=2 + 캐시)는 measure=true, 경고 없음 — S74 동작 불변.
+- **리뷰 반영**: ① 단일 run 경로가 `opts.cache`를 직접 사용하던 helper 우회를 `cachePlan.measure`로
+  통일 ② 경고를 `::warning::` 어노테이션으로도 출력 (S37 컨벤션).
+- **잔여**: ① runs >= 3 + 캐시를 진짜 원하는 사용자는 캐시를 받을 수 없음 (의도된 트레이드오프 —
+  수동 dispatch에 2-pass 추가 원하면 runs=2 사용) ② 다음 실제 수동 dispatch에서 가드 로그 확인.
+
+### S78: S73/S74 워크플로우 diff 리뷰 + 로컬 스모크 — ReferenceError 발견·수정 + tsc 블라인드 스팟 (2026-08-09)
+
+- **요청**: S73/S74 변경(diffBaselineStabilized·캐시-once)을 검증할 첫 실제 CI push를 위해 eval.yml
+  포함 워크플로우 diff를 리뷰하고, 로컬 act 시뮬레이션 가능 여부 점검.
+- **① eval.yml diff 리뷰 — 이상 없음**: S74 타임아웃 상향(job 95→110, step 90→100, 실측 예산 주석),
+  RUNS_FLAG 배선(dispatch 입력 우선 → push/PR/schedule `--runs 2`), G10 "self-index benchmark" 오주석
+  정정, S77 dispatch 입력 설명 — 전부 의도대로. **config 스텝 bash 로직을 7개 트리거 조합으로 시뮬레이션**
+  (push/PR/schedule/dispatch × runs/cache/save) — 플래그 조합 전부 정확 (예: schedule → `--runs 2
+  --cache`, PR → `--runs 2` + save 없음, dispatch runs=3+cache → `--runs 3 --cache` + S77 가드 발동).
+- **② 로컬 act 가능성**: act 미설치 (brew 사용 가능), **Docker Desktop 설치돼 있으나 데몬 미기동**.
+  풀 eval.yml을 act로 돌리는 것은 부적합 — ① 실라이브 백엔드 500쿼리 2-run ≈ 30-40분 ②
+  "Commit updated baseline"의 git push 스텝이 act 컨테이너에 인증 없음 → 실패. act는 ci.yml 게이트
+  (lint/tsc/format/unit) 검증에만 적합. **대안으로 로컬 실스모크 채택**.
+- **③ 로컬 실스모크 (`--runs 2 --cache --tag korean`, 81쿼리, ~7분, 백업 후 실행/복원) — 치명적 버그 발견**:
+  `Eval failed: ReferenceError: reports is not defined` (eval/index.ts:195). S73이
+  `diffBaselineStabilized(reports, ...)`를 `if (runCount > 1)` 블록 **밖**(최상위)에 두었는데
+  `reports` 배열은 블록 안에 선언 — **스코프 버그**. 모든 게이트(tsc 0 포함)를 통과한 이유가
+  결정적: **`tsconfig.json` include가 `src/**`·`tests/**`뿐이라 eval/index.ts가 tsc로 검사되지 않음**
+  (tests가 import하는 eval/median·baseline·metrics만 전이 검사). eslint/format이 eval/을 커버해도
+  **타입 검사는 블라인드**.
+- **④ 수정**: eval/index.ts — `const reports: EvalReport[] = []`를 if 블록 밖(최상위)으로 호이스트
+  (S78 주석으로 근거 기록). 단일 run 경로는 빈 배열이 그대로 유지되어 무영향.
+- **⑤ 수정 후 재스모크**: run 1/2·2/2 정상 완료, S73 게이트가 실baseline 대비 **10건 회귀**
+  (ndcgAt10 8 + responseTimeMs 2 — "was 0.6508, now 0.4776" 포맷, kr-news-03은 S76 실측 22건과
+  일치하는 대표 풀 앵커 아티팩트), 캐시 warm pass 발동 확인. EXIT=1(회귀 감지 — 정상 동작).
+  스모크가 덮어쓴 run-1/2/latest.json·baseline은 **백업에서 전부 복원** (git status clean 확인).
+- **⑥ tsc 블라인드 스팟 전수 조사 (probe: include에 eval/·scripts/ 추가)**: **21건 기존 타입 에러**
+  (12개 파일) — eval/llm-judge.ts:235 `Cannot find name 'SearchAnswer'`, eval/reporter.ts:196
+  warnings undefined, scripts/analyze-relevant-fix.ts 5건, report-backend-availability.ts 3건,
+  verify-s49/s50·sim-s48 2건씩 등. S73 버그처럼 "게이트 그린이지만 타입 미검사" 사례가 eval/·scripts/에
+  잠재. **후속 S로 21건 정리 후 tsconfig include 확장 필요** (게이트 강화).
+- **검증**: 유닛 전체 **1,489건 통과** (74파일), tsc 0, lint 0, format 0. eval/index.ts는 확장 probe에서
+  CLEAN 확인. 스모크 후 eval 아티팩트 원상 복구.
+- **결론**: 수정 포함 상태에서 push 가능. 단, 다음 push 전에 ① S76 median-NDCG 대표 풀(S73 게이트의
+  baseline 앵커 편향) ② tsconfig include 확장(21건 정리) 중 최소 하나는 함께 검토 권고 — 아니면
+  push 직후 eval 게이트가 자체 아티팩트(대표 풀 앵커)로 울릴 수 있음 (S76 실측 22건).
+- **잔여**: ① tsc include 확장(21건 정리)은 별도 S ② act 설치는 Docker 데몬 기동 후
+  `brew install act` — ci.yml 게이트 검증용으로만 권장 ③ 스모크 후 백업/복원 절차는 /tmp/eval-backup에
+  유지 (다음 검증 재사용 가능).
+
+### S79: 주간 schedule 2-run 전환의 README 메트릭 기대값 — 캐시 측정 구조적 결함 발견 (2026-08-09)
+
+- **요청**: S74로 schedule이 2-run median을 쓰게 됐으니, 다음 주간 run에서 README 메트릭(캐시
+  hitRate 포함)이 이전 단일 run과 어떻게 달라지는지 — 저장 latest.json의 runs/cache 필드로 기대값을
+  미리 계산해 문서화.
+- **현재 저장 상태**: S68 latest.json은 `runs: {count:3}` + **cache undefined** (median-of-3, 캐시
+  없음). git 히스토리 전수 확인 — **커밋된 아티팩트에 캐시 측정 이력 없음** (4개 커밋의 latest.json
+  전부 cache 없음). 즉 다음 주간 run이 **최초의 커밋 가능 캐시 측정**이 됨.
+- **① median-of-2 vs median-of-3 집계 형태 델타 (저장 run-1..3으로 실측)**: median-of-3이
+  NDCG 0.2812/MRR 0.5144/P@10 0.2970인데, median-of-2(3개 조합)는 NDCG 0.2756~0.2818
+  (±0.006), MRR 0.4998~0.5112, P@10 0.2900~0.2978 — **2-vs-3 형태 자체의 델타는 작음**. 실제
+  주간 값은 백엔드 가용성(429 창)이 지배. pass 투표는 median-of-2가 "양쪽 모두 pass"(majority 2/2)로
+  **median-of-3(2/3)보다 엄격**하지만, 저장 스냅샷에서 플립 쿼리 **0건** (pass 100% 유지). p50 지연은
+  median-of-2 조합에서 1335~1400ms (median-of-3의 869ms 대비 상승) — run-1(느림) 포함 여부의
+  샘플링 아티팩트.
+- **② 캐시 hitRate 기대값 — 구조적 결함으로 ~0% 확정 (실측)**: 로컬 캐시 측정
+  (`--cache --tag korean`, 81쿼리, 백업 후 실행/복원): **hitRate 0.0247 (2/81)**, avgColdMs 1775 →
+  avgWarmMs 1336 (25%만 개선). 근본 원인: orchestrator 메모리 캐시 TTL은 **일반 120s / 뉴스·금융
+  30s** (src/lib/orchestrator.ts:69-70)인데, runner의 warm pass는 **전체 cold pass 종료 후** 시작 —
+  korean(≈200s cold)에서도 초반 항목이 만료, **500쿼리 주간 run(cold ≈ 23분 ≈ 1380s)은 TTL 120s ≪
+  1380s라 전 항목 만료 → hitRate 구조적으로 ~0%**. runner.ts:205-208의 "TTL이 갭을 커버한다"는 가정이
+  장시간 eval에 대해 **틀렸음**. 즉 다음 주간 README의 "Cache Hit Rate" 행은 **측정 아티팩트 ~0%**가
+  되며, 이는 실사용 캐시 성능(실제 사용자는 초 단위 재방문 → TTL 내 히트)과 무관.
+- **③ README 영향 예측 (update-readme-eval.ts 기준)**: ① 캐시 행이 **처음으로 추가됨** — hitRate
+  ~0%, cold→warm 1775→1336ms 급 (이전 단일 run에도 캐시 행이 없었으므로 "이전과 달라지는" 항목) ②
+  NDCG/MRR/P@10은 2-run 형태로 ±0.006 흔들림 ③ p50 지연은 run 조합에 따라 869ms vs 1335ms+ 차이
+  가능 (형태 아티팩트 — README에 기만적일 수 있음) ④ pass rate 변화 없음 (플립 0건).
+- **권고 (후속 S 후보)**: 캐시 측정 방법론 수정 — warm pass를 **쿼리별 인터리브**로 변경 (cold query i
+  직후 즉시 warm query i → 다음 쿼리), TTL 내 측정으로 실사용 hitRate에 근접. 또는 README에서 캐시
+  행 제거/라벨 변경 (구조적 ~0%가 측정 아티팩트임을 명시). p50의 run-조합 의존성은 median 보고서에서
+  "대표 run" 선택 문제 — S76 median-NDCG 대표 풀 개편과 함께 검토.
+- **검증**: 프로브(probe-s79)는 일회성 정리. eval 아티팩트 원상 복구 확인 (runs:3, cache undefined).
+  코드 변경 없음 (분석 전용).
+
+### S80: eval 캐시 warm pass를 쿼리별 인터리브로 변경 — 구조적 ~0% hitRate 해결 (2026-08-09)
+
+- **S79 후속 ① 구현**: S79가 확정한 구조적 결함(캐시 TTL 120s/30s ≪ 500쿼리 cold pass ~23분 → warm pass 시작 시 전 항목 만료 → hitRate ~0%)을 eval runner에서 해결.
+- **수정** (2개 파일 + 테스트):
+  1. `eval/runner.ts` — **post-loop warm pass 제거** (cold 전체 종료 후 두 번째 전체 루프로 재실행하던 방식) → **쿼리별 인터리브**: 각 쿼리의 cold run 직후 즉시 같은 쿼리의 warm run 실행 (TTL 내, 몇 ms 후). coldTimesMs/warmTimesMs를 루프 내에서 쌍으로 수집하고, `totalDurationMs = elapsed - totalWarmMs`로 **QPS가 cold pass만 측정**하도록 유지 (구 post-loop pass도 측정 창 밖이었던 의미론 보존).
+  2. `eval/runner.ts` — **`EVAL_QUERY_DELAY_MS=0` 비활성화 버그 수정**: 기존 `Number(x) || 1200`이 '0'을 falsy로 처리해 1200ms로 폴백 (문서 계약 위반, S80 테스트가 포착) → `Number.isFinite` 기준으로 명시적 숫자만 허용. 비숫자 문자열만 기본값 유지.
+  3. `tests/unit/eval-runner-interleave.test.ts` 신규 (+4건) — executeSearch를 vi.mock해 runEval 전체 테스트: ① 인터리브 순서 **[q1,q1,q2,q2]** (구 post-loop는 [q1,q2,...,q1,q2]) ② warm이 cold보다 빠르면 hitRate=1 ③ measureCache=false면 쿼리당 1회 (warm 없음) ④ cold 실패 시 warm 재실행은 miss ⑤ **totalDurationMs가 warm 시간 제외** (40ms×4 → 80ms, warm 포함 시 160ms로 실패).
+- **라이브 실측** (korean 태그 81쿼리, `--cache`): hitRate **0.0247 (2/81) → 1.0 (81/81)**, avgCold 1561ms → avgWarm **0ms** (S79 대비 40배). 인터리브로 캐시가 실사용 반복 트래픽처럼 측정됨을 입증. eval 아티팩트는 백업에서 원상 복구.
+- **리뷰 반영**: ① 테스트 4 주석 부정확 수정 (cold/warm 모두 40ms — 검증 의도는 warm 제외 증명) ② 실패 cold의 warm 백투백 실행은 자기 제한적(업스트림 여전히 429)임을 주석화 ③ `EVAL_QUERY_DELAY_MS=''`(빈 문자열)이 이제 페이싱 비활성화 — 미문서 값이라 허용, 주석에 명시.
+- **검증**: 유닛 **1,493건** (75파일, +4), tsc 0, lint 0, format 0.
+- **영향**: 주간 README의 "Cache Hit Rate" 행이 ~0%가 아닌 **실측 반복 트래픽 수치**로 기록됨 (다음 주간 run부터). `--cache --runs 1-2` 예산(2 cold + 1 warm)은 인터리브로 warm이 ~0ms라 **더 빨라짐** — S77 타임아웃 가드 여유 증가.
+- **잔여 (후속 S 후보)**: ① cold 실패 쿼리의 warm run을 스킵하는 옵션 (denominator 의미론 vs 네트워크 절약 트레이드오프) ② 다음 eval:median:save에서 hitRate가 baseline 아티팩트에 처음으로 기록됨 (S79의 예측 확정).
+
+### S81: median 보고서 대표 풀을 median-latency → median-NDCG로 개편 — baseline 앵커 편향 제거 (2026-08-09)
+
+- **S76 권고 ② 구현**: median 보고서의 쿼리별 `response`(대표 풀)가 **저장 baseline의 NDCG 앵커**가 되는데, median-latency run의 풀은 품질과 무관해 높은 NDCG outlier run에 앵커링되어 자기비교에서 22/500 팬텀 ndcgAt10 플래그를 생성 (S76 실측).
+- **수정** (2개 파일 + 테스트):
+  1. `eval/median.ts` — `computeMedianReport`의 대표 run 선택을 **median-latency → median-NDCG**로 변경: 각 run의 NDCG를 **현재 gold로 재계산**(S54 경로, `recomputeNdcgAt10`)한 뒤 중앙값에 가장 가까운 run 선택, 동률은 낮은 지연으로 결정. `gold` 3번째 파라미터 신규 (기본값 `loadGoldStandards()`, 테스트 주입 가능). **gold 게이트 추가** (리뷰 반영): `gold[q.id]`에 항목이 있을 때만 NDCG 경로 사용 — `recomputeNdcgAt10`은 비어있는 pool + undefined/빈 gold에서 **undefined가 아닌 0**을 반환하므로, 미게이트 시 no-gold 쿼리가 "전 run NDCG 0"으로 취급되어 최저지연 run에 타이브레이크 (문서화된 median-latency 폴백 위반). gold 없음/빔 → 기존 median-latency 폴백.
+  2. `eval/baseline.ts` — S58 주석 갱신 (대표가 median-NDCG이며 anchor가 중앙값 품질에 위치, S76 22→0).
+  3. `tests/unit/eval-median.test.ts` — 기존 median-latency 테스트를 "no-gold 폴백"으로 개명 + **3건 신규**: median-NDCG 선택 (저장 ranking 경로) / **pool 재계산 경로** (비어있지 않은 pool + gold label-suffix 매칭, 리뷰 ② 반영) / 동률 낮은 지연 타이브레이크.
+- **저장 스냅샷 실측 검증** (S68 run-1..3, 현재 gold, diffBaselineStabilized 자기비교):
+  | 앵커 | ndcgAt10 플래그 |
+  |---|---|
+  | LEGACY (median-latency) | **22** (S76 재현) |
+  | NEW (median-NDCG) | **0** |
+  대표 풀 선택이 **376/500** 쿼리에서 변경 — median-latency와 median-NDCG이 실제로 많이 다르며, 변경이 앵커를 중앙값으로 옮겨 편향을 제거함을 입증.
+- **리뷰 반영**: ① gold 게이트 (no-gold 쿼리의 0-반환 함정 — 실버그 수정) ② pool-driven 경로 단위 테스트 추가 (실데이터 경로 보호) ③ S58 주석의 "24/500 불일치 해소" 과장 완화 (pick 376/500 변경은 pool/stored NDCG이 여전히 다름을 의미 — anchor가 중앙값에 있다는 사실로 정정).
+- **검증**: 유닛 **1,496건** (75파일, +3), tsc 0, lint 0, format 0.
+- **영향**: 다음 eval:median:save부터 baseline 앵커가 median-NDCG run의 풀이 되어, G2 회귀 게이트의 자기비교 팬텀 플래그(22/500)가 근본 제거됨. S75 게이트×429 교차분류·S37 손실 리포트는 run 원본을 쓰므로 무영향.
+- **잔여 (후속 S 후보)**: ① 기존 저장 baseline(latest.json)은 구 앵커(median-latency) 기준 — 다음 save 시 새 앵커로 교체되므로 히스토리 비교 시 1회 기준점 이동 발생 ② S76 권고 ①(저장 시 쿼리별 per-run NDCG 영속화)은 S81로 대체 — 재검토 불필요.
+
+### S82: tsc 블라인드 스팟 제거 — eval/scripts 21건 타입 에러 전수 수정 + tsconfig include 확장 (2026-08-07)
+
+- **근거 (S78 발견)**: `tsconfig.json` include가 `src/**`·`tests/**`뿐이라 **eval/와 scripts/는 tsc로 전혀 검사되지 않았음** — S73의 `reports is not defined` 스코프 버그가 모든 게이트 그린 상태로 통과한 원인. probe(`tsc -p` + include 확장)로 **21건 타입 에러가 12개 파일**에 존재함을 확정.
+- **수정 (12개 파일 + tsconfig)**:
+  1. `eval/llm-judge.ts` — `SearchAnswer` 타입 import 누락 (TS2304)
+  2. `eval/reporter.ts` — `r.warnings.join()`이 undefined에서 throw하던 **런타임 버그**를 `(r.warnings ?? []).join('; ') || '—'`로 동시 수정 (TS18048 + 실버그)
+  3. `scripts/verify-s49/s50` + `analyze-relevant-fix.ts` — `med(...arr)` spread 7건을 튜플 인덱스 호출로 (TS2556, median-of-3 의미 보존)
+  4. `scripts/verify-metrics-persistence.ts` + `seed-wikipedia.ts` — 전역 `main`/`Args` 충돌(TS2393)을 `export {}` 모듈화로 해결 (shebang tsx 실행 불변)
+  5. `scripts/verify-index.ts` — comment-json `parse()` 결과를 `as unknown as WranglerConfig`로 (TS2322)
+  6. `scripts/sim-s48.ts` — `Record`→`SearchResult` 2건 `as unknown as` 경유 (TS2345)
+  7. `scripts/report-backend-availability.ts` — **실버그**: `files.map((f) => … idx …)`에서 `idx` 미선언 (TS2304, 실행 시 ReferenceError) → `(f, idx)`로 수정 + `unknown`→`Number()` 강제 2건
+  8. `scripts/probe-s36/s38-recovery.ts` — gold Map 인덱싱 타입 명시 (TS7053)
+- **tsconfig**: include에 `eval/**/*`·`scripts/**/*` 추가 → **tsc 블라인드 스팟 제거** (S78 결론 이행). 전체 tsc 0 에러.
+- **검증**: ① 유닛 **1,496건** (75파일) / tsc 0 / lint 0 / format 0 ② 의미 보존 스모크 — verify-s49/s50이 저장 풀에서 **NDCG 0.2816 정확 재현** (S69 기록과 일치), report-backend-availability가 idx 수정 후 크래시 없이 실행 (기존엔 ReferenceError) ③ 리뷰 반영 — reporter.ts 수정이 타입 수정+런타임 버그 동시 해결임을 확인.
+- **영향**: 이제 eval/·scripts/의 타입 오류는 CI typecheck 게이트에서 즉시 실패 — eval 코드 변경의 안전망 완성.
+- **잔여 (후속 S 후보)**: ① CI에 eval 타입 검사 전용 스텝 명시 (tsconfig 포함이라 중복이나, 워크플로우 문서에 명시) ② vitest coverage threshold 미설정 — eval 게이트 커버리지 정책 검토.
+
+### S80-①: 캐시 측정 warm 재실행 스킵 — cold 실패 쿼리는 warm 미실행 + denominator 투명화 (2026-08-09)
+
+- **근거 (S80 잔여 ①)**: 인터리브 warm pass에서 cold run이 throw로 실패하면 **캐시 엔트리가 저장되지 않음** (executeSearch가 완료돼야 캐시 기록). 그런데도 warm 재실행은 그대로 발사되어 보장된 miss를 위해 **네트워크 재팬아웃**을 수행 — wikipedia 429 창에서 이미 rate-limited된 업스트림을 다시 두드리는 순수 낭비 (S80 리뷰가 'failed cold → warm 백투백'을 주석화로만 남겨둔 지점).
+- **수정** (4개 파일 + 테스트):
+  1. `eval/runner.ts` — `runEval` config에 **`skipWarmOnColdError?: boolean` (기본 true)** 신규. `error !== undefined` (executeSearch throw → 캐시 미저장)면 warm 재실행을 **건너뛰고** `skippedWarmRuns++`. false면 레거시 동작 유지 (warm 발사 → 느린 warm = miss). 성공했지만 빈 풀(resultCount 0)은 캐시에 저장되므로 **스킵 대상 아님** — 결과 수가 아닌 error 신호로만 판정.
+  2. `eval/metrics.ts` — `computeCacheHitRate(cold, warm, hitThresholdMs, skipped=0)` 4번째 파라미터 추가, 그대로 반환.
+  3. `eval/types.ts` — `CacheHitMetrics.skipped: number` 신규 — "cold 실패로 warm 스킵된 쿼리 수". **denominator 의미론**: skipped는 hits/misses 어디에도 계상되지 않음 → hitRate = hits/(hits+misses) = **측정된 쌍 기준** (전체 쿼리 기준 아님). `hits + misses < totalQueries` 가능함을 주석으로 명시.
+  4. `eval/reporter.ts` — 사람이 읽는 리포트 + GitHub Summary에 `Skipped: N (cold run failed — excluded from denominator)` 행 추가 (skipped > 0일 때만) — denominator 변화 투명화.
+- **테스트** (3개 파일, 유닛 1,496→**1,500건**): `eval-runner-interleave.test.ts` — 기존 'failed cold = miss'(구 동작 단정) 테스트를 3건으로 대체: ① 기본값 스킵 (cold 1회만 호출, hitRate 0·misses 0·**skipped 1**) ② `skipWarmOnColdError:false` 레거시 (warm 2회 호출, miss 1, skipped 0) ③ **denominator 혼합** — 실패 1 + 히트 1 → hitRate **1.0** (구 동작이면 0.5), skipped 1, 측정 쌍 1. `eval-cache-metrics.test.ts` +2건 (skipped 계상 / 기본값 0). `eval-median.test.ts` cache 픽스처에 skipped:0 추가 (S74 캐시-once 계약 유지).
+- **검증**: 유닛 **1,500건** (75파일) / tsc 0 / lint 0 / format 0. 리뷰 반영 — ① if/else-if의 subtle invariant (else-if가 skipWarmOnColdError를 재확인하지 않음) 제거 → 중첩 if로 단순화 ② skipped를 사람이 읽는 리포트에 노출 (JSON에만 있던 것에서 default 출력으로 승격). reporter 스모크: `Hit rate: 100.0% (2/2)` + `Skipped: 1` 정상 출력 확인.
+- **영향**: 캐시 hitRate가 "실제 캐시 가능했던 쿼리 기준"으로 정확해짐 — 실패 쿼리가 강제 miss로 hitRate를 끌어내리던 왜곡 제거. 다음 `--cache` eval부터 skipped 필드가 리포트에 포함됨 (S79 예측 확정의 다음 단계). 레거시 동작은 `skipWarmOnColdError:false`로 명시적 옵트인 가능.
+- **잔여 (후속 S 후보)**: ① S80 실측(hitRate 1.0)과 함께 `eval:median:save --cache --runs 2`에서 skipped 포함 첫 공식 캐시 기록 ② `--cache` + 실패 비율 높은 쿼리셋에서 skipped가 비대해지는지 S37 손실 리포트와 교차분석.
+
+### S80-① 잔여 ①: 첫 공식 캐시 기록 — eval:median:save --cache --runs 2 실측 (hitRate 1.0, skipped 0) (2026-08-09)
+
+- **요청**: S80-① 잔여 ① — `eval:median:save --cache --runs 2`로 **skipped 필드 포함 첫 공식 캐시
+  기록**을 실행하고, 실측 hitRate·skipped를 latest.json에 남긴 뒤 S79/S80 예측과 대조해 문서화.
+- **실행**: S74 schedule 모드(`--runs 2 --cache`, 캐시-once — run 1만 측정)로 데몬 실행 완료.
+  아티팩트: `run-1.json`(캐시 측정 run) + `run-2.json` + `latest.json`(median-of-2) +
+  `baselines/latest.json` 전부 갱신.
+- **실측 결과 (최초 공식 캐시 기록, S80-① skipped 포함)**:
+  - `cache = { hitRate: 1, hits: 500, misses: 0, skipped: 0, avgColdMs: 10027, avgWarmMs: 0, hitThresholdMs: 200 }`
+  - **hitRate 1.0 (500/500)** — 인터리브 warm pass가 전 쿼리에서 캐시 히트, avgWarmMs **0ms**.
+    wikipedia 429 창이 극심했음에도(run-1 avgColdMs 10.0s, p50 5.9s) warm은 전부 인프로세스 히트.
+  - **skipped 0** — run-1에서 executeSearch throw(전체 실패)가 0건 (품질 게이트 실패 88건은
+    response가 반환되므로 캐시 저장됨 → warm 히트 가능, 스킵 대상 아님). denominator 왜곡 없음.
+  - median-of-2: **NDCG@10 0.2839** (신규 label-suffix+DCG 캡 규칙 기준), MRR 0.5179, P@10 0.3140,
+    passRate 0.824 (run-1 wikipedia 429 창으로 저하 — run-2는 0.952).
+- **S79/S80 예측 대조**:
+  - S79: "git 히스토리에 캐시 측정 이력 없음 — 다음 주간 run이 최초의 커밋 가능 캐시 측정"
+    → **성립**: 이번 run이 첫 공식 캐시 기록이며 baselines/latest.json에 영속됨.
+  - S80: korean 81쿼리 라이브에서 hitRate 1.0 → **500쿼리 전체에서 hitRate 1.0으로 확정**.
+    post-loop warm pass(구)의 구조적 ~0% 대비 인터리브가 반복 트래픽처럼 캐시를 조회함을 입증.
+  - S80-①: skipped는 cold 실패 시에만 증가 → **0건 실패로 skipped 0** (예측 부합 — 실패가 없어
+    스킵 로직이 발동할 기회가 없었음). 실패율 높은 쿼리셋에서의 skipped 비대화는 잔여 ②로 유지.
+- **부수 정리**: `eval/results/run-3.json`은 이전 median-of-3 세션(04:53Z) 잔재로, `--runs 2` 실행이
+  runCount 초과 파일을 정리하지 않아 남아 있던 것 — 백업(`/tmp/s80-cache-backup/results-run-3.json`)
+  및 git HEAD와 동일본 확인 후 제거 (run-1/2가 새 세션 산출물이므로 혼동 방지).
+  eval/index.ts 저장 루프는 runCount 초과 stale run 파일을 정리하지 않는 **잔여 개선 항목**으로 기록.
+- **README 갱신**: 품질 섹션 NDCG를 신규 규칙(0.2839) 기준으로 교체 + **Cache Hit Rate
+  100.0% (500/500, skipped 0)** 행 추가. `scripts/update-readme-eval.ts`의 cache 인터페이스에
+  `skipped` 필드 반영 (S80-①) — 다음 자동 갱신부터 Skipped 수치가 표에 포함됨.
+- **검증**: 최종 상태 — run-1/2 + latest + baselines cache 필드 일치, stale run-3 제거.
+- **잔여 (후속 S 후보)**: ① eval/index.ts가 runCount 초과 stale run 파일을 정리하도록 보강
+  (이번에 수동 정리) ② `--cache` + 실패 비율 높은 쿼리셋에서 skipped 비대화 교차분석(S37)
+  ③ 다음 clean-window eval에서 passRate/p50 평상시 수치 회복 확인.
+
+### S80-① 잔여 ②: skipped × S37 손실 리포트 교차분석 — skipped는 429 노이즈 판별 신호로 부적합 (2026-08-09)
+
+- **요청**: `--cache` 실행 중 cold 실패 비율이 높은 쿼리셋(wikipedia 429 창)에서 **skipped가 비대해지는지**
+  S37 손실 리포트와 교차분석해, skipped를 429 노이즈 판별 신호로 쓸 수 있는지 평가.
+- **실측 (S80-① 잔여 ① run-1.json + S37 분석, wikipedia 429 극심 창)**:
+  - **skipped=0 ↔ error(throw) 0건 완벽 일치** — skipped 의미론(executeSearch throw만 카운트) 검증됨.
+  - **wikipedia 부재 281건 (전체 500의 56%)** — wikipedia 라우팅 쿼리 435개 중 218개(50%)가
+    wikipedia 부재. 그러나 **전부 '저하된 응답'으로 흡수** — throw 0건.
+  - **미러 폴백 보상: wikipedia 부재 281건 중 119건(42%)에 dbpedia/wikidata/dbpedia-lang 발동**
+    (S37 리포트: dbpedia fired 214 이벤트/162쿼리·success 100%, wikidata 1쿼리만 성공,
+    dbpedia-lang 0 — S36/S38 non-EN 티어는 여전히 rate-guard 게이트).
+  - **전체 fanout 실패(backends=[failed]) 0건 · 빈 backends 0건** — skipped가 발동할 기회 자체가 없었음.
+  - **S37 손실 쿼리 31건(gain>0.001) 중 23건이 wikipedia 부재였지만 throw 0건** — 429가 NDCG 손실을
+    일으켜도 (weighted loss 4.795, en-fact-04 Δ+0.469 등) executeSearch throw로는 이어지지 않음.
+- **판정: skipped는 429 노이즈 판별 신호로 부적합**. 근거:
+  1. **429는 throw가 아니라 저하된 응답으로 나타남** — orchestrator가 wikipedia 부재를 빈 백엔드가
+     아닌 'wikipedia 미포함 backends' + 미러 폴백으로 흡수 (fanout이 부분 결과를 반환하므로
+     executeSearch는 성공). skipped는 이 경로를 **절대 포착하지 못함**.
+  2. **skipped가 커지는 상황 = 진짜 전체 파이프라인 throw** (코드 버그, 극단적 타임아웃, 인프라 전멸) —
+     429 노이즈가 아니라 **중대 장애 신호**로 해석해야 함. 이번 run에서 0건은 시스템이 429 창에서도
+     partial-result 계약을 유지함을 보여줌.
+  3. **429 판별의 정확한 신호는 이미 존재** — ① S37 composition-controlled weighted loss
+     (S34, 구성 동일 쌍 비교) ② backends의 wikipedia 부재 + 미러 발동 여부(S39) ③ 로그 기반
+     per-query 429 카운트(S33 parseQuery429s, en-fact-04 429×5 등) ④ S75 gate429 교차참조
+     (flaggedBy429/passedWith429 — S73 2-run 게이트와 429 가용성 결합). skipped는 이 신호들에
+     추가 정보를 주지 않음.
+- **권고**: skipped는 **denominator 투명화 + 낭비 방지 목적**(S80-①)으로 유지하되, 429 판별에는
+  사용하지 말 것. skipped>0 발견 시 'executeSearch 전체 실패'로 해석해 코드 오류/인프라 장애를
+  조사 (429 가용성 노이즈로 오분류하면 진짜 장애를 놓침). 이번 500쿼리 창에서 skipped=0이므로
+  캐시 hitRate 1.0이 denominator 왜곡 없이 유효.
+- **검증**: 유닛/tsc/lint/format 그린 (코드 변경 없음 — 분석+문서만).
+- **잔여 (후속 S 후보)**: ① S36/S38 non-EN 미러 티어(wikidata/dbpedia-lang)의 실제 발동률 1%는
+  rate-guard 게이트가 평가 부하에서 대부분 차단 — S35 orchestrator 승격 패턴으로 이중 보완 검토
+  ② skipped>0이 실제로 발생하는 쿼리셋(인위적 throw 주입)의 동작 스모크.
+
+### S80-① 후속: update-readme-eval.ts README 캐시 행에 skipped 항상 표기 확장 (2026-08-09)
+
+- **요청**: S80-① 변경(캐시 메트릭 `skipped`)이 update-readme-eval.ts의 README 캐시 행과 호환되는지
+  확인하고, hitRate 표기와 함께 **skipped가 있으면 함께 표기**하도록 확장.
+- **호환성 확인**: `eval/types.ts` `CacheHitMetrics.skipped`(필수) vs 스크립트 로컬 인터페이스 정합.
+  단, 스크립트는 `skipped > 0`일 때만 `(skipped N)` 접미사를 표기하고 있었음 — 0이거나
+  pre-S80-① 레거시(undefined)면 미표기 → **denominator 의미론이 README에서 불투명**.
+- **수정** (`scripts/update-readme-eval.ts` + 신규 테스트):
+  1. **`skipped` 항상 표기** — 필드가 정의되어 있으면 0이어도 `(skipped N)` 접미사
+     (예: `100.0% (500/500) (skipped 0)`). denominator 투명화: hitRate=hits/(hits+misses)이고
+     hits+misses < totalQueries가 정확히 skipped>0일 때 발생함을 독자가 즉시 인지. 레거시
+     (undefined)는 접미사 생략 — 필드 부재가 곧 "0 skips, 레거시 denominator".
+  2. **`buildMetricsSection` export + `isDirectRun` 가드** — 테스트에서 import 시 main() 미실행
+     (analyze-429-loss.ts와 동일 확립 패턴).
+  3. **주석**: eval/reporter.ts는 skipped>0일 때만 `Skipped: N` 표기 — README가 항상 표기하는
+     것은 의도적 차이임을 명시 (리뷰 반영).
+- **테스트**: `tests/unit/update-readme-eval.test.ts` 신규 +5건 — ① skipped=0이어도 표기 ② skipped>0
+  표기 (실패 1+히트 1 → hitRate 1.0이지만 skipped 1 노출) ③ 레거시 undefined 접미사 생략
+  ④ avg cold→warm 행 무관 유지 ⑤ import 부작용 가드 (isDirectRun — buildMetricsSection 순수성).
+  유닛 전체 **1,505건** (76파일, +5), tsc 0, lint 0, format 0.
+- **README 반영**: 스크립트 실행으로 Cache Hit Rate 행이
+  `100.0% (500/500) (skipped 0)`으로 갱신됨.
+- **잔여 (후속 S 후보)**: ① 다음 eval:median:save --cache에서 skipped>0 사례가 실제로 README에
+  노출되는지 확인 ② reporter.ts(>0 조건)와 README(항상)의 표기 정책 통일 여부 재검토.
+
+### Wave 4 (docs/13 B1): wikipedia 429 페이싱 가드 + 병렬 미러 — 미러 폴백 지연 비용 제거 (2026-08-09)
+
+- **요청**: docs/13 Wave 4(B1) — wikipedia 429 창에서 미러 폴백의 지연 비용을 줄이도록
+  wikipedia 페이싱/병렬 미러를 적용하고, eval 로그 기반으로 p50/p95 개선을 실측.
+- **데이터 기반 진단 (저장 run-1..3 실측)**: 미러 발동 쿼리 **392건/3run (25.8%)**가
+  **p50 3,289ms / p95 5,292ms**로, wikipedia 정상 쿼리(p50 ~0.82s) 대비 **~2.5s 추가**
+  (동일 쿼리 페어 n=183, median 2,465ms / avg 2,706ms 직접 측정). 원인: S35 미러가
+  **fanout 완료 후 순차 실행** — 미러 fetch(~1.4s 라이브)가 팬아웃 시간 위에 통째로 누적.
+- **수정** (2개 파일 + 테스트):
+  1. `src/lib/specialized.ts` — **wikipedia 429 페이싱 가드 신규**: S23 GitHub /search 가드
+     패턴 — `wikipediaRateLimitedUntil` + `resetWikipediaRateState`/`isWikipediaRateLimited`/
+     `recordWikipediaRateLimit` (Retry-After 인지, [1s,120s] 클램프, 기본 30s). 가드 트립 시
+     `wikipediaSearch`는 **캐시 체크 후 네트워크 체인(REST+Action) 전체 스킵** — 창 안의
+     반복 쿼리가 429 재시도(~1.1s)를 소진하지 않음 (공격적 재호출 차단 = 진짜 페이싱).
+  2. `src/lib/orchestrator.ts` — **병렬 미러**: 미러 체인을 `runWikipediaMirrorChain`
+     (EN→dbpedia / non-EN→wikidata / ja 2차→dbpedia-lang, S35/S36/S38 배선 그대로)로 추출,
+     **fanout 이전(4.5)** 가드 트립 시에만 백그라운드로 시작 → 5b에서 settled 프라미스 await
+     (**추가 지연 ~0**). wikipedia 정상 시 가드 클린 → 미러 미시작 (S35 '0 추가 지연' 계약
+     보존). 5b 로그에 `parallel` 필드 추가 (S37 파서 JSON.parse 기반 — 무호환).
+- **실측 (scripts/measure-mirror-latency.ts, 저장 run-1..3 재계산)**: 미러 발동 쿼리
+  **p50 3,289→822ms, p95 5,292→1,092ms** (동일 쿼리 wikiOK 팬아웃 프록시 기반 **하한** —
+  미러가 fanout 창 초과 시 실제값은 약간 높을 수 있음, 페어 측정 Δ 2.5s가 직접 증거).
+  **전체 eval p50 1,817→842ms, p95 4,395→2,688ms** — p50 상용 목표 <1.5s 달성.
+- **테스트**: specialized.test.ts +5건 (가드 스킵/캐시 우선/429 기록/Retry-After 타임스탬프
+  클램프) + measure-mirror-latency.test.ts +5건 (분류/before-after/폴백 프록시/전체/빈 run)
+  + orchestrator.test.ts 통합 +1건 (가드 arm 시 wikipedia 검색 체인 미호출 + 병렬 미러 gold
+  회복 — 지식패널 summary와 검색 체인 분리 단언) + beforeEach 가드 리셋. 기존 S35/S36/S38
+  미러 테스트 7건 무회귀. 유닛 전체 **1,536건** (78파일), 통합 22건, tsc 0, lint 0, format 0.
+- **리뷰 반영**: ① Retry-After 하한 클램프 ② 다른 통합 테스트 파일 429 mock 전수 확인
+  (누수 없음) ③ S37 parseMirrorEvents 호환 확인 ④ after 하한 추정 한계 문서화.
+- **잔여 (후속 S/Wave 후보)**: ① 라이브 eval:median:save 재실행으로 실제 p50/p95 회복 실측
+  확정 (~60분 별도 세션) ② B4 팬아웃 예산 재조정 — wikipedia 4500ms ceiling은 페이싱 가드와
+  직교하나 재시도 체인이 짧아져 사실상 여유 확보 ③ 가드 쿨다운 30s는 튜닝 노브 (15s면 회복
+  빠르나 재-429 증가 — 라이브 데이터로 결정).

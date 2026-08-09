@@ -85,6 +85,51 @@ export function clearWikipediaCache(): void {
   wikipediaCache.clear()
 }
 
+// ============================================================
+// B1 (Wave 4): wikipedia 429 pacing guard
+// ============================================================
+
+/**
+ * Default cooldown after a wikipedia 429 when the response carries no
+ * usable Retry-After header. The wikimedia gateway's REST+Action block
+ * lasts "a minute+" under sustained hammering, but the eval's own 1200ms
+ * pacing (runner.ts) keeps windows shorter — 30s balances stopping the
+ * burst (queries 2+ in the window skip instantly) against not over-holding
+ * a healthy endpoint once the window actually recovers. Mirrors the S23
+ * GitHub /search guard pattern (header-driven, module-level, per-isolate).
+ */
+const WIKIPEDIA_RATE_COOLDOWN_MS = 30_000
+
+/** Epoch ms; 0 = not limited. B1: module-level wikipedia 429 window. */
+let wikipediaRateLimitedUntil = 0
+
+/** TEST HOOK: reset the wikipedia rate-guard state (per-isolate module state). */
+export function resetWikipediaRateState(): void {
+  wikipediaRateLimitedUntil = 0
+}
+
+/** True when wikipedia recently 429'd and the cooldown window has not passed. */
+export function isWikipediaRateLimited(now: number = Date.now()): boolean {
+  return now < wikipediaRateLimitedUntil
+}
+
+/**
+ * Record a wikipedia 429 — arms a cooldown. Honours the upstream Retry-After
+ * header when present (clamped to [1s, 120s]); falls back to the 30s default
+ * otherwise (a plain-object mock in tests has no headers). EXPORTED FOR TESTS.
+ */
+export function recordWikipediaRateLimit(
+  res?: { headers?: { get?: (key: string) => string | null } },
+  now: number = Date.now(),
+): void {
+  const retryAfterSec = Number(res?.headers?.get?.('retry-after'))
+  const cooldownMs =
+    Number.isFinite(retryAfterSec) && retryAfterSec > 0
+      ? Math.min(Math.max(retryAfterSec * 1000, 1000), 120_000)
+      : WIKIPEDIA_RATE_COOLDOWN_MS
+  wikipediaRateLimitedUntil = Math.max(wikipediaRateLimitedUntil, now + cooldownMs)
+}
+
 /**
  * Search Wikipedia for encyclopedia entries.
  * Free, no API key. Works for all languages.
@@ -98,7 +143,24 @@ export async function wikipediaSearch(
   const cacheKey = wikipediaCacheKey(language, query, maxResults)
   const cached = wikipediaCacheGet(cacheKey)
   if (cached) return cached
+
+  // B1 (Wave 4): pacing guard. When wikipedia recently 429'd (the wikimedia
+  // gateway blocks the IP across REST+Action for a minute+ under bursts),
+  // skip the network chain ENTIRELY — every attempt inside the window just
+  // re-429s and re-arms the cooldown, wasting requests and delaying window
+  // recovery. The orchestrator-level mirror (5b) covers the gold instead;
+  // once the cooldown expires the next call retries for real. The cache is
+  // checked BEFORE this guard so a pre-window result still serves. Mirrors
+  // the S23 GitHub rate-guard skip semantics.
   const results: SearchResult[] = []
+  if (isWikipediaRateLimited()) {
+    logger.warn('Wikipedia search skipped (429 cooldown window):', {
+      resumeAt: new Date(wikipediaRateLimitedUntil).toISOString(),
+      query,
+      language,
+    })
+    return results
+  }
 
   // Wikipedia REST API can return HTTP 429 (rate limit) under rapid sequential
   // calls. Retry with backoff that fits within fanout's wikipedia ceiling
@@ -154,9 +216,13 @@ export async function wikipediaSearch(
         )
         if (actionRes.ok) break
         if (actionRes.status === 429 && attempt === 0) {
-          // Give the IP window a slightly longer beat to recover — 500ms
-          // (was 300ms). The REST chain already burned ~900ms of backoff
-          // sleep, so this stays well inside the 4.5s fanout ceiling.
+          // B1: the Action endpoint shares the same gateway block as REST
+          // (verified live) — record the cooldown so later queries skip the
+          // whole chain, then give the window a slightly longer beat (500ms)
+          // for the rare transient case. The REST chain already burned ~900ms
+          // of backoff sleep, so this stays well inside the 4.5s fanout
+          // ceiling.
+          recordWikipediaRateLimit(actionRes)
           await new Promise((r) => setTimeout(r, 500))
           continue
         }
@@ -200,8 +266,13 @@ export async function wikipediaSearch(
 
       if (response.ok) break
       if (response.status === 429 && attempt < maxRetries) {
-        // Rate limited — wait and retry
+        // Rate limited — B1: record the cooldown (Retry-After-aware) so the
+        // NEXT wikipedia-expected query in this isolate skips instantly
+        // instead of burning its own 429 attempts. The intra-query retry
+        // chain is kept for the DISCOVERY query only (the one that finds the
+        // window) — later queries are skipped at the top by the guard.
         restRateLimited = true
+        recordWikipediaRateLimit(response)
         await new Promise((r) => setTimeout(r, backoffDelays[attempt]))
         continue
       }

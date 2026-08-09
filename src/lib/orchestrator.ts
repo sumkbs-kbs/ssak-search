@@ -38,6 +38,7 @@ import {
   dbpediaSearch,
   wikidataWikiSearch,
   dbpediaLangSearch,
+  isWikipediaRateLimited,
 } from './specialized'
 import { extractContent } from './extractor'
 import { generateAnswer, attachFactCheckToAnswer } from './answer'
@@ -375,6 +376,47 @@ function toBingTimeRange(range: string | undefined): 'day' | 'week' | 'month' | 
 }
 
 // ============================================================
+// B1 (Wave 4): wikipedia mirror chain + parallel-mirror helper
+// ============================================================
+
+interface MirrorResult {
+  results: SearchResult[]
+  backend: string
+}
+
+/**
+ * B1: the cross-infrastructure wikipedia mirror chain (S35 EN / S36 non-EN /
+ * S38 ja 2nd tier), extracted so the orchestrator can start it in PARALLEL
+ * with the fanout (Wave 4) instead of only after wikipedia is known missing.
+ *
+ *   - EN:     DBpedia Lookup (English index, keyless) → en.wikipedia.org URLs
+ *   - non-EN: Wikidata label search + sitelink fetch → <lang>.wikipedia.org
+ *   - ja 2nd: ja.dbpedia.org SPARQL — only when Wikidata ALSO produced nothing
+ *
+ * Mirrors never throw — each search function catches its own errors and
+ * returns [], so awaiting this can only yield an empty result set, never a
+ * rejection (5b and the background start both rely on that).
+ */
+async function runWikipediaMirrorChain(query: string, language: string, env: Env | undefined): Promise<MirrorResult> {
+  if (language === 'en') {
+    const results = await dbpediaSearch(query, { maxResults: 5, timeoutMs: 5000, language: 'en', env })
+    return { results, backend: 'dbpedia' }
+  }
+  const results = await wikidataWikiSearch(query, {
+    maxResults: 5,
+    timeoutMs: 5000,
+    language,
+    env,
+  })
+  if (results.length > 0) return { results, backend: 'wikidata' }
+  if (language === 'ja') {
+    const langResults = await dbpediaLangSearch(query, { maxResults: 5, timeoutMs: 5000, language: 'ja', env })
+    if (langResults.length > 0) return { results: langResults, backend: 'dbpedia-lang' }
+  }
+  return { results, backend: 'wikidata' }
+}
+
+// ============================================================
 // Main Search Execution
 // ============================================================
 
@@ -495,6 +537,23 @@ export async function executeSearch(request: SearchRequest, config: Orchestrator
     // Strategy-selected backends
     tasks.push(...buildBackendTasks(ctx))
 
+    // ── 4.5 B1 (Wave 4): parallel wikipedia mirror for an ACTIVE 429 window ──
+    // When wikipedia recently 429'd (pacing guard tripped), wikipediaSearch
+    // will skip its chain and the backend will be missing — start the mirror
+    // chain NOW so it runs CONCURRENTLY with the fanout instead of waiting
+    // until 5b to begin. The mirror's fetch (~1.4s live) overlaps the fanout
+    // (phase collection ≥800ms), so 5b awaits an already-settled promise:
+    // sequential added latency (~2.4s measured p50 in the stored runs) drops
+    // to ~0 for steady-state window queries. When wikipedia is healthy the
+    // guard is clean and NO mirror is started — the S35 'zero added latency
+    // when wikipedia succeeds' contract is preserved (a stale guard could
+    // leave a discarded promise behind if wikipedia recovers mid-flight;
+    // rare, and mirrors swallow their own errors so nothing leaks).
+    let mirrorPromise: Promise<MirrorResult> | null = null
+    if (ctx.sources.useWikipedia && isWikipediaRateLimited()) {
+      mirrorPromise = runWikipediaMirrorChain(query, effectiveWikiLang, env)
+    }
+
     // ── 5. Fan-out with progressive timeout collection ──
     // waitFor=['wikipedia']: wikipedia's 429-retry chain often settles just
     // after phase 1's 800ms early-exit. Awaiting it (bounded by its 4500ms
@@ -557,40 +616,39 @@ export async function executeSearch(request: SearchRequest, config: Orchestrator
     // wikipedia is missing (a healthy wikipedia run adds ZERO latency).
     if (ctx.sources.useWikipedia && !usedBackends.includes('wikipedia')) {
       try {
-        // timeoutMs 5000 (not 8000): this runs SEQUENTIALLY after the fanout
-        // already waited up to 4500ms for wikipedia, so an 8s budget would add
-        // a worst-case +8s tail to exactly the slowest (429'd) queries. Live
+        // timeoutMs 5000 (not 8000): this runs after the fanout already
+        // waited up to 4500ms for wikipedia, so an 8s budget would add a
+        // worst-case +8s tail to exactly the slowest (429'd) queries. Live
         // mirror latency is ~1.4s; 5s bounds the added p95 tail (review S35).
         // NOTE: mirrors receive the RAW query — wikipediaSearch uses
         // wikiQuery(ctx) (Chinese cleaning), but dbpediaSearch is EN-only and
         // wikidataWikiSearch/dbpediaLangSearch apply their own CJK cleaning.
-        let mirrorResults: SearchResult[] = []
-        let mirrorBackend = ''
-        if (effectiveWikiLang === 'en') {
-          mirrorResults = await dbpediaSearch(query, { maxResults: 5, timeoutMs: 5000, language: 'en', env })
-          mirrorBackend = 'dbpedia'
+        //
+        // B1 (Wave 4): when the pacing guard was already tripped at fanout
+        // start (4.5), mirrorPromise has been running in parallel — awaiting
+        // it adds ~0 latency instead of the full sequential mirror round-trip
+        // (~2.4s measured p50 on stored runs). Only the FIRST query of a 429
+        // window (the one that discovers the block) takes the sequential path
+        // here; queries 2+ in the window skip wikipedia instantly (guard) and
+        // find the mirror already settled.
+        let mirror: MirrorResult
+        let parallel = false
+        if (mirrorPromise) {
+          mirror = await mirrorPromise
+          mirrorPromise = null
+          parallel = true
         } else {
-          mirrorResults = await wikidataWikiSearch(query, {
-            maxResults: 5,
-            timeoutMs: 5000,
-            language: effectiveWikiLang,
-            env,
-          })
-          mirrorBackend = 'wikidata'
-          // S38 2nd tier: ja only, fires ONLY when Wikidata produced nothing.
-          if (mirrorResults.length === 0 && effectiveWikiLang === 'ja') {
-            mirrorResults = await dbpediaLangSearch(query, { maxResults: 5, timeoutMs: 5000, language: 'ja', env })
-            if (mirrorResults.length > 0) mirrorBackend = 'dbpedia-lang'
-          }
+          mirror = await runWikipediaMirrorChain(query, effectiveWikiLang, env)
         }
-        if (mirrorResults.length > 0) {
-          resultSets.push(mirrorResults)
-          usedBackends.push(mirrorBackend)
+        if (mirror.results.length > 0) {
+          resultSets.push(mirror.results)
+          usedBackends.push(mirror.backend)
           log.warn('[Orchestrator] Wikipedia mirror fallback recovered wikipedia gold (wikipedia backend missing):', {
             query,
             language: effectiveWikiLang,
-            backend: mirrorBackend,
-            count: mirrorResults.length,
+            backend: mirror.backend,
+            count: mirror.results.length,
+            parallel,
           })
         }
       } catch (err) {

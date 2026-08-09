@@ -24,6 +24,9 @@ import {
   wikidataLabelRelevant,
   resetWikidataRateState,
   resetDbpediaLangRateState,
+  resetWikipediaRateState,
+  isWikipediaRateLimited,
+  recordWikipediaRateLimit,
   clearWikipediaCache,
   githubSearch,
   githubIssuesSearch,
@@ -372,6 +375,10 @@ describe('wikipediaSearch', () => {
     // test's mocked results leak into the next and the mock is never called
     // (cache hit short-circuits fetchWithTimeout).
     clearWikipediaCache()
+    // B1: the pacing guard is module-level — a 429 test arms a 30s cooldown
+    // that would silently skip wikipedia in the NEXT test (returns [] without
+    // touching the mock). Same leak pattern as resetWikidataRateState.
+    resetWikipediaRateState()
   })
   afterEach(() => {
     vi.restoreAllMocks()
@@ -530,8 +537,12 @@ describe('wikipediaSearch', () => {
     const first = await wikipediaSearch('recovery test')
     expect(first).toEqual([])
 
-    // Run 2 (e.g. next eval run): upstream recovered → real fetch again
+    // Run 2 (e.g. next eval run): upstream recovered → real fetch again.
+    // B1: run 1's 429 armed the pacing guard — a real eval run is ~20 min
+    // later (long past the 30s cooldown), so clear the guard to model the
+    // window having passed before the retry.
     mockFetchWithTimeout.mockReset()
+    resetWikipediaRateState()
     mockFetchWithTimeout.mockResolvedValueOnce({
       ok: true,
       json: () => Promise.resolve({ pages: [{ title: 'Recovered', key: 'Recovered', excerpt: 'ok' }] }),
@@ -539,6 +550,58 @@ describe('wikipediaSearch', () => {
     const second = await wikipediaSearch('recovery test')
     expect(second).toHaveLength(1)
     expect(second[0].title).toBe('Recovered')
+  })
+
+  // ── B1 (Wave 4): wikipedia 429 pacing guard ────────────────────────
+
+  it('skips the network chain entirely while the pacing guard is armed (B1)', async () => {
+    // A previous 429 armed a 30s cooldown — wikipediaSearch must return empty
+    // WITHOUT touching the network (the orchestrator mirror covers the gold).
+    recordWikipediaRateLimit()
+    expect(isWikipediaRateLimited()).toBe(true)
+    const results = await wikipediaSearch('anything')
+    expect(results).toEqual([])
+    expect(mockFetchWithTimeout).not.toHaveBeenCalled()
+  })
+
+  it('serves a cached result even while the pacing guard is armed (B1)', async () => {
+    mockFetchWithTimeout.mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({ pages: [{ title: 'Cached', key: 'Cached', excerpt: 'pre-window result' }] }),
+    })
+    await wikipediaSearch('cached query')
+    const callsAfterFirst = mockFetchWithTimeout.mock.calls.length
+
+    // Arm the guard — the cache check precedes the guard, so the pre-window
+    // result still serves without a network round-trip.
+    recordWikipediaRateLimit()
+    const second = await wikipediaSearch('cached query')
+    expect(second).toHaveLength(1)
+    expect(second[0].title).toBe('Cached')
+    expect(mockFetchWithTimeout.mock.calls.length).toBe(callsAfterFirst)
+  })
+
+  it('arms the pacing guard when REST 429s (B1)', async () => {
+    expect(isWikipediaRateLimited()).toBe(false)
+    mockFetchWithTimeout.mockResolvedValue({ ok: false, status: 429 })
+    await wikipediaSearch('rate limited')
+    expect(isWikipediaRateLimited()).toBe(true)
+  })
+
+  it('honours Retry-After for the cooldown when the 429 response carries it (B1)', async () => {
+    const now = Date.now()
+    mockFetchWithTimeout.mockResolvedValueOnce({
+      ok: false,
+      status: 429,
+      headers: { get: (k: string) => (k === 'retry-after' ? '5' : null) },
+    })
+    await wikipediaSearch('retry after')
+    // 5s Retry-After → cooldown ends 5s from the call. Timestamp-armed checks:
+    // still armed at now+4s, expired by now+6s — and NEVER extended to the
+    // 30s no-header default (now+29s must be expired).
+    expect(isWikipediaRateLimited(now + 4000)).toBe(true)
+    expect(isWikipediaRateLimited(now + 6000)).toBe(false)
+    expect(isWikipediaRateLimited(now + 29_000)).toBe(false)
   })
 })
 

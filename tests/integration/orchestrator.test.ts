@@ -7,7 +7,14 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { executeSearch, __clearMemoryCacheForTests } from '../../src/lib/orchestrator'
 import { __resetRateLimiterStateForTests } from '../../src/lib/rate-limiter'
-import { clearWikipediaCache, resetWikidataRateState, resetDbpediaLangRateState } from '../../src/lib/specialized'
+import {
+  clearWikipediaCache,
+  resetWikidataRateState,
+  resetDbpediaLangRateState,
+  resetWikipediaRateState,
+  recordWikipediaRateLimit,
+  isWikipediaRateLimited,
+} from '../../src/lib/specialized'
 import type { SearchRequest, SearchDepth, Topic, Env } from '../../src/types'
 
 // Mock the external fetch for all backends
@@ -216,6 +223,10 @@ describe('Orchestrator executeSearch() Integration', () => {
     // dbpedia-lang 2nd tier) in the NEXT test.
     resetWikidataRateState()
     resetDbpediaLangRateState()
+    // B1: the wikipedia pacing guard leaks the same way — a 429 test arms a
+    // 30s cooldown that would make the NEXT test's wikipedia task skip
+    // instantly (and spuriously fire the parallel mirror).
+    resetWikipediaRateState()
     // The orchestrator's 120s in-memory response cache would also leak the
     // previous test's response for the same query (S35 fallback test caches a
     // 'bing+dbpedia' response that must not satisfy the wikipedia-success test).
@@ -669,6 +680,72 @@ describe('Orchestrator executeSearch() Integration', () => {
     // The DBpedia mirror actually fired after the fanout saw wikipedia missing.
     expect(dbpediaCalled).toBe(true)
     // And its en.wikipedia.org gold URL made it into the final pool.
+    const wikiHit = result.results.find((r) => r.url === 'https://en.wikipedia.org/wiki/Quantum_computing')
+    expect(wikiHit).toBeDefined()
+    expect(wikiHit!.domain).toBe('en.wikipedia.org')
+  })
+
+  // ── B1 (Wave 4): parallel mirror + pacing guard ───────────────────────
+  // When the wikipedia 429 pacing guard is already armed, the orchestrator
+  // starts the mirror chain BEFORE the fanout (concurrently) instead of only
+  // after wikipedia is known missing — cutting the sequential mirror's added
+  // latency (~2.4s measured p50 on stored runs) to ~0 for steady-state window
+  // queries. wikipediaSearch itself skips its network chain while the guard
+  // is armed (pacing), so the mirror is the ONLY wikipedia-gold path.
+
+  it('starts the mirror in parallel with the fanout when the pacing guard is armed (B1)', async () => {
+    let dbpediaCalled = false
+    let wikipediaSearchCalled = false
+    mockFetch.mockImplementation(async (url: string | URL) => {
+      const urlStr = url.toString()
+      // The wikipediaSearch REST + Action chain must NOT be touched — the
+      // pacing guard skips it entirely (the mock would succeed if it WERE
+      // called, so a call is a real failure of the pacing semantics). NOTE:
+      // the knowledge-panel summary endpoint (rest_v1/page/summary) is a
+      // SEPARATE best-effort call that the panel fires in non-eval mode and
+      // is NOT part of the search chain under test — only the search endpoints
+      // are asserted below.
+      if (urlStr.includes('wikipedia.org/w/rest.php/v1/search/page') || urlStr.includes('wikipedia.org/w/api.php')) {
+        wikipediaSearchCalled = true
+        return wikiResponse()
+      }
+      if (urlStr.includes('wikipedia.org')) {
+        return wikiResponse()
+      }
+      if (urlStr.includes('lookup.dbpedia.org')) {
+        dbpediaCalled = true
+        const DBPEDIA_JSON = JSON.stringify({
+          docs: [
+            {
+              resource: ['http://dbpedia.org/resource/Quantum_computing'],
+              label: ['<B>Quantum</B> <B>computing</B>'],
+              comment: ['Quantum computing is the use of quantum-mechanical phenomena'],
+            },
+          ],
+        })
+        return new Response(DBPEDIA_JSON, { status: 200, headers: { 'content-type': 'application/json' } })
+      }
+      if (urlStr.includes('bing.com')) {
+        return new Response(BING_HTML, { status: 200, headers: { 'content-type': 'text/html' } })
+      }
+      return new Response('', { status: 404 })
+    })
+
+    // Simulate an active 429 window: the guard was armed by an earlier query.
+    recordWikipediaRateLimit()
+    // Sanity: the guard must be armed in THIS module instance (shared with
+    // the orchestrator via the same workerd isolate) or the wikipedia task
+    // will fetch instead of skipping.
+    expect(isWikipediaRateLimited()).toBe(true)
+
+    const request = createSearchRequest({ query: 'what is quantum computing' })
+    const result = await executeSearch(request, { env })
+
+    // Pacing: the wikipedia SEARCH chain was never fetched; the mirror
+    // recovered the gold instead (started in parallel with the fanout).
+    expect(wikipediaSearchCalled).toBe(false)
+    expect(dbpediaCalled).toBe(true)
+    expect(result.backend).toContain('dbpedia')
     const wikiHit = result.results.find((r) => r.url === 'https://en.wikipedia.org/wiki/Quantum_computing')
     expect(wikiHit).toBeDefined()
     expect(wikiHit!.domain).toBe('en.wikipedia.org')

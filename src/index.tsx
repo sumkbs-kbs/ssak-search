@@ -74,15 +74,21 @@ const app = new Hono<{ Bindings: AppBindings }>()
 app.use('*', sentryMiddleware)
 
 // Structured logging middleware (must be first for full request coverage)
-app.use('*', createLoggingMiddleware({
-  ddEnv: 'production', // Override via Cloudflare Pages env vsn to set 'preview' dynamically
-}))
-app.use('/api/*', cors({
-  origin: '*',
-  allowMethods: ['GET', 'POST', 'OPTIONS'],
-  allowHeaders: ['Content-Type', 'Authorization', 'X-API-Key'],
-  maxAge: 86400,
-}))
+app.use(
+  '*',
+  createLoggingMiddleware({
+    ddEnv: 'production', // Override via Cloudflare Pages env vsn to set 'preview' dynamically
+  }),
+)
+app.use(
+  '/api/*',
+  cors({
+    origin: '*',
+    allowMethods: ['GET', 'POST', 'OPTIONS'],
+    allowHeaders: ['Content-Type', 'Authorization', 'X-API-Key'],
+    maxAge: 86400,
+  }),
+)
 
 // Security middleware — CSP, rate limiting, security headers
 app.use('*', securityMiddleware)
@@ -244,7 +250,8 @@ app.get('/api', (c) => {
       index: {
         method: ['POST', 'GET', 'DELETE'],
         path: '/api/index',
-        description: 'Search index management — index URLs, semantic search, D1 schema init, stats, refresh scheduling (Phase 2.2)',
+        description:
+          'Search index management — index URLs, semantic search, D1 schema init, stats, refresh scheduling (Phase 2.2)',
       },
     },
     docs: '/docs',
@@ -284,7 +291,11 @@ const manifest = {
   background_color: '#f8fafc',
   theme_color: '#6366f1',
   icons: [
-    { src: 'data:image/svg+xml,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' viewBox=\'0 0 100 100\'%3E%3Ctext y=\'.9em\' font-size=\'90\'%3E%26%23x1F50D%3B%3C/text%3E%3C/svg%3E', sizes: 'any', type: 'image/svg+xml' },
+    {
+      src: "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%26%23x1F50D%3B%3C/text%3E%3C/svg%3E",
+      sizes: 'any',
+      type: 'image/svg+xml',
+    },
   ],
 }
 
@@ -295,7 +306,7 @@ app.get('/manifest.json', (c) => {
 // ============================================================
 // OpenAPI Spec
 // ============================================================
-app.get('/openapi.yaml', (c) => {
+app.get('/openapi.yaml', (_c) => {
   return new Response(openapiSpec, {
     headers: { 'Content-Type': 'text/yaml; charset=utf-8' },
   })

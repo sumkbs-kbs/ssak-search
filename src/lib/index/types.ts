@@ -7,8 +7,6 @@
  * - Embedding model configuration
  */
 
-import type { Env } from '../../types'
-
 // ============================================================
 // Vectorize Document Chunk
 // ============================================================
@@ -292,14 +290,14 @@ export interface DomainBlacklistEntry {
 
 export interface DomainReputation {
   domain: string
-  authority: number        // 0-1
-  freshness: number        // 0-1
-  content_quality: number  // 0-1
-  crawability: number      // 0-1
+  authority: number // 0-1
+  freshness: number // 0-1
+  content_quality: number // 0-1
+  crawability: number // 0-1
   doc_count: number
   avg_importance: number
   total_crawls: number
-  success_rate: number     // 0-1
+  success_rate: number // 0-1
   last_crawled?: number
   last_updated: number
   categories?: string[]
@@ -313,9 +311,9 @@ export interface CrawlQueueEntry {
   id: string
   url: string
   domain: string
-  priority: number          // -1 to 1
+  priority: number // -1 to 1
   depth: number
-  source?: string           // 'brave_api' | 'crawler' | 'manual' | 'sitemap'
+  source?: string // 'brave_api' | 'crawler' | 'manual' | 'sitemap'
   reason?: string
   added_at: number
   due_at: number
@@ -357,7 +355,10 @@ export type IndexQueueMessage =
   | { type: 'REFRESH_SCHEDULE'; payload: { urls: string[] } }
   | { type: 'BULK_INDEX'; payload: { urls: Array<{ url: string; title: string; html: string }> } }
   | { type: 'SEED_FROM_BRAVE'; payload: { query: string; urls: string[] } }
-  | { type: 'UPDATE_DOMAIN_REPUTATION'; payload: { domains: Array<{ domain: string; success: boolean; quality: number }> } }
+  | {
+      type: 'UPDATE_DOMAIN_REPUTATION'
+      payload: { domains: Array<{ domain: string; success: boolean; quality: number }> }
+    }
 
 // ============================================================
 // Constants

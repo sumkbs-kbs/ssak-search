@@ -136,58 +136,116 @@ export function usagePage() {
       <div class="usage-page">
         <div style="text-align:center;padding:24px 0 16px;">
           <h1 style="font-size:1.5rem;font-weight:700;margin-bottom:4px;">
-            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="vertical-align:middle;margin-right:8px;color:var(--accent);"><path d="M4 20h16M4 17l4-7 4 3 6-7"/><path d="M20 8V5h-3"/></svg>
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              width="24"
+              height="24"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              aria-hidden="true"
+              style="vertical-align:middle;margin-right:8px;color:var(--accent);"
+            >
+              <path d="M4 20h16M4 17l4-7 4 3 6-7" />
+              <path d="M20 8V5h-3" />
+            </svg>
             Usage Dashboard
           </h1>
-          <p style="color:var(--text-secondary);font-size:0.85rem;">
-            Real-time request statistics and system metrics
-          </p>
+          <p style="color:var(--text-secondary);font-size:0.85rem;">Real-time request statistics and system metrics</p>
         </div>
 
         {/* Overview metrics */}
         <div class="metrics-grid">
           <div class="metric-card">
-            <div class="metric-value" id="total-requests">-</div>
+            <div class="metric-value" id="total-requests">
+              -
+            </div>
             <div class="metric-label">Total Requests</div>
           </div>
           <div class="metric-card">
-            <div class="metric-value" id="total-errors">-</div>
+            <div class="metric-value" id="total-errors">
+              -
+            </div>
             <div class="metric-label">Total Errors</div>
-            <div class="metric-sub">Error Rate: <span id="error-rate">-</span></div>
+            <div class="metric-sub">
+              Error Rate: <span id="error-rate">-</span>
+            </div>
           </div>
           <div class="metric-card">
-            <div class="metric-value" id="search-reqs">-</div>
+            <div class="metric-value" id="search-reqs">
+              -
+            </div>
             <div class="metric-label">Search Requests</div>
           </div>
           <div class="metric-card">
-            <div class="metric-value" id="extract-reqs">-</div>
+            <div class="metric-value" id="extract-reqs">
+              -
+            </div>
             <div class="metric-label">Extract Requests</div>
           </div>
         </div>
 
         {/* Subrequest stats */}
         <div class="section-title">
-          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            width="16"
+            height="16"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            aria-hidden="true"
+          >
+            <polyline points="16 18 22 12 16 6" />
+            <polyline points="8 6 2 12 8 18" />
+          </svg>
           Subrequest Statistics
         </div>
         <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:16px;margin-bottom:20px;">
           <div class="stat-row">
             <span class="stat-label">Total Subrequests</span>
-            <span class="stat-value" id="total-subreq">-</span>
+            <span class="stat-value" id="total-subreq">
+              -
+            </span>
           </div>
           <div class="stat-row">
             <span class="stat-label">Avg Subrequests / Search</span>
-            <span class="stat-value" id="avg-search-sub">-</span>
+            <span class="stat-value" id="avg-search-sub">
+              -
+            </span>
           </div>
           <div class="stat-row">
             <span class="stat-label">Avg Subrequests / Extract</span>
-            <span class="stat-value" id="avg-extract-sub">-</span>
+            <span class="stat-value" id="avg-extract-sub">
+              -
+            </span>
           </div>
         </div>
 
         {/* Error rate bar */}
         <div class="section-title">
-          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            width="16"
+            height="16"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            aria-hidden="true"
+          >
+            <path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
+            <line x1="12" y1="9" x2="12" y2="13" />
+            <line x1="12" y1="17" x2="12.01" y2="17" />
+          </svg>
           Error Rate
         </div>
         <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:16px;margin-bottom:20px;">
@@ -202,36 +260,104 @@ export function usagePage() {
 
         {/* System info */}
         <div class="section-title">
-          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            width="16"
+            height="16"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            aria-hidden="true"
+          >
+            <circle cx="12" cy="12" r="10" />
+            <line x1="12" y1="8" x2="12" y2="12" />
+            <line x1="12" y1="16" x2="12.01" y2="16" />
+          </svg>
           System Information
         </div>
         <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:16px;margin-bottom:20px;">
           <div class="stat-row">
             <span class="stat-label">Health Status</span>
-            <span class="stat-value" id="health-status" style="color:var(--success);">-</span>
+            <span class="stat-value" id="health-status" style="color:var(--success);">
+              -
+            </span>
           </div>
           <div class="stat-row">
             <span class="stat-label">Metrics Persistence</span>
-            <span class="stat-value" id="persistence">-</span>
+            <span class="stat-value" id="persistence">
+              -
+            </span>
           </div>
           <div class="stat-row">
             <span class="stat-label">Tracking Since</span>
-            <span class="stat-value" id="tracked-since">-</span>
+            <span class="stat-value" id="tracked-since">
+              -
+            </span>
           </div>
         </div>
 
         {/* Links */}
         <div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:center;margin-bottom:20px;">
           <a href="/api/usage" target="_blank" class="btn btn-ghost" style="font-size:0.78rem;">
-            <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="vertical-align:middle;"><path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              width="12"
+              height="12"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2.5"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              aria-hidden="true"
+              style="vertical-align:middle;"
+            >
+              <path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6" />
+              <polyline points="15 3 21 3 21 9" />
+              <line x1="10" y1="14" x2="21" y2="3" />
+            </svg>
             Raw API Data
           </a>
           <a href="/api/metrics" target="_blank" class="btn btn-ghost" style="font-size:0.78rem;">
-            <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="vertical-align:middle;"><path d="M4 20h16M4 17l4-7 4 3 6-7"/><path d="M20 8V5h-3"/></svg>
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              width="12"
+              height="12"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2.5"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              aria-hidden="true"
+              style="vertical-align:middle;"
+            >
+              <path d="M4 20h16M4 17l4-7 4 3 6-7" />
+              <path d="M20 8V5h-3" />
+            </svg>
             Prometheus Metrics
           </a>
           <a href="/status" class="btn btn-ghost" style="font-size:0.78rem;">
-            <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="vertical-align:middle;"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              width="12"
+              height="12"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2.5"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              aria-hidden="true"
+              style="vertical-align:middle;"
+            >
+              <circle cx="12" cy="12" r="10" />
+              <line x1="12" y1="8" x2="12" y2="12" />
+              <line x1="12" y1="16" x2="12.01" y2="16" />
+            </svg>
             Service Status
           </a>
         </div>

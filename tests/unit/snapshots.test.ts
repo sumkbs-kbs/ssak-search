@@ -1,9 +1,9 @@
 /**
  * Snapshot Tests for HTML/API Parsers
- * 
+ *
  * These tests use fixed HTML/API response snapshots to detect parser regressions
  * when search backends change their markup. Run with: npm test -- tests/unit/snapshots.test.ts
- * 
+ *
  * To update snapshots after confirmed backend changes: npm test -- tests/unit/snapshots.test.ts -u
  */
 
@@ -11,13 +11,6 @@ import { describe, it, expect } from 'vitest'
 import { parseBingHtml } from '../../src/lib/bing-search'
 import { parseStockCard, parseLinks } from '../../src/lib/naver-search'
 import { parseDuckDuckGoHtml } from '../../src/lib/duckduckgo'
-import { wikipediaSearch } from '../../src/lib/specialized'
-import { githubSearch } from '../../src/lib/specialized'
-import { hackerNewsSearch } from '../../src/lib/specialized'
-import type { Env } from '../../src/types'
-
-// Mock env for fetchWithTimeout
-const mockEnv: Env = {}
 
 // Helper to read snapshot files
 import * as fs from 'fs'
@@ -39,7 +32,7 @@ describe('Parser Snapshot Tests (P0-2: Regression Prevention)', () => {
     it('parses standard mobile results correctly', async () => {
       const html = await readSnapshot('bing-search.html')
       const results = parseBingHtml(html, 'quantum computing', 10)
-      
+
       expect(results.length).toBeGreaterThan(0)
       expect(results[0]).toMatchObject({
         title: expect.any(String),
@@ -48,7 +41,7 @@ describe('Parser Snapshot Tests (P0-2: Regression Prevention)', () => {
         score: expect.any(Number),
         domain: expect.any(String),
       })
-      
+
       // Snapshot match - will fail if parser output changes
       expect(results).toMatchSnapshot('bing-parser-output')
     })
@@ -56,11 +49,9 @@ describe('Parser Snapshot Tests (P0-2: Regression Prevention)', () => {
     it('skips Bing internal/redirect links', async () => {
       const html = await readSnapshot('bing-search.html')
       const results = parseBingHtml(html, 'test', 10)
-      
-      const internalUrls = results.filter(r => 
-        r.url.includes('bing.com/a') || 
-        r.url.includes('bing.com/privacy') || 
-        r.url.includes('go.microsoft.com')
+
+      const internalUrls = results.filter(
+        (r) => r.url.includes('bing.com/a') || r.url.includes('bing.com/privacy') || r.url.includes('go.microsoft.com'),
       )
       expect(internalUrls.length).toBe(0)
     })
@@ -89,7 +80,7 @@ describe('Parser Snapshot Tests (P0-2: Regression Prevention)', () => {
     it('parseStockCard extracts structured stock data', async () => {
       const html = await readSnapshot('naver-search.html')
       const results = parseStockCard(html, '삼성전자 주가')
-      
+
       expect(results.length).toBeGreaterThan(0)
       const stock = results[0]
       expect(stock).toMatchObject({
@@ -101,7 +92,7 @@ describe('Parser Snapshot Tests (P0-2: Regression Prevention)', () => {
         // stock_data may be undefined if change regex doesn't match (arrow char not handled)
         stock_data: expect.any(Object),
       })
-      
+
       // If stock_data is present, verify its structure
       if (stock.stock_data) {
         expect(stock.stock_data).toMatchObject({
@@ -120,17 +111,19 @@ describe('Parser Snapshot Tests (P0-2: Regression Prevention)', () => {
     it('parseLinks extracts external content links', async () => {
       const html = await readSnapshot('naver-search.html')
       const results = parseLinks(html, 'test query', 20)
-      
+
       expect(results.length).toBeGreaterThan(0)
-      
+
       // Should NOT contain excluded subdomains
-      const excludedDomains = results.map(r => extractDomain(r.url))
-        .filter(d => ['m.search.naver.com', 'search.naver.com', 'help.naver.com', 'www.naver.com'].includes(d))
+      const excludedDomains = results
+        .map((r) => extractDomain(r.url))
+        .filter((d) => ['m.search.naver.com', 'search.naver.com', 'help.naver.com', 'www.naver.com'].includes(d))
       expect(excludedDomains.length).toBe(0)
-      
+
       // Should contain content subdomains
-      const contentDomains = results.map(r => extractDomain(r.url))
-        .filter(d => ['n.news.naver.com', 'm.blog.naver.com', 'm.cafe.naver.com'].some(cd => d.includes(cd)))
+      const contentDomains = results
+        .map((r) => extractDomain(r.url))
+        .filter((d) => ['n.news.naver.com', 'm.blog.naver.com', 'm.cafe.naver.com'].some((cd) => d.includes(cd)))
       expect(contentDomains.length).toBeGreaterThan(0)
     })
   })
@@ -142,7 +135,7 @@ describe('Parser Snapshot Tests (P0-2: Regression Prevention)', () => {
     it('parses standard DDG HTML results', async () => {
       const html = await readSnapshot('duckduckgo-search.html')
       const results = parseDuckDuckGoHtml(html, 'quantum computing', 10)
-      
+
       expect(results.length).toBeGreaterThan(0)
       expect(results[0]).toMatchObject({
         title: expect.any(String),
@@ -151,7 +144,7 @@ describe('Parser Snapshot Tests (P0-2: Regression Prevention)', () => {
         score: expect.any(Number),
         domain: expect.any(String),
       })
-      
+
       expect(results).toMatchSnapshot('ddg-parser-output')
     })
 
@@ -176,13 +169,7 @@ describe('Parser Snapshot Tests (P0-2: Regression Prevention)', () => {
   describe('wikipediaSearch', () => {
     it('parses Wikipedia search API response', async () => {
       const response = await readSnapshot('wikipedia-search.json')
-      const mockFetch = async (url: string) => {
-        return {
-          ok: true,
-          json: async () => JSON.parse(response),
-        } as Response
-      }
-      
+
       // Since wikipediaSearch uses fetchWithTimeout internally,
       // we test the parsing logic by checking the snapshot structure
       const data = JSON.parse(response)
@@ -202,7 +189,7 @@ describe('Parser Snapshot Tests (P0-2: Regression Prevention)', () => {
     it('parses GitHub search API response and filters low-quality repos', async () => {
       const response = await readSnapshot('github-search.json')
       const data = JSON.parse(response)
-      
+
       expect(data.items.length).toBeGreaterThan(0)
       expect(data.items[0]).toMatchObject({
         full_name: expect.any(String),
@@ -212,7 +199,7 @@ describe('Parser Snapshot Tests (P0-2: Regression Prevention)', () => {
         language: expect.any(String),
         topics: expect.arrayContaining([expect.any(String)]),
       })
-      
+
       // No items without descriptions should pass quality filter
       const withDescription = data.items.filter((item: { description?: string }) => item.description)
       expect(withDescription.length).toBe(data.items.length)
@@ -226,10 +213,10 @@ describe('Parser Snapshot Tests (P0-2: Regression Prevention)', () => {
     it('parses HN Algolia API response', async () => {
       const item1 = await readSnapshot('hackernews-item-42654321.json')
       const item2 = await readSnapshot('hackernews-item-42654210.json')
-      
+
       const itemData1 = JSON.parse(item1)
       const itemData2 = JSON.parse(item2)
-      
+
       expect(itemData1).toMatchObject({
         title: expect.any(String),
         url: expect.stringMatching(/^https?:\/\//),
@@ -237,7 +224,7 @@ describe('Parser Snapshot Tests (P0-2: Regression Prevention)', () => {
         by: expect.any(String),
         time: expect.any(Number),
       })
-      
+
       expect(itemData2).toMatchObject({
         title: expect.stringContaining('PennyLane'),
         url: expect.stringMatching(/github\.com/),

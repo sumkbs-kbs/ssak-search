@@ -62,7 +62,9 @@ describe('computeBm25Score', () => {
       'python programming',
       'javascript web development guide',
       'completely unrelated title',
-      100, 1000, 50,
+      100,
+      1000,
+      50,
     )
     expect(score).toBe(0)
   })
@@ -72,13 +74,17 @@ describe('computeBm25Score', () => {
       'react hooks',
       'some unrelated content here for testing purposes with enough words',
       'Complete React Hooks Guide',
-      100, 1000, 50,
+      100,
+      1000,
+      50,
     )
     const noTitleMatch = computeBm25Score(
       'react hooks',
       'some unrelated content here for testing purposes with enough words',
       'Completely Different Topic',
-      100, 1000, 50,
+      100,
+      1000,
+      50,
     )
     expect(titleMatch).toBeGreaterThan(noTitleMatch)
   })
@@ -88,13 +94,17 @@ describe('computeBm25Score', () => {
       'react hooks',
       'This article explains react hooks and their usage patterns in modern web development',
       'General Title',
-      100, 1000, 50,
+      100,
+      1000,
+      50,
     )
     const noMatch = computeBm25Score(
       'react hooks',
       'This is completely unrelated content about cooking recipes',
       'General Title',
-      100, 1000, 50,
+      100,
+      1000,
+      50,
     )
     expect(contentMatch).toBeGreaterThan(noMatch)
   })
@@ -104,7 +114,9 @@ describe('computeBm25Score', () => {
       '삼성전자 주가',
       '삼성전자 주가가 오늘 상승했습니다 증권가 분석',
       '삼성전자 주가',
-      100, 1000, 50,
+      100,
+      1000,
+      50,
     )
     // Korean doesn't have \b word boundaries, so the regex match depends on the implementation
     // At minimum, the function should not crash and return a non-negative value
@@ -116,30 +128,24 @@ describe('computeBm25Score', () => {
       'react',
       'react react react this is about react framework react hooks react patterns',
       'React',
-      100, 1000, 50,
+      100,
+      1000,
+      50,
     )
     const lowFreq = computeBm25Score(
       'react',
       'this is an article about javascript not really about react',
       'JavaScript',
-      100, 1000, 50,
+      100,
+      1000,
+      50,
     )
     expect(highFreq).toBeGreaterThan(lowFreq)
   })
 
   it('applies length normalization (shorter docs rank higher for equal term frequency)', () => {
-    const shortDoc = computeBm25Score(
-      'react',
-      'react framework guide',
-      'React',
-      100, 1000, 50,
-    )
-    const longDoc = computeBm25Score(
-      'react',
-      'react ' + 'and '.repeat(100) + 'more content',
-      'React',
-      100, 1000, 50,
-    )
+    const shortDoc = computeBm25Score('react', 'react framework guide', 'React', 100, 1000, 50)
+    const longDoc = computeBm25Score('react', 'react ' + 'and '.repeat(100) + 'more content', 'React', 100, 1000, 50)
     expect(shortDoc).toBeGreaterThan(longDoc)
   })
 
@@ -148,7 +154,9 @@ describe('computeBm25Score', () => {
       'typescript',
       'TypeScript is a typed superset of JavaScript that compiles to plain JavaScript',
       'TypeScript',
-      100, 1000, 50,
+      100,
+      1000,
+      50,
     )
     expect(score).toBeGreaterThanOrEqual(0)
     expect(score).toBeLessThan(100) // Sanity check — BM25 rarely exceeds 20
@@ -166,18 +174,8 @@ describe('computeBm25Score', () => {
   })
 
   it('is case-insensitive for query and content matching', () => {
-    const lowerCase = computeBm25Score(
-      'react',
-      'React is a library',
-      'REACT HOOKS',
-      100, 1000, 50,
-    )
-    const upperCase = computeBm25Score(
-      'REACT',
-      'react is a library',
-      'react hooks',
-      100, 1000, 50,
-    )
+    const lowerCase = computeBm25Score('react', 'React is a library', 'REACT HOOKS', 100, 1000, 50)
+    const upperCase = computeBm25Score('REACT', 'react is a library', 'react hooks', 100, 1000, 50)
     expect(lowerCase).toBeCloseTo(upperCase, 2)
   })
 })

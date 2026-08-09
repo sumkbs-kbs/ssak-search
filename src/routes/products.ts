@@ -66,16 +66,10 @@ products.post('/search', async (c) => {
     return c.json({ success: true, query, results })
   } catch (err) {
     if (err instanceof z.ZodError) {
-      return c.json<ErrorResponse>(
-        { detail: 'Validation error', code: 'validation_error' },
-        400,
-      )
+      return c.json<ErrorResponse>({ detail: 'Validation error', code: 'validation_error' }, 400)
     }
     logger.error('Product search error:', { error: toError(err) })
-    return c.json<ErrorResponse>(
-      { detail: 'Product search failed', code: 'internal_error' },
-      500,
-    )
+    return c.json<ErrorResponse>({ detail: 'Product search failed', code: 'internal_error' }, 500)
   }
 })
 

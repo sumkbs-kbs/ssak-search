@@ -36,12 +36,15 @@ describe('DuckDuckGo Parsers', () => {
     })
 
     it('respects maxResults limit', () => {
-      const html = Array.from({ length: 5 }, (_, i) => `
+      const html = Array.from(
+        { length: 5 },
+        (_, i) => `
         <div class="result">
           <a class="result__a" href="https://example.com/page${i}">Result ${i}</a>
           <a class="result__snippet" href="https://example.com/page${i}">Snippet ${i}</a>
         </div>
-      `).join('')
+      `,
+      ).join('')
       const results = parseDuckDuckGoHtml(html, 'example', 3)
       expect(results).toHaveLength(3)
     })
@@ -86,7 +89,7 @@ describe('DuckDuckGo Parsers', () => {
       // First result has empty title (just an img tag), should be skipped
       // Second result has valid title
       expect(results.length).toBeGreaterThanOrEqual(1)
-      const validResults = results.filter(r => r.title === 'Valid Title')
+      const validResults = results.filter((r) => r.title === 'Valid Title')
       expect(validResults).toHaveLength(1)
     })
 
@@ -118,7 +121,7 @@ describe('DuckDuckGo Parsers', () => {
       }
     })
 
-it('decodes HTML entities in titles and snippets', () => {
+    it('decodes HTML entities in titles and snippets', () => {
       const html = `
         <a class="result__a" href="https://example.com/page">Title & Description</a>
         <a class="result__snippet" href="https://example.com/page">Snippet with "quotes" and 'apostrophes'</a>

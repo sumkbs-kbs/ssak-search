@@ -229,7 +229,7 @@ const LOCALE_LANG_MAP: Record<string, string> = {
 export interface LayoutProps {
   title?: string
   currentPage?: 'search' | 'chat' | 'docs'
-  children: any
+  children: unknown
   /** Current locale (default: 'ko') */
   locale?: string
   /** Translation function for nav items */
@@ -313,7 +313,10 @@ export function Layout({
 
         {/* PWA Manifest */}
         <link rel="manifest" href="/manifest.json" />
-        <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E&#x1F50D;%3C/text%3E%3C/svg%3E" />
+        <link
+          rel="icon"
+          href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E&#x1F50D;%3C/text%3E%3C/svg%3E"
+        />
 
         {/* Resource Hints (Phase 2.3 — performance) */}
         <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -332,7 +335,10 @@ export function Layout({
           onload="this.media='all'"
         />
         <noscript>
-          <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+          <link
+            href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap"
+            rel="stylesheet"
+          />
         </noscript>
 
         {/* Font Awesome — non-blocking load (for legacy client-rendered icons) */}
@@ -348,7 +354,12 @@ export function Layout({
         </noscript>
 
         {/* Alpine.js — deferred for non-blocking load */}
-        <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.14.8/dist/cdn.min.js" crossOrigin="anonymous" onload="this.loaded=true" />
+        <script
+          defer
+          src="https://cdn.jsdelivr.net/npm/alpinejs@3.14.8/dist/cdn.min.js"
+          crossOrigin="anonymous"
+          onload="this.loaded=true"
+        />
 
         {/* Global Styles */}
         <style>{GLOBAL_CSS}</style>
@@ -365,13 +376,29 @@ export function Layout({
       </head>
       <body {...(bodyAlpineData ? { 'x-data': bodyAlpineData } : {})}>
         {/* Skip link */}
-        <a href="#main-content" class="skip-link">{_('a11y.skip_to_main')}</a>
+        <a href="#main-content" class="skip-link">
+          {_('a11y.skip_to_main')}
+        </a>
 
         {/* Header */}
         <header class="header" role="banner">
           <div class="header-inner">
             <a href="/" class="logo" aria-label="Search Engine Home" style="display:flex;align-items:center;gap:8px;">
-              <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                width="18"
+                height="18"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2.5"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                aria-hidden="true"
+              >
+                <circle cx="11" cy="11" r="8" />
+                <line x1="21" y1="21" x2="16.65" y2="16.65" />
+              </svg>
               <span aria-hidden="true">Search Engine</span>
             </a>
             <nav class="header-actions" aria-label={_('nav.search')}>
@@ -380,7 +407,22 @@ export function Layout({
                 class={`header-btn${currentPage === 'search' ? ' active' : ''}`}
                 aria-current={currentPage === 'search' ? 'page' : undefined}
               >
-                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex-shrink:0;"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  width="14"
+                  height="14"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2.5"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  aria-hidden="true"
+                  style="flex-shrink:0;"
+                >
+                  <circle cx="11" cy="11" r="8" />
+                  <line x1="21" y1="21" x2="16.65" y2="16.65" />
+                </svg>
                 <span>{_('nav.search')}</span>
               </a>
               <a
@@ -388,7 +430,21 @@ export function Layout({
                 class={`header-btn${currentPage === 'chat' ? ' active' : ''}`}
                 aria-current={currentPage === 'chat' ? 'page' : undefined}
               >
-                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex-shrink:0;"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2v10z"/></svg>
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  width="14"
+                  height="14"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2.5"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  aria-hidden="true"
+                  style="flex-shrink:0;"
+                >
+                  <path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2v10z" />
+                </svg>
                 <span>{_('nav.chat')}</span>
               </a>
               <a
@@ -396,7 +452,22 @@ export function Layout({
                 class={`header-btn${currentPage === 'docs' ? ' active' : ''}`}
                 aria-current={currentPage === 'docs' ? 'page' : undefined}
               >
-                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex-shrink:0;"><path d="M4 19.5A2.5 2.5 0 016.5 17H20M4 19.5A2.5 2.5 0 016.5 17H20V3H6.5C5.12 3 4 4.12 4 5.5v14z"/><path d="M12 3v14"/></svg>
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  width="14"
+                  height="14"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2.5"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  aria-hidden="true"
+                  style="flex-shrink:0;"
+                >
+                  <path d="M4 19.5A2.5 2.5 0 016.5 17H20M4 19.5A2.5 2.5 0 016.5 17H20V3H6.5C5.12 3 4 4.12 4 5.5v14z" />
+                  <path d="M12 3v14" />
+                </svg>
                 <span>{_('nav.docs')}</span>
               </a>
               <a
@@ -406,7 +477,21 @@ export function Layout({
                 rel="noopener"
                 aria-label={_('nav.health') + ' - ' + _('a11y.open_link')}
               >
-                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex-shrink:0;"><path d="M20.84 4.61a5.5 5.5 0 00-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 00-7.78 7.78l1.06 1.06 7.78 7.78 7.78-7.78 1.06-1.06a5.5 5.5 0 000-7.78z"/></svg>
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  width="14"
+                  height="14"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2.5"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  aria-hidden="true"
+                  style="flex-shrink:0;"
+                >
+                  <path d="M20.84 4.61a5.5 5.5 0 00-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 00-7.78 7.78l1.06 1.06 7.78 7.78 7.78-7.78 1.06-1.06a5.5 5.5 0 000-7.78z" />
+                </svg>
                 <span>{_('nav.health')}</span>
               </a>
 
@@ -424,7 +509,8 @@ export function Layout({
         {/* PWA Service Worker Registration */}
         <script
           dangerouslySetInnerHTML={{
-            __html: "if ('serviceWorker' in navigator) { window.addEventListener('load', () => { navigator.serviceWorker.register('/sw.js').catch(function(){}); }); }",
+            __html:
+              "if ('serviceWorker' in navigator) { window.addEventListener('load', () => { navigator.serviceWorker.register('/sw.js').catch(function(){}); }); }",
           }}
         />
 

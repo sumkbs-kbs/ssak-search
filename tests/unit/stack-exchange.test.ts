@@ -16,11 +16,7 @@ vi.mock('../../src/lib/util', async (importOriginal) => {
   return { ...actual, fetchWithTimeout: (...args: unknown[]) => mockFetchWithTimeout(...args) }
 })
 
-import {
-  parseStackExchangeResponse,
-  stackExchangeSearch,
-  resetStackExchangeQuota,
-} from '../../src/lib/stack-exchange'
+import { parseStackExchangeResponse, stackExchangeSearch, resetStackExchangeQuota } from '../../src/lib/stack-exchange'
 
 const SO_ITEMS = {
   items: [

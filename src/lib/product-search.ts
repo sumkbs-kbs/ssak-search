@@ -6,7 +6,8 @@
  * G2: https://www.g2.com
  */
 
-import { fetchWithTimeout, extractDomain, stripHtml, decodeEntities } from './util'
+import { fetchWithTimeout, stripHtml, decodeEntities } from './util'
+import type { Env } from '../types'
 
 import { logger, toError } from './logger'
 export interface ProductResult {
@@ -27,11 +28,7 @@ const USER_AGENT =
  * Search Product Hunt for products.
  * Scrapes the search page HTML for product listings.
  */
-export async function searchProductHunt(
-  query: string,
-  maxResults = 10,
-  env?: any,
-): Promise<ProductResult[]> {
+export async function searchProductHunt(query: string, maxResults = 10, env?: Env): Promise<ProductResult[]> {
   const results: ProductResult[] = []
 
   try {
@@ -99,11 +96,7 @@ export async function searchProductHunt(
  * Search G2 for products.
  * Scrapes the search page HTML for product listings.
  */
-export async function searchG2(
-  query: string,
-  maxResults = 10,
-  env?: any,
-): Promise<ProductResult[]> {
+export async function searchG2(query: string, maxResults = 10, env?: Env): Promise<ProductResult[]> {
   const results: ProductResult[] = []
 
   try {
@@ -148,7 +141,7 @@ export async function searchG2(
               })
             }
           }
-        } catch (err) {
+        } catch (_err) {
           // Skip malformed JSON
         }
       }
@@ -156,7 +149,8 @@ export async function searchG2(
 
     // Fallback: HTML parsing
     if (results.length === 0) {
-      const productRegex = /<a[^>]*href="(\/[^"]*)"[^>]*class="[^"]*product[^"]*"[^>]*>[\s\S]*?<[^>]*>([^<]+)<\/[^>]*>/gi
+      const productRegex =
+        /<a[^>]*href="(\/[^"]*)"[^>]*class="[^"]*product[^"]*"[^>]*>[\s\S]*?<[^>]*>([^<]+)<\/[^>]*>/gi
       let match: RegExpExecArray | null
 
       while ((match = productRegex.exec(html)) !== null && results.length < maxResults) {
@@ -187,11 +181,7 @@ export async function searchG2(
 /**
  * Search all product sources in parallel.
  */
-export async function searchProducts(
-  query: string,
-  maxResults = 10,
-  env?: any,
-): Promise<ProductResult[]> {
+export async function searchProducts(query: string, maxResults = 10, env?: Env): Promise<ProductResult[]> {
   const [phResults, g2Results] = await Promise.allSettled([
     searchProductHunt(query, maxResults, env),
     searchG2(query, maxResults, env),

@@ -54,7 +54,12 @@ const HOST_CONFIGS: Record<string, HostConfig> = {
   // and burst-ban together, so they must share ONE rate window.
   'en.wikipedia.org': { maxConcurrent: 3, failureThreshold: 5, resetTimeoutMs: 30_000, rateLimitPerMinute: 100 },
   'api.github.com': { maxConcurrent: 2, failureThreshold: 3, resetTimeoutMs: 60_000, rateLimitPerMinute: 100 },
-  'hacker-news.firebaseio.com': { maxConcurrent: 3, failureThreshold: 5, resetTimeoutMs: 30_000, rateLimitPerMinute: 100 },
+  'hacker-news.firebaseio.com': {
+    maxConcurrent: 3,
+    failureThreshold: 5,
+    resetTimeoutMs: 30_000,
+    rateLimitPerMinute: 100,
+  },
   'www.reddit.com': { maxConcurrent: 2, failureThreshold: 5, resetTimeoutMs: 60_000, rateLimitPerMinute: 40 },
   'export.arxiv.org': { maxConcurrent: 2, failureThreshold: 3, resetTimeoutMs: 60_000, rateLimitPerMinute: 30 },
   'r.jina.ai': { maxConcurrent: 2, failureThreshold: 5, resetTimeoutMs: 60_000, rateLimitPerMinute: 50 },
@@ -84,7 +89,7 @@ function getConfig(host: string): HostConfig {
 function hostname(url: string): string {
   try {
     return new URL(url).hostname
-  } catch (err) {
+  } catch (_err) {
     return url
   }
 }
@@ -105,7 +110,10 @@ function getBackoffMs(tripCount: number): number {
 // ============================================================
 
 const LOCAL_INFLIGHT = new Map<string, number>()
-const LOCAL_CIRCUITS = new Map<string, { failures: number; tripped: boolean; openedAt: number; tripCount: number; probeInFlight: boolean }>()
+const LOCAL_CIRCUITS = new Map<
+  string,
+  { failures: number; tripped: boolean; openedAt: number; tripCount: number; probeInFlight: boolean }
+>()
 const LOCAL_RATE_WINDOWS = new Map<string, number[]>()
 
 function getLocalCircuit(host: string) {

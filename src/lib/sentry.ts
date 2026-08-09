@@ -16,6 +16,7 @@
  */
 
 import * as Sentry from '@sentry/cloudflare'
+import type { Span } from '@sentry/cloudflare'
 import type { AppBindings } from '../types'
 
 // ============================================================
@@ -66,9 +67,7 @@ export function wrapApp(
       // Denylist URLs that should not generate traces
       tracePropagationTargets: [/\/api\//, /\/v1\//],
       // Integration to deduplicate duplicate errors
-      integrations: [
-        Sentry.dedupeIntegration(),
-      ],
+      integrations: [Sentry.dedupeIntegration()],
     }),
     {
       async fetch(request: Request, env: AppBindings, ctx: ExecutionContext) {
@@ -93,7 +92,13 @@ export function wrapApp(
  *   app.use('*', sentryMiddleware)
  *   ```
  */
-export function sentryMiddleware(c: any, next: () => Promise<void>): Promise<void> {
+export function sentryMiddleware(
+  c: {
+    req: { method: string; path: string; routePath?: string }
+    res: { status: number }
+  },
+  next: () => Promise<void>,
+): Promise<void> {
   return Sentry.startSpan(
     {
       name: `${c.req.method} ${c.req.path}`,
@@ -178,7 +183,7 @@ export function captureSentryMessage(
  */
 export async function traceOperation<T>(
   name: string,
-  callback: (span: any) => Promise<T>,
+  callback: (span: Span) => Promise<T>,
   options: {
     op?: string
     attributes?: Record<string, string | number | boolean>

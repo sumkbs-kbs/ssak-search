@@ -13,10 +13,7 @@ export class WritingStrategy implements SearchStrategy {
   readonly focus = 'writing' as const
 
   buildTasks(ctx: SearchContext): BackendTask[] {
-    const tasks: BackendTask[] = [
-      buildBingTask(ctx),
-      buildWikipediaTask(ctx, 8, 8000),
-    ]
+    const tasks: BackendTask[] = [buildBingTask(ctx), buildWikipediaTask(ctx, 8, 8000)]
     // Also search with a more open-ended phrasing for inspiration
     if (ctx.query.length < 100) {
       tasks.push(buildBingModifiedTask(ctx, 'ideas examples inspiration', 'bing-writing'))

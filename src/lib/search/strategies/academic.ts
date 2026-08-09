@@ -13,10 +13,6 @@ export class AcademicStrategy implements SearchStrategy {
   readonly focus = 'academic' as const
 
   buildTasks(ctx: SearchContext): BackendTask[] {
-    return [
-      buildBingTask(ctx),
-      buildWikipediaTask(ctx, 10, 12000),
-      buildArxivTask(ctx, 10),
-    ]
+    return [buildBingTask(ctx), buildWikipediaTask(ctx, 10, 12000), buildArxivTask(ctx, 10)]
   }
 }

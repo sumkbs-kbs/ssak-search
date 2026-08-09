@@ -71,7 +71,7 @@ export const MIN_CHUNK_TOKENS = 50
  */
 export function parseHtmlSections(html: string): ParsedSection[] {
   // Strip scripts, styles, comments
-  let cleaned = html
+  const cleaned = html
     .replace(/<script[\s\S]*?<\/script>/gi, '')
     .replace(/<style[\s\S]*?<\/style>/gi, '')
     .replace(/<!--[\s\S]*?-->/g, '')
@@ -93,14 +93,16 @@ export function parseHtmlSections(html: string): ParsedSection[] {
   if (headings.length === 0) {
     // No headings - return single section with full content
     const text = stripHtml(cleaned).trim()
-    return [{
-      heading: '',
-      level: 0,
-      content: text,
-      children: [],
-      startOffset: 0,
-      endOffset: text.length,
-    }]
+    return [
+      {
+        heading: '',
+        level: 0,
+        content: text,
+        children: [],
+        startOffset: 0,
+        endOffset: text.length,
+      },
+    ]
   }
 
   // Build hierarchy
@@ -173,7 +175,7 @@ export function stripHtml(html: string): string {
  */
 export function buildHeadingPath(section: ParsedSection, maxDepth = 3): string {
   const path: string[] = []
-  let current: ParsedSection | null = section
+  const current: ParsedSection | null = section
 
   while (current && current.level > 0 && path.length < maxDepth) {
     path.unshift(current.heading)
@@ -207,7 +209,7 @@ export function chunkDocument(
   url: string,
   title: string,
   html: string,
-  options: Partial<ChunkOptions> = {}
+  options: Partial<ChunkOptions> = {},
 ): ChunkResult {
   const opts = { ...DEFAULT_CHUNK_OPTIONS, ...options }
   const language = options.language ?? 'en'
@@ -257,7 +259,12 @@ export function chunkDocument(
     if (sectionTokens <= opts.maxTokens) {
       // Section fits in one chunk
       const chunk = createChunk({
-        url, title, section, headingPath, chunkIndex, language: options.language,
+        url,
+        title,
+        section,
+        headingPath,
+        chunkIndex,
+        language: options.language,
         content: sectionText,
       })
       chunks.push(chunk)
@@ -268,7 +275,12 @@ export function chunkDocument(
       const subChunks = slidingWindowChunk(sectionText, opts, options.language ?? 'en')
       for (const subContent of subChunks) {
         const chunk = createChunk({
-          url, title, section, headingPath, chunkIndex, language: options.language,
+          url,
+          title,
+          section,
+          headingPath,
+          chunkIndex,
+          language: options.language,
           content: subContent,
         })
         chunks.push(chunk)
@@ -291,7 +303,7 @@ export function chunkDocument(
 /**
  * Create a single chunk result for small documents
  */
-function singleChunkResult(url: string, title: string, text: string, language: string): ChunkResult {
+function singleChunkResult(url: string, title: string, text: string, _language: string): ChunkResult {
   const chunk: VectorizeChunk = {
     id: `${hashString(url)}_chunk_0`,
     url,
@@ -314,11 +326,7 @@ function singleChunkResult(url: string, title: string, text: string, language: s
 /**
  * Sliding window chunking for large sections
  */
-function slidingWindowChunk(
-  text: string,
-  opts: ChunkOptions,
-  language: string
-): string[] {
+function slidingWindowChunk(text: string, opts: ChunkOptions, _language: string): string[] {
   const chunks: string[] = []
   const maxChars = opts.maxTokens * 4 // rough
   const minChars = opts.minTokens * 4
@@ -403,7 +411,7 @@ function createChunk(params: CreateChunkParams): VectorizeChunk {
 export function extractDomain(url: string): string {
   try {
     return new URL(url).hostname.replace(/^www\./, '')
-  } catch (err) {
+  } catch (_err) {
     return 'unknown'
   }
 }
@@ -429,7 +437,7 @@ export function hashString(str: string): string {
   let hash = 0
   for (let i = 0; i < str.length; i++) {
     const char = str.charCodeAt(i)
-    hash = ((hash << 5) - hash) + char
+    hash = (hash << 5) - hash + char
     hash = hash & hash
   }
   return Math.abs(hash).toString(36)
@@ -443,7 +451,7 @@ export function chunkHtmlDocument(
   url: string,
   title: string,
   html: string,
-  options: Partial<ChunkOptions> = {}
+  options: Partial<ChunkOptions> = {},
 ): ChunkResult {
   return chunkDocument(url, title, html, options)
 }

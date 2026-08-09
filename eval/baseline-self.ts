@@ -9,7 +9,6 @@ import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'node:fs'
 import { join, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import type { EvalReport, EvalBaseline, RegressionDiff } from './types'
-import { diffBaseline } from './runner'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = dirname(__filename)

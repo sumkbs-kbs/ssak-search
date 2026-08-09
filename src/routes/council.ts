@@ -60,51 +60,85 @@ interface ModelDefinition {
 }
 
 const AVAILABLE_MODELS: ModelDefinition[] = [
-  { id: 'workers-ai', label: 'Llama 3.1 (8B)', provider: 'Workers AI', requires: 'AI', contextWindow: 8192, description: 'Cloudflare Workers AI — 무료, 빠름', speed: 'fast', cost: 'free' },
-  { id: 'openai-gpt4o-mini', label: 'GPT-4o Mini', provider: 'OpenAI', requires: 'OPENAI_API_KEY', contextWindow: 128000, description: 'OpenAI GPT-4o Mini — 저비용, 고품질', speed: 'fast', cost: 'low' },
-  { id: 'openai-gpt4o', label: 'GPT-4o', provider: 'OpenAI', requires: 'OPENAI_API_KEY', contextWindow: 128000, description: 'OpenAI GPT-4o — 최고 품질', speed: 'medium', cost: 'medium' },
-  { id: 'claude-sonnet', label: 'Claude Sonnet 4', provider: 'Anthropic', requires: 'ANTHROPIC_API_KEY', contextWindow: 200000, description: 'Anthropic Claude Sonnet 4 — 긴 컨텍스트', speed: 'medium', cost: 'medium' },
+  {
+    id: 'workers-ai',
+    label: 'Llama 3.1 (8B)',
+    provider: 'Workers AI',
+    requires: 'AI',
+    contextWindow: 8192,
+    description: 'Cloudflare Workers AI — 무료, 빠름',
+    speed: 'fast',
+    cost: 'free',
+  },
+  {
+    id: 'openai-gpt4o-mini',
+    label: 'GPT-4o Mini',
+    provider: 'OpenAI',
+    requires: 'OPENAI_API_KEY',
+    contextWindow: 128000,
+    description: 'OpenAI GPT-4o Mini — 저비용, 고품질',
+    speed: 'fast',
+    cost: 'low',
+  },
+  {
+    id: 'openai-gpt4o',
+    label: 'GPT-4o',
+    provider: 'OpenAI',
+    requires: 'OPENAI_API_KEY',
+    contextWindow: 128000,
+    description: 'OpenAI GPT-4o — 최고 품질',
+    speed: 'medium',
+    cost: 'medium',
+  },
+  {
+    id: 'claude-sonnet',
+    label: 'Claude Sonnet 4',
+    provider: 'Anthropic',
+    requires: 'ANTHROPIC_API_KEY',
+    contextWindow: 200000,
+    description: 'Anthropic Claude Sonnet 4 — 긴 컨텍스트',
+    speed: 'medium',
+    cost: 'medium',
+  },
 ]
 
 // ============================================================
 // Model Invokers
 // ============================================================
 
-async function invokeWorkersAI(
-  query: string,
-  ai: any,
-  systemPrompt?: string,
-): Promise<string> {
+async function invokeWorkersAI(query: string, ai: Ai, systemPrompt?: string): Promise<string> {
   const result = await ai.run('@cf/meta/llama-3.1-8b-instruct', {
     messages: [
-      { role: 'system', content: systemPrompt || 'You are a helpful AI assistant. Provide clear, concise, and accurate answers.' },
+      {
+        role: 'system',
+        content: systemPrompt || 'You are a helpful AI assistant. Provide clear, concise, and accurate answers.',
+      },
       { role: 'user', content: query },
     ],
     max_tokens: 1500,
     temperature: 0.3,
   })
-  const text = typeof result === 'object' && result !== null
-    ? (('response' in result ? (result as { response: string }).response : null) || JSON.stringify(result))
-    : String(result)
+  const text =
+    typeof result === 'object' && result !== null
+      ? ('response' in result ? (result as { response: string }).response : null) || JSON.stringify(result)
+      : String(result)
   return text || ''
 }
 
-async function invokeOpenAI(
-  query: string,
-  apiKey: string,
-  model: string,
-  systemPrompt?: string,
-): Promise<string> {
+async function invokeOpenAI(query: string, apiKey: string, model: string, systemPrompt?: string): Promise<string> {
   const resp = await fetch('https://api.openai.com/v1/chat/completions', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      'Authorization': `Bearer ${apiKey}`,
+      Authorization: `Bearer ${apiKey}`,
     },
     body: JSON.stringify({
       model,
       messages: [
-        { role: 'system', content: systemPrompt || 'You are a helpful AI assistant. Provide clear, concise, and accurate answers.' },
+        {
+          role: 'system',
+          content: systemPrompt || 'You are a helpful AI assistant. Provide clear, concise, and accurate answers.',
+        },
         { role: 'user', content: query },
       ],
       max_tokens: 1500,
@@ -117,15 +151,13 @@ async function invokeOpenAI(
     throw new Error(`OpenAI API error (${resp.status}): ${err.slice(0, 200)}`)
   }
 
-  const data: any = await resp.json()
+  const data = (await resp.json()) as {
+    choices?: Array<{ message?: { content?: string } }>
+  }
   return data?.choices?.[0]?.message?.content || ''
 }
 
-async function invokeClaude(
-  query: string,
-  apiKey: string,
-  systemPrompt?: string,
-): Promise<string> {
+async function invokeClaude(query: string, apiKey: string, systemPrompt?: string): Promise<string> {
   const resp = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
     headers: {
@@ -146,8 +178,15 @@ async function invokeClaude(
     throw new Error(`Anthropic API error (${resp.status}): ${err.slice(0, 200)}`)
   }
 
-  const data: any = await resp.json()
-  return data?.content?.map((c: any) => c.text).filter(Boolean).join('\n') || ''
+  const data = (await resp.json()) as {
+    content?: Array<{ text?: string }>
+  }
+  return (
+    data?.content
+      ?.map((c) => c.text)
+      .filter(Boolean)
+      .join('\n') || ''
+  )
 }
 
 // ============================================================
@@ -173,14 +212,17 @@ councilRoute.post('/', async (c) => {
 
   // Determine which models to use
   const selectedModels = body.models?.length
-    ? AVAILABLE_MODELS.filter((m) => body.models!.includes(m.id))
+    ? AVAILABLE_MODELS.filter((m) => (body.models as string[]).includes(m.id))
     : AVAILABLE_MODELS // default: all available
 
   if (selectedModels.length === 0) {
-    return c.json<ErrorResponse>({
-      detail: 'No valid models selected. Available: ' + AVAILABLE_MODELS.map((m) => m.id).join(', '),
-      code: 'no_models',
-    }, 400)
+    return c.json<ErrorResponse>(
+      {
+        detail: 'No valid models selected. Available: ' + AVAILABLE_MODELS.map((m) => m.id).join(', '),
+        code: 'no_models',
+      },
+      400,
+    )
   }
 
   // Build parallel invocations
@@ -193,7 +235,14 @@ councilRoute.post('/', async (c) => {
       switch (model.id) {
         case 'workers-ai': {
           if (!c.env.AI) {
-            return { model: model.id, provider: model.provider, response: '', latency_ms: 0, available: false, error: 'Workers AI binding not configured' }
+            return {
+              model: model.id,
+              provider: model.provider,
+              response: '',
+              latency_ms: 0,
+              available: false,
+              error: 'Workers AI binding not configured',
+            }
           }
           response = await invokeWorkersAI(query, c.env.AI, systemPrompt)
           break
@@ -201,20 +250,41 @@ councilRoute.post('/', async (c) => {
         case 'openai-gpt4o-mini':
         case 'openai-gpt4o': {
           if (!c.env.OPENAI_API_KEY) {
-            return { model: model.id, provider: model.provider, response: '', latency_ms: 0, available: false, error: 'OPENAI_API_KEY not configured' }
+            return {
+              model: model.id,
+              provider: model.provider,
+              response: '',
+              latency_ms: 0,
+              available: false,
+              error: 'OPENAI_API_KEY not configured',
+            }
           }
           response = await invokeOpenAI(query, c.env.OPENAI_API_KEY, model.id.replace('openai-', ''), systemPrompt)
           break
         }
         case 'claude-sonnet': {
           if (!c.env.ANTHROPIC_API_KEY) {
-            return { model: model.id, provider: model.provider, response: '', latency_ms: 0, available: false, error: 'ANTHROPIC_API_KEY not configured' }
+            return {
+              model: model.id,
+              provider: model.provider,
+              response: '',
+              latency_ms: 0,
+              available: false,
+              error: 'ANTHROPIC_API_KEY not configured',
+            }
           }
           response = await invokeClaude(query, c.env.ANTHROPIC_API_KEY, systemPrompt)
           break
         }
         default: {
-          return { model: model.id, provider: model.provider, response: '', latency_ms: 0, available: false, error: 'Unknown model' }
+          return {
+            model: model.id,
+            provider: model.provider,
+            response: '',
+            latency_ms: 0,
+            available: false,
+            error: 'Unknown model',
+          }
         }
       }
 
@@ -303,7 +373,7 @@ councilRoute.post('/stream', async (c) => {
   const systemPrompt = body.system_prompt
 
   const selectedModels = body.models?.length
-    ? AVAILABLE_MODELS.filter((m) => body.models!.includes(m.id))
+    ? AVAILABLE_MODELS.filter((m) => (body.models as string[]).includes(m.id))
     : AVAILABLE_MODELS
 
   // Build SSE stream
@@ -316,7 +386,10 @@ councilRoute.post('/stream', async (c) => {
       }
 
       // Send models info
-      sendEvent('models', selectedModels.map((m) => ({ id: m.id, label: m.label, provider: m.provider })))
+      sendEvent(
+        'models',
+        selectedModels.map((m) => ({ id: m.id, label: m.label, provider: m.provider })),
+      )
 
       // Run all models in parallel, streaming each response
       const tasks = selectedModels.map(async (model) => {
@@ -378,7 +451,7 @@ councilRoute.post('/stream', async (c) => {
     headers: {
       'Content-Type': 'text/event-stream',
       'Cache-Control': 'no-cache',
-      'Connection': 'keep-alive',
+      Connection: 'keep-alive',
     },
   })
 })

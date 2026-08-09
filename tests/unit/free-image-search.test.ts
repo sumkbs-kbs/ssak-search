@@ -10,7 +10,6 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import type { ImageResult } from '../../src/types'
 
 // ============================================================
 // Mock global fetch
@@ -172,17 +171,19 @@ describe('flickrImageSearch', () => {
           pages: 1,
           perpage: 1,
           total: '1',
-          photo: [{
-            id: 'fallback_photo',
-            owner: 'owner',
-            secret: 'secret',
-            server: 'srv',
-            farm: 1,
-            title: 'No URL Photo',
-            ispublic: 1,
-            isfriend: 0,
-            isfamily: 0,
-          }],
+          photo: [
+            {
+              id: 'fallback_photo',
+              owner: 'owner',
+              secret: 'secret',
+              server: 'srv',
+              farm: 1,
+              title: 'No URL Photo',
+              ispublic: 1,
+              isfriend: 0,
+              isfamily: 0,
+            },
+          ],
         },
         stat: 'ok',
       }),
@@ -274,16 +275,24 @@ describe('unsplashImageSearch', () => {
       json: async () => ({
         total: 1,
         total_pages: 1,
-        results: [{
-          id: 'test_1',
-          urls: { raw: 'https://test.com/raw', full: 'https://test.com/full', regular: 'https://test.com/reg', small: 'https://test.com/small', thumb: 'https://test.com/thumb' },
-          alt_description: 'Fallback alt description',
-          description: null,
-          width: 800,
-          height: 600,
-          user: { name: 'Test User', username: 'testuser' },
-          links: { html: 'https://unsplash.com/photos/test_1' },
-        }],
+        results: [
+          {
+            id: 'test_1',
+            urls: {
+              raw: 'https://test.com/raw',
+              full: 'https://test.com/full',
+              regular: 'https://test.com/reg',
+              small: 'https://test.com/small',
+              thumb: 'https://test.com/thumb',
+            },
+            alt_description: 'Fallback alt description',
+            description: null,
+            width: 800,
+            height: 600,
+            user: { name: 'Test User', username: 'testuser' },
+            links: { html: 'https://unsplash.com/photos/test_1' },
+          },
+        ],
       }),
     })
 
@@ -341,14 +350,16 @@ describe('searchAllFreeImageSources', () => {
       {
         match: 'bing.com',
         response: {
-          value: [{
-            contentUrl: 'https://bing.com/img1.jpg',
-            name: 'Bing Image 1',
-            hostPageDomain: 'example.com',
-            width: 800,
-            height: 600,
-            thumbnailUrl: 'https://bing.com/thumb1.jpg',
-          }],
+          value: [
+            {
+              contentUrl: 'https://bing.com/img1.jpg',
+              name: 'Bing Image 1',
+              hostPageDomain: 'example.com',
+              width: 800,
+              height: 600,
+              thumbnailUrl: 'https://bing.com/thumb1.jpg',
+            },
+          ],
         },
       },
       {
@@ -381,7 +392,16 @@ describe('searchAllFreeImageSources', () => {
       {
         match: 'bing.com',
         response: {
-          value: [{ contentUrl: 'https://bing.com/1.jpg', name: 'Bing 1', hostPageDomain: 'ex.com', width: 800, height: 600, thumbnailUrl: 'https://bing.com/t1.jpg' }],
+          value: [
+            {
+              contentUrl: 'https://bing.com/1.jpg',
+              name: 'Bing 1',
+              hostPageDomain: 'ex.com',
+              width: 800,
+              height: 600,
+              thumbnailUrl: 'https://bing.com/t1.jpg',
+            },
+          ],
         },
       },
       {
@@ -406,7 +426,16 @@ describe('searchAllFreeImageSources', () => {
       {
         match: 'bing.com',
         response: {
-          value: [{ contentUrl: 'https://ex.com/dup.jpg', name: 'Dup', hostPageDomain: 'ex.com', width: 100, height: 100, thumbnailUrl: 'https://ex.com/t.jpg' }],
+          value: [
+            {
+              contentUrl: 'https://ex.com/dup.jpg',
+              name: 'Dup',
+              hostPageDomain: 'ex.com',
+              width: 100,
+              height: 100,
+              thumbnailUrl: 'https://ex.com/t.jpg',
+            },
+          ],
         },
       },
       {
@@ -421,7 +450,7 @@ describe('searchAllFreeImageSources', () => {
       env: mockEnvWithoutKeys,
     })
 
-    const urls = results.map(r => r.url)
+    const urls = results.map((r) => r.url)
     const uniqueUrls = new Set(urls)
     expect(uniqueUrls.size).toBe(results.length)
   })
@@ -434,8 +463,22 @@ describe('searchAllFreeImageSources', () => {
         match: 'bing.com',
         response: {
           value: [
-            { contentUrl: 'https://ex.com/high.jpg', name: 'High Score', hostPageDomain: 'ex.com', width: 200, height: 200, thumbnailUrl: '' },
-            { contentUrl: 'https://ex.com/low.jpg', name: 'Low Score', hostPageDomain: 'ex.com', width: 100, height: 100, thumbnailUrl: '' },
+            {
+              contentUrl: 'https://ex.com/high.jpg',
+              name: 'High Score',
+              hostPageDomain: 'ex.com',
+              width: 200,
+              height: 200,
+              thumbnailUrl: '',
+            },
+            {
+              contentUrl: 'https://ex.com/low.jpg',
+              name: 'Low Score',
+              hostPageDomain: 'ex.com',
+              width: 100,
+              height: 100,
+              thumbnailUrl: '',
+            },
           ],
         },
       },
@@ -452,7 +495,7 @@ describe('searchAllFreeImageSources', () => {
     })
 
     for (let i = 1; i < results.length; i++) {
-      expect((results[i].score ?? 0)).toBeLessThanOrEqual(results[i - 1].score ?? 0)
+      expect(results[i].score ?? 0).toBeLessThanOrEqual(results[i - 1].score ?? 0)
     }
   })
 
@@ -467,7 +510,9 @@ describe('searchAllFreeImageSources', () => {
             contentUrl: `https://ex.com/${i}.jpg`,
             name: `Image ${i}`,
             hostPageDomain: 'ex.com',
-            width: 100, height: 100, thumbnailUrl: '',
+            width: 100,
+            height: 100,
+            thumbnailUrl: '',
           })),
         },
       },

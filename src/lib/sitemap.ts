@@ -153,7 +153,9 @@ export async function discoverAndParseSitemaps(
 
   // 3. BFS through sitemap index → sub-sitemaps
   while (queue.length > 0 && found.size < maxUrls) {
-    const { url, depth } = queue.shift()!
+    const next = queue.shift()
+    if (!next) break
+    const { url, depth } = next
     if (visitedSitemaps.has(url)) continue
     visitedSitemaps.add(url)
 

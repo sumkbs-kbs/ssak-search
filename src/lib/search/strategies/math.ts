@@ -13,9 +13,6 @@ export class MathStrategy implements SearchStrategy {
   readonly focus = 'math' as const
 
   buildTasks(ctx: SearchContext): BackendTask[] {
-    return [
-      buildWikipediaTask(ctx, 10, 12000),
-      buildBingTask(ctx),
-    ]
+    return [buildWikipediaTask(ctx, 10, 12000), buildBingTask(ctx)]
   }
 }

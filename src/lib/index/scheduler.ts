@@ -10,7 +10,7 @@
 
 import type { Env } from '../../types'
 import { logger } from '../../lib/logger'
-import type { DocumentMetadata, RefreshCandidate, RefreshSchedulerConfig } from './types'
+import type { RefreshCandidate, RefreshSchedulerConfig } from './types'
 
 // ============================================================
 // Default Configuration
@@ -20,8 +20,8 @@ export const DEFAULT_SCHEDULER_CONFIG: RefreshSchedulerConfig = {
   batchSize: 50,
   minRefreshIntervalMs: 60 * 60 * 1000, // 1 hour minimum
   defaultFrequencyDays: 30,
-  maxFrequencyDays: 7,   // High importance
-  minFrequencyDays: 90,  // Low importance
+  maxFrequencyDays: 7, // High importance
+  minFrequencyDays: 90, // Low importance
 }
 
 // ============================================================
@@ -47,10 +47,9 @@ export class RefreshScheduler {
    * Find documents that need refreshing
    */
   async findCandidates(): Promise<RefreshCandidate[]> {
-    const now = Date.now()
-
     // Query documents due for refresh
-    const results = await this.env.SEARCH_INDEX_DB?.prepare(`
+    const results = await this.env.SEARCH_INDEX_DB?.prepare(
+      `
       SELECT id, url, domain, importance, last_indexed, next_index_at, status
       FROM documents
       WHERE status IN ('indexed', 'stale')
@@ -58,18 +57,30 @@ export class RefreshScheduler {
         AND status != 'failed'
       ORDER BY importance DESC, next_index_at ASC
       LIMIT ?
-    `).bind(Date.now(), this.config.batchSize).all()
+    `,
+    )
+      .bind(Date.now(), this.config.batchSize)
+      .all()
 
     const candidates: RefreshCandidate[] = []
 
     if (!results?.results) return candidates
 
     for (const row of results.results) {
-      const doc = row as { id: string; url: string; domain: string; importance: number; last_indexed: number; next_index_at: number; status: string }
+      const doc = row as {
+        id: string
+        url: string
+        domain: string
+        importance: number
+        last_indexed: number
+        next_index_at: number
+        status: string
+      }
 
-      // Calculate dynamic frequency based on importance
-      const frequencyDays = this.calculateFrequency(doc.importance)
-      const minIntervalMs = frequencyDays * 24 * 60 * 60 * 1000
+      // NOTE: calculateFrequency() is deliberately NOT applied here —
+      // candidates carry doc.next_index_at (already set at index time from
+      // the same frequency), and minRefreshIntervalMs below is the freshness
+      // gate. A dead local was removed here (2026-08-07 lint pass).
 
       // Check if enough time has passed since last index
       const timeSinceLastIndex = Date.now() - doc.last_indexed
@@ -113,17 +124,20 @@ export class RefreshScheduler {
   async scheduleRefresh(
     documentId: string,
     reason: RefreshCandidate['reason'] = 'manual',
-    priority = 0
+    priority = 0,
   ): Promise<void> {
     if (!this.env.SEARCH_INDEX_DB) return
-    
-    const id = `refresh_${documentId}_${Date.now()}`
-    const now = Date.now()
 
-    await this.env.SEARCH_INDEX_DB.prepare(`
+    const id = `refresh_${documentId}_${Date.now()}`
+
+    await this.env.SEARCH_INDEX_DB.prepare(
+      `
       INSERT INTO refresh_schedule (id, document_id, priority, reason, scheduled_at, status, attempt, created_at, updated_at)
       VALUES (?, ?, ?, ?, ?, 'pending', 0, ?, ?)
-    `).bind(id, documentId, priority, reason, Date.now(), Date.now(), Date.now()).run()
+    `,
+    )
+      .bind(id, documentId, priority, reason, Date.now(), Date.now(), Date.now())
+      .run()
   }
 
   /**
@@ -131,14 +145,18 @@ export class RefreshScheduler {
    */
   async processSchedule(): Promise<{ processed: number; succeeded: number; failed: number }> {
     if (!this.env.SEARCH_INDEX_DB) return { processed: 0, succeeded: 0, failed: 0 }
-    
-    const pendingResult = await this.env.SEARCH_INDEX_DB.prepare(`
+
+    const pendingResult = await this.env.SEARCH_INDEX_DB.prepare(
+      `
       SELECT id, document_id, priority, reason, attempt
       FROM refresh_schedule
       WHERE status = 'pending' AND scheduled_at <= ?
       ORDER BY priority DESC, scheduled_at ASC
       LIMIT ?
-    `).bind(Date.now(), this.config.batchSize).all()
+    `,
+    )
+      .bind(Date.now(), this.config.batchSize)
+      .all()
 
     let succeeded = 0
     let failed = 0
@@ -149,22 +167,28 @@ export class RefreshScheduler {
       const job = row as { id: string; document_id: string; priority: number; reason: string; attempt: number }
 
       // Mark as running
-      await this.env.SEARCH_INDEX_DB?.prepare(`
+      await this.env.SEARCH_INDEX_DB?.prepare(
+        `
         UPDATE refresh_schedule SET status = 'running', attempt = attempt + 1, updated_at = ?
         WHERE id = ?
-      `).bind(Date.now(), job.id).run()
+      `,
+      )
+        .bind(Date.now(), job.id)
+        .run()
 
       try {
         // Get document URL
-        const doc = await this.env.SEARCH_INDEX_DB?.prepare(`
+        const doc = await this.env.SEARCH_INDEX_DB?.prepare(
+          `
           SELECT url FROM documents WHERE id = ?
-        `).bind(job.document_id).first()
+        `,
+        )
+          .bind(job.document_id)
+          .first()
 
         if (!doc) {
           throw new Error(`Document not found: ${job.document_id}`)
         }
-
-        const url = (doc as { url: string }).url
 
         // This would trigger actual re-indexing
         // In practice, you'd push to the indexing queue
@@ -174,34 +198,46 @@ export class RefreshScheduler {
         })
 
         // Mark completed
-        await this.env.SEARCH_INDEX_DB?.prepare(`
+        await this.env.SEARCH_INDEX_DB?.prepare(
+          `
           UPDATE refresh_schedule SET status = 'completed', updated_at = ?
           WHERE id = ?
-        `).bind(Date.now(), job.id).run()
+        `,
+        )
+          .bind(Date.now(), job.id)
+          .run()
 
         succeeded++
       } catch (error) {
         logger.error(`[Scheduler] Refresh failed for ${job.document_id}:`, { error: String(error) })
 
-        const jobResult = pendingResult.results.find(r => {
+        const jobResult = pendingResult.results.find((r) => {
           const row = r as { id: string; document_id: string; priority: number; reason: string; attempt: number }
           return row.id === job.id
         })
         const jobAttempt = (jobResult as { attempt?: number })?.attempt ?? 0
-        
+
         const maxAttempts = 3
-        if (jobAttempt >= 3) {
-          await this.env.SEARCH_INDEX_DB?.prepare(`
+        if (jobAttempt >= maxAttempts) {
+          await this.env.SEARCH_INDEX_DB?.prepare(
+            `
             UPDATE refresh_schedule SET status = 'failed', last_error = ?, updated_at = ?
             WHERE id = ?
-          `).bind(String(error), Date.now(), job.id).run()
+          `,
+          )
+            .bind(String(error), Date.now(), job.id)
+            .run()
         } else {
           // Reschedule with backoff
           const backoffMs = Math.min(3600000 * Math.pow(2, jobAttempt), 86400000) // max 24h
-          await this.env.SEARCH_INDEX_DB?.prepare(`
+          await this.env.SEARCH_INDEX_DB?.prepare(
+            `
             UPDATE refresh_schedule SET status = 'pending', scheduled_at = ?, last_error = ?, updated_at = ?
             WHERE id = ?
-          `).bind(Date.now() + backoffMs, String(error), Date.now(), job.id).run()
+          `,
+          )
+            .bind(Date.now() + backoffMs, String(error), Date.now(), job.id)
+            .run()
         }
         failed++
       }
@@ -215,11 +251,15 @@ export class RefreshScheduler {
    */
   async updateIndexTimestamp(documentId: string, success = true): Promise<void> {
     if (!this.env.SEARCH_INDEX_DB) return
-    
+
     const now = Date.now()
-    const doc = await this.env.SEARCH_INDEX_DB.prepare(`
+    const doc = await this.env.SEARCH_INDEX_DB.prepare(
+      `
       SELECT importance FROM documents WHERE id = ?
-    `).bind(documentId).first()
+    `,
+    )
+      .bind(documentId)
+      .first()
 
     if (!doc) return
 
@@ -227,14 +267,18 @@ export class RefreshScheduler {
     const frequencyDays = this.calculateFrequency(importance)
     const nextIndexAt = now + frequencyDays * 24 * 60 * 60 * 1000
 
-    await this.env.SEARCH_INDEX_DB.prepare(`
+    await this.env.SEARCH_INDEX_DB.prepare(
+      `
       UPDATE documents
       SET last_indexed = ?,
           next_index_at = ?,
           status = ?,
           updated_at = ?
       WHERE id = ?
-    `).bind(now, nextIndexAt, success ? 'indexed' : 'failed', now, documentId).run()
+    `,
+    )
+      .bind(now, nextIndexAt, success ? 'indexed' : 'failed', now, documentId)
+      .run()
   }
 
   /**
@@ -249,7 +293,8 @@ export class RefreshScheduler {
   }> {
     const now = Date.now()
 
-    const stats = await this.env.SEARCH_INDEX_DB?.prepare(`
+    const stats = await this.env.SEARCH_INDEX_DB?.prepare(
+      `
       SELECT
         SUM(CASE WHEN status = 'pending' THEN 1 ELSE 0 END) AS pending,
         SUM(CASE WHEN status = 'running' THEN 1 ELSE 0 END) AS running,
@@ -257,7 +302,10 @@ export class RefreshScheduler {
         SUM(CASE WHEN status = 'failed' THEN 1 ELSE 0 END) AS failed,
         SUM(CASE WHEN status IN ('pending', 'running') AND scheduled_at <= ? THEN 1 ELSE 0 END) AS overdue
       FROM refresh_schedule
-    `).bind(now).first()
+    `,
+    )
+      .bind(now)
+      .first()
 
     if (!stats) {
       return { pending: 0, running: 0, completed: 0, failed: 0, overdue: 0 }
@@ -278,11 +326,15 @@ export class RefreshScheduler {
   async cleanup(maxAgeDays = 30): Promise<number> {
     const cutoff = Date.now() - maxAgeDays * 24 * 60 * 60 * 1000
 
-    const result = await this.env.SEARCH_INDEX_DB?.prepare(`
+    const result = await this.env.SEARCH_INDEX_DB?.prepare(
+      `
       DELETE FROM refresh_schedule
       WHERE status IN ('completed', 'failed')
         AND updated_at < ?
-    `).bind(cutoff).run()
+    `,
+    )
+      .bind(cutoff)
+      .run()
 
     return result?.meta.changes ?? 0
   }
@@ -316,9 +368,21 @@ export function calculateImportance(factors: ImportanceFactors): number {
 
   // Title keywords (0-0.2)
   const importantKeywords = [
-    'official', 'documentation', 'guide', 'tutorial', 'reference',
-    'api', 'specification', 'standard', 'best practice', 'whitepaper',
-    'research', 'analysis', 'report', 'benchmark', 'comparison'
+    'official',
+    'documentation',
+    'guide',
+    'tutorial',
+    'reference',
+    'api',
+    'specification',
+    'standard',
+    'best practice',
+    'whitepaper',
+    'research',
+    'analysis',
+    'report',
+    'benchmark',
+    'comparison',
   ]
   const titleLower = factors.titleKeywords.join(' ').toLowerCase()
   for (const kw of importantKeywords) {

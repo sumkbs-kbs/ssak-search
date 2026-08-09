@@ -22,11 +22,7 @@ describe('parseSitemapXml', () => {
 
     const result = parseSitemapXml(xml, 'https://example.com/sitemap.xml')
     expect(result.isIndex).toBe(false)
-    expect(result.urls).toEqual([
-      'https://example.com/a',
-      'https://example.com/b',
-      'https://example.com/c',
-    ])
+    expect(result.urls).toEqual(['https://example.com/a', 'https://example.com/b', 'https://example.com/c'])
     expect(result.subSitemaps).toEqual([])
   })
 
@@ -121,7 +117,11 @@ describe('discoverAndParseSitemaps', () => {
     globalThis.fetch = vi.fn(async (input: RequestInfo | URL) => {
       const url = typeof input === 'string' ? input : input.toString()
       if (url.includes('1.1.1.1/dns-query')) {
-        return { ok: true, status: 200, json: async () => ({ Status: 0, Answer: [{ data: '1.2.3.4', type: 1 }] }) } as Response
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({ Status: 0, Answer: [{ data: '1.2.3.4', type: 1 }] }),
+        } as Response
       }
       const body = routes[url]
       if (body === undefined) {
@@ -171,7 +171,7 @@ describe('discoverAndParseSitemaps', () => {
   it('respects maxUrls cap', async () => {
     mockFetch({
       'https://example.com/robots.txt': 'Sitemap: https://example.com/sitemap.xml\n',
-      'https://example.com/sitemap.xml': `<urlset>${[1, 2, 3, 4, 5].map(i => `<url><loc>https://example.com/p${i}</loc></url>`).join('')}</urlset>`,
+      'https://example.com/sitemap.xml': `<urlset>${[1, 2, 3, 4, 5].map((i) => `<url><loc>https://example.com/p${i}</loc></url>`).join('')}</urlset>`,
     })
 
     const urls = await discoverAndParseSitemaps('example.com', { maxUrls: 3 })

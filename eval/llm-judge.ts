@@ -13,7 +13,7 @@
  */
 
 import type { EvalResult } from './types'
-import type { SearchResponse, SearchAnswerSource } from '../src/types'
+import type { SearchAnswerSource } from '../src/types'
 import { logger } from '../src/lib/logger'
 
 // ============================================================
@@ -120,9 +120,7 @@ function getDefaultConfig(): JudgeConfig {
   const model = process.env.JUDGE_MODEL || 'gpt-4o-mini'
 
   if (!apiKey) {
-    throw new Error(
-      'Judge API key required. Set JUDGE_API_KEY or OPENAI_API_KEY environment variable.',
-    )
+    throw new Error('Judge API key required. Set JUDGE_API_KEY or OPENAI_API_KEY environment variable.')
   }
 
   return {
@@ -138,11 +136,7 @@ function getDefaultConfig(): JudgeConfig {
 // LLM Call Helper
 // ============================================================
 
-async function callJudgeLLM(
-  config: JudgeConfig,
-  systemPrompt: string,
-  userPrompt: string,
-): Promise<string> {
+async function callJudgeLLM(config: JudgeConfig, systemPrompt: string, userPrompt: string): Promise<string> {
   const response = await fetch(`${config.apiUrl}/chat/completions`, {
     method: 'POST',
     headers: {
@@ -165,7 +159,7 @@ async function callJudgeLLM(
     throw new Error(`Judge LLM call failed (${response.status}): ${text}`)
   }
 
-  const data = await response.json() as {
+  const data = (await response.json()) as {
     choices: Array<{ message: { content: string } }>
   }
 
@@ -231,12 +225,8 @@ Evaluate whether each cited source is relevant to the claims it appears near in 
 
 function extractClaims(text: string): string {
   // Split by sentences and numbered citations to extract claims
-  const sentences = text
-    .split(/(?<=[.!?。！？])\s+/)
-    .filter((s) => s.trim().length > 10)
-  return sentences
-    .map((s, i) => `${i + 1}. ${s.trim()}`)
-    .join('\n')
+  const sentences = text.split(/(?<=[.!?。！？])\s+/).filter((s) => s.trim().length > 10)
+  return sentences.map((s, i) => `${i + 1}. ${s.trim()}`).join('\n')
 }
 
 async function evaluateCitationPrecision(
@@ -247,7 +237,7 @@ async function evaluateCitationPrecision(
 ): Promise<CitationPrecisionResult> {
   // Normalize sources — handle both number[] and SearchAnswerSource[] forms
   const normalizedSources: SearchAnswerSource[] = Array.isArray(sources)
-    ? sources.map((s, i) =>
+    ? sources.map((s) =>
         typeof s === 'number'
           ? { index: s, url: results[s]?.url, title: results[s]?.title, snippet: results[s]?.content?.slice(0, 200) }
           : s,
@@ -485,10 +475,7 @@ async function evaluateRelevance(
 /**
  * Evaluate a single search response using LLM-as-judge.
  */
-export async function evaluateQuery(
-  config: JudgeConfig,
-  evalResult: EvalResult,
-): Promise<JudgeEvaluation> {
+export async function evaluateQuery(config: JudgeConfig, evalResult: EvalResult): Promise<JudgeEvaluation> {
   const response = evalResult.response
   const hasAnswer = !!response?.answer?.text
   const answerText = response?.answer?.text ?? ''
@@ -520,9 +507,7 @@ export async function evaluateQuery(
 
   // Composite score: citation_precision 35%, (1-hallucination) 35%, relevance 30%
   const compositeScore = hasAnswer
-    ? citationPrecision.precision * 0.35 +
-      (1 - hallucination.hallucinationRate) * 0.35 +
-      relevance.relevance * 0.3
+    ? citationPrecision.precision * 0.35 + (1 - hallucination.hallucinationRate) * 0.35 + relevance.relevance * 0.3
     : 0
 
   return {
@@ -553,9 +538,7 @@ export async function runJudgeEvaluation(
   // Process in batches of 3 to avoid rate limits
   for (let i = 0; i < evalResults.length; i += 3) {
     const batch = evalResults.slice(i, i + 3)
-    const batchResults = await Promise.all(
-      batch.map((r) => evaluateQuery(config, r)),
-    )
+    const batchResults = await Promise.all(batch.map((r) => evaluateQuery(config, r)))
     evaluations.push(...batchResults)
 
     if (i + 3 < evalResults.length) {
@@ -574,25 +557,18 @@ export async function runJudgeEvaluation(
       ? withAnswers.reduce((sum, e) => sum + e.hallucination.hallucinationRate, 0) / withAnswers.length
       : 0
   const avgRelevance =
-    withAnswers.length > 0
-      ? withAnswers.reduce((sum, e) => sum + e.relevance.relevance, 0) / withAnswers.length
-      : 0
+    withAnswers.length > 0 ? withAnswers.reduce((sum, e) => sum + e.relevance.relevance, 0) / withAnswers.length : 0
   const avgCompositeScore =
-    withAnswers.length > 0
-      ? withAnswers.reduce((sum, e) => sum + e.compositeScore, 0) / withAnswers.length
-      : 0
+    withAnswers.length > 0 ? withAnswers.reduce((sum, e) => sum + e.compositeScore, 0) / withAnswers.length : 0
 
   // Summary
   const compositeScores = withAnswers.map((e) => e.compositeScore).sort((a, b) => a - b)
-  const medianCompositeScore =
-    compositeScores.length > 0
-      ? compositeScores[Math.floor(compositeScores.length / 2)]
-      : 0
+  const medianCompositeScore = compositeScores.length > 0 ? compositeScores[Math.floor(compositeScores.length / 2)] : 0
 
-  const worstHallucination = withAnswers
-    .sort((a, b) => b.hallucination.hallucinationRate - a.hallucination.hallucinationRate)[0]
-  const worstPrecision = withAnswers
-    .sort((a, b) => a.citationPrecision.precision - b.citationPrecision.precision)[0]
+  const worstHallucination = withAnswers.sort(
+    (a, b) => b.hallucination.hallucinationRate - a.hallucination.hallucinationRate,
+  )[0]
+  const worstPrecision = withAnswers.sort((a, b) => a.citationPrecision.precision - b.citationPrecision.precision)[0]
 
   return {
     timestamp: new Date().toISOString(),
@@ -684,7 +660,9 @@ Environment:
   console.error(`  Avg Hallucination Rate:   ${(report.avgHallucinationRate * 100).toFixed(1)}%`)
   console.error(`  Avg Relevance:            ${(report.avgRelevance * 100).toFixed(1)}%`)
   console.error(`  Avg Composite Score:      ${(report.avgCompositeScore * 100).toFixed(1)}%`)
-  console.error(`  Score Range:              ${(report.summary.minCompositeScore * 100).toFixed(1)}% – ${(report.summary.maxCompositeScore * 100).toFixed(1)}%`)
+  console.error(
+    `  Score Range:              ${(report.summary.minCompositeScore * 100).toFixed(1)}% – ${(report.summary.maxCompositeScore * 100).toFixed(1)}%`,
+  )
   console.error('='.repeat(50))
 }
 

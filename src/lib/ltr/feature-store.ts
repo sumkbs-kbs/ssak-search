@@ -25,22 +25,22 @@ import { getDomainAuthority, extractDomain } from '../util'
 // ============================================================
 
 export const FEATURE_NAMES = [
-  'q_len',            // 0  query length (normalized)
-  'q_terms',          // 1  query token count (normalized)
-  'title_len',        // 2  title length (normalized)
-  'content_len',      // 3  content length (normalized)
-  'title_overlap',    // 4  query terms found in title [0,1]
-  'content_overlap',  // 5  query terms found in content [0,1]
-  'score',            // 6  current hybrid relevance score [0,1]
+  'q_len', // 0  query length (normalized)
+  'q_terms', // 1  query token count (normalized)
+  'title_len', // 2  title length (normalized)
+  'content_len', // 3  content length (normalized)
+  'title_overlap', // 4  query terms found in title [0,1]
+  'content_overlap', // 5  query terms found in content [0,1]
+  'score', // 6  current hybrid relevance score [0,1]
   'domain_authority', // 7  authority bonus (0..0.15)
-  'recency',          // 8  freshness [0,1]; no date → 0.5
-  'is_news',          // 9  0/1
-  'is_finance',       // 10 0/1
-  'korean',           // 11 0/1
-  'chinese',          // 12 0/1
-  'query_type_num',   // 13 query type ordinal [0,1]
-  'user_visited',     // 14 0/1 — user has visited this domain
-  'user_visits',      // 15 normalized visit count
+  'recency', // 8  freshness [0,1]; no date → 0.5
+  'is_news', // 9  0/1
+  'is_finance', // 10 0/1
+  'korean', // 11 0/1
+  'chinese', // 12 0/1
+  'query_type_num', // 13 query type ordinal [0,1]
+  'user_visited', // 14 0/1 — user has visited this domain
+  'user_visits', // 15 normalized visit count
 ] as const
 
 export type FeatureName = (typeof FEATURE_NAMES)[number]

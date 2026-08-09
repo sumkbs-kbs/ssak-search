@@ -66,8 +66,8 @@ export const DEFAULT_BM25_CONFIG: BM25Config = {
   k1: 1.5,
   b: 0.75,
   delta: 0.5,
-  avgDocLength: 200,    // Average ~200 words per document
-  totalDocs: 1000,      // Will be tuned as corpus grows
+  avgDocLength: 200, // Average ~200 words per document
+  totalDocs: 1000, // Will be tuned as corpus grows
 }
 
 // ============================================================
@@ -76,25 +76,149 @@ export const DEFAULT_BM25_CONFIG: BM25Config = {
 
 /** Stop words for BM25 scoring */
 const STOP_WORDS = new Set([
-  'the', 'a', 'an', 'is', 'are', 'was', 'were', 'be', 'been', 'being',
-  'have', 'has', 'had', 'do', 'does', 'did', 'will', 'would', 'could',
-  'should', 'may', 'might', 'must', 'can', 'shall', 'need', 'dare',
-  'in', 'on', 'at', 'to', 'for', 'of', 'with', 'by', 'from', 'as',
-  'and', 'or', 'but', 'not', 'nor', 'so', 'yet', 'if', 'else',
-  'what', 'when', 'where', 'why', 'how', 'who', 'whom', 'which',
-  'this', 'that', 'these', 'those', 'i', 'me', 'my', 'myself',
-  'we', 'our', 'ours', 'ourselves', 'you', 'your', 'yours',
-  'he', 'him', 'his', 'she', 'her', 'hers', 'it', 'its',
-  'they', 'them', 'their', 'theirs', 'itself', 'themselves',
+  'the',
+  'a',
+  'an',
+  'is',
+  'are',
+  'was',
+  'were',
+  'be',
+  'been',
+  'being',
+  'have',
+  'has',
+  'had',
+  'do',
+  'does',
+  'did',
+  'will',
+  'would',
+  'could',
+  'should',
+  'may',
+  'might',
+  'must',
+  'can',
+  'shall',
+  'need',
+  'dare',
+  'in',
+  'on',
+  'at',
+  'to',
+  'for',
+  'of',
+  'with',
+  'by',
+  'from',
+  'as',
+  'and',
+  'or',
+  'but',
+  'not',
+  'nor',
+  'so',
+  'yet',
+  'if',
+  'else',
+  'what',
+  'when',
+  'where',
+  'why',
+  'how',
+  'who',
+  'whom',
+  'which',
+  'this',
+  'that',
+  'these',
+  'those',
+  'i',
+  'me',
+  'my',
+  'myself',
+  'we',
+  'our',
+  'ours',
+  'ourselves',
+  'you',
+  'your',
+  'yours',
+  'he',
+  'him',
+  'his',
+  'she',
+  'her',
+  'hers',
+  'it',
+  'its',
+  'they',
+  'them',
+  'their',
+  'theirs',
+  'itself',
+  'themselves',
   // Korean stop words
-  '은', '는', '이', '가', '을', '를', '의', '에', '에서', '에게',
-  '으로', '로', '와', '과', '하고', '이며', '거나', '든지',
-  '그리고', '그래서', '그러나', '그런데', '때문에',
-  '있다', '했다', '한다', '되는', '없는', '같은', '하는',
+  '은',
+  '는',
+  '이',
+  '가',
+  '을',
+  '를',
+  '의',
+  '에',
+  '에서',
+  '에게',
+  '으로',
+  '로',
+  '와',
+  '과',
+  '하고',
+  '이며',
+  '거나',
+  '든지',
+  '그리고',
+  '그래서',
+  '그러나',
+  '그런데',
+  '때문에',
+  '있다',
+  '했다',
+  '한다',
+  '되는',
+  '없는',
+  '같은',
+  '하는',
   // Chinese stop words
-  '的', '了', '在', '是', '我', '有', '和', '就', '不', '人',
-  '都', '一', '一个', '上', '也', '很', '到', '说', '要',
-  '去', '你', '会', '着', '没有', '看', '好', '自己', '这',
+  '的',
+  '了',
+  '在',
+  '是',
+  '我',
+  '有',
+  '和',
+  '就',
+  '不',
+  '人',
+  '都',
+  '一',
+  '一个',
+  '上',
+  '也',
+  '很',
+  '到',
+  '说',
+  '要',
+  '去',
+  '你',
+  '会',
+  '着',
+  '没有',
+  '看',
+  '好',
+  '自己',
+  '这',
 ])
 
 /** Check if a string has CJK characters */
@@ -126,9 +250,9 @@ export function tokenize(text: string): string[] {
     // Also split into words for mixed CJK-Latin text
     const latinTerms = text
       .toLowerCase()
-      .split(/[\s,.;:!?()\[\]{}【】「」『』]+/)
-      .map(t => t.replace(/[^\w&+#\u{4E00}-\u{9FFF}\u{AC00}-\u{D7A3}]+/gu, ''))
-      .filter(t => t.length > 1 && !STOP_WORDS.has(t))
+      .split(/[\s,.;:!?()[\]{}【】「」『』]+/)
+      .map((t) => t.replace(/[^\w&+#\u{4E00}-\u{9FFF}\u{AC00}-\u{D7A3}]+/gu, ''))
+      .filter((t) => t.length > 1 && !STOP_WORDS.has(t))
 
     return [...new Set([...bigrams, ...latinTerms])]
   }
@@ -139,9 +263,9 @@ export function tokenize(text: string): string[] {
   // and tech queries.
   return text
     .toLowerCase()
-    .split(/[\s,.;:!?()\[\]{}]+/)
-    .map(t => t.replace(/[^\w&+#]+/g, ''))
-    .filter(t => t.length > 1 && !STOP_WORDS.has(t))
+    .split(/[\s,.;:!?()[\]{}]+/)
+    .map((t) => t.replace(/[^\w&+#]+/g, ''))
+    .filter((t) => t.length > 1 && !STOP_WORDS.has(t))
 }
 
 /** Compute term frequency of a term in a document */
@@ -169,14 +293,10 @@ function termFrequency(term: string, text: string): number {
  *   N = total number of documents
  *   n(q) = number of documents containing term q
  */
-export function computeIDF(
-  term: string,
-  totalDocs: number,
-  docFrequency: number,
-): number {
+export function computeIDF(term: string, totalDocs: number, docFrequency: number): number {
   // For unknown term frequency, use max IDF
   if (docFrequency <= 0) return Math.log((totalDocs + 1) / 0.5)
-  
+
   const numerator = totalDocs - docFrequency + 0.5
   const denominator = docFrequency + 0.5
   return Math.log(Math.max(1, numerator / denominator) + 1)
@@ -204,8 +324,8 @@ function scoreTerm(
   if (tf === 0) return 0
 
   const numerator = tf * (k1 + 1)
-  const denominator = tf + k1 * (1 - b + b * docLength / Math.max(1, avgDocLength))
-  
+  const denominator = tf + k1 * (1 - b + (b * docLength) / Math.max(1, avgDocLength))
+
   return idf * (numerator / denominator)
 }
 
@@ -235,13 +355,11 @@ export class BM25Scorer {
    */
   updateCorpusStats(documents: BM25Document[]): void {
     if (documents.length === 0) return
-    
+
     this.config.totalDocs = documents.length
-    this.config.avgDocLength = documents.reduce(
-      (sum, doc) => sum + this.wordCount(doc.content + ' ' + doc.title),
-      0,
-    ) / documents.length
-    
+    this.config.avgDocLength =
+      documents.reduce((sum, doc) => sum + this.wordCount(doc.content + ' ' + doc.title), 0) / documents.length
+
     // Reset IDF cache when corpus changes
     this.idfCache.clear()
   }
@@ -254,10 +372,10 @@ export class BM25Scorer {
     if (hasCJK(text)) {
       // For CJK, count characters as a rough measure
       const cjkChars = (text.match(/[\u{4E00}-\u{9FFF}\u{AC00}-\u{D7A3}]/gu) || []).length
-      const words = text.split(/[\s]+/).filter(w => w.length > 0).length
+      const words = text.split(/[\s]+/).filter((w) => w.length > 0).length
       return Math.max(1, cjkChars + words)
     }
-    return Math.max(1, text.split(/[\s]+/).filter(w => w.length > 0).length)
+    return Math.max(1, text.split(/[\s]+/).filter((w) => w.length > 0).length)
   }
 
   /**
@@ -267,7 +385,7 @@ export class BM25Scorer {
     const cached = this.idfCache.get(term)
     if (cached !== undefined) return cached
 
-    const docFrequency = documents.filter(doc => {
+    const docFrequency = documents.filter((doc) => {
       const combined = (doc.title + ' ' + doc.content).toLowerCase()
       return combined.includes(term)
     }).length
@@ -288,34 +406,27 @@ export class BM25Scorer {
     if (queryTerms.length === 0) return []
 
     // Precompute term IDFs
-    const idfs = queryTerms.map(term => ({ term, idf: this.getIDF(term, documents) }))
+    const idfs = queryTerms.map((term) => ({ term, idf: this.getIDF(term, documents) }))
     // Filter out terms with zero IDF (appear in ALL documents)
-    const significantTerms = idfs.filter(t => t.idf > 0)
-    if (significantTerms.length === 0) return documents.map(d => ({
-      id: d.id,
-      score: 0.5,
-      title: d.title,
-      content: d.content.slice(0, 500),
-      url: d.url ?? '',
-      domain: d.domain ?? '',
-      publishedDate: d.publishedDate,
-    }))
+    const significantTerms = idfs.filter((t) => t.idf > 0)
+    if (significantTerms.length === 0)
+      return documents.map((d) => ({
+        id: d.id,
+        score: 0.5,
+        title: d.title,
+        content: d.content.slice(0, 500),
+        url: d.url ?? '',
+        domain: d.domain ?? '',
+        publishedDate: d.publishedDate,
+      }))
 
-    const results: BM25Result[] = documents.map(doc => {
+    const results: BM25Result[] = documents.map((doc) => {
       const docText = (doc.title + ' ' + doc.content).toLowerCase()
       const docLength = this.wordCount(docText)
 
       let totalScore = 0
       for (const { term, idf } of significantTerms) {
-        totalScore += scoreTerm(
-          term,
-          docText,
-          docLength,
-          this.config.avgDocLength,
-          this.config.k1,
-          this.config.b,
-          idf,
-        )
+        totalScore += scoreTerm(term, docText, docLength, this.config.avgDocLength, this.config.k1, this.config.b, idf)
       }
 
       return {
@@ -347,13 +458,16 @@ export class BM25Scorer {
    * Score live search results (from external backends) using BM25.
    * Used when we don't have a full corpus — compute against the result set itself.
    */
-  scoreLiveResults(query: string, results: Array<{
-    title: string
-    content: string
-    url: string
-    domain: string
-    publishedDate?: string
-  }>): BM25Result[] {
+  scoreLiveResults(
+    query: string,
+    results: Array<{
+      title: string
+      content: string
+      url: string
+      domain: string
+      publishedDate?: string
+    }>,
+  ): BM25Result[] {
     const documents: BM25Document[] = results.map((r, i) => ({
       id: `live_${i}`,
       title: r.title,
@@ -378,12 +492,7 @@ export class BM25Scorer {
  *
  * This is a simplified version that doesn't need full corpus stats.
  */
-export function bm25Score(
-  query: string,
-  title: string,
-  content: string,
-  avgDocLen: number = 200,
-): number {
+export function bm25Score(query: string, title: string, content: string, avgDocLen: number = 200): number {
   const queryTerms = tokenize(query)
   if (queryTerms.length === 0) return 0.5
 
@@ -399,12 +508,12 @@ export function bm25Score(
 
     // Simplified IDF: assume each term appears in ~10% of documents
     const idf = Math.log((1000 - 100 + 0.5) / (100 + 0.5) + 1)
-    
+
     const k1 = 1.5
     const b = 0.75
     const numerator = tf * (k1 + 1)
-    const denominator = tf + k1 * (1 - b + b * docLen / Math.max(1, avgDocLen))
-    
+    const denominator = tf + k1 * (1 - b + (b * docLen) / Math.max(1, avgDocLen))
+
     score += idf * (numerator / denominator)
     matchedTerms++
   }
@@ -412,9 +521,10 @@ export function bm25Score(
   if (matchedTerms === 0) return 0.01
 
   // Normalize by max possible score (all terms matched once)
-  const maxScore = queryTerms.length * 
-    Math.log((1000 - 100 + 0.5) / (100 + 0.5) + 1) * 
-    ((1 * (1.5 + 1)) / (1 + 1.5 * (1 - 0.75 + 0.75 * docLen / Math.max(1, avgDocLen))))
+  const maxScore =
+    queryTerms.length *
+    Math.log((1000 - 100 + 0.5) / (100 + 0.5) + 1) *
+    ((1 * (1.5 + 1)) / (1 + 1.5 * (1 - 0.75 + (0.75 * docLen) / Math.max(1, avgDocLen))))
 
   return Math.min(0.99, Math.max(0.01, score / Math.max(1, maxScore)))
 }

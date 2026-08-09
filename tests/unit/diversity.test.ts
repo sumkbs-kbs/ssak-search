@@ -42,7 +42,7 @@ function makeResults(count: number, domainPrefix = 'site'): DiversityResult[] {
       score: 0.9 - i * 0.05,
       domain: `${domainPrefix}${i}.example.com`,
       originalRank: i,
-    })
+    }),
   )
 }
 
@@ -88,7 +88,7 @@ describe('MMR Diversity Filter', () => {
           score: 0.9 - i * 0.05,
           domain: i < 8 ? 'same.com' : `other${i}.com`,
           originalRank: i,
-        })
+        }),
       )
 
       const result = mmrDiversityFilter(results, {
@@ -97,7 +97,7 @@ describe('MMR Diversity Filter', () => {
       })
 
       // Count results from same.com
-      const sameComCount = result.filter(r => r.domain === 'same.com').length
+      const sameComCount = result.filter((r) => r.domain === 'same.com').length
       expect(sameComCount).toBeLessThanOrEqual(3)
     })
 
@@ -111,7 +111,7 @@ describe('MMR Diversity Filter', () => {
           score: 0.9,
           domain: 'same.com',
           originalRank: i,
-        })
+        }),
       )
 
       const result = mmrDiversityFilter(results, {
@@ -161,7 +161,7 @@ describe('MMR Diversity Filter', () => {
           score: 0.9 - i * 0.1,
           domain: 'same.com',
           originalRank: i,
-        })
+        }),
       )
 
       const result = mmrDiversityFilter(results, {

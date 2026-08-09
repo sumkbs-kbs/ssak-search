@@ -15,7 +15,10 @@ export type IndexQueueMessage =
   | { type: 'REFRESH_SCHEDULE'; payload: { urls: string[] } }
   | { type: 'BULK_INDEX'; payload: { urls: Array<{ url: string; title: string; html: string }> } }
   | { type: 'SEED_FROM_BRAVE'; payload: { query: string; urls: string[] } }
-  | { type: 'UPDATE_DOMAIN_REPUTATION'; payload: { domains: Array<{ domain: string; success: boolean; quality: number }> } }
+  | {
+      type: 'UPDATE_DOMAIN_REPUTATION'
+      payload: { domains: Array<{ domain: string; success: boolean; quality: number }> }
+    }
 
 // ============================================================
 // Search Types

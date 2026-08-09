@@ -11,7 +11,13 @@ import { applyLtrRanking } from '../../src/lib/ltr/ranker'
 
 function makeResults() {
   return [
-    { title: 'React state management', url: 'https://a.com/article', content: 'Best practices for react state', score: 0.8, domain: 'a.com' },
+    {
+      title: 'React state management',
+      url: 'https://a.com/article',
+      content: 'Best practices for react state',
+      score: 0.8,
+      domain: 'a.com',
+    },
     { title: 'Vue guide', url: 'https://b.com/guide', content: 'Vue framework tutorial', score: 0.4, domain: 'b.com' },
   ]
 }
@@ -92,9 +98,12 @@ describe('applyLtrRanking', () => {
   it('aborts the sidecar call after 2s and returns unchanged results', async () => {
     vi.useFakeTimers()
     const results = makeResults()
-    globalThis.fetch = vi.fn((_url: unknown, init: any) => new Promise((_res, rej) => {
-      init?.signal?.addEventListener('abort', () => rej(new Error('Aborted')))
-    })) as any
+    globalThis.fetch = vi.fn(
+      (_url: unknown, init: any) =>
+        new Promise((_res, rej) => {
+          init?.signal?.addEventListener('abort', () => rej(new Error('Aborted')))
+        }),
+    ) as any
 
     const promise = applyLtrRanking(results, makeCtx())
     await vi.advanceTimersByTimeAsync(2500)

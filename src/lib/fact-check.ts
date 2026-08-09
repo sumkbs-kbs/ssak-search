@@ -136,10 +136,7 @@ interface ExtractedClaim {
  * every request; the cost is O(sources × claimsPerSource × groups) similarity
  * comparisons against a small, capped claim pool.
  */
-export function crossCheckFacts(
-  results: SearchResult[],
-  opts: FactCheckOptions = {},
-): FactCheckReport {
+export function crossCheckFacts(results: SearchResult[], opts: FactCheckOptions = {}): FactCheckReport {
   const checkedAt = new Date().toISOString()
 
   if (!results || results.length === 0) {
@@ -206,7 +203,12 @@ export function crossCheckFacts(
   const warnings = buildWarnings(claimItems, conflicts, verdict)
 
   // Sort: corroborated → conflicting → single-source; ties by confidence desc.
-  const rankOrder: Record<ClaimVerdict, number> = { corroborated: 0, conflicting: 1, 'single-source': 2, unsupported: 3 }
+  const rankOrder: Record<ClaimVerdict, number> = {
+    corroborated: 0,
+    conflicting: 1,
+    'single-source': 2,
+    unsupported: 3,
+  }
   claimItems.sort((a, b) => rankOrder[a.verdict] - rankOrder[b.verdict] || b.confidence - a.confidence)
 
   return {
@@ -293,7 +295,11 @@ function claimScore(text: string): number {
   else if (/[A-Z][a-z]+|[A-Z]{2,}/.test(text)) score += 0.15
 
   // Boilerplate / UI noise penalty.
-  if (/(subscribe|newsletter|cookie|click here|sign up|log in|©|copyright|all rights reserved|javascript|menu|footer|privacy policy|terms of service|skip to content)/i.test(text)) {
+  if (
+    /(subscribe|newsletter|cookie|click here|sign up|log in|©|copyright|all rights reserved|javascript|menu|footer|privacy policy|terms of service|skip to content)/i.test(
+      text,
+    )
+  ) {
     score -= 0.6
   }
 
@@ -432,24 +438,119 @@ function passesLength(text: string, minLen: number, maxLen: number): boolean {
 // ('new', 'said', 'says', …) are deliberately NOT stripped — removing them
 // symmetrically would make distinct claims look more similar than they are.
 const STOPWORDS = new Set([
-  'the', 'a', 'an', 'and', 'or', 'but', 'nor', 'in', 'on', 'at', 'to', 'for', 'of', 'with', 'by', 'from', 'as',
-  'is', 'are', 'was', 'were', 'be', 'been', 'being', 'has', 'have', 'had', 'do', 'does', 'did', 'will', 'would',
-  'could', 'should', 'may', 'might', 'must', 'can', 'its', 'it', 'this', 'that', 'these', 'those', 'they', 'them',
-  'their', 'we', 'you', 'he', 'she', 'i', 'me', 'him', 'her', 'us', 'than', 'then', 'there', 'which', 'who',
-  'whom', 'when', 'where', 'why', 'how', 'so', 'too', 'very', 'just', 'about', 'into', 'over', 'under', 'after',
-  'before', 'between', 'during', 'since', 'until', 'while', 'up', 'down', 'out', 'off', 'again', 'further',
-  'once', 'here', 'all', 'any', 'both', 'each', 'few', 'other', 'some', 'such', 'own', 'same', 'more', 'most',
-  'also', 'still', 'even', 'only', 'per',
+  'the',
+  'a',
+  'an',
+  'and',
+  'or',
+  'but',
+  'nor',
+  'in',
+  'on',
+  'at',
+  'to',
+  'for',
+  'of',
+  'with',
+  'by',
+  'from',
+  'as',
+  'is',
+  'are',
+  'was',
+  'were',
+  'be',
+  'been',
+  'being',
+  'has',
+  'have',
+  'had',
+  'do',
+  'does',
+  'did',
+  'will',
+  'would',
+  'could',
+  'should',
+  'may',
+  'might',
+  'must',
+  'can',
+  'its',
+  'it',
+  'this',
+  'that',
+  'these',
+  'those',
+  'they',
+  'them',
+  'their',
+  'we',
+  'you',
+  'he',
+  'she',
+  'i',
+  'me',
+  'him',
+  'her',
+  'us',
+  'than',
+  'then',
+  'there',
+  'which',
+  'who',
+  'whom',
+  'when',
+  'where',
+  'why',
+  'how',
+  'so',
+  'too',
+  'very',
+  'just',
+  'about',
+  'into',
+  'over',
+  'under',
+  'after',
+  'before',
+  'between',
+  'during',
+  'since',
+  'until',
+  'while',
+  'up',
+  'down',
+  'out',
+  'off',
+  'again',
+  'further',
+  'once',
+  'here',
+  'all',
+  'any',
+  'both',
+  'each',
+  'few',
+  'other',
+  'some',
+  'such',
+  'own',
+  'same',
+  'more',
+  'most',
+  'also',
+  'still',
+  'even',
+  'only',
+  'per',
 ])
 
 // ============================================================
 // Group Finalization & Conflict Detection
 // ============================================================
 
-function finalizeGroup(
-  group: ClaimGroup,
-  index: number,
-): { claim: FactCheckClaim; conflicts: FactConflict[] } {
+function finalizeGroup(group: ClaimGroup, index: number): { claim: FactCheckClaim; conflicts: FactConflict[] } {
   const { claims } = group
   const conflicts = detectConflicts(claims)
 
@@ -539,11 +640,7 @@ function detectConflicts(claims: ExtractedClaim[]): FactConflict[] {
 // Report Helpers
 // ============================================================
 
-function buildWarnings(
-  claimItems: FactCheckClaim[],
-  conflicts: FactConflict[],
-  verdict: ClaimVerdict,
-): string[] {
+function buildWarnings(claimItems: FactCheckClaim[], conflicts: FactConflict[], verdict: ClaimVerdict): string[] {
   const warnings: string[] = []
 
   if (conflicts.length > 0) {
@@ -630,7 +727,8 @@ function hasNegation(text: string): boolean {
 }
 
 /** Quantity extraction: number + unit. Units include %, currency and large-number suffixes. */
-const QUANTITY_RE = /(\d+(?:[.,]\d+)*)\s*(%|percent|％|pp|bp|만|억|조|원|달러|엔|유로|billion|trillion|million|thousand|개|년|월|kg|km|gb|tb|mb|hz|ghz)/gi
+const QUANTITY_RE =
+  /(\d+(?:[.,]\d+)*)\s*(%|percent|％|pp|bp|만|억|조|원|달러|엔|유로|billion|trillion|million|thousand|개|년|월|kg|km|gb|tb|mb|hz|ghz)/gi
 
 function extractQuantities(text: string): Quantity[] {
   const out: Quantity[] = []

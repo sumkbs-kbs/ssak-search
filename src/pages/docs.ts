@@ -545,5 +545,5 @@ const extData = await ext.json();</code></pre>
     });
   </script>
 </body>
-</html>`;
+</html>`
 }

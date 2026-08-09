@@ -29,7 +29,8 @@ describe('crossCheckFacts — corroboration', () => {
         title: 'React Docs',
         url: 'https://react.dev/hooks',
         domain: 'react.dev',
-        content: 'The React team released hooks in 2018 to manage state in functional components without writing classes.',
+        content:
+          'The React team released hooks in 2018 to manage state in functional components without writing classes.',
       }),
       makeResult({
         title: 'Blog Post',
@@ -55,7 +56,8 @@ describe('crossCheckFacts — corroboration', () => {
       makeResult({
         url: 'https://only.example.com/x',
         domain: 'only.example.com',
-        content: 'The React team released hooks in 2018 to manage state in functional components without writing classes.',
+        content:
+          'The React team released hooks in 2018 to manage state in functional components without writing classes.',
       }),
     ]
     const report = crossCheckFacts(results)
@@ -72,12 +74,14 @@ describe('crossCheckFacts — conflict detection', () => {
       makeResult({
         url: 'https://a.example.com/x',
         domain: 'a.example.com',
-        content: 'The new environmental policy will reduce carbon emissions by the year 2027 according to government officials.',
+        content:
+          'The new environmental policy will reduce carbon emissions by the year 2027 according to government officials.',
       }),
       makeResult({
         url: 'https://b.example.com/x',
         domain: 'b.example.com',
-        content: 'The new environmental policy will not reduce carbon emissions by the year 2027 according to independent analysts.',
+        content:
+          'The new environmental policy will not reduce carbon emissions by the year 2027 according to independent analysts.',
       }),
     ]
     const report = crossCheckFacts(results)
@@ -150,7 +154,8 @@ describe('crossCheckFacts — edge cases', () => {
   })
 
   it('dedupes near-identical sentences within the same source', () => {
-    const duplicated = 'The React team released hooks in 2018 to manage state in functional components without writing classes.'
+    const duplicated =
+      'The React team released hooks in 2018 to manage state in functional components without writing classes.'
     const results = [
       makeResult({
         url: 'https://dup.example.com/x',
@@ -189,7 +194,8 @@ describe('crossCheckFacts — options', () => {
       makeResult({
         url: 'https://opts.example.com/x',
         domain: 'opts.example.com',
-        content: 'Claim one about React state management with hooks in functional components. Claim two about React performance optimization with memoization techniques. Claim three about React testing with the react testing library tools.',
+        content:
+          'Claim one about React state management with hooks in functional components. Claim two about React performance optimization with memoization techniques. Claim three about React testing with the react testing library tools.',
       }),
     ]
     expect(crossCheckFacts(results).examinedClaims).toBe(3)
@@ -220,7 +226,8 @@ describe('crossCheckFacts — options', () => {
       makeResult({
         url: 'https://raw.example.com/x',
         domain: 'raw.example.com',
-        raw_content: 'The raw content claim about quantum entanglement and its experimental verification in the laboratory.',
+        raw_content:
+          'The raw content claim about quantum entanglement and its experimental verification in the laboratory.',
         content: 'The snippet claim about classical physics textbooks used in university courses across the country.',
       }),
     ]
@@ -235,7 +242,8 @@ describe('formatFactCheckSection', () => {
       makeResult({
         url: 'https://react.dev/hooks',
         domain: 'react.dev',
-        content: 'The React team released hooks in 2018 to manage state in functional components without writing classes.',
+        content:
+          'The React team released hooks in 2018 to manage state in functional components without writing classes.',
       }),
       makeResult({
         url: 'https://blog.example.com/react-hooks',
@@ -256,12 +264,14 @@ describe('formatFactCheckSection', () => {
       makeResult({
         url: 'https://a.example.com/x',
         domain: 'a.example.com',
-        content: 'The new environmental policy will reduce carbon emissions by the year 2027 according to government officials.',
+        content:
+          'The new environmental policy will reduce carbon emissions by the year 2027 according to government officials.',
       }),
       makeResult({
         url: 'https://b.example.com/x',
         domain: 'b.example.com',
-        content: 'The new environmental policy will not reduce carbon emissions by the year 2027 according to independent analysts.',
+        content:
+          'The new environmental policy will not reduce carbon emissions by the year 2027 according to independent analysts.',
       }),
     ]
     const section = formatFactCheckSection(crossCheckFacts(results))
@@ -275,7 +285,8 @@ describe('generateAnswer integration', () => {
       makeResult({
         url: 'https://react.dev/hooks',
         domain: 'react.dev',
-        content: 'The React team released hooks in 2018 to manage state in functional components without writing classes.',
+        content:
+          'The React team released hooks in 2018 to manage state in functional components without writing classes.',
       }),
       makeResult({
         url: 'https://blog.example.com/react-hooks',
@@ -283,14 +294,7 @@ describe('generateAnswer integration', () => {
         content: 'React hooks were introduced in 2018 by the React team for state management in function components.',
       }),
     ]
-    const answer = await generateAnswer(
-      'react hooks',
-      results,
-      undefined,
-      {},
-      undefined,
-      { includeFactCheck: true },
-    )
+    const answer = await generateAnswer('react hooks', results, undefined, {}, undefined, { includeFactCheck: true })
 
     expect(answer.text).toContain('Fact check')
     expect(answer.factCheck).toBeDefined()
@@ -302,7 +306,8 @@ describe('generateAnswer integration', () => {
       makeResult({
         url: 'https://react.dev/hooks',
         domain: 'react.dev',
-        content: 'The React team released hooks in 2018 to manage state in functional components without writing classes.',
+        content:
+          'The React team released hooks in 2018 to manage state in functional components without writing classes.',
       }),
     ]
     const answer = await generateAnswer('react hooks', results)

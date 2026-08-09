@@ -31,10 +31,7 @@ export interface ExtractOptions {
  * network call. Private IPs, non-http(s) schemes, and credentials-in-URL
  * are rejected at the boundary.
  */
-export async function extractContent(
-  urls: string | string[],
-  opts: ExtractOptions = {},
-): Promise<ExtractedContent[]> {
+export async function extractContent(urls: string | string[], opts: ExtractOptions = {}): Promise<ExtractedContent[]> {
   const urlList = Array.isArray(urls) ? urls : [urls]
 
   // Cap number of URLs to prevent request amplification (subrequest budget).
@@ -82,9 +79,7 @@ export async function extractContent(
   const concurrencyLimit = 5
   for (let i = 0; i < fetchable.length; i += concurrencyLimit) {
     const batch = fetchable.slice(i, i + concurrencyLimit)
-    const batchResults = await Promise.allSettled(
-      batch.map((url) => extractSingleUrl(url, opts)),
-    )
+    const batchResults = await Promise.allSettled(batch.map((url) => extractSingleUrl(url, opts)))
     for (let j = 0; j < batchResults.length; j++) {
       const result = batchResults[j]
       const url = batch[j]
@@ -105,10 +100,7 @@ export async function extractContent(
 }
 
 /** Extract content from a single URL with fallback strategy */
-async function extractSingleUrl(
-  url: string,
-  opts: ExtractOptions,
-): Promise<ExtractedContent> {
+async function extractSingleUrl(url: string, opts: ExtractOptions): Promise<ExtractedContent> {
   const { jinaApiKey, includeImages = false, maxTokens = 8000, timeoutMs = 20000 } = opts
 
   // Strategy 0: YouTube — watch-page description + transcript. Generic readers

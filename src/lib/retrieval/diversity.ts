@@ -107,25 +107,90 @@ export const DEFAULT_DIVERSITY_CONFIG: DiversityConfig = {
  */
 function tokenize(text: string): Set<string> {
   const stopWords = new Set([
-    'the', 'a', 'an', 'is', 'are', 'was', 'were', 'be', 'been', 'being',
-    'have', 'has', 'had', 'do', 'does', 'did', 'will', 'would', 'could',
-    'should', 'may', 'might', 'must', 'can', 'shall', 'need',
-    'in', 'on', 'at', 'to', 'for', 'of', 'with', 'by', 'from', 'as',
-    'and', 'or', 'but', 'not', 'nor', 'so', 'yet',
-    'what', 'when', 'where', 'why', 'how', 'who', 'whom', 'which',
-    'this', 'that', 'these', 'those',
+    'the',
+    'a',
+    'an',
+    'is',
+    'are',
+    'was',
+    'were',
+    'be',
+    'been',
+    'being',
+    'have',
+    'has',
+    'had',
+    'do',
+    'does',
+    'did',
+    'will',
+    'would',
+    'could',
+    'should',
+    'may',
+    'might',
+    'must',
+    'can',
+    'shall',
+    'need',
+    'in',
+    'on',
+    'at',
+    'to',
+    'for',
+    'of',
+    'with',
+    'by',
+    'from',
+    'as',
+    'and',
+    'or',
+    'but',
+    'not',
+    'nor',
+    'so',
+    'yet',
+    'what',
+    'when',
+    'where',
+    'why',
+    'how',
+    'who',
+    'whom',
+    'which',
+    'this',
+    'that',
+    'these',
+    'those',
     // Korean
-    '은', '는', '이', '가', '을', '를', '의', '에', '에서',
+    '은',
+    '는',
+    '이',
+    '가',
+    '을',
+    '를',
+    '의',
+    '에',
+    '에서',
     // Chinese
-    '的', '了', '在', '是', '我', '有', '和', '就', '不', '人',
+    '的',
+    '了',
+    '在',
+    '是',
+    '我',
+    '有',
+    '和',
+    '就',
+    '不',
+    '人',
   ])
 
   return new Set(
     text
       .toLowerCase()
       .split(/[\s,.;:!?()[\]{}]+/)
-      .map(t => t.replace(/[^\w\u{4E00}-\u{9FFF}\u{AC00}-\u{D7A3}]+/gu, ''))
-      .filter(t => t.length > 1 && !stopWords.has(t))
+      .map((t) => t.replace(/[^\w\u{4E00}-\u{9FFF}\u{AC00}-\u{D7A3}]+/gu, ''))
+      .filter((t) => t.length > 1 && !stopWords.has(t)),
   )
 }
 
@@ -174,11 +239,7 @@ function cosineSimilarity(a: number[], b: number[]): number {
  * Compute similarity between two results.
  * Uses embeddings if available, otherwise falls back to text similarity.
  */
-function computeSimilarity(
-  a: DiversityResult,
-  b: DiversityResult,
-  embeddings?: Map<string, number[]>,
-): number {
+function computeSimilarity(a: DiversityResult, b: DiversityResult, embeddings?: Map<string, number[]>): number {
   // Try embedding-based similarity first
   if (embeddings) {
     const embA = embeddings.get(a.id)
@@ -345,15 +406,11 @@ export function computeDiversityStats(
     domainDist.set(r.domain, (domainDist.get(r.domain) ?? 0) + 1)
   }
 
-  const uniqueDomainsBefore = new Set(before.map(r => r.domain)).size
-  const uniqueDomainsAfter = new Set(after.map(r => r.domain)).size
+  const uniqueDomainsBefore = new Set(before.map((r) => r.domain)).size
+  const uniqueDomainsAfter = new Set(after.map((r) => r.domain)).size
 
-  const avgBefore = before.length > 0
-    ? before.reduce((s, r) => s + r.score, 0) / before.length
-    : 0
-  const avgAfter = after.length > 0
-    ? after.reduce((s, r) => s + r.score, 0) / after.length
-    : 0
+  const avgBefore = before.length > 0 ? before.reduce((s, r) => s + r.score, 0) / before.length : 0
+  const avgAfter = after.length > 0 ? after.reduce((s, r) => s + r.score, 0) / after.length : 0
 
   return {
     totalInput: before.length,
@@ -419,11 +476,7 @@ import type { SearchResult } from '../../types'
  * @param maxResults  Target result count (drives MMR selection)
  * @returns Diversified SearchResult[] (may be shorter than input)
  */
-export function applyDiversityFilter(
-  results: SearchResult[],
-  _query: string,
-  maxResults: number,
-): SearchResult[] {
+export function applyDiversityFilter(results: SearchResult[], _query: string, maxResults: number): SearchResult[] {
   if (results.length <= maxResults) return results
 
   const adapted = results.map((r) => ({

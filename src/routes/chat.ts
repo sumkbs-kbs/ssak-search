@@ -11,10 +11,10 @@
  *   Returns: ThreadData { id, messages[], created_at, last_activity, message_count }
  */
 
-import { Hono } from 'hono'
+import { Hono, type Context } from 'hono'
 import { logger, toError } from '../lib/logger'
 import { cors } from 'hono/cors'
-import type { AppBindings, ErrorResponse, ChatRequest, ChatResponse, ThreadData } from '../types'
+import type { AppBindings, ErrorResponse, ChatRequest, ChatResponse } from '../types'
 import { executeResearch } from '../lib/research'
 import { createThreadStub, getThreadStub } from '../lib/thread-do'
 
@@ -23,7 +23,7 @@ const chatRoute = new Hono<{ Bindings: AppBindings }>()
 chatRoute.use('/*', cors({ origin: '*' }))
 
 // Rate limit check
-async function checkRateLimit(c: any): Promise<boolean> {
+async function checkRateLimit(c: Context<{ Bindings: AppBindings }>): Promise<boolean> {
   const { checkClientRateLimit, getClientIp } = await import('../lib/auth')
   const clientIp = getClientIp(c.req.raw.headers)
   const rateLimit = checkClientRateLimit(clientIp)
@@ -45,7 +45,7 @@ chatRoute.post('/', async (c) => {
   let body: Partial<ChatRequest>
   try {
     body = await c.req.json()
-  } catch (err) {
+  } catch (_err) {
     return c.json<ErrorResponse>({ detail: 'Invalid JSON body', code: 'invalid_body' }, 400)
   }
 
@@ -59,7 +59,10 @@ chatRoute.post('/', async (c) => {
 
   if (!c.env.THREAD_DO) {
     return c.json<ErrorResponse>(
-      { detail: 'Chat requires THREAD_DO Durable Object binding. Configure via Cloudflare Dashboard.', code: 'binding_missing' },
+      {
+        detail: 'Chat requires THREAD_DO Durable Object binding. Configure via Cloudflare Dashboard.',
+        code: 'binding_missing',
+      },
       501,
     )
   }
@@ -76,16 +79,16 @@ chatRoute.post('/', async (c) => {
       const stub = getThreadStub(c.env, body.thread_id)
       context = await stub.getContext(3)
       threadId = body.thread_id
-    } catch (err) {
+    } catch (_err) {
       return c.json<ErrorResponse>({ detail: 'Thread not found', code: 'thread_not_found' }, 404)
     }
   } else {
     // New thread
-    const { stub, id } = createThreadStub(c.env)
+    const { id } = createThreadStub(c.env)
     threadId = id
   }
 
-  const depth = body.depth === 'deep' ? 'deep' as const : 'quick' as const
+  const depth = body.depth === 'deep' ? ('deep' as const) : ('quick' as const)
   const maxSources = Math.min(Math.max(body.max_sources ?? 15, 5), 30)
 
   try {
@@ -160,7 +163,7 @@ chatRoute.get('/:thread_id', async (c) => {
     const stub = getThreadStub(c.env, thread_id)
     const thread = await stub.getThread()
     return c.json(thread)
-  } catch (err) {
+  } catch (_err) {
     return c.json<ErrorResponse>({ detail: 'Thread not found', code: 'thread_not_found' }, 404)
   }
 })

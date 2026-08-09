@@ -18,13 +18,17 @@ import { executeSearch } from '../lib/orchestrator'
 import { cacheKey, getCached, setCached } from '../lib/cache'
 import { indexFromSearchResults } from '../lib/search/auto-index'
 import { logSearchImpression } from '../lib/ltr/click-logger'
-import { resolveExperimentAssignment, logExperimentImpression, logExperimentLatency, logExperimentError } from '../lib/experiments/ab-test'
-import type { ExperimentAssignment } from '../lib/experiments/ab-test'
+import {
+  resolveExperimentAssignment,
+  logExperimentImpression,
+  logExperimentLatency,
+  logExperimentError,
+} from '../lib/experiments/ab-test'
+
 import { validateApiKeyWithTenant, checkClientRateLimit, getClientIp } from '../lib/auth'
 import { recordSearchRequest, recordSearchSubrequests, setMetricsEnv } from '../lib/metrics'
 import { auditAuthFailure, auditRateLimit, audit } from '../lib/audit'
-import { createAnswerTokenStream, generateAnswer } from '../lib/answer'
-import type { AnswerStreamResult } from '../lib/answer'
+import { createAnswerTokenStream, generateAnswer, type AnswerStreamResult } from '../lib/answer'
 import { classifyQuery, DEFAULT_CLASSIFIER_CONFIG } from '../lib/agentic/classifier'
 import { normalizeQuery, SubrequestTracker, installSubrequestTracker } from '../lib/util'
 import { expandCompanyAlias } from '../lib/stock-finance'
@@ -76,12 +80,15 @@ function resolveSearchDepth(
 const searchRoute = new Hono<{ Bindings: AppBindings; Variables: { tenantId: string; tenantPlan: string } }>()
 
 // CORS for agent access
-searchRoute.use('/*', cors({
-  origin: '*',
-  allowMethods: ['GET', 'POST', 'OPTIONS'],
-  allowHeaders: ['Content-Type', 'Authorization', 'X-API-Key'],
-  maxAge: 86400,
-}))
+searchRoute.use(
+  '/*',
+  cors({
+    origin: '*',
+    allowMethods: ['GET', 'POST', 'OPTIONS'],
+    allowHeaders: ['Content-Type', 'Authorization', 'X-API-Key'],
+    maxAge: 86400,
+  }),
+)
 
 // Auth + rate limit middleware
 searchRoute.use('/*', async (c, next) => {
@@ -91,11 +98,15 @@ searchRoute.use('/*', async (c, next) => {
   // POST a 1MB include_domains array and burn CPU on filter matching.
   const contentLength = parseInt(c.req.raw.headers.get('Content-Length') ?? '0', 10)
   if (contentLength > 64 * 1024) {
-    audit({ eventType: 'invalid_input', severity: 'low', outcome: 'blocked', resource: c.req.path, actor: clientIp, context: { contentLength } })
-    return c.json<ErrorResponse>(
-      { detail: 'Request body too large (max 64KB)', code: 'payload_too_large' },
-      413,
-    )
+    audit({
+      eventType: 'invalid_input',
+      severity: 'low',
+      outcome: 'blocked',
+      resource: c.req.path,
+      actor: clientIp,
+      context: { contentLength },
+    })
+    return c.json<ErrorResponse>({ detail: 'Request body too large (max 64KB)', code: 'payload_too_large' }, 413)
   }
 
   // Multi-tenant API key validation
@@ -105,12 +116,13 @@ searchRoute.use('/*', async (c, next) => {
       reason: authResult.reason || 'Invalid or missing API key',
       clientIp,
       resource: c.req.path,
-      attempt: c.req.raw.headers.get('Authorization')?.startsWith('Bearer ') ? 'bearer' : c.req.raw.headers.get('X-API-Key') ? 'x-api-key' : 'none',
+      attempt: c.req.raw.headers.get('Authorization')?.startsWith('Bearer ')
+        ? 'bearer'
+        : c.req.raw.headers.get('X-API-Key')
+          ? 'x-api-key'
+          : 'none',
     })
-    return c.json<ErrorResponse>(
-      { detail: authResult.reason || 'Unauthorized', code: 'unauthorized' },
-      401,
-    )
+    return c.json<ErrorResponse>({ detail: authResult.reason || 'Unauthorized', code: 'unauthorized' }, 401)
   }
 
   const tenantId = authResult.tenant?.id
@@ -122,11 +134,10 @@ searchRoute.use('/*', async (c, next) => {
   })
   if (!rateLimit.allowed) {
     auditRateLimit(clientIp, c.req.path, rateLimit.remaining)
-    return c.json<ErrorResponse>(
-      { detail: 'Rate limit exceeded. Try again later.', code: 'rate_limited' },
-      429,
-      { 'X-RateLimit-Remaining': '0', 'Retry-After': '60' },
-    )
+    return c.json<ErrorResponse>({ detail: 'Rate limit exceeded. Try again later.', code: 'rate_limited' }, 429, {
+      'X-RateLimit-Remaining': '0',
+      'Retry-After': '60',
+    })
   }
 
   // Set tenant context headers
@@ -156,7 +167,7 @@ searchRoute.post('/', async (c) => {
   let body: Partial<SearchRequest>
   try {
     body = await c.req.json()
-  } catch (err) {
+  } catch (_err) {
     return c.json<ErrorResponse>({ detail: 'Invalid JSON body', code: 'invalid_body' }, 400)
   }
 
@@ -212,9 +223,10 @@ searchRoute.post('/', async (c) => {
     country: body.country,
     language: body.language,
     location: body.location,
-    focus: body.focus && ['all', 'academic', 'news', 'writing', 'video', 'social', 'finance', 'math'].includes(body.focus)
-      ? body.focus as FocusMode
-      : 'all',
+    focus:
+      body.focus && ['all', 'academic', 'news', 'writing', 'video', 'social', 'finance', 'math'].includes(body.focus)
+        ? (body.focus as FocusMode)
+        : 'all',
     user_id: typeof body.user_id === 'string' ? body.user_id.slice(0, 200) : undefined,
   }
 
@@ -234,7 +246,9 @@ searchRoute.post('/', async (c) => {
       if (cached) {
         recordSearchRequest(Date.now() - startTime, true)
         if (experiment) {
-          c.executionCtx.waitUntil(logExperimentImpression(c.env, experiment, request.query, cached.results?.length ?? 0))
+          c.executionCtx.waitUntil(
+            logExperimentImpression(c.env, experiment, request.query, cached.results?.length ?? 0),
+          )
           c.executionCtx.waitUntil(logExperimentLatency(c.env, experiment, Date.now() - startTime))
         }
         return c.json<SearchResponse>({ ...cached, cached: true, ...(experiment ? { experiment } : {}) })
@@ -251,7 +265,9 @@ searchRoute.post('/', async (c) => {
       // Phase C.3: semantic cache tier (Vectorize) — opt-in per route so the
       // eval runner / research pipeline never receive cached responses.
       semanticCache: true,
-      waitUntil: (promise) => { c.executionCtx.waitUntil(promise) },
+      waitUntil: (promise) => {
+        c.executionCtx.waitUntil(promise)
+      },
     })
 
     // Add subrequest estimate header for quota monitoring
@@ -361,7 +377,8 @@ searchRoute.get('/', async (c) => {
 
   // Default to false — users want answers, not just link lists
   const includeAnswerParam = c.req.query('include_answer')
-  const includeAnswer = includeAnswerParam === undefined ? false : includeAnswerParam === 'true' || c.req.query('answer') === 'true'
+  const includeAnswer =
+    includeAnswerParam === undefined ? false : includeAnswerParam === 'true' || c.req.query('answer') === 'true'
   const includeRawContent = c.req.query('include_raw_content') === 'true'
   const includeFactCheck = c.req.query('include_fact_check') === 'true'
 
@@ -376,9 +393,8 @@ searchRoute.get('/', async (c) => {
     search_depth: searchDepth,
     topic: (c.req.query('topic') as SearchRequest['topic']) || 'general',
     time_range: c.req.query('time_range') as SearchRequest['time_range'],
-    sort_by: c.req.query('sort_by') === 'date' ? 'date'
-      : c.req.query('sort_by') === 'relevance' ? 'relevance'
-      : undefined,
+    sort_by:
+      c.req.query('sort_by') === 'date' ? 'date' : c.req.query('sort_by') === 'relevance' ? 'relevance' : undefined,
     page: Math.min(Math.max(parseInt(c.req.query('page') || '1', 10) || 1, 1), 10),
     country: c.req.query('country'),
     language: c.req.query('language'),
@@ -393,11 +409,17 @@ searchRoute.get('/', async (c) => {
   // Both forms are merged; the verbose form wins on conflict for backward compat.
   const includeDomains = c.req.query('include_domains') ?? c.req.query('site') ?? c.req.query('domain')
   if (includeDomains) {
-    request.include_domains = includeDomains.split(',').map((d) => d.trim()).filter(Boolean)
+    request.include_domains = includeDomains
+      .split(',')
+      .map((d) => d.trim())
+      .filter(Boolean)
   }
   const excludeDomains = c.req.query('exclude_domains') ?? c.req.query('exclude') ?? c.req.query('block')
   if (excludeDomains) {
-    request.exclude_domains = excludeDomains.split(',').map((d) => d.trim()).filter(Boolean)
+    request.exclude_domains = excludeDomains
+      .split(',')
+      .map((d) => d.trim())
+      .filter(Boolean)
   }
 
   const startTime = Date.now()
@@ -415,7 +437,9 @@ searchRoute.get('/', async (c) => {
       if (cached) {
         recordSearchRequest(Date.now() - startTime, true)
         if (experiment) {
-          c.executionCtx.waitUntil(logExperimentImpression(c.env, experiment, request.query, cached.results?.length ?? 0))
+          c.executionCtx.waitUntil(
+            logExperimentImpression(c.env, experiment, request.query, cached.results?.length ?? 0),
+          )
           c.executionCtx.waitUntil(logExperimentLatency(c.env, experiment, Date.now() - startTime))
         }
         const response = c.json<SearchResponse>({ ...cached, cached: true, ...(experiment ? { experiment } : {}) })
@@ -434,7 +458,9 @@ searchRoute.get('/', async (c) => {
       // Phase C.3: semantic cache tier (Vectorize) — opt-in per route so the
       // eval runner / research pipeline never receive cached responses.
       semanticCache: true,
-      waitUntil: (promise) => { c.executionCtx.waitUntil(promise) },
+      waitUntil: (promise) => {
+        c.executionCtx.waitUntil(promise)
+      },
     })
 
     // Cache the result if it's worth reusing (same logic as POST route)
@@ -555,9 +581,7 @@ searchRoute.get('/stream', async (c) => {
       const encoder = new TextEncoder()
       let eventId = 0
       const send = (event: string, data: unknown) => {
-        controller.enqueue(encoder.encode(
-          `id: ${eventId++}\nevent: ${event}\ndata: ${JSON.stringify(data)}\n\n`,
-        ))
+        controller.enqueue(encoder.encode(`id: ${eventId++}\nevent: ${event}\ndata: ${JSON.stringify(data)}\n\n`))
       }
 
       // Keepalive timer — sends a ping every 10s during answer generation
@@ -566,7 +590,7 @@ searchRoute.get('/stream', async (c) => {
         keepaliveTimer = setInterval(() => {
           try {
             send('keepalive', { ts: Date.now() })
-          } catch (err) {
+          } catch (_err) {
             clearInterval(keepaliveTimer)
           }
         }, 10_000)
@@ -577,20 +601,23 @@ searchRoute.get('/stream', async (c) => {
 
       try {
         // Phase 1: Execute search and send results immediately
-    const result = await executeSearch(request, {
-      jinaApiKey: c.env.JINA_API_KEY,
-      ai: c.env.AI,
-      env: c.env,
-      subrequestTracker: tracker,
-      requestId: getRequestId(c.req.raw.headers),
-      experimentVariant: experiment?.variant,
-      // Phase C.3: semantic cache tier (Vectorize) — opt-in per route so the
-      // eval runner / research pipeline never receive cached responses.
-      semanticCache: true,
-      waitUntil: (promise) => { c.executionCtx.waitUntil(promise) },
-    })
+        const result = await executeSearch(request, {
+          jinaApiKey: c.env.JINA_API_KEY,
+          ai: c.env.AI,
+          env: c.env,
+          subrequestTracker: tracker,
+          requestId: getRequestId(c.req.raw.headers),
+          experimentVariant: experiment?.variant,
+          // Phase C.3: semantic cache tier (Vectorize) — opt-in per route so the
+          // eval runner / research pipeline never receive cached responses.
+          semanticCache: true,
+          waitUntil: (promise) => {
+            c.executionCtx.waitUntil(promise)
+          },
+        })
 
-        const subrequestEstimate = (result as SearchResponse & { subrequest_estimate?: number }).subrequest_estimate ?? 0
+        const subrequestEstimate =
+          (result as SearchResponse & { subrequest_estimate?: number }).subrequest_estimate ?? 0
         // Same env-driven quota as POST/GET — the SSE path must not drift from
         // the configured SUBREQUEST_QUOTA_PER_REQUEST (free 50, paid 1000).
         const subrequestLimit = resolveSubrequestLimit(c.env)
@@ -608,7 +635,11 @@ searchRoute.get('/stream', async (c) => {
         // Phase 2: Stream the AI answer in real-time
         // Multi-model streaming: tries OpenAI → Anthropic → Workers AI → extractive
         const tokenResult = await createAnswerTokenStream(
-          query, result.results, c.env.AI, abortController.signal, c.env,
+          query,
+          result.results,
+          c.env.AI,
+          abortController.signal,
+          c.env,
         )
 
         if (tokenResult) {
@@ -697,7 +728,7 @@ searchRoute.get('/stream', async (c) => {
     headers: {
       'Content-Type': 'text/event-stream',
       'Cache-Control': 'no-cache',
-      'Connection': 'keep-alive',
+      Connection: 'keep-alive',
       'X-Accel-Buffering': 'no',
       // SSE responses have their own subrequest budget — surface the quota the
       // same way JSON responses do so agents/ops can monitor SSE cost.

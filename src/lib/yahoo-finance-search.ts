@@ -45,11 +45,7 @@ function backoffDelay(attempt: number): number {
  * (genuinely no data) fail fast. The caller's total timeout budget is split
  * across attempts so the retry chain can't balloon past the fanout ceiling.
  */
-export async function fetchYahooJson(
-  env: Env | undefined,
-  url: string,
-  timeoutMs: number,
-): Promise<Response> {
+export async function fetchYahooJson(env: Env | undefined, url: string, timeoutMs: number): Promise<Response> {
   const maxRetries = 2
   // Split the budget: 3 attempts × ~⅓ each (min 800ms so a healthy first
   // attempt isn't starved by the split).
@@ -58,9 +54,14 @@ export async function fetchYahooJson(
 
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
     try {
-      const res = await fetchWithTimeout(env, url, {
-        headers: { 'User-Agent': YAHOO_UA, Accept: 'application/json' },
-      }, perAttempt)
+      const res = await fetchWithTimeout(
+        env,
+        url,
+        {
+          headers: { 'User-Agent': YAHOO_UA, Accept: 'application/json' },
+        },
+        perAttempt,
+      )
 
       // Transient under fan-out — back off and retry.
       if (res.status === 429 || res.status >= 500) {
@@ -143,26 +144,26 @@ const TICKER_ALIASES: Record<string, string> = {
   's&p 500': '^GSPC',
   'sp 500': '^GSPC',
   's&p500': '^GSPC',
-  'sp500': '^GSPC',
+  sp500: '^GSPC',
   'nasdaq composite': '^IXIC',
   'dow jones': '^DJI',
   'dow jones industrial average': '^DJI',
   'russell 2000': '^RUT',
-  'kospi': '^KS11',
-  'kosdaq': '^KQ11',
+  kospi: '^KS11',
+  kosdaq: '^KQ11',
   'nikkei 225': '^N225',
   'ftse 100': '^FTSE',
   'cac 40': '^FCHI',
-  'dax': '^GDAXI',
-  'hangseng': '^HSI',
+  dax: '^GDAXI',
+  hangseng: '^HSI',
   // Cryptocurrencies — the v1 search fuzzy-matches "Bitcoin" to "American
   // Bitcoin Corp" (ABTC), a completely unrelated company. Map to the crypto
   // quote so "Bitcoin price today" returns real market data.
-  'bitcoin': 'BTC-USD',
+  bitcoin: 'BTC-USD',
   'bitcoin price': 'BTC-USD',
-  'ethereum': 'ETH-USD',
+  ethereum: 'ETH-USD',
   'ethereum price': 'ETH-USD',
-  'dogecoin': 'DOGE-USD',
+  dogecoin: 'DOGE-USD',
 }
 
 /** Resolve a known index alias to a Yahoo ticker symbol, or null. EXPORTED FOR TESTING. */
@@ -184,11 +185,7 @@ export function resolveTickerAlias(query: string): string | null {
  * Look up a ticker symbol from a company name using Yahoo Finance v1 search.
  * Returns the top-matching quote or null.
  */
-async function searchTicker(
-  query: string,
-  env: Env | undefined,
-  timeoutMs: number,
-): Promise<V1SearchQuote | null> {
+async function searchTicker(query: string, env: Env | undefined, timeoutMs: number): Promise<V1SearchQuote | null> {
   // Index aliases first — Yahoo v1 search fails on "S&P 500" (it returns an
   // empty quotes list because the symbol is ^GSPC, not a regular equity).
   const alias = resolveTickerAlias(query)
@@ -209,7 +206,7 @@ async function searchTicker(
     return null
   }
 
-  const data = await res.json() as { quotes?: V1SearchQuote[] }
+  const data = (await res.json()) as { quotes?: V1SearchQuote[] }
   // Accept EQUITY (stocks), INDEX (^GSPC, ^IXIC, …) and CRYPTOCURRENCY
   // (BTC-USD). The previous EQUITY-only filter silently dropped index-level
   // results — the root cause of en-stock-05 ("S&P 500") scoring 0.000 even
@@ -244,18 +241,51 @@ async function searchTicker(
  * guard and injects a semantically wrong quote into the result pool.
  */
 const GENERIC_FINANCE_TOKENS = new Set([
-  'inc', 'corp', 'corporation', 'company', 'co', 'group', 'holdings', 'ltd',
-  'plc', 'limited', 'market', 'markets', 'share', 'shares', 'stock', 'stocks',
-  'price', 'prices', 'the', 'and', 'fund', 'funds', 'trust', 'trusts', 'etf',
-  'index', 'indices', 'bank', 'banks', 'capital', 'invest', 'investing',
+  'inc',
+  'corp',
+  'corporation',
+  'company',
+  'co',
+  'group',
+  'holdings',
+  'ltd',
+  'plc',
+  'limited',
+  'market',
+  'markets',
+  'share',
+  'shares',
+  'stock',
+  'stocks',
+  'price',
+  'prices',
+  'the',
+  'and',
+  'fund',
+  'funds',
+  'trust',
+  'trusts',
+  'etf',
+  'index',
+  'indices',
+  'bank',
+  'banks',
+  'capital',
+  'invest',
+  'investing',
 ])
 
 /** Lowercase, non-trivial word tokens for overlap matching. EXPORTED FOR TESTING. */
 export function tokenizeWords(text: string): string[] {
-  return text.toLowerCase().split(/\s+/).map((t) => t.replace(/[^\p{L}\p{N}]/gu, ''))
-    // Exclude years ("2024") — they match option contracts ("May 2024 call")
-    // and never identify the company itself.
-    .filter((t) => t.length > 2 && !/^\d{4}$/.test(t) && !GENERIC_FINANCE_TOKENS.has(t))
+  return (
+    text
+      .toLowerCase()
+      .split(/\s+/)
+      .map((t) => t.replace(/[^\p{L}\p{N}]/gu, ''))
+      // Exclude years ("2024") — they match option contracts ("May 2024 call")
+      // and never identify the company itself.
+      .filter((t) => t.length > 2 && !/^\d{4}$/.test(t) && !GENERIC_FINANCE_TOKENS.has(t))
+  )
 }
 
 /**
@@ -359,11 +389,7 @@ async function searchTickerWithFallback(
 /**
  * Fetch detailed price data for a ticker using Yahoo Finance v8 chart API.
  */
-async function fetchPriceData(
-  symbol: string,
-  env: Env | undefined,
-  timeoutMs: number,
-): Promise<V8ChartMeta | null> {
+async function fetchPriceData(symbol: string, env: Env | undefined, timeoutMs: number): Promise<V8ChartMeta | null> {
   const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}?range=1d&interval=1d`
 
   // The chart fetch is the most failure-prone hop (en-stock-06 noise): retry
@@ -380,7 +406,7 @@ async function fetchPriceData(
     return null
   }
 
-  const data = await res.json() as { chart?: { result?: Array<{ meta?: V8ChartMeta }> } }
+  const data = (await res.json()) as { chart?: { result?: Array<{ meta?: V8ChartMeta }> } }
   return data.chart?.result?.[0]?.meta ?? null
 }
 
@@ -405,8 +431,7 @@ export function buildYahooStockData(quote: V1SearchQuote, meta: V8ChartMeta | nu
     change = price - prevClose
   }
   const changeNum = typeof change === 'number' && !isNaN(change) ? change : 0
-  const changePercent = meta?.regularMarketChangePercent
-    ?? (prevClose ? (changeNum / prevClose) * 100 : 0)
+  const changePercent = meta?.regularMarketChangePercent ?? (prevClose ? (changeNum / prevClose) * 100 : 0)
   const direction: 'up' | 'down' | 'flat' = changeNum > 0 ? 'up' : changeNum < 0 ? 'down' : 'flat'
 
   // Market status heuristic: regular-market prints update only during the
@@ -443,11 +468,7 @@ export function buildYahooStockData(quote: V1SearchQuote, meta: V8ChartMeta | nu
 /**
  * Build a SearchResult from ticker + price data.
  */
-function buildResult(
-  quote: V1SearchQuote,
-  meta: V8ChartMeta | null,
-  query: string,
-): SearchResult | null {
+function buildResult(quote: V1SearchQuote, meta: V8ChartMeta | null, query: string): SearchResult | null {
   const symbol = quote.symbol
   const name = meta?.longName || meta?.shortName || quote.longname || quote.shortname || symbol
   if (!symbol) return null
@@ -504,14 +525,14 @@ function buildResult(
  * Search Yahoo Finance for stock/financial information.
  * Returns structured SearchResult[] with price data embedded in content.
  */
-export async function yahooFinanceSearch(
-  query: string,
-  opts: YahooFinanceOptions = {},
-): Promise<SearchResult[]> {
+export async function yahooFinanceSearch(query: string, opts: YahooFinanceOptions = {}): Promise<SearchResult[]> {
   // Default budget aligned with fanout's yahoo-finance ceiling (4500ms): the
   // backend task is marked rejected at that ceiling regardless, so an 8s
   // internal budget would only waste CPU whenever Yahoo is slow/down.
-  const { maxResults = 5, timeoutMs = 4500, env } = opts
+  // NOTE: maxResults is accepted for interface compatibility with the other
+  // backends but is deliberately unused — this is a ticker lookup that
+  // returns the single best-matching quote (P18 audit, documented).
+  const { timeoutMs = 4500, env } = opts
 
   try {
     // Step 1: Find the best-matching ticker from user's query

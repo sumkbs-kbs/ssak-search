@@ -31,9 +31,30 @@ jobs:
       - name: Lint & Typecheck (strict)
         run: npm run lint:ci
 
-      - name: Lint (ESLint)
+      # S29 (2026-08-07): lint:eslint:ci runs `eslint src/ tests/ scripts/ eval/
+      # --max-warnings=0` (scope extended S57→scripts/, S61→eval/) — a hard
+      # regression gate. Any new warning/error fails this step, which fails
+      # this job, which blocks the `build` job (needs: lint-typecheck). PRs and
+      # pushes to main both run this workflow, so the 0-warning budget is
+      # enforced immediately. Keep the budget at 0 — loosen only after fixing
+      # the underlying issue (see STRATEGIC_PLAN S24/S25 lint budget pass).
+      # S57 (2026-08-09): scope extended to `src/ tests/ scripts/` — the 82 legacy
+      # scripts/ warnings (no-explicit-any / no-non-null-assertion / unused) were
+      # cleaned so the 0-warning gate now covers the whole reachable codebase.
+      # S61 (2026-08-09): scope extended to `eval/` (removed from the eslint
+      # global ignores + 15 warnings cleaned) — every TS directory now passes
+      # `--max-warnings=0`. eval/ keeps its own overrides (console/any allowed).
+      # run directly (no pipe): `set -e -o pipefail` is the GitHub Actions default,
+      # but relying on it for exit-code propagation makes the gate fragile if the
+      # shell ever changes. ESLint output is already captured in the job log.
+      - name: Lint (ESLint — 0-warning gate)
         run: npm run lint:eslint:ci
 
+      # S62/S64 (2026-08-09): format:check now covers src/ tests/ scripts/ eval/
+      # + root — every TS file in the repo must be prettier-clean. The gate was
+      # red at HEAD (86 src/tests files + eval/*.ts were unformatted); the
+      # working-tree reformat turns it green once committed. eval.yml also runs
+      # this step for scheduled/manual eval triggers.
       - name: Check formatting (Prettier)
         run: npm run format:check
 

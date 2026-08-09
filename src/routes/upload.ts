@@ -10,16 +10,10 @@
  * - AI Workers AI binding (optional, for summarization)
  */
 
-import { Hono } from 'hono'
+import { Hono, type Context } from 'hono'
 import { logger, toError } from '../lib/logger'
 import { cors } from 'hono/cors'
-import type {
-  AppBindings,
-  ErrorResponse,
-  UploadResponse,
-  AnalyzeRequest,
-  AnalyzeResponse,
-} from '../types'
+import type { AppBindings, ErrorResponse, UploadResponse, AnalyzeRequest, AnalyzeResponse } from '../types'
 
 interface FileRecord {
   file_id: string
@@ -45,7 +39,7 @@ uploadRoute.use('/*', cors({ origin: '*' }))
 // Helpers
 // ============================================================
 
-function checkBinding(c: any): boolean {
+function checkBinding(c: Context<{ Bindings: AppBindings }>): boolean {
   return !!c.env.UPLOAD_BUCKET
 }
 
@@ -87,7 +81,10 @@ async function extractTextFromFile(file: File, contentType: string): Promise<str
     while ((match = re.exec(raw)) !== null) {
       const t = match[1]
       // Filter out binary garbage — keep printable ASCII + CJK
-      if (/^[\x20-\x7E\uAC00-\uD7AF\u4E00-\u9FFF\u3040-\u309F\u30A0-\u30FF0-9\s.,!?;:'"()\-]+$/.test(t) && t.length > 3) {
+      if (
+        /^[\x20-\x7E\uAC00-\uD7AF\u4E00-\u9FFF\u3040-\u309F\u30A0-\u30FF0-9\s.,!?;:'"()-]+$/.test(t) &&
+        t.length > 3
+      ) {
         texts.push(t)
       }
     }
@@ -99,17 +96,20 @@ async function extractTextFromFile(file: File, contentType: string): Promise<str
 }
 
 async function analyzeContent(
-  c: any,
+  c: Context<{ Bindings: AppBindings }>,
   text: string,
   question?: string,
 ): Promise<{ summary: string; key_points: string[] }> {
   if (!c.env.AI) {
     // Fallback: extract first 200 chars as summary
     const summary = text.slice(0, 200) + (text.length > 200 ? '...' : '')
-    const sentences = text.split(/[.!?]+/).filter(s => s.trim().length > 20).slice(0, 5)
+    const sentences = text
+      .split(/[.!?]+/)
+      .filter((s) => s.trim().length > 20)
+      .slice(0, 5)
     return {
       summary,
-      key_points: sentences.map(s => s.trim()),
+      key_points: sentences.map((s) => s.trim()),
     }
   }
 
@@ -140,7 +140,7 @@ ${text.slice(0, 8000)}`
         summary: parsed.summary || responseText.slice(0, 300),
         key_points: Array.isArray(parsed.key_points) ? parsed.key_points.slice(0, 10) : [],
       }
-    } catch (err) {
+    } catch (_err) {
       // Not JSON — use raw response as summary
       return {
         summary: responseText.slice(0, 500),
@@ -160,21 +160,28 @@ ${text.slice(0, 8000)}`
 uploadRoute.post('/', async (c) => {
   if (!checkBinding(c)) {
     return c.json<ErrorResponse>(
-      { detail: 'File upload requires UPLOAD_BUCKET R2 binding. Configure via Cloudflare Dashboard → Pages → ssak-search → Settings → Bindings → R2 → Add binding (name: UPLOAD_BUCKET).', code: 'binding_missing' },
+      {
+        detail:
+          'File upload requires UPLOAD_BUCKET R2 binding. Configure via Cloudflare Dashboard → Pages → ssak-search → Settings → Bindings → R2 → Add binding (name: UPLOAD_BUCKET).',
+        code: 'binding_missing',
+      },
       501,
     )
   }
-  const bucket: R2Bucket = c.env.UPLOAD_BUCKET!
+  const bucket: R2Bucket = c.env.UPLOAD_BUCKET as R2Bucket
 
   let file: File | undefined
   try {
     const formData = await c.req.parseBody()
     // Try common field names
-    file = formData['file'] as File || formData['upload'] as File
+    file = (formData['file'] as File) || (formData['upload'] as File)
     if (!file || typeof file === 'string') {
-      return c.json<ErrorResponse>({ detail: 'No file found in upload. Use form field name "file" with multipart/form-data.', code: 'no_file' }, 400)
+      return c.json<ErrorResponse>(
+        { detail: 'No file found in upload. Use form field name "file" with multipart/form-data.', code: 'no_file' },
+        400,
+      )
     }
-  } catch (err) {
+  } catch (_err) {
     return c.json<ErrorResponse>({ detail: 'Failed to parse multipart form data', code: 'parse_error' }, 400)
   }
 
@@ -190,7 +197,10 @@ uploadRoute.post('/', async (c) => {
   const contentType = file.type || OCTET_STREAM
   if (!isAllowedType(file.name, contentType)) {
     return c.json<ErrorResponse>(
-      { detail: `Unsupported file type: ${contentType || getExtension(file.name)}. Allowed: ${ALLOWED_EXTENSIONS.join(', ')}`, code: 'unsupported_type' },
+      {
+        detail: `Unsupported file type: ${contentType || getExtension(file.name)}. Allowed: ${ALLOWED_EXTENSIONS.join(', ')}`,
+        code: 'unsupported_type',
+      },
       415,
     )
   }
@@ -255,12 +265,9 @@ uploadRoute.post('/', async (c) => {
 // ============================================================
 uploadRoute.get('/:file_id', async (c) => {
   if (!checkBinding(c)) {
-    return c.json<ErrorResponse>(
-      { detail: 'Requires UPLOAD_BUCKET R2 binding', code: 'binding_missing' },
-      501,
-    )
+    return c.json<ErrorResponse>({ detail: 'Requires UPLOAD_BUCKET R2 binding', code: 'binding_missing' }, 501)
   }
-  const bucket: R2Bucket = c.env.UPLOAD_BUCKET!
+  const bucket: R2Bucket = c.env.UPLOAD_BUCKET as R2Bucket
 
   const { file_id } = c.req.param()
 
@@ -285,10 +292,7 @@ uploadRoute.get('/:file_id', async (c) => {
     return c.json(response)
   } catch (err) {
     logger.error('Get file metadata error:', { error: toError(err) })
-    return c.json<ErrorResponse>(
-      { detail: 'Failed to get file metadata', code: 'get_error' },
-      500,
-    )
+    return c.json<ErrorResponse>({ detail: 'Failed to get file metadata', code: 'get_error' }, 500)
   }
 })
 
@@ -297,19 +301,16 @@ uploadRoute.get('/:file_id', async (c) => {
 // ============================================================
 uploadRoute.post('/:file_id/analyze', async (c) => {
   if (!checkBinding(c)) {
-    return c.json<ErrorResponse>(
-      { detail: 'Requires UPLOAD_BUCKET R2 binding', code: 'binding_missing' },
-      501,
-    )
+    return c.json<ErrorResponse>({ detail: 'Requires UPLOAD_BUCKET R2 binding', code: 'binding_missing' }, 501)
   }
-  const bucket: R2Bucket = c.env.UPLOAD_BUCKET!
+  const bucket: R2Bucket = c.env.UPLOAD_BUCKET as R2Bucket
 
   const { file_id } = c.req.param()
 
   let body: Partial<AnalyzeRequest>
   try {
     body = await c.req.json()
-  } catch (err) {
+  } catch (_err) {
     return c.json<ErrorResponse>({ detail: 'Invalid JSON body', code: 'invalid_body' }, 400)
   }
 
@@ -335,10 +336,7 @@ uploadRoute.post('/:file_id/analyze', async (c) => {
     return c.json(response)
   } catch (err) {
     logger.error('Analyze file error:', { error: toError(err) })
-    return c.json<ErrorResponse>(
-      { detail: 'Failed to analyze file', code: 'analyze_error' },
-      500,
-    )
+    return c.json<ErrorResponse>({ detail: 'Failed to analyze file', code: 'analyze_error' }, 500)
   }
 })
 

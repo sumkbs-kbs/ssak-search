@@ -286,11 +286,7 @@ const STYLES = `
  * Escape HTML special characters.
  */
 function esc(s: string): string {
-  return s
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
+  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
 }
 
 /**
@@ -300,7 +296,10 @@ function esc(s: string): string {
 function renderMarkdownInline(text: string): string {
   return text
     .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
-    .replace(/`(.+?)`/g, '<code style="font-size:0.85em;background:#f3f4f6;padding:0.1em 0.3em;border-radius:3px;font-family:var(--mono)">$1</code>')
+    .replace(
+      /`(.+?)`/g,
+      '<code style="font-size:0.85em;background:#f3f4f6;padding:0.1em 0.3em;border-radius:3px;font-family:var(--mono)">$1</code>',
+    )
 }
 
 /**
@@ -339,14 +338,12 @@ export function generateReportHtml(result: ResearchResponse): string {
         ${esc(s.title)}
         <span class="source-url">${esc(s.url)}</span>
       </a>
-    </li>`
+    </li>`,
     )
     .join('')
 
   // Sub-queries tags
-  const subQueryHtml = result.sub_queries
-    .map((sq) => `<span class="sub-query-tag">${esc(sq)}</span>`)
-    .join('')
+  const subQueryHtml = result.sub_queries.map((sq) => `<span class="sub-query-tag">${esc(sq)}</span>`).join('')
 
   const bodyClass = isCJK ? 'cjk' : ''
 

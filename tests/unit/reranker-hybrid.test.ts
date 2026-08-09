@@ -44,7 +44,7 @@ function makeDocs(count: number): RerankDocument[] {
       url: `https://example${i}.com/page`,
       domain: `example${i}.com`,
       score: 0.3 + (i % 3) * 0.2,
-    })
+    }),
   )
 }
 
@@ -91,10 +91,12 @@ afterEach(() => {
 
 describe('hybrid reranker — Workers AI only', () => {
   it('uses Workers AI scores when sidecar URL is not configured', async () => {
-    const env = { AI: makeFakeAI(async (_model, inputs) => {
-      const contexts = (inputs as { contexts: Array<{ text: string }> }).contexts
-      return workersAIResponse(contexts.map((_, i) => ({ id: i, score: 1 - i * 0.1 })))
-    }) } as Env
+    const env = {
+      AI: makeFakeAI(async (_model, inputs) => {
+        const contexts = (inputs as { contexts: Array<{ text: string }> }).contexts
+        return workersAIResponse(contexts.map((_, i) => ({ id: i, score: 1 - i * 0.1 })))
+      }),
+    } as Env
 
     const reranker = new CrossEncoderReranker({ enableSidecar: false })
     const docs = makeDocs(5)
@@ -108,7 +110,11 @@ describe('hybrid reranker — Workers AI only', () => {
   })
 
   it('falls back to heuristic when Workers AI throws', async () => {
-    const env = { AI: makeFakeAI(async () => { throw new Error('workers ai down') }) } as Env
+    const env = {
+      AI: makeFakeAI(async () => {
+        throw new Error('workers ai down')
+      }),
+    } as Env
 
     const reranker = new CrossEncoderReranker({ enableSidecar: false })
     const docs = makeDocs(5)
@@ -130,10 +136,10 @@ describe('hybrid reranker — sidecar only', () => {
   it('uses sidecar scores when Workers AI binding is absent', async () => {
     const fetchMock = mockFetchSidecar([
       { index: 2, relevance_score: 0.95 },
-      { index: 0, relevance_score: 0.80 },
-      { index: 1, relevance_score: 0.60 },
-      { index: 3, relevance_score: 0.40 },
-      { index: 4, relevance_score: 0.20 },
+      { index: 0, relevance_score: 0.8 },
+      { index: 1, relevance_score: 0.6 },
+      { index: 3, relevance_score: 0.4 },
+      { index: 4, relevance_score: 0.2 },
     ])
 
     const env = { SIDECAR_RERANK_URL: 'http://localhost:8000' } as Env
@@ -206,10 +212,12 @@ describe('hybrid reranker — sidecar only', () => {
 describe('hybrid reranker — blend (Workers AI + sidecar)', () => {
   it('blends scores 0.6 sidecar + 0.4 Workers AI when both succeed', async () => {
     const env = {
-      AI: makeFakeAI(async () => workersAIResponse([
-        { id: 0, score: 0.5 },
-        { id: 1, score: 0.5 },
-      ])),
+      AI: makeFakeAI(async () =>
+        workersAIResponse([
+          { id: 0, score: 0.5 },
+          { id: 1, score: 0.5 },
+        ]),
+      ),
       SIDECAR_RERANK_URL: 'http://localhost:8000',
     } as Env
 
@@ -224,8 +232,8 @@ describe('hybrid reranker — blend (Workers AI + sidecar)', () => {
 
     // doc_0: 0.6*0.9 + 0.4*0.5 = 0.74
     // doc_1: 0.6*0.1 + 0.4*0.5 = 0.26
-    const doc0 = results.find(r => r.id === 'doc_0')!
-    const doc1 = results.find(r => r.id === 'doc_1')!
+    const doc0 = results.find((r) => r.id === 'doc_0')!
+    const doc1 = results.find((r) => r.id === 'doc_1')!
     expect(doc0.rerankScore).toBeCloseTo(0.74, 5)
     expect(doc1.rerankScore).toBeCloseTo(0.26, 5)
     expect(results[0].id).toBe('doc_0')
@@ -233,10 +241,12 @@ describe('hybrid reranker — blend (Workers AI + sidecar)', () => {
 
   it('blend weight is configurable', async () => {
     const env = {
-      AI: makeFakeAI(async () => workersAIResponse([
-        { id: 0, score: 0.5 },
-        { id: 1, score: 0.5 },
-      ])),
+      AI: makeFakeAI(async () =>
+        workersAIResponse([
+          { id: 0, score: 0.5 },
+          { id: 1, score: 0.5 },
+        ]),
+      ),
       SIDECAR_RERANK_URL: 'http://localhost:8000',
     } as Env
 
@@ -251,7 +261,7 @@ describe('hybrid reranker — blend (Workers AI + sidecar)', () => {
     const results = await reranker.rerank('test query', docs, env)
 
     // doc_0: 0.3*0.9 + 0.7*0.5 = 0.62
-    const doc0 = results.find(r => r.id === 'doc_0')!
+    const doc0 = results.find((r) => r.id === 'doc_0')!
     expect(doc0.rerankScore).toBeCloseTo(0.62, 5)
   })
 })
@@ -305,8 +315,8 @@ describe('rerankSearchResultsRaw (orchestrator entry point)', () => {
   it('returns applied:true and reorders results when sidecar succeeds', async () => {
     mockFetchSidecar([
       { index: 1, relevance_score: 0.99 },
-      { index: 2, relevance_score: 0.30 },
-      { index: 0, relevance_score: 0.10 },
+      { index: 2, relevance_score: 0.3 },
+      { index: 0, relevance_score: 0.1 },
     ])
 
     const results = [

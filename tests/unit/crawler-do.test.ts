@@ -18,14 +18,22 @@ function createMockDOState() {
   return {
     storage: {
       get: vi.fn(async (key: string) => storage.get(key)),
-      put: vi.fn(async (key: string, value: unknown) => { storage.set(key, value) }),
+      put: vi.fn(async (key: string, value: unknown) => {
+        storage.set(key, value)
+      }),
       delete: vi.fn(async (key: string) => storage.delete(key)),
       deleteAll: vi.fn(async () => storage.clear()),
-      setAlarm: vi.fn(async (time: number) => { alarmTime = time }),
-      deleteAlarm: vi.fn(async () => { alarmTime = null }),
+      setAlarm: vi.fn(async (time: number) => {
+        alarmTime = time
+      }),
+      deleteAlarm: vi.fn(async () => {
+        alarmTime = null
+      }),
       getAlarm: vi.fn(async () => alarmTime),
     },
-    blockConcurrencyWhile: vi.fn(async (fn: () => Promise<void>) => { await fn() }),
+    blockConcurrencyWhile: vi.fn(async (fn: () => Promise<void>) => {
+      await fn()
+    }),
     waitUntil: vi.fn(),
     id: { toString: () => 'test-do-id' },
     tags: [],
@@ -160,8 +168,12 @@ describe('CrawlerDO.checkDomainBlacklist', () => {
   beforeEach(async () => {
     vi.mock('cloudflare:workers', () => ({
       DurableObject: class MockDurableObject {
-        ctx: any; env: any
-        constructor(ctx: any, env: any) { this.ctx = ctx; this.env = env }
+        ctx: any
+        env: any
+        constructor(ctx: any, env: any) {
+          this.ctx = ctx
+          this.env = env
+        }
       },
     }))
     const mod = await import('../../src/lib/crawler-do')
@@ -197,9 +209,10 @@ describe('CrawlerDO.checkDomainBlacklist', () => {
   it('detects blacklisted domains from D1', async () => {
     // D1 prepare → bind() returns an object with a `first()` method
     // The `domain` check iterates URLs, so it needs to handle the bind().first() chain properly
-    const mockFirst = vi.fn()
-      .mockResolvedValueOnce({ domain: 'spam.com' })  // first URL: spam.com found in blacklist
-      .mockResolvedValueOnce(null)                      // second URL: good.com not found
+    const mockFirst = vi
+      .fn()
+      .mockResolvedValueOnce({ domain: 'spam.com' }) // first URL: spam.com found in blacklist
+      .mockResolvedValueOnce(null) // second URL: good.com not found
 
     const mockBind = vi.fn().mockReturnValue({ first: mockFirst })
     const mockPrepare = vi.fn().mockReturnValue({ bind: mockBind })
@@ -228,8 +241,12 @@ describe('CrawlerDO.seedFromReputation', () => {
   beforeEach(async () => {
     vi.mock('cloudflare:workers', () => ({
       DurableObject: class MockDurableObject {
-        ctx: any; env: any
-        constructor(ctx: any, env: any) { this.ctx = ctx; this.env = env }
+        ctx: any
+        env: any
+        constructor(ctx: any, env: any) {
+          this.ctx = ctx
+          this.env = env
+        }
       },
     }))
     const mod = await import('../../src/lib/crawler-do')
@@ -273,10 +290,7 @@ describe('CrawlerDO.seedFromReputation', () => {
     })
 
     const mockAll = vi.fn().mockResolvedValue({
-      results: [
-        { domain: 'github.com' },
-        { domain: 'stackoverflow.com' },
-      ],
+      results: [{ domain: 'github.com' }, { domain: 'stackoverflow.com' }],
     })
     const mockBind = vi.fn().mockReturnValue({ all: mockAll })
     const mockPrepare = vi.fn().mockReturnValue({ bind: mockBind })
@@ -303,8 +317,12 @@ describe('CrawlerDO.seedFromSitemap', () => {
   beforeEach(async () => {
     vi.mock('cloudflare:workers', () => ({
       DurableObject: class MockDurableObject {
-        ctx: any; env: any
-        constructor(ctx: any, env: any) { this.ctx = ctx; this.env = env }
+        ctx: any
+        env: any
+        constructor(ctx: any, env: any) {
+          this.ctx = ctx
+          this.env = env
+        }
       },
     }))
     const mod = await import('../../src/lib/crawler-do')
@@ -362,8 +380,8 @@ describe('CrawlerDO.seedFromSitemap', () => {
     const status = await doInstance.getStatus()
     expect(status.frontier_size).toBe(3)
     const frontier = (doInstance as any).frontier as Array<{ url: string; priority: number; source_url?: string }>
-    expect(frontier.every(u => u.priority === 80)).toBe(true)
-    expect(frontier.every(u => u.source_url === 'sitemap:example.com')).toBe(true)
+    expect(frontier.every((u) => u.priority === 80)).toBe(true)
+    expect(frontier.every((u) => u.source_url === 'sitemap:example.com')).toBe(true)
   })
 
   it('skips already-visited URLs (dedupe across seeds)', async () => {
@@ -392,9 +410,10 @@ describe('CrawlerDO.seedFromSitemap', () => {
       'https://example.com/sitemap.xml': `<urlset><url><loc>https://example.com/a</loc></url><url><loc>https://spam.com/b</loc></url></urlset>`,
     })
 
-    const mockFirst = vi.fn()
-      .mockResolvedValueOnce(null)        // example.com — not blacklisted
-      .mockResolvedValueOnce({ domain: 'spam.com' })  // spam.com — blacklisted
+    const mockFirst = vi
+      .fn()
+      .mockResolvedValueOnce(null) // example.com — not blacklisted
+      .mockResolvedValueOnce({ domain: 'spam.com' }) // spam.com — blacklisted
     const mockBind = vi.fn().mockReturnValue({ first: mockFirst })
     const mockPrepare = vi.fn().mockReturnValue({ bind: mockBind })
     const mockDb = { prepare: mockPrepare }

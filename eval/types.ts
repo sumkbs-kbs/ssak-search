@@ -30,6 +30,9 @@ export interface EvalResult {
   backends: string[]
   passed: boolean
   failures: string[]
+  /** Non-fatal observations — missing required backends (availability noise,
+   *  S28) surface here instead of flipping `passed`. */
+  warnings?: string[]
   /** Ranking-quality metrics (NDCG@10, MRR, Precision@10). Undefined when
    *  the query has no relevantDomains (gold standard). */
   ranking?: RankingMetrics

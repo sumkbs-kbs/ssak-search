@@ -20,7 +20,16 @@
 
 import type { SearchResult, Env, ExtractedContent } from '../types'
 import { logger, toError } from './logger'
-import { fetchWithTimeout, extractDomain, stripHtml, decodeEntities, computeScore, truncateToTokens, parseFlexibleDate, parseRelativeTime } from './util'
+import {
+  fetchWithTimeout,
+  extractDomain,
+  stripHtml,
+  decodeEntities,
+  computeScore,
+  truncateToTokens,
+  parseFlexibleDate,
+  parseRelativeTime,
+} from './util'
 
 const NAVER_NEWS_SEARCH_URL = 'https://m.search.naver.com/search.naver'
 
@@ -59,9 +68,22 @@ export interface NaverNewsSearchOptions {
  * the LATEST articles, not Naver's relevance-sorted (often week-old) picks.
  */
 const RECENCY_MARKERS = [
-  '최신', '최근', '오늘', '속보', '실시간', '오늘자', '오늘의',
-  '이번주', '이번 주', '방금', '업데이트', 'breaking', 'latest',
-  'today', 'recent', 'newest',
+  '최신',
+  '최근',
+  '오늘',
+  '속보',
+  '실시간',
+  '오늘자',
+  '오늘의',
+  '이번주',
+  '이번 주',
+  '방금',
+  '업데이트',
+  'breaking',
+  'latest',
+  'today',
+  'recent',
+  'newest',
 ]
 
 /**
@@ -81,10 +103,7 @@ export function isRecencyNewsQuery(query: string): boolean {
  * the sort=1 newest-first page (freshness) in parallel and merges them —
  * see NaverNewsSearchOptions.sortByRecency for the rationale.
  */
-export async function naverNewsSearch(
-  query: string,
-  opts: NaverNewsSearchOptions = {},
-): Promise<SearchResult[]> {
+export async function naverNewsSearch(query: string, opts: NaverNewsSearchOptions = {}): Promise<SearchResult[]> {
   const { sortByRecency = false } = opts
 
   // Recency intent: dual-fetch relevance + 최신순, then merge. Each page goes
@@ -146,7 +165,7 @@ async function fetchNaverNewsPage(
       const status = response.status
       if ((status === 429 || status >= 500) && !opts._retry) {
         const jitter = Math.random() * 1500 + 500 // 0.5–2s
-        await new Promise(r => setTimeout(r, jitter))
+        await new Promise((r) => setTimeout(r, jitter))
         logger.info('[ssak] Retrying Naver news (status=' + status + ')')
         return fetchNaverNewsPage(query, { ...opts, _retry: true }, sortByRecency)
       }
@@ -326,10 +345,7 @@ export function parseNaverArticleHtml(html: string): {
   let body = ''
   const article = html.match(/<article[^>]*id="dic_area"[^>]*>([\s\S]*?)<\/article>/i)
   if (article) {
-    const bodyHtml = article[1].replace(
-      /<strong[^>]*class="media_end_summary"[^>]*>[\s\S]*?<\/strong>/i,
-      '',
-    )
+    const bodyHtml = article[1].replace(/<strong[^>]*class="media_end_summary"[^>]*>[\s\S]*?<\/strong>/i, '')
     // stripHtml already converts <br>/<p> block tags to \n and collapses
     // runs of newlines — no additional <br> handling needed here.
     body = decodeEntities(stripHtml(bodyHtml)).trim()
@@ -467,7 +483,12 @@ export async function naverNewsExtract(
       const html = await response.text()
       const parsed = parseNaverArticleHtml(html)
       if (!parsed.body) {
-        return { url, raw_content: '', success: false, error: 'No article body could be extracted (blocked or layout changed)' }
+        return {
+          url,
+          raw_content: '',
+          success: false,
+          error: 'No article body could be extracted (blocked or layout changed)',
+        }
       }
       const content = buildNaverNewsEvidenceText(parsed, { maxTokens })
       return {
@@ -488,7 +509,9 @@ export async function naverNewsExtract(
 
 /** Skip titles that are navigation/boilerplate, not article headlines. */
 function isNavTitle(title: string): boolean {
-  return /^(더보기|전체보기|다음|이전|목록으로|바로가기|접기|펼치기|로그인|회원가입|검색|옵션|보내기|공유|댓글)$/i.test(title)
+  return /^(더보기|전체보기|다음|이전|목록으로|바로가기|접기|펼치기|로그인|회원가입|검색|옵션|보내기|공유|댓글)$/i.test(
+    title,
+  )
 }
 
 /**
@@ -527,7 +550,8 @@ export function parseNaverNewsHtml(html: string, query: string, maxResults: numb
   while ((tm = timeRegex.exec(html)) !== null) {
     const candidate = tm[1].trim()
     // Accept only recognizable time strings (relative or absolute Korean dates)
-    if (!/^(방금\s*전|[0-9]+\s*(분|시간|일|주)\s*전|어제|오늘|[0-9]{4}\.[0-9]{2}\.[0-9]{2}\.?)$/i.test(candidate)) continue
+    if (!/^(방금\s*전|[0-9]+\s*(분|시간|일|주)\s*전|어제|오늘|[0-9]{4}\.[0-9]{2}\.[0-9]{2}\.?)$/i.test(candidate))
+      continue
     timeMarkers.push({ offset: tm.index, iso: parseFlexibleDate(candidate) })
   }
 
@@ -565,7 +589,7 @@ export function parseNaverNewsHtml(html: string, query: string, maxResults: numb
       if (text.length > existing.content.length) {
         results[existingIdx] = {
           ...existing,
-          content: truncateToTokens(mediaByUrl.get(url)! + text, 500),
+          content: truncateToTokens((mediaByUrl.get(url) ?? '') + text, 500),
         }
       }
       continue
@@ -584,7 +608,7 @@ export function parseNaverNewsHtml(html: string, query: string, maxResults: numb
     }
 
     const title = text.slice(0, 120)
-    const prefix = mediaByUrl.get(url)!
+    const prefix = mediaByUrl.get(url) ?? ''
     const result: SearchResult = {
       title,
       url,

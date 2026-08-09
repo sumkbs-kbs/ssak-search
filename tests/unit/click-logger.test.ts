@@ -19,11 +19,17 @@ function createMockDOState() {
   return {
     storage: {
       get: vi.fn(async (key: string) => storage.get(key)),
-      put: vi.fn(async (key: string, value: unknown) => { storage.set(key, value) }),
+      put: vi.fn(async (key: string, value: unknown) => {
+        storage.set(key, value)
+      }),
       delete: vi.fn(async (key: string) => storage.delete(key)),
       deleteAll: vi.fn(async () => storage.clear()),
-      setAlarm: vi.fn(async (time: number) => { alarmTime = time }),
-      deleteAlarm: vi.fn(async () => { alarmTime = null }),
+      setAlarm: vi.fn(async (time: number) => {
+        alarmTime = time
+      }),
+      deleteAlarm: vi.fn(async () => {
+        alarmTime = null
+      }),
       getAlarm: vi.fn(async () => alarmTime),
       list: vi.fn(async (opts: { prefix?: string; start?: string; end?: string; limit?: number } = {}) => {
         const { prefix, start, end, limit } = opts
@@ -36,7 +42,9 @@ function createMockDOState() {
       }),
       _map: storage,
     },
-    blockConcurrencyWhile: vi.fn(async (fn: () => Promise<void>) => { await fn() }),
+    blockConcurrencyWhile: vi.fn(async (fn: () => Promise<void>) => {
+      await fn()
+    }),
     waitUntil: vi.fn(),
     id: { toString: () => 'test-do-id' },
     tags: [],
@@ -187,7 +195,11 @@ describe('ClickLogDO', () => {
 
   it('logSearchImpression no-ops without the CLICK_LOG_DO binding', async () => {
     const mod = await import('../../src/lib/ltr/click-logger')
-    await mod.logSearchImpression('q', [{ url: 'https://a.com', title: 'A', content: 'x', score: 0.5 } as any], {} as any)
+    await mod.logSearchImpression(
+      'q',
+      [{ url: 'https://a.com', title: 'A', content: 'x', score: 0.5 } as any],
+      {} as any,
+    )
   })
 
   it('logSearchImpression records results with 16-feature vectors', async () => {
@@ -199,7 +211,11 @@ describe('ClickLogDO', () => {
         get: () => ({ logImpression }),
       },
     }
-    await mod.logSearchImpression('react state', [{ url: 'https://a.com', title: 'A', content: 'x', score: 0.5 } as any], env as any)
+    await mod.logSearchImpression(
+      'react state',
+      [{ url: 'https://a.com', title: 'A', content: 'x', score: 0.5 } as any],
+      env as any,
+    )
     expect(logImpression).toHaveBeenCalledTimes(1)
     const input = logImpression.mock.calls[0][0]
     expect(input.results).toHaveLength(1)

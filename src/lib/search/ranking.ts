@@ -64,7 +64,7 @@ const DOMAIN_AUTHORITY_BONUS: Record<string, number> = {
   'finance.naver.com': 0.15,
   'm.stock.naver.com': 0.12,
   'm.finance.naver.com': 0.12,
-  'krx.co.kr': 0.10,
+  'krx.co.kr': 0.1,
   'dart.fss.or.kr': 0.08,
   // investing.com is already in util.ts DOMAIN_AUTHORITY (+0.07, applied via
   // computeScore to ALL queries). Keep it out of this map to avoid double-
@@ -76,9 +76,19 @@ const DOMAIN_AUTHORITY_BONUS: Record<string, number> = {
 const LOW_QUALITY_DOMAINS: Record<string, number> = {
   'topstarnews.net': -0.15,
   'choicenews.co.kr': -0.12,
-  'wikitree.co.kr': -0.10,
+  'wikitree.co.kr': -0.1,
   'seoul.co.kr': -0.05,
-  'esusatyo.net': -0.40, // spam/keyword-stuffing domain observed in en-stock eval
+  'esusatyo.net': -0.4, // spam/keyword-stuffing domain observed in en-stock eval
+  // S18 (2026-08-06): unresolved Google News RSS redirects. parseGoogleNewsRss
+  // maps the title-suffix source via NEWS_SOURCE_DOMAINS, but sources outside
+  // the map keep the transport URL (news.google.com/rss/articles/...) as their
+  // domain — the link is JS-rendered and UNFOLLOWABLE by agents, the gold
+  // matcher sees a redirect, and the high text-overlap title still outranks
+  // real articles (eval: 140 redirect slots in the en-news family alone,
+  // zh-general-03 5/5). recomputeScores overwrites parser scores, so the
+  // demotion must live in the ranking authority maps. Resolved sources get
+  // their gold-domain authority instead and are untouched.
+  'news.google.com': -0.35,
 }
 
 /**
@@ -101,11 +111,11 @@ const ENGLISH_FINANCE_BLOG_PENALTY: Record<string, number> = {
   // beat the yahoo quote (base ~0.5 + 0.30 = 0.80). Commentary/aggregator
   // domains that keyword-match "apple stock price" but provide no market data
   // must fall below quote results for a finance query.
-  'arstechnica.com': -0.20,
-  'techcrunch.com': -0.20,
+  'arstechnica.com': -0.2,
+  'techcrunch.com': -0.2,
   'theverge.com': -0.18,
-  'daringfireball.net': -0.20,
-  'marco.org': -0.20,
+  'daringfireball.net': -0.2,
+  'marco.org': -0.2,
   'bloombergview.com': -0.15,
   'slate.com': -0.15,
   'medium.com': -0.15,
@@ -115,9 +125,9 @@ const ENGLISH_FINANCE_BLOG_PENALTY: Record<string, number> = {
   'engadget.com': -0.15,
   '9to5mac.com': -0.15,
   'macrumors.com': -0.15,
-  'thesun.co.uk': -0.10,
-  'usatoday.com': -0.10,
-  'btc-e.com': -0.10,
+  'thesun.co.uk': -0.1,
+  'usatoday.com': -0.1,
+  'btc-e.com': -0.1,
 }
 
 const ENGLISH_FINANCE_AUTHORITY: Record<string, number> = {
@@ -127,14 +137,14 @@ const ENGLISH_FINANCE_AUTHORITY: Record<string, number> = {
   // A +0.15 bonus could never lift it above a keyword-saturated tech blog
   // (0.87-0.99). These are exactly the eval gold domains, so the premium is
   // justified by intent — finance queries should surface market data.
-  'finance.yahoo.com': 0.30,
+  'finance.yahoo.com': 0.3,
   'nasdaq.com': 0.26,
   'investing.com': 0.24,
   'stockanalysis.com': 0.24,
   'marketwatch.com': 0.22,
   'coinmarketcap.com': 0.26,
-  'coindesk.com': 0.20,
-  'sec.gov': 0.20,
+  'coindesk.com': 0.2,
+  'sec.gov': 0.2,
   'spglobal.com': 0.16,
   'statista.com': 0.12,
   'businesswire.com': 0.08,
@@ -147,8 +157,8 @@ const ENGLISH_FINANCE_AUTHORITY: Record<string, number> = {
   'nvidia.com': 0.12,
   'microsoft.com': 0.12,
   'amazon.com': 0.12,
-  'netflix.com': 0.10,
-  'abc.xyz': 0.10,
+  'netflix.com': 0.1,
+  'abc.xyz': 0.1,
 }
 
 /**
@@ -163,18 +173,18 @@ const ENGLISH_NEWS_AUTHORITY: Record<string, number> = {
   'bloomberg.com': 0.12,
   'cnbc.com': 0.12,
   'apnews.com': 0.12,
-  'npr.org': 0.10,
-  'theverge.com': 0.10,
+  'npr.org': 0.1,
+  'theverge.com': 0.1,
   'cnet.com': 0.08,
   'techcrunch.com': 0.08,
   'nature.com': 0.12,
-  'gov.uk': 0.10,
-  'europa.eu': 0.10,
+  'gov.uk': 0.1,
+  'europa.eu': 0.1,
   'energy.gov': 0.08,
   'cisa.gov': 0.08,
-  'apple.com': 0.10,
-  'tesla.com': 0.10,
-  'spacex.com': 0.10,
+  'apple.com': 0.1,
+  'tesla.com': 0.1,
+  'spacex.com': 0.1,
   'blog.google': 0.08,
   '9to5mac.com': 0.07,
   // Phase S14 (NDCG 0.60 lever): the remaining EN news gold domains were
@@ -188,9 +198,9 @@ const ENGLISH_NEWS_AUTHORITY: Record<string, number> = {
   'nytimes.com': 0.12,
   'cnn.com': 0.12,
   'theguardian.com': 0.12,
-  'wired.com': 0.10,
-  'washingtonpost.com': 0.10,
-  'politico.com': 0.10,
+  'wired.com': 0.1,
+  'washingtonpost.com': 0.1,
+  'politico.com': 0.1,
   'nbcnews.com': 0.08,
   'thehill.com': 0.08,
 }
@@ -209,8 +219,8 @@ const KOREAN_NEWS_AUTHORITY: Record<string, number> = {
   'etnews.com': 0.12,
   'sports.naver.com': 0.12,
   'samsung.com': 0.12,
-  'koreabaseball.com': 0.10,
-  'kcdc.go.kr': 0.10,
+  'koreabaseball.com': 0.1,
+  'kcdc.go.kr': 0.1,
   'hankyung.com': 0.12,
   'sedaily.com': 0.12,
   // Phase 6.10: Korean media surfaced by the ko-KR RSS feeds (chosun/중앙/
@@ -219,30 +229,30 @@ const KOREAN_NEWS_AUTHORITY: Record<string, number> = {
   // without the boost they'd tie with MSN/네이트 aggregates on recency.
   'chosun.com': 0.12,
   'biz.chosun.com': 0.12,
-  'weekly.chosun.com': 0.10,
+  'weekly.chosun.com': 0.1,
   'joongang.co.kr': 0.12,
   'khan.co.kr': 0.11,
-  'kmib.co.kr': 0.10,
-  'segye.com': 0.10,
-  'munhwa.com': 0.10,
-  'hankookilbo.com': 0.10,
+  'kmib.co.kr': 0.1,
+  'segye.com': 0.1,
+  'munhwa.com': 0.1,
+  'hankookilbo.com': 0.1,
   'mk.co.kr': 0.12,
   'mt.co.kr': 0.11,
   'edaily.co.kr': 0.11,
-  'biz.heraldcorp.com': 0.10,
-  'asiae.co.kr': 0.10,
+  'biz.heraldcorp.com': 0.1,
+  'asiae.co.kr': 0.1,
   'fnnews.com': 0.11,
-  'newsis.com': 0.10,
-  'news1.kr': 0.10,
+  'newsis.com': 0.1,
+  'news1.kr': 0.1,
   'jtbc.co.kr': 0.11,
   'sbs.co.kr': 0.11,
-  'imbc.com': 0.10,
-  'kbs.co.kr': 0.10,
-  'ichannela.com': 0.10,
-  'tv.chosun.com': 0.10,
+  'imbc.com': 0.1,
+  'kbs.co.kr': 0.1,
+  'ichannela.com': 0.1,
+  'tv.chosun.com': 0.1,
   'ytn.co.kr': 0.11,
-  'thelec.kr': 0.10,
-  'zdnet.co.kr': 0.10,
+  'thelec.kr': 0.1,
+  'zdnet.co.kr': 0.1,
 }
 
 /**
@@ -253,10 +263,46 @@ const KOREAN_NEWS_AUTHORITY: Record<string, number> = {
 const KOREAN_BLOG_PENALTY_NEWS: Record<string, number> = {
   'm.blog.naver.com': -0.25,
   'blog.naver.com': -0.18,
-  'm.cafe.naver.com': -0.20,
+  'm.cafe.naver.com': -0.2,
   'cafe.naver.com': -0.15,
   'tistory.com': -0.12,
   'velog.io': -0.12,
+}
+
+/**
+ * Korean technical-reference authority. Applied when ctx.korean AND
+ * technical/academic/factual. kr-tech eval gold (typescriptlang.org,
+ * tanstack.com, github.com) is missed because CJK queries get near-zero BM25
+ * against English repo/doc pages — the general util.ts github.com +0.10 is
+ * diluted to ~0.03 by the 0.3 heuristic weight, so the 0.10 quality
+ * threshold filters the gold repos (kr-tech-06: TanStack/query ★50k was
+ * returned by the github backend but filtered at 0.10 — live-verified
+ * 2026-08-06). react.dev is already in TECH_DOCS_AUTHORITY (+0.12, all
+ * languages) and is deliberately NOT duplicated here.
+ */
+const KOREAN_TECH_AUTHORITY: Record<string, number> = {
+  'github.com': 0.15,
+  'typescriptlang.org': 0.15,
+  'tanstack.com': 0.15,
+}
+
+/**
+ * Korean technical-query blog penalty — S20 (2026-08-07). Naver's
+ * blog/cafe/knowledge-in platforms flood Korean tech query pools with
+ * SEO/low-signal posts — eval: kr-tech-02/06/12/18/22 NDCG 0.000 with 3+
+ * naver results in top5 (kr-tech-13: 4/5 m.blog.naver.com). Deliberately
+ * does NOT penalize velog.io/tistory.com/inflearn.com — those are EXPLICIT
+ * kr-tech gold domains (kr-tech-10/13/17/19/20 gold sets list them), and a
+ * blanket blog penalty regressed 5 eval queries (sim, 2026-08-07).
+ * matchInMap suffix matching covers m.blog.naver.com via the blog.naver.com
+ * key. KOREAN_BLOG_PENALTY_NEWS (news context) stays separate — blogs there
+ * are never gold. The SAME map is also applied in korean+financial context
+ * (S43 — kr-stock-14 blog flood, see the gate below).
+ */
+const KOREAN_TECH_BLOG_PENALTY: Record<string, number> = {
+  'blog.naver.com': -0.2,
+  'cafe.naver.com': -0.25,
+  'kin.naver.com': -0.3,
 }
 
 /**
@@ -271,9 +317,9 @@ const CHINESE_NEWS_AUTHORITY: Record<string, number> = {
   '36kr.com': 0.12,
   'thepaper.cn': 0.12,
   'chinadaily.com.cn': 0.12,
-  'cctv.com': 0.10,
+  'cctv.com': 0.1,
   'news.cn': 0.12,
-  'autohome.com.cn': 0.10,
+  'autohome.com.cn': 0.1,
   'sohu.com': 0.05,
   'qq.com': 0.05,
   '163.com': 0.05,
@@ -294,12 +340,12 @@ const CHINESE_TRAVEL_AUTHORITY: Record<string, number> = {
   // could not bridge that gap. Mirrors the ENGLISH_FINANCE_AUTHORITY premium
   // rationale: guide pages have structurally lower query-term overlap than
   // aggregator posts.
-  'ctrip.com': 0.20,
-  'mafengwo.cn': 0.20,
+  'ctrip.com': 0.2,
+  'mafengwo.cn': 0.2,
   'qunar.com': 0.12,
-  'tuniu.com': 0.10,
-  'ly.com': 0.10, // 同程旅行
-  'fliggy.com': 0.10,
+  'tuniu.com': 0.1,
+  'ly.com': 0.1, // 同程旅行
+  'fliggy.com': 0.1,
   'elong.com': 0.08,
 }
 
@@ -313,18 +359,18 @@ const JAPANESE_NEWS_AUTHORITY: Record<string, number> = {
   'nikkei.com': 0.13,
   'itmedia.co.jp': 0.12,
   'asahi.com': 0.12,
-  'mainichi.jp': 0.10,
-  'yomiuri.co.jp': 0.10,
-  'japantimes.co.jp': 0.10,
-  'reuters.com': 0.10,
-  'bloomberg.com': 0.10,
+  'mainichi.jp': 0.1,
+  'yomiuri.co.jp': 0.1,
+  'japantimes.co.jp': 0.1,
+  'reuters.com': 0.1,
+  'bloomberg.com': 0.1,
   // Phase 6.12: ja-news eval gold domains surfaced by the ja-JP Google News
   // feed (famitsu.com, digital.go.jp, nintendo.co.jp) — without the boost a
   // keyword-matched game blog or english tech outlet outranks them.
   'famitsu.com': 0.12,
-  'digital.go.jp': 0.10,
+  'digital.go.jp': 0.1,
   'nintendo.co.jp': 0.12,
-  'k-tai.watch.impress.co.jp': 0.10,
+  'k-tai.watch.impress.co.jp': 0.1,
 }
 
 /**
@@ -337,8 +383,8 @@ const JAPANESE_NEWS_AUTHORITY: Record<string, number> = {
  * lower query-term overlap than aggregator lists, so the boost must be large.
  */
 const JAPANESE_TRAVEL_AUTHORITY: Record<string, number> = {
-  'japan-guide.com': 0.20,
-  'tripadvisor.jp': 0.20,
+  'japan-guide.com': 0.2,
+  'tripadvisor.jp': 0.2,
   'tripadvisor.com': 0.18,
   'gotokyo.org': 0.18,
   'osaka-info.jp': 0.15,
@@ -346,9 +392,9 @@ const JAPANESE_TRAVEL_AUTHORITY: Record<string, number> = {
   'okinawatravelinfo.com': 0.15,
   'welcome2japan.jp': 0.15,
   'rakuten.co.jp': 0.12,
-  'yahoo.co.jp': 0.10,
+  'yahoo.co.jp': 0.1,
   '4travel.jp': 0.12,
-  'rurubu.jp': 0.10,
+  'rurubu.jp': 0.1,
 }
 
 /**
@@ -364,9 +410,14 @@ const JAPANESE_TRAVEL_AUTHORITY: Record<string, number> = {
 const JAPANESE_TECH_AUTHORITY: Record<string, number> = {
   'qiita.com': 0.15,
   'zenn.dev': 0.15,
-  'dev.to': 0.10,
+  'dev.to': 0.1,
   'typescriptlang.org': 0.12,
   'ipa.go.jp': 0.12,
+  // S19: github.com is the #1 technical gold domain (127/158 eval queries)
+  // and ja-tech pools are zh.wikipedia + github repos — the util.ts +0.10 is
+  // diluted to ~0.03 by the heuristic weight, so CJK queries filter the gold
+  // repos at the 0.10 quality threshold. Same fix as KOREAN_TECH_AUTHORITY.
+  'github.com': 0.15,
   // NOTE: kotobank.jp / weblio.jp are deliberately NOT here — they live in
   // JAPANESE_FACT_AUTHORITY (fact/academic) and kotobank.jp additionally in
   // TECH_DOCS_AUTHORITY. The JAPANESE_TECH gate (technical|academic|factual)
@@ -419,13 +470,13 @@ const JAPANESE_FACT_AUTHORITY: Record<string, number> = {
  */
 const ENGLISH_REFERENCE_AUTHORITY: Record<string, number> = {
   'britannica.com': 0.12,
-  'howstuffworks.com': 0.10,
-  'scientificamerican.com': 0.10,
-  'nationalgeographic.com': 0.10,
-  'nasa.gov': 0.10,
-  'mayoclinic.org': 0.10,
-  'nih.gov': 0.10,
-  'cdc.gov': 0.10,
+  'howstuffworks.com': 0.1,
+  'scientificamerican.com': 0.1,
+  'nationalgeographic.com': 0.1,
+  'nasa.gov': 0.1,
+  'mayoclinic.org': 0.1,
+  'nih.gov': 0.1,
+  'cdc.gov': 0.1,
   'usgs.gov': 0.08,
   'noaa.gov': 0.08,
   // NOTE: healthline.com / webmd.com are deliberately NOT here — they are
@@ -436,7 +487,7 @@ const ENGLISH_REFERENCE_AUTHORITY: Record<string, number> = {
 
 const TECH_DOCS_AUTHORITY: Record<string, number> = {
   'developers.cloudflare.com': 0.15,
-  'cloudflare.com': 0.10,
+  'cloudflare.com': 0.1,
   'postgresql.org': 0.14,
   'mysql.com': 0.12,
   'use-the-index-luke.com': 0.14,
@@ -452,14 +503,14 @@ const TECH_DOCS_AUTHORITY: Record<string, number> = {
   // It now lives ONLY in JAPANESE_FACT_AUTHORITY. (git-blame it was added
   // for ja-tech queries in Phase 6.7 — JAPANESE_TECH/FACT maps own that now.)
   'docs.github.com': 0.12,
-  'atlassian.com': 0.10,
-  'mozilla.org': 0.10,
+  'atlassian.com': 0.1,
+  'mozilla.org': 0.1,
   'w3.org': 0.12,
-  'python.org': 0.10,
-  'nodejs.org': 0.10,
+  'python.org': 0.1,
+  'nodejs.org': 0.1,
   'redis.io': 0.12,
   'kubernetes.io': 0.12,
-  'docker.com': 0.10,
+  'docker.com': 0.1,
   'react.dev': 0.12,
   'vuejs.org': 0.12,
 }
@@ -501,6 +552,27 @@ function authorityBonusForDomain(domain: string, ctx: SearchContext): number {
     bonus += matchInMap(domain, KOREAN_NEWS_AUTHORITY)
     bonus += matchInMap(domain, KOREAN_BLOG_PENALTY_NEWS)
   }
+  // Korean technical-reference authority — S19. Mirrors JAPANESE_TECH:
+  // CJK queries score near-zero BM25 against English repos/docs, so the
+  // gold domains need a direct bonus to survive the quality threshold.
+  if (ctx.korean && (ctx.queryType === 'technical' || ctx.queryType === 'academic' || ctx.queryType === 'factual')) {
+    bonus += matchInMap(domain, KOREAN_TECH_AUTHORITY)
+    bonus += matchInMap(domain, KOREAN_TECH_BLOG_PENALTY)
+  }
+  // Korean financial blog spam — S43 (2026-08-08). S42 diagnosis: kr-stock-14
+  // (ETF 투자 방법 초보, NDCG 0.14) is flooded by m.blog.naver.com/cafe/tistory
+  // because the S20 gate (technical|academic|factual) excluded financial —
+  // finance.naver.com's +0.15 global authority could not beat keyword-saturated
+  // blogs. Gated on ctx.isFinance (the SAME flag the EN finance block uses —
+  // orchestrator: isFinance = topic==='finance' || queryType==='financial', so
+  // topic='finance' requests whose queryType classifies as news/factual are
+  // covered too, review S43). KR general stays exempt (naver blogs are
+  // EXPLICIT gold there — kr-general-05/11/13). KOREAN_TECH_AUTHORITY is
+  // deliberately NOT applied here (github/typescriptlang/tanstack are not
+  // financial gold).
+  if (ctx.korean && ctx.isFinance) {
+    bonus += matchInMap(domain, KOREAN_TECH_BLOG_PENALTY)
+  }
   if (ctx.isNews && ctx.chinese) bonus += matchInMap(domain, CHINESE_NEWS_AUTHORITY)
   // Chinese travel-guide authority — zh-general eval gold domains (ctrip,
   // mafengwo) outrank keyword-saturated aggregators for 攻略/travel queries.
@@ -530,12 +602,30 @@ function getDomainAuthorityBonus(url: string, ctx: SearchContext, fallbackDomain
   // (reuters.com, apnews.com, ...) while their URL is a news.google.com
   // redirect, so the authority bonus must key on the semantic domain, not the
   // transport URL (Phase 6.6).
+  //
+  // S18: the news.google.com transport host is shared by BOTH resolved items
+  // (domain = gold source) and unresolved items (domain = news.google.com).
+  // The transport host must never shadow the semantic domain-field decision:
+  // resolved items keep their gold authority, unresolved items get the -0.35
+  // LOW_QUALITY_DOMAINS demotion (eval: 140 redirect slots in the en-news
+  // family — zh-general-03 returned 5/5 redirects at the top).
   try {
     const host = new URL(url).hostname.replace(/^www\./, '').toLowerCase()
-    const fromUrl = authorityBonusForDomain(host, ctx)
-    if (fromUrl !== 0 || !fallbackDomain) return fromUrl
+    const isGoogleRedirect = host === 'news.google.com'
+
+    if (!isGoogleRedirect) {
+      const fromUrl = authorityBonusForDomain(host, ctx)
+      if (fromUrl !== 0 || !fallbackDomain) return fromUrl
+    } else if (!fallbackDomain) {
+      return 0
+    }
+
     const fallback = fallbackDomain.replace(/^www\./, '').toLowerCase()
-    if (fallback === host) return 0
+    // Same-host fallback is a no-op for normal URLs (no double evaluation),
+    // but for an UNRESOLVED google redirect (domain field carries the
+    // transport host as the unresolved marker) it must evaluate so the S18
+    // demotion applies.
+    if (fallback === host && !isGoogleRedirect) return 0
     return authorityBonusForDomain(fallback, ctx)
   } catch {
     // Invalid URL — try the fallback domain alone
@@ -621,13 +711,7 @@ export function recomputeScores(results: SearchResult[], ctx: SearchContext): Se
       }
     }
 
-    const baseScore = hybridScore(
-      ctx.query,
-      r.title,
-      r.content,
-      r.published_date,
-      r.url,
-    )
+    const baseScore = hybridScore(ctx.query, r.title, r.content, r.published_date, r.url)
 
     // Reserve headroom when a POSITIVE bonus exists. Without this, a saturated
     // base (0.99, routine since computeScore caps at 0.99) plus a +0.15 bonus
@@ -646,16 +730,13 @@ export function recomputeScores(results: SearchResult[], ctx: SearchContext): Se
  * Apply personalized domain boosting (Phase 3.2b).
  * Boosts scores for the user's frequently-visited domains by +0.15.
  */
-export async function applyDomainBoosting(
-  results: SearchResult[],
-  ctx: SearchContext,
-): Promise<SearchResult[]> {
+export async function applyDomainBoosting(results: SearchResult[], ctx: SearchContext): Promise<SearchResult[]> {
   if (!ctx.request.user_id || !ctx.env?.USER_PROFILE_DO) return results
 
   try {
     const { getProfileStub } = await import('../user-profile-do')
     const stub = getProfileStub(ctx.env)
-    const boostedDomains = await stub.getBoostedDomains(ctx.request.user_id!, 3)
+    const boostedDomains = await stub.getBoostedDomains(ctx.request.user_id as string, 3)
     if (boostedDomains.length === 0) return results
 
     return results.map((r) => {
@@ -719,7 +800,7 @@ export function freshnessBlendKey(score: number, recency: number, weight: number
  * overall +0.013 (financial +0.092, news +0.024) with only minor losses on
  * zh/general. Shared between code and tests so re-tuning is single-source.
  */
-export const NEWS_FRESHNESS_WEIGHT = 0.30
+export const NEWS_FRESHNESS_WEIGHT = 0.3
 /** @see NEWS_FRESHNESS_WEIGHT — lighter tiebreak for non-news default sort. */
 export const DEFAULT_FRESHNESS_WEIGHT = 0.15
 
@@ -790,7 +871,7 @@ export function sortResults(results: SearchResult[], ctx: SearchContext): Search
  * just to chase a high max_results.
  */
 export function applyQualityThreshold(results: SearchResult[], ctx: SearchContext): SearchResult[] {
-  const minScoreHigh = 0.10
+  const minScoreHigh = 0.1
   const minScoreLow = 0.01
   const abundanceFloor = Math.min(10, ctx.maxResults)
 
@@ -814,10 +895,7 @@ export function applyQualityThreshold(results: SearchResult[], ctx: SearchContex
  * Full ranking pipeline: filter → recompute → boost → sort → threshold.
  * Convenience function that runs all steps in order.
  */
-export async function applyRankingPipeline(
-  results: SearchResult[],
-  ctx: SearchContext,
-): Promise<SearchResult[]> {
+export async function applyRankingPipeline(results: SearchResult[], ctx: SearchContext): Promise<SearchResult[]> {
   let r = applyFilters(results, ctx)
   r = recomputeScores(r, ctx)
   r = await applyDomainBoosting(r, ctx)
@@ -828,4 +906,35 @@ export async function applyRankingPipeline(
   r = sortResults(r, ctx)
   r = applyQualityThreshold(r, ctx)
   return r
+}
+
+/**
+ * S20: cap results from ONE source so a single backend can't saturate the
+ * pool. HN Algolia over-inflow was observed in eval (en-general-03: 5/5 HN
+ * in top5, adv-03: 4/10 HN) — capping to max keeps pool diversity while the
+ * backend relevance filter already ensures the survivors are on-topic.
+ * Zero NDCG regression across the 9 affected eval queries (sim 2026-08-07).
+ * Matches by URL host OR the backend-set domain field (suffix match, same
+ * semantics as matchInMap). EXPORTED FOR TESTS.
+ */
+export function capSourceResults(results: SearchResult[], sourceDomain: string, max: number): SearchResult[] {
+  if (!sourceDomain || max <= 0) return results
+  let seen = 0
+  const out: SearchResult[] = []
+  for (const r of results) {
+    let host = ''
+    try {
+      host = new URL(r.url).hostname.replace(/^www\./, '').toLowerCase()
+    } catch {
+      // invalid URL — fall through to the domain field
+    }
+    const domainField = (r.domain ?? '').toLowerCase()
+    const isSource = host.endsWith(sourceDomain) || domainField.endsWith(sourceDomain)
+    if (isSource) {
+      if (seen >= max) continue
+      seen += 1
+    }
+    out.push(r)
+  }
+  return out
 }

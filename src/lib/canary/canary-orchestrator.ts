@@ -211,7 +211,7 @@ export class CanaryOrchestratorDO extends DurableObject<Env> {
           const passed = count >= test.expected_min
           return {
             backend: test.backend,
-            status: passed ? 'pass' as const : 'fail' as const,
+            status: passed ? ('pass' as const) : ('fail' as const),
             results_count: count,
             expected_min: test.expected_min,
             latency_ms: latency,
@@ -247,7 +247,6 @@ export class CanaryOrchestratorDO extends DurableObject<Env> {
 
     // Snapshot comparison — regression = previously passing, now failing
     const regressions: string[] = []
-    const now = Date.now()
     for (const r of results) {
       if (r.status !== 'fail') continue
       const prev = this.state.snapshots[r.backend]

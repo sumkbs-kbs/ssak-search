@@ -22,10 +22,17 @@
 
 import { DurableObject } from 'cloudflare:workers'
 import { logger, toError } from './logger'
-import type { Env, CrawlUrl, CrawlDomainState, CrawlStats, CrawlerConfig, IndexQueueMessage } from '../types'
+import {
+  DEFAULT_CRAWLER_CONFIG,
+  type Env,
+  type CrawlUrl,
+  type CrawlDomainState,
+  type CrawlStats,
+  type CrawlerConfig,
+  type IndexQueueMessage,
+} from '../types'
 import { normalizeUrl, assertSafeFetchUrl } from './util'
 import { discoverAndParseSitemaps } from './sitemap'
-import { DEFAULT_CRAWLER_CONFIG } from '../types'
 
 // ============================================================
 // Crawler Storage Schema
@@ -33,7 +40,7 @@ import { DEFAULT_CRAWLER_CONFIG } from '../types'
 
 interface CrawlerStorage {
   frontier: CrawlUrl[]
-  visited: string[]  // Serialized set
+  visited: string[] // Serialized set
   domainStates: Record<string, CrawlDomainState>
   seeds: string[]
   config: CrawlerConfig
@@ -104,7 +111,8 @@ function discoverLinks(html: string, baseUrl: string): DiscoveredLink[] {
   const seen = new Set<string>()
 
   // Match <a href="...">text</a>
-  const anchorRegex = /<a\s+(?:[^>]*?\s+)?href\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>]+))(?:\s+(?:[^>]*?\s+)?rel\s*=\s*(?:"nofollow"|'nofollow'))?[^>]*>([\s\S]*?)<\/a>/gi
+  const anchorRegex =
+    /<a\s+(?:[^>]*?\s+)?href\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>]+))(?:\s+(?:[^>]*?\s+)?rel\s*=\s*(?:"nofollow"|'nofollow'))?[^>]*>([\s\S]*?)<\/a>/gi
   let match: RegExpExecArray | null
 
   while ((match = anchorRegex.exec(html)) !== null) {
@@ -123,7 +131,8 @@ function discoverLinks(html: string, baseUrl: string): DiscoveredLink[] {
       seen.add(normalized)
 
       // Skip non-HTML extensions (images, pdfs, etc.)
-      const skipExtensions = /\.(pdf|zip|tar|gz|rar|exe|dmg|iso|img|png|jpg|jpeg|gif|svg|webp|ico|css|js|json|xml|doc|docx|xls|xlsx|ppt|pptx|mp3|mp4|avi|mov|wmv|flv)$/i
+      const skipExtensions =
+        /\.(pdf|zip|tar|gz|rar|exe|dmg|iso|img|png|jpg|jpeg|gif|svg|webp|ico|css|js|json|xml|doc|docx|xls|xlsx|ppt|pptx|mp3|mp4|avi|mov|wmv|flv)$/i
       if (skipExtensions.test(normalized)) continue
 
       links.push({ url: normalized, text: match[4]?.replace(/<[^>]+>/g, '').trim() || '' })
@@ -210,7 +219,7 @@ export class CrawlerDO extends DurableObject<Env> {
         this.frontier.push({
           url,
           depth: 0,
-          priority: 100,  // High priority for seeds
+          priority: 100, // High priority for seeds
           added_at: Date.now(),
         })
         added++
@@ -298,7 +307,7 @@ export class CrawlerDO extends DurableObject<Env> {
 
       const response = await fetch(url.toString(), {
         headers: {
-          'Accept': 'application/json',
+          Accept: 'application/json',
           'X-Subscription-Token': apiKey,
         },
         signal: AbortSignal.timeout(10000),
@@ -309,7 +318,7 @@ export class CrawlerDO extends DurableObject<Env> {
         return { added: 0, failed: 0, query }
       }
 
-      const data = await response.json() as {
+      const data = (await response.json()) as {
         web?: { results: Array<{ url: string; title: string; description?: string }> }
       }
 
@@ -318,9 +327,9 @@ export class CrawlerDO extends DurableObject<Env> {
       }
 
       // 2. Check domain blacklist and add valid URLs to seeds
-      const braveUrls = data.web.results.map(r => r.url).filter(Boolean)
+      const braveUrls = data.web.results.map((r) => r.url).filter(Boolean)
       const blacklisted = await this.checkDomainBlacklist(braveUrls)
-      const validUrls = braveUrls.filter(u => !blacklisted.has(new URL(u).hostname))
+      const validUrls = braveUrls.filter((u) => !blacklisted.has(new URL(u).hostname))
 
       // 3. Add as seeds with metadata
       const result = await this.seed(validUrls.slice(0, maxResults))
@@ -350,7 +359,7 @@ export class CrawlerDO extends DurableObject<Env> {
     if (!this.env.SEARCH_INDEX_DB || urls.length === 0) return blacklisted
 
     try {
-      const domains = urls.map(u => new URL(u).hostname.replace(/^www\./, ''))
+      const domains = urls.map((u) => new URL(u).hostname.replace(/^www\./, ''))
       const uniqueDomains = [...new Set(domains)]
 
       for (const domain of uniqueDomains) {
@@ -358,8 +367,10 @@ export class CrawlerDO extends DurableObject<Env> {
           `SELECT domain FROM domain_blacklist
            WHERE domain = ?
              AND (expires_at IS NULL OR expires_at > ?)
-           LIMIT 1`
-        ).bind(domain, Date.now()).first()
+           LIMIT 1`,
+        )
+          .bind(domain, Date.now())
+          .first()
 
         if (row) {
           blacklisted.add(domain)
@@ -386,8 +397,10 @@ export class CrawlerDO extends DurableObject<Env> {
          WHERE authority >= ?
            AND crawability >= 0.5
          ORDER BY (authority + freshness + content_quality) DESC
-         LIMIT ?`
-      ).bind(minAuthority, maxResults).all<{ domain: string }>()
+         LIMIT ?`,
+      )
+        .bind(minAuthority, maxResults)
+        .all<{ domain: string }>()
 
       if (!rows.results?.length) return { added: 0 }
 
@@ -455,7 +468,7 @@ export class CrawlerDO extends DurableObject<Env> {
             url,
             depth: 0,
             source_url: `sitemap:${domain}`,
-            priority: 80,  // High priority — authoritative page list from the publisher
+            priority: 80, // High priority — authoritative page list from the publisher
             added_at: Date.now(),
           })
           added++
@@ -495,7 +508,7 @@ export class CrawlerDO extends DurableObject<Env> {
       frontier_size: this.frontier.length,
       visited_count: this.visited.size,
       domain_count: this.domainStates.size,
-      recent_urls: this.frontier.slice(0, 10).map(u => u.url),
+      recent_urls: this.frontier.slice(0, 10).map((u) => u.url),
     }
   }
 
@@ -516,9 +529,7 @@ export class CrawlerDO extends DurableObject<Env> {
 
       // Fire webhook if configured
       if (this.config.webhook_url && this.stats.status === 'completed') {
-        this.fireWebhook().catch(err =>
-          logger.error('[CrawlerDO] Webhook failed:', { error: toError(err) })
-        )
+        this.fireWebhook().catch((err) => logger.error('[CrawlerDO] Webhook failed:', { error: toError(err) }))
       }
       return
     }
@@ -551,7 +562,7 @@ export class CrawlerDO extends DurableObject<Env> {
       // Check domain page limit
       if (domainState && domainState.pages_crawled >= this.config.max_pages_per_domain) {
         this.stats.urls_skipped++
-        continue  // Skip this URL entirely
+        continue // Skip this URL entirely
       }
 
       batch.push(url)
@@ -560,9 +571,7 @@ export class CrawlerDO extends DurableObject<Env> {
     this.frontier = remaining
 
     // Process batch in parallel
-    await Promise.allSettled(
-      batch.map(url => this.crawlUrl(url))
-    )
+    await Promise.allSettled(batch.map((url) => this.crawlUrl(url)))
 
     // Sort remaining frontier
     this.sortFrontier()
@@ -575,7 +584,7 @@ export class CrawlerDO extends DurableObject<Env> {
     if (processed > 0) {
       const elapsed = this.stats.last_activity - this.stats.start_time
       const rate = processed / (elapsed || 1)
-      this.stats.estimated_completion = rate > 0 ? Date.now() + (this.frontier.length / rate) : 0
+      this.stats.estimated_completion = rate > 0 ? Date.now() + this.frontier.length / rate : 0
     }
 
     await this.persist()
@@ -590,9 +599,7 @@ export class CrawlerDO extends DurableObject<Env> {
       await this.persist()
 
       if (this.config.webhook_url && this.stats.status === 'completed') {
-        this.fireWebhook().catch(err =>
-          logger.error('[CrawlerDO] Webhook failed:', { error: toError(err) })
-        )
+        this.fireWebhook().catch((err) => logger.error('[CrawlerDO] Webhook failed:', { error: toError(err) }))
       }
     }
   }
@@ -621,8 +628,8 @@ export class CrawlerDO extends DurableObject<Env> {
         const domainState = this.domainStates.get(domain)
         if (domainState && domainState.robots_disallows.length > 0) {
           const urlPath = new URL(url).pathname
-          const pathBlocked = domainState.robots_disallows.some(pattern =>
-            pattern === '/' ? true : urlPath.startsWith(pattern)
+          const pathBlocked = domainState.robots_disallows.some((pattern) =>
+            pattern === '/' ? true : urlPath.startsWith(pattern),
           )
           if (pathBlocked) {
             logger.info(`[CrawlerDO] Path blocked by robots.txt: ${url}`)
@@ -665,7 +672,7 @@ export class CrawlerDO extends DurableObject<Env> {
 
       const html = await response.text()
       if (html.length < 100) {
-        this.stats.urls_skipped++  // Too short
+        this.stats.urls_skipped++ // Too short
         this.updateDomainState(domain, true)
         return
       }
@@ -675,7 +682,7 @@ export class CrawlerDO extends DurableObject<Env> {
       const title = titleMatch ? titleMatch[1].replace(/<[^>]+>/g, '').trim() : domain
 
       // 4. Extract clean content directly from HTML (no double fetch)
-      let extractedContent = html
+      const extractedContent = html
         .replace(/<script[\s\S]*?<\/script>/gi, ' ')
         .replace(/<style[\s\S]*?<\/style>/gi, ' ')
         .replace(/<nav[^>]*>[\s\S]*?<\/nav>/gi, ' ')
@@ -713,7 +720,7 @@ export class CrawlerDO extends DurableObject<Env> {
 
           // Skip if already visited or queued
           if (this.visited.has(link.url)) continue
-          if (this.frontier.some(u => u.url === link.url)) continue
+          if (this.frontier.some((u) => u.url === link.url)) continue
 
           // Validate URL
           try {
@@ -728,7 +735,7 @@ export class CrawlerDO extends DurableObject<Env> {
             url: link.url,
             depth: depth + 1,
             source_url: url,
-            priority: Math.max(1, 10 - depth),  // Lower depth = higher priority
+            priority: Math.max(1, 10 - depth), // Lower depth = higher priority
             added_at: Date.now(),
           })
           newUrlsAdded++
@@ -766,7 +773,6 @@ export class CrawlerDO extends DurableObject<Env> {
       this.updateDomainState(domain, true)
 
       logger.info(`[CrawlerDO] Completed: ${url} (${extractedContent.length} chars)`)
-
     } catch (error) {
       logger.error(`[CrawlerDO] Failed: ${url}:`, { error: toError(error) })
       this.stats.urls_failed++
@@ -922,8 +928,9 @@ export interface CrawlerRPC {
  * Uses ID-based routing: each crawl gets its own DO instance.
  */
 export function getCrawlerStub(env: Env, crawlId: string): CrawlerRPC {
-  const id = env.CRAWLER_DO!.idFromName(`crawl-${crawlId}`)
-  return env.CRAWLER_DO!.get(id) as unknown as CrawlerRPC
+  if (!env.CRAWLER_DO) throw new Error('CRAWLER_DO binding missing — configure the Durable Object binding first')
+  const id = env.CRAWLER_DO.idFromName(`crawl-${crawlId}`)
+  return env.CRAWLER_DO.get(id) as unknown as CrawlerRPC
 }
 
 /**

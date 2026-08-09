@@ -79,7 +79,7 @@ export function assembleSynthesizerPrompt(
   originalQuery: string,
   stepResults: StepResult[],
   plan: SubQueryPlan,
-  opts: SynthesizerOptions = {}
+  opts: SynthesizerOptions = {},
 ): { prompt: string; evidenceMap: Map<number, Citation[]> } {
   const maxSnippets = opts.maxSnippetsPerStep ?? 3
   const tokenBudget = opts.evidenceTokenBudget ?? 12000
@@ -92,13 +92,13 @@ export function assembleSynthesizerPrompt(
 
   for (const result of stepResults) {
     if (!result.success || !result.evidence) continue
-    
+
     const evidence = result.evidence as WebSearchResult[]
     if (!Array.isArray(evidence) || evidence.length === 0) continue
 
     // Take top snippets from this step
     const snippets = evidence.slice(0, maxSnippets)
-    
+
     for (const item of snippets) {
       // 06 Security Review S3: sanitize untrusted evidence — CONTENT and TITLE
       // (a malicious title like "Ignore previous instructions" must not stay
@@ -125,7 +125,7 @@ export function assembleSynthesizerPrompt(
         snippet: truncateForCitation(item.content, 300),
         timestamp: new Date().toISOString(),
       }
-      
+
       // Add to evidence map (stepId -> citations from this step)
       const existing = evidenceMap.get(result.stepId) || []
       existing.push(citation)
@@ -142,7 +142,7 @@ Content (JSON data): ${sanitized.safe}`
         logger.warn(`[Synthesizer] Evidence token budget exceeded, truncating at ${evidenceIdx} citations`)
         break
       }
-      
+
       evidenceBlocks.push(block)
       totalTokens += blockTokens
     }
@@ -163,7 +163,8 @@ The available sources do not provide sufficient information to answer this query
   }
 
   // Add synthesis instruction from plan
-  const synthesisGuidance = plan.synthesis_instruction || 
+  const synthesisGuidance =
+    plan.synthesis_instruction ||
     `Answer the original query "${originalQuery}" using the evidence above. Cite as [1], [2], etc.`
 
   const prompt = `QUERY: ${originalQuery}
@@ -188,7 +189,7 @@ function truncateForCitation(text: string, maxChars: number): string {
     truncated.lastIndexOf('? '),
     truncated.lastIndexOf('。'),
     truncated.lastIndexOf('！'),
-    truncated.lastIndexOf('？')
+    truncated.lastIndexOf('？'),
   )
   if (lastPeriod > maxChars * 0.6) {
     return truncated.slice(0, lastPeriod + 1)
@@ -233,14 +234,11 @@ export class AnswerSynthesizer {
    * all retries, fall back to extractive summary which is deterministic and
    * guaranteed to cite real sources.
    */
-  async synthesize(
-    plan: SubQueryPlan,
-    stepResults: StepResult[]
-  ): Promise<SynthesizedAnswer> {
+  async synthesize(plan: SubQueryPlan, stepResults: StepResult[]): Promise<SynthesizedAnswer> {
     // Filter citations by minimum evidence score
-    const filteredResults = stepResults.map(r => ({
+    const filteredResults = stepResults.map((r) => ({
       ...r,
-      evidence: Array.isArray(r.evidence) 
+      evidence: Array.isArray(r.evidence)
         ? (r.evidence as Array<unknown>).filter((e: unknown) => {
             const item = e as WebSearchResult
             return item && typeof item.score === 'number' && item.score >= this.minEvidenceScore
@@ -249,12 +247,9 @@ export class AnswerSynthesizer {
     }))
 
     // Assemble prompt
-    const { prompt, evidenceMap } = assembleSynthesizerPrompt(
-      plan.original_query,
-      filteredResults,
-      plan,
-      { minEvidenceScore: this.minEvidenceScore }
-    )
+    const { prompt, evidenceMap } = assembleSynthesizerPrompt(plan.original_query, filteredResults, plan, {
+      minEvidenceScore: this.minEvidenceScore,
+    })
 
     // Generate answer with quality gate (retry on low confidence)
     let bestAnswer: SynthesizedAnswer | null = null
@@ -263,9 +258,10 @@ export class AnswerSynthesizer {
       let answerText: string
       if (this.ai) {
         // On retry, append stricter instruction to the prompt
-        const attemptPrompt = attempt > 0
-          ? `${prompt}\n\nSTRICT REMINDER: You MUST cite every factual claim with [N]. Do NOT make any claim without a citation. If unsure, say "insufficient evidence".`
-          : prompt
+        const attemptPrompt =
+          attempt > 0
+            ? `${prompt}\n\nSTRICT REMINDER: You MUST cite every factual claim with [N]. Do NOT make any claim without a citation. If unsure, say "insufficient evidence".`
+            : prompt
         answerText = await this.generateWithAI(attemptPrompt)
       } else {
         answerText = this.generateExtractive(plan.original_query, filteredResults, evidenceMap)
@@ -282,7 +278,7 @@ export class AnswerSynthesizer {
         text: answerText.trim(),
         confidence,
         citations: usedCitations,
-        sourceSteps: Array.from(new Set(usedCitations.map(c => c.stepId))).sort((a, b) => a - b),
+        sourceSteps: Array.from(new Set(usedCitations.map((c) => c.stepId))).sort((a, b) => a - b),
         warnings,
       }
 
@@ -297,7 +293,9 @@ export class AnswerSynthesizer {
         bestAnswer = candidate
       }
 
-      logger.info(`[Synthesizer] Confidence ${confidence} below threshold ${this.confidenceThreshold}, retrying (${attempt + 1}/${this.maxRetries})`)
+      logger.info(
+        `[Synthesizer] Confidence ${confidence} below threshold ${this.confidenceThreshold}, retrying (${attempt + 1}/${this.maxRetries})`,
+      )
     }
 
     // Final fallback: if AI generation produced very low confidence, use extractive
@@ -307,7 +305,7 @@ export class AnswerSynthesizer {
         plan.original_query,
         filteredResults,
         plan,
-        { minEvidenceScore: this.minEvidenceScore }
+        { minEvidenceScore: this.minEvidenceScore },
       )
       void fallbackPrompt // used only for context
       const extractiveText = this.generateExtractive(plan.original_query, filteredResults, fallbackMap)
@@ -321,13 +319,17 @@ export class AnswerSynthesizer {
           text: extractiveText.trim(),
           confidence,
           citations: usedCitations,
-          sourceSteps: Array.from(new Set(usedCitations.map(c => c.stepId))).sort((a, b) => a - b),
+          sourceSteps: Array.from(new Set(usedCitations.map((c) => c.stepId))).sort((a, b) => a - b),
           warnings,
         }
       }
     }
 
-    return bestAnswer!
+    // bestAnswer is always assigned: the loop breaks either on the confidence
+    // threshold or on the final attempt (attempt === maxRetries), so this
+    // guard is unreachable in practice — kept for the type system.
+    if (!bestAnswer) throw new Error('Synthesizer failed to produce an answer')
+    return bestAnswer
   }
 
   private async generateWithAI(prompt: string): Promise<string> {
@@ -363,21 +365,17 @@ export class AnswerSynthesizer {
     return ''
   }
 
-  private generateExtractive(
-    _query: string,
-    stepResults: StepResult[],
-    evidenceMap: Map<number, Citation[]>
-  ): string {
+  private generateExtractive(_query: string, stepResults: StepResult[], evidenceMap: Map<number, Citation[]>): string {
     // Simple extractive fallback: combine top snippets with citations
     const sentences: { text: string; citation: Citation }[] = []
 
     for (const result of stepResults) {
       if (!result.success || !result.evidence) continue
       const evidence = result.evidence as WebSearchResult[]
-      
+
       for (const item of evidence.slice(0, 2)) {
         // Split into sentences
-        const sents = item.content.split(/[.!?。！？]+/).filter(s => s.trim().length > 20)
+        const sents = item.content.split(/[.!?。！？]+/).filter((s) => s.trim().length > 20)
         for (const sent of sents.slice(0, 2)) {
           const citations = evidenceMap.get(result.stepId)
           if (citations && citations.length > 0) {
@@ -404,25 +402,22 @@ export class AnswerSynthesizer {
         citationCounter++
         usedCitations.set(citation.sourceId, { ...citation, sourceId: citationCounter })
       }
-      const citeNum = usedCitations.get(citation.sourceId)!.sourceId
+      const citeNum = usedCitations.get(citation.sourceId)?.sourceId ?? 0
       parts.push(`${text} [${citeNum}]`)
     }
 
     return parts.join(' ') + '.'
   }
 
-  private extractUsedCitations(
-    answer: string,
-    evidenceMap: Map<number, Citation[]>
-  ): Citation[] {
+  private extractUsedCitations(answer: string, evidenceMap: Map<number, Citation[]>): Citation[] {
     // Find all [N] patterns in answer
-    const citationRefs = Array.from(answer.matchAll(/\[(\d+)\]/g), m => parseInt(m[1], 10))
+    const citationRefs = Array.from(answer.matchAll(/\[(\d+)\]/g), (m) => parseInt(m[1], 10))
     const uniqueRefs = [...new Set(citationRefs)].sort((a, b) => a - b)
 
     const used: Citation[] = []
     let globalIdx = 0
 
-    for (const [/*stepId*/, citations] of evidenceMap) {
+    for (const [, /*stepId*/ citations] of evidenceMap) {
       for (const citation of citations) {
         globalIdx++
         if (uniqueRefs.includes(globalIdx)) {
@@ -439,15 +434,11 @@ export class AnswerSynthesizer {
    * Returns warnings for any citation that references non-existent evidence
    * or has no URL — preventing hallucinated citations from reaching the user.
    */
-  private validateAnswer(
-    answer: string,
-    usedCitations: Citation[],
-    stepResults: StepResult[]
-  ): string[] {
+  private validateAnswer(answer: string, usedCitations: Citation[], stepResults: StepResult[]): string[] {
     const warnings: string[] = []
 
     // Check for uncited claims (sentences without [N])
-    const sentences = answer.split(/[.!?。！？]+/).filter(s => s.trim().length > 15)
+    const sentences = answer.split(/[.!?。！？]+/).filter((s) => s.trim().length > 15)
     let uncitedCount = 0
     for (const sent of sentences) {
       if (!/\[\d+\]/.test(sent)) {
@@ -464,7 +455,7 @@ export class AnswerSynthesizer {
     }
 
     // Check for hallucinated citations (referenced but not in evidence)
-    const citedNumbers = Array.from(answer.matchAll(/\[(\d+)\]/g), m => parseInt(m[1], 10))
+    const citedNumbers = Array.from(answer.matchAll(/\[(\d+)\]/g), (m) => parseInt(m[1], 10))
     const maxEvidence = usedCitations.length
     for (const num of citedNumbers) {
       if (num > maxEvidence) {
@@ -480,7 +471,7 @@ export class AnswerSynthesizer {
     }
 
     // Check evidence coverage
-    const successfulSteps = stepResults.filter(r => r.success).length
+    const successfulSteps = stepResults.filter((r) => r.success).length
     const totalSteps = stepResults.length
     if (successfulSteps < totalSteps * 0.5) {
       warnings.push(`Only ${successfulSteps}/${totalSteps} steps succeeded`)
@@ -489,11 +480,7 @@ export class AnswerSynthesizer {
     return warnings
   }
 
-  private calculateConfidence(
-    usedCitations: Citation[],
-    stepResults: StepResult[],
-    warningCount: number
-  ): number {
+  private calculateConfidence(usedCitations: Citation[], stepResults: StepResult[], warningCount: number): number {
     let confidence = 0.5 // Base
 
     // Evidence density
@@ -501,7 +488,7 @@ export class AnswerSynthesizer {
     else if (usedCitations.length >= 1) confidence += 0.1
 
     // Step success rate
-    const successRate = stepResults.filter(r => r.success).length / Math.max(1, stepResults.length)
+    const successRate = stepResults.filter((r) => r.success).length / Math.max(1, stepResults.length)
     confidence += successRate * 0.2
 
     // Penalties
@@ -533,7 +520,7 @@ export async function synthesizeAnswer(
   plan: SubQueryPlan,
   stepResults: StepResult[],
   ai?: Ai,
-  model?: string
+  model?: string,
 ): Promise<SynthesizedAnswer> {
   const synthesizer = new AnswerSynthesizer({ ai, model })
   return synthesizer.synthesize(plan, stepResults)

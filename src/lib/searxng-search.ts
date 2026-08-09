@@ -33,19 +33,11 @@ export interface SearxngSearchOptions {
  * Search using a self-hosted SearXNG instance.
  * Returns empty array if SEARXNG_URL is not configured.
  */
-export async function searxngSearch(
-  query: string,
-  opts: SearxngSearchOptions = {},
-): Promise<SearchResult[]> {
+export async function searxngSearch(query: string, opts: SearxngSearchOptions = {}): Promise<SearchResult[]> {
   const searxngUrl = opts.env?.SEARXNG_URL
   if (!searxngUrl) return [] // Not configured
 
-  const {
-    maxResults = 10,
-    timeoutMs = 10000,
-    category = 'general',
-    language,
-  } = opts
+  const { maxResults = 10, timeoutMs = 10000, category = 'general', language } = opts
 
   try {
     const params = new URLSearchParams({
@@ -73,7 +65,7 @@ export async function searxngSearch(
       return []
     }
 
-    const data = await response.json() as { results?: Array<Record<string, unknown>> }
+    const data = (await response.json()) as { results?: Array<Record<string, unknown>> }
     const rawResults = data.results || []
 
     const results: SearchResult[] = rawResults
@@ -83,18 +75,18 @@ export async function searxngSearch(
         const title = stripHtml(decodeEntities(String(r.title || '')))
         const content = r.content ? stripHtml(decodeEntities(String(r.content))) : ''
         const url = String(r.url)
-      // Map to SearchResult — use undefined for missing dates per type contract
-      const publishedDate = r.publishedDate ? String(r.publishedDate) : undefined
-      return {
-        title,
-        url,
-        content: content.slice(0, 1000),
-        score: computeScore(title, content, query, publishedDate, extractDomain(url)),
-        domain: extractDomain(url),
-        published_date: publishedDate,
-        engine: 'searxng',
-        raw_content: content,
-      }
+        // Map to SearchResult — use undefined for missing dates per type contract
+        const publishedDate = r.publishedDate ? String(r.publishedDate) : undefined
+        return {
+          title,
+          url,
+          content: content.slice(0, 1000),
+          score: computeScore(title, content, query, publishedDate, extractDomain(url)),
+          domain: extractDomain(url),
+          published_date: publishedDate,
+          engine: 'searxng',
+          raw_content: content,
+        }
       })
 
     return results

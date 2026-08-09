@@ -17,7 +17,14 @@
  */
 
 import { DurableObject } from 'cloudflare:workers'
-import type { Env, LibraryCollection, LibraryItem, CreateCollectionRequest, UpdateCollectionRequest, CreateItemRequest } from '../types'
+import type {
+  Env,
+  LibraryCollection,
+  LibraryItem,
+  CreateCollectionRequest,
+  UpdateCollectionRequest,
+  CreateItemRequest,
+} from '../types'
 
 interface LibraryStorage {
   collections: Record<string, InternalCollection>
@@ -294,6 +301,7 @@ export interface LibraryRPC {
 }
 
 export function getLibraryStub(env: Env): LibraryRPC {
-  const id = env.LIBRARY_DO!.idFromName('hub')
-  return env.LIBRARY_DO!.get(id) as unknown as LibraryRPC
+  if (!env.LIBRARY_DO) throw new Error('LIBRARY_DO binding missing — configure the Durable Object binding first')
+  const id = env.LIBRARY_DO.idFromName('hub')
+  return env.LIBRARY_DO.get(id) as unknown as LibraryRPC
 }

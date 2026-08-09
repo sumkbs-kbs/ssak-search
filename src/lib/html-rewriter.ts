@@ -11,8 +11,13 @@
 import type { Env } from '../types'
 import { logger, toError } from './logger'
 import { fetchWithTimeout, extractDomain, decodeEntities, truncateToTokens } from './util'
-import type { ElementSignature, AdaptiveConfig } from './adaptive-scraper'
-import { captureSignature, findElementsInHtml, relocateElement } from './adaptive-scraper'
+import {
+  captureSignature,
+  findElementsInHtml,
+  relocateElement,
+  type ElementSignature,
+  type AdaptiveConfig,
+} from './adaptive-scraper'
 
 export interface HtmlRewriterOptions {
   includeImages?: boolean
@@ -42,8 +47,7 @@ export async function extractWithHtmlRewriter(
     url,
     {
       headers: {
-        'User-Agent':
-          'Mozilla/5.0 (compatible; SearchEngineBot/1.0; +https://webapp.pages.dev)',
+        'User-Agent': 'Mozilla/5.0 (compatible; SearchEngineBot/1.0; +https://webapp.pages.dev)',
         Accept: 'text/html,application/xhtml+xml',
         'Accept-Language': 'en-US,en;q=0.9,ko;q=0.8',
       },
@@ -148,7 +152,12 @@ export async function extractWithHtmlRewriter(
         if (t.text.trim()) {
           // Avoid duplicating text already captured by specific handlers
           // Only add if current element is not a heading/p/li
-          if (currentElement && !['h1','h2','h3','h4','h5','h6','p','li','td','th','blockquote','dd','dt'].includes(currentElement)) {
+          if (
+            currentElement &&
+            !['h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'p', 'li', 'td', 'th', 'blockquote', 'dd', 'dt'].includes(
+              currentElement,
+            )
+          ) {
             textPieces.push(new TextPiece(t.text, currentElement))
           } else if (!currentElement) {
             textPieces.push(new TextPiece(t.text, 'body'))
@@ -289,7 +298,7 @@ export async function extractWithAdaptiveMode(
   /** Similarity score if adaptive mode was used */
   similarity: number
 }> {
-  const { targetSelector, targetName, savedSignature, config, sourceUrl } = opts
+  const { targetSelector, savedSignature, config, sourceUrl } = opts
   const mergedConfig: AdaptiveConfig = {
     minSimilarity: config?.minSimilarity ?? 0.45,
     useTextFingerprint: config?.useTextFingerprint ?? true,
@@ -402,11 +411,7 @@ export function generateFallbackSelectors(targetName: string): string[] {
 
   // Generic fallbacks
   if (selectors.length === 0) {
-    selectors.push(
-      `[class*="${targetName}"]`,
-      `#${targetName}`,
-      `a[href*="${targetName.toLowerCase()}"]`,
-    )
+    selectors.push(`[class*="${targetName}"]`, `#${targetName}`, `a[href*="${targetName.toLowerCase()}"]`)
   }
 
   return selectors

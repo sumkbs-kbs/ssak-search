@@ -30,7 +30,7 @@ describe('Blacklist API route', () => {
   it('returns 501 when SEARCH_INDEX_DB is missing (GET /)', async () => {
     const mod = await import('../../src/routes/blacklist')
     const req = new Request('http://localhost/', { method: 'GET' })
-    const res = await mod.blacklistRoute.fetch(req, { } as any, {} as any)
+    const res = await mod.blacklistRoute.fetch(req, {} as any, {} as any)
     expect(res.status).toBe(501)
     const body: any = await res.json()
     expect(body.code).toBe('binding_missing')
@@ -60,7 +60,12 @@ describe('Blacklist API route', () => {
   it('returns 400 for POST with missing domain', async () => {
     const mod = await import('../../src/routes/blacklist')
     const mockDb = {
-      prepare: vi.fn().mockReturnValue({ bind: vi.fn().mockReturnValue({ first: vi.fn().mockResolvedValue(null), run: vi.fn().mockResolvedValue({ success: true }) }) }),
+      prepare: vi.fn().mockReturnValue({
+        bind: vi.fn().mockReturnValue({
+          first: vi.fn().mockResolvedValue(null),
+          run: vi.fn().mockResolvedValue({ success: true }),
+        }),
+      }),
     }
     const req = new Request('http://localhost/', {
       method: 'POST',
@@ -174,7 +179,7 @@ describe('Queue API route', () => {
   it('returns 501 when SEARCH_INDEX_DB is missing (GET /stats)', async () => {
     const mod = await import('../../src/routes/queue')
     const req = new Request('http://localhost/stats', { method: 'GET' })
-    const res = await mod.queueRoute.fetch(req, { } as any, {} as any)
+    const res = await mod.queueRoute.fetch(req, {} as any, {} as any)
     expect(res.status).toBe(501)
     const body: any = await res.json()
     expect(body.code).toBe('binding_missing')
@@ -183,7 +188,7 @@ describe('Queue API route', () => {
   it('returns 501 when SEARCH_INDEX_DB is missing (GET /pending)', async () => {
     const mod = await import('../../src/routes/queue')
     const req = new Request('http://localhost/pending', { method: 'GET' })
-    const res = await mod.queueRoute.fetch(req, { } as any, {} as any)
+    const res = await mod.queueRoute.fetch(req, {} as any, {} as any)
     expect(res.status).toBe(501)
   })
 })

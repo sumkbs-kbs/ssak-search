@@ -7,7 +7,7 @@
  * Requires SEARCH_INDEX_DB binding. Without it, returns 501.
  */
 
-import { Hono } from 'hono'
+import { Hono, type Context } from 'hono'
 import { logger, toError } from '../lib/logger'
 import { cors } from 'hono/cors'
 import type { AppBindings, ErrorResponse } from '../types'
@@ -20,13 +20,14 @@ queueRoute.use('/*', cors({ origin: '*' }))
 // Helpers
 // ============================================================
 
-function checkBinding(c: any): boolean {
+function checkBinding(c: Context<{ Bindings: AppBindings }>): boolean {
   return !!c.env.SEARCH_INDEX_DB
 }
 
-function bindingError(c: any) {
+function bindingError(c: Context<{ Bindings: AppBindings }>) {
   const body: ErrorResponse = {
-    detail: 'Crawl queue requires SEARCH_INDEX_DB (D1) binding. Configure via Cloudflare Dashboard → Pages → Settings → Functions → D1.',
+    detail:
+      'Crawl queue requires SEARCH_INDEX_DB (D1) binding. Configure via Cloudflare Dashboard → Pages → Settings → Functions → D1.',
     code: 'binding_missing',
   }
   return c.json(body, 501)
@@ -42,7 +43,9 @@ queueRoute.get('/stats', async (c) => {
     const db = c.env.SEARCH_INDEX_DB as D1Database
 
     // Aggregate counts by status
-    const stats = await db.prepare(`
+    const stats = (await db
+      .prepare(
+        `
       SELECT
         COUNT(*) AS total,
         SUM(CASE WHEN status = 'pending' THEN 1 ELSE 0 END) AS pending,
@@ -53,7 +56,10 @@ queueRoute.get('/stats', async (c) => {
         AVG(priority) AS avg_priority,
         SUM(CASE WHEN status = 'pending' AND due_at <= ? THEN 1 ELSE 0 END) AS overdue
       FROM crawl_queue
-    `).bind(Date.now()).first() as {
+    `,
+      )
+      .bind(Date.now())
+      .first()) as {
       total: number
       pending: number
       claimed: number
@@ -65,39 +71,53 @@ queueRoute.get('/stats', async (c) => {
     } | null
 
     // Top domains with most pending jobs
-    const topDomains = await db.prepare(`
+    const topDomains = (await db
+      .prepare(
+        `
       SELECT domain, COUNT(*) AS count
       FROM crawl_queue
       WHERE status = 'pending'
       GROUP BY domain
       ORDER BY count DESC
       LIMIT 20
-    `).all() as { results: Array<{ domain: string; count: number }> }
+    `,
+      )
+      .all()) as { results: Array<{ domain: string; count: number }> }
 
     // Source breakdown
-    const bySource = await db.prepare(`
+    const bySource = (await db
+      .prepare(
+        `
       SELECT source, COUNT(*) AS count
       FROM crawl_queue
       GROUP BY source
       ORDER BY count DESC
-    `).all() as { results: Array<{ source: string | null; count: number }> }
+    `,
+      )
+      .all()) as { results: Array<{ source: string | null; count: number }> }
 
     // Recent activity (last 100 completed/failed/skipped)
-    const recentActivity = await db.prepare(`
+    const recentActivity = (await db
+      .prepare(
+        `
       SELECT url, domain, status, added_at, claim_at, retry_count, last_error
       FROM crawl_queue
       WHERE status IN ('completed', 'failed', 'skipped')
       ORDER BY claim_at DESC NULLS LAST
       LIMIT 20
-    `).all() as { results: Array<{
-      url: string
-      domain: string
-      status: string
-      added_at: number
-      claim_at: number | null
-      retry_count: number
-      last_error: string | null
-    }> }
+    `,
+      )
+      .all()) as {
+      results: Array<{
+        url: string
+        domain: string
+        status: string
+        added_at: number
+        claim_at: number | null
+        retry_count: number
+        last_error: string | null
+      }>
+    }
 
     return c.json({
       stats: {
@@ -131,8 +151,8 @@ queueRoute.get('/pending', async (c) => {
     const page = Math.max(parseInt(c.req.query('page') || '1', 10) || 1, 1)
     const pageSize = Math.min(Math.max(parseInt(c.req.query('page_size') || '50', 10) || 50, 1), 200)
     const offset = (page - 1) * pageSize
-    const minPriority = parseFloat(c.req.query('min_priority') || '-1')  // filter: show only >= this priority
-    const domain = c.req.query('domain')  // filter by specific domain
+    const minPriority = parseFloat(c.req.query('min_priority') || '-1') // filter: show only >= this priority
+    const domain = c.req.query('domain') // filter by specific domain
 
     const db = c.env.SEARCH_INDEX_DB as D1Database
     let sql = `SELECT id, url, domain, priority, depth, source, reason,
@@ -153,7 +173,10 @@ queueRoute.get('/pending', async (c) => {
     sql += ' ORDER BY priority DESC, due_at ASC LIMIT ? OFFSET ?'
     params.push(pageSize, offset)
 
-    const result = await db.prepare(sql).bind(...params).all()
+    const result = await db
+      .prepare(sql)
+      .bind(...params)
+      .all()
 
     // Get total count
     let countSql = "SELECT COUNT(*) as total FROM crawl_queue WHERE status = 'pending'"
@@ -166,7 +189,10 @@ queueRoute.get('/pending', async (c) => {
       countSql += ' AND domain = ?'
       countParams.push(domain)
     }
-    const countResult = await db.prepare(countSql).bind(...countParams).first() as { total: number } | null
+    const countResult = (await db
+      .prepare(countSql)
+      .bind(...countParams)
+      .first()) as { total: number } | null
 
     return c.json({
       jobs: result.results || [],

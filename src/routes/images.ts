@@ -12,12 +12,12 @@ import { Hono } from 'hono'
 import { logger, toError } from '../lib/logger'
 import { cors } from 'hono/cors'
 import type { AppBindings, ImageResult, ErrorResponse } from '../types'
-import { bingImageSearch } from '../lib/bing-search'
+
 import { searchAllFreeImageSources } from '../lib/free-image-search'
 import { validateApiKeyWithTenant, checkClientRateLimit, getClientIp } from '../lib/auth'
 import { auditAuthFailure, audit } from '../lib/audit'
 import { setMetricsEnv, recordSearchSubrequests } from '../lib/metrics'
-import { cacheKey, getCached, setCached } from '../lib/cache'
+import { getCached, setCached } from '../lib/cache'
 
 // ============================================================
 // Types
@@ -48,29 +48,6 @@ export interface ImageSearchResponse {
   visual_answer?: string
 }
 
-// Bing image filter parameter mapping
-const SIZE_MAP: Record<ImageSize, string> = {
-  small: 'Small',
-  medium: 'Medium',
-  large: 'Large',
-  wallpaper: 'Wallpaper',
-  any: '',
-}
-
-const COLOR_MAP: Record<ImageColor, string> = {
-  color: 'Color',
-  monochrome: 'Monochrome',
-  any: '',
-}
-
-const TYPE_MAP: Record<ImageType, string> = {
-  photo: 'Photo',
-  clipart: 'Clipart',
-  animated: 'AnimatedGif',
-  transparent: 'Transparent',
-  any: '',
-}
-
 /**
  * Execute image search with optional filters.
  * Filters are applied via Bing's URL parameters (qft filter string).
@@ -90,9 +67,10 @@ async function executeImageSearch(
   // Use combined free image search (Bing + Flickr + Unsplash if keys configured)
   let results = await searchAllFreeImageSources(query, { maxResults, env, size, color, type })
 
-  // Post-filter by size (in case some sources return dimensions)
-  if (size === 'small') {
-  } else if (size === 'large') {
+  // Post-filter by size (in case some sources return dimensions).
+  // 'small' needs no post-filter — sources already return their default
+  // (small/medium) thumbnails; only 'large' is enforced here.
+  if (size === 'large') {
     results = results.filter((r) => (r.width ?? 0) > 1200 || (r.height ?? 0) > 1200)
   }
 
@@ -108,11 +86,7 @@ async function executeImageSearch(
  * image search results. Uses image titles + source context to produce
  * a coherent narrative about the visual content found.
  */
-async function generateVisualAnswer(
-  query: string,
-  images: ImageResult[],
-  ai: any,
-): Promise<string | undefined> {
+async function generateVisualAnswer(query: string, images: ImageResult[], ai: Ai): Promise<string | undefined> {
   if (!ai || images.length === 0) return undefined
 
   // Take top images for context
@@ -138,16 +112,20 @@ VISUAL ANSWER (2-3 paragraphs):`
   try {
     const result = await ai.run('@cf/meta/llama-3.1-8b-instruct', {
       messages: [
-        { role: 'system', content: 'You are a visual search analyst that produces brief, insightful visual summaries.' },
+        {
+          role: 'system',
+          content: 'You are a visual search analyst that produces brief, insightful visual summaries.',
+        },
         { role: 'user', content: prompt },
       ],
       max_tokens: 500,
       temperature: 0.3,
     })
 
-    const text = typeof result === 'object' && result !== null
-      ? (('response' in result ? (result as { response: string }).response : null) || JSON.stringify(result))
-      : String(result)
+    const text =
+      typeof result === 'object' && result !== null
+        ? ('response' in result ? (result as { response: string }).response : null) || JSON.stringify(result)
+        : String(result)
 
     if (text && text.trim().length > 20) return text.trim()
   } catch (err) {
@@ -160,12 +138,15 @@ VISUAL ANSWER (2-3 paragraphs):`
 const imagesRoute = new Hono<{ Bindings: AppBindings; Variables: { tenantId: string; tenantPlan: string } }>()
 
 // CORS
-imagesRoute.use('/*', cors({
-  origin: '*',
-  allowMethods: ['GET', 'POST', 'OPTIONS'],
-  allowHeaders: ['Content-Type', 'Authorization', 'X-API-Key'],
-  maxAge: 86400,
-}))
+imagesRoute.use(
+  '/*',
+  cors({
+    origin: '*',
+    allowMethods: ['GET', 'POST', 'OPTIONS'],
+    allowHeaders: ['Content-Type', 'Authorization', 'X-API-Key'],
+    maxAge: 86400,
+  }),
+)
 
 // Auth + rate limit middleware
 imagesRoute.use('/*', async (c, next) => {
@@ -174,21 +155,39 @@ imagesRoute.use('/*', async (c, next) => {
   // Body size guard
   const contentLength = parseInt(c.req.raw.headers.get('Content-Length') ?? '0', 10)
   if (contentLength > 64 * 1024) {
-    audit({ eventType: 'invalid_input', severity: 'low', outcome: 'blocked', resource: c.req.path, actor: clientIp, context: { contentLength } })
+    audit({
+      eventType: 'invalid_input',
+      severity: 'low',
+      outcome: 'blocked',
+      resource: c.req.path,
+      actor: clientIp,
+      context: { contentLength },
+    })
     return c.json<ErrorResponse>({ detail: 'Request body too large (max 64KB)', code: 'payload_too_large' }, 413)
   }
 
   // Multi-tenant API key validation
   const authResult = validateApiKeyWithTenant(c.req.raw.headers, c.env.TENANTS_CONFIG, c.env.SEARCH_API_KEY)
   if (!authResult.valid) {
-    auditAuthFailure({ reason: authResult.reason || 'Invalid or missing API key', clientIp, resource: c.req.path, attempt: 'none' })
+    auditAuthFailure({
+      reason: authResult.reason || 'Invalid or missing API key',
+      clientIp,
+      resource: c.req.path,
+      attempt: 'none',
+    })
     return c.json<ErrorResponse>({ detail: authResult.reason || 'Unauthorized', code: 'unauthorized' }, 401)
   }
 
   // Per-client rate limiting
-  const rateLimit = checkClientRateLimit(clientIp, { tenantId: authResult.tenant?.id, tenantsConfig: c.env.TENANTS_CONFIG })
+  const rateLimit = checkClientRateLimit(clientIp, {
+    tenantId: authResult.tenant?.id,
+    tenantsConfig: c.env.TENANTS_CONFIG,
+  })
   if (!rateLimit.allowed) {
-    return c.json<ErrorResponse>({ detail: 'Rate limit exceeded. Try again later.', code: 'rate_limited' }, 429, { 'X-RateLimit-Remaining': '0', 'Retry-After': '60' })
+    return c.json<ErrorResponse>({ detail: 'Rate limit exceeded. Try again later.', code: 'rate_limited' }, 429, {
+      'X-RateLimit-Remaining': '0',
+      'Retry-After': '60',
+    })
   }
 
   c.header('X-Tenant-Id', authResult.tenant?.id ?? '__default__')
@@ -206,7 +205,7 @@ imagesRoute.post('/', async (c) => {
   let body: Partial<ImageSearchRequest>
   try {
     body = await c.req.json()
-  } catch (err) {
+  } catch (_err) {
     return c.json<ErrorResponse>({ detail: 'Invalid JSON body', code: 'invalid_body' }, 400)
   }
 
@@ -264,7 +263,10 @@ imagesRoute.post('/', async (c) => {
     return c.json<ImageSearchResponse>(result)
   } catch (err) {
     logger.error('Image search error:', { error: toError(err) })
-    return c.json<ErrorResponse>({ detail: err instanceof Error ? err.message : 'Image search failed', code: 'image_search_error' }, 500)
+    return c.json<ErrorResponse>(
+      { detail: err instanceof Error ? err.message : 'Image search failed', code: 'image_search_error' },
+      500,
+    )
   }
 })
 
@@ -296,7 +298,10 @@ imagesRoute.get('/', async (c) => {
     return c.json<ImageSearchResponse>(result)
   } catch (err) {
     logger.error('Image search error:', { error: toError(err) })
-    return c.json<ErrorResponse>({ detail: err instanceof Error ? err.message : 'Image search failed', code: 'image_search_error' }, 500)
+    return c.json<ErrorResponse>(
+      { detail: err instanceof Error ? err.message : 'Image search failed', code: 'image_search_error' },
+      500,
+    )
   }
 })
 

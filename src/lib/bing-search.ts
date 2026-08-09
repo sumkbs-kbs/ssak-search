@@ -22,7 +22,15 @@
 
 import type { SearchResult, ImageResult, Env } from '../types'
 import { logger, toError } from './logger'
-import { fetchWithTimeout, extractDomain, stripHtml, decodeEntities, computeScore, truncateToTokens, parseFlexibleDate } from './util'
+import {
+  fetchWithTimeout,
+  extractDomain,
+  stripHtml,
+  decodeEntities,
+  computeScore,
+  truncateToTokens,
+  parseFlexibleDate,
+} from './util'
 
 const BING_SEARCH_URL = 'https://www.bing.com/search'
 
@@ -41,10 +49,7 @@ export interface BingSearchOptions {
  * Search using Bing's mobile web endpoint.
  * No API key required. Works for all languages including Korean.
  */
-export async function bingSearch(
-  query: string,
-  opts: BingSearchOptions = {},
-): Promise<SearchResult[]> {
+export async function bingSearch(query: string, opts: BingSearchOptions = {}): Promise<SearchResult[]> {
   const { maxResults = 10, timeoutMs = 15000, region, timeRange, env } = opts
 
   // Build URL parameters for a given page offset
@@ -74,9 +79,8 @@ export async function bingSearch(
 
   // Build Accept-Language header based on region for better localized results.
   // zh-CN region → prioritize Chinese in Accept-Language so Bing returns CJK content.
-  const acceptLang = region && region.startsWith('zh')
-    ? 'zh-CN,zh;q=0.9,en;q=0.8'
-    : 'en-US,en;q=0.9,ko;q=0.8,zh-CN;q=0.7'
+  const acceptLang =
+    region && region.startsWith('zh') ? 'zh-CN,zh;q=0.9,en;q=0.8' : 'en-US,en;q=0.9,ko;q=0.8,zh-CN;q=0.7'
 
   const fetchHeaders: Record<string, string> = {
     'User-Agent': MOBILE_UA,
@@ -156,10 +160,15 @@ export function parseBingHtml(html: string, query: string, maxResults: number): 
 
     // Extract main result link from b_algoheader
     // Pattern: <div class="b_algoheader">...<a href="URL" ...>TITLE</a>
-    const headerMatch = block.match( // b_algoheader is class-stable; allow attribute suffix per HTML5 flexibility,
-                                      // e.g., future-proof vs <div class="b_algoheader something_else"> without breaking existing structure.
-      /<div class="b_algoheader[^"]*">\s*<a[^>]*href="([^"]+)"[^>]*>([\s\S]*?)<\/a>/i, )
-    if (!headerMatch) { logger.warn('bing block parse failed — selector drift; skipping result', { index: results.length }) ; continue } 
+    const headerMatch = block.match(
+      // b_algoheader is class-stable; allow attribute suffix per HTML5 flexibility,
+      // e.g., future-proof vs <div class="b_algoheader something_else"> without breaking existing structure.
+      /<div class="b_algoheader[^"]*">\s*<a[^>]*href="([^"]+)"[^>]*>([\s\S]*?)<\/a>/i,
+    )
+    if (!headerMatch) {
+      logger.warn('bing block parse failed — selector drift; skipping result', { index: results.length })
+      continue
+    }
 
     let url = headerMatch[1]
     // Skip Bing-internal links
@@ -196,7 +205,9 @@ export function parseBingHtml(html: string, query: string, maxResults: number): 
     // published_date first so sort_by=date actually ranks Bing web results.
     // Patterns: "Mon D, YYYY ·", "Mon D YYYY ·", "YYYY. M. D. —", "YYYY-MM-DD ·"
     let publishedDate: string | undefined
-    const datePrefix = snippet.match(/^([A-Z][a-z]{2}\s+\d{1,2},?\s*\d{4}|\d{4}[.\-/]\s*\d{1,2}[.\-/]\s*\d{1,2})\s*[·•&#0183;—-]+\s*/)
+    const datePrefix = snippet.match(
+      /^([A-Z][a-z]{2}\s+\d{1,2},?\s*\d{4}|\d{4}[.\-/]\s*\d{1,2}[.\-/]\s*\d{1,2})\s*[·•&#0183;—-]+\s*/,
+    )
     if (datePrefix) {
       const parsed = parseFlexibleDate(datePrefix[1].trim())
       if (parsed) publishedDate = parsed
@@ -214,7 +225,7 @@ export function parseBingHtml(html: string, query: string, maxResults: number): 
     if (citeMatch) {
       const rawCite = stripHtml(citeMatch[1]).trim()
       // Take only the first part before any breadcrumb separator (›, »,›, ·)
-      citeDomain = rawCite.split(/[›»›··\-]/)[0].trim()
+      citeDomain = rawCite.split(/[›»›··-]/)[0].trim()
       // Remove protocol prefix if present
       citeDomain = citeDomain.replace(/^https?:\/\//i, '').replace(/^www\./, '')
       // Validate it looks like a domain
@@ -304,10 +315,7 @@ export function parseBingNewsHtml(html: string, query: string, maxResults: numbe
  *   data-title="...", data-url="...", data-author="..."
  * Each card also contains <a class="title itemlink"> with the full headline.
  */
-export async function bingNewsSearch(
-  query: string,
-  opts: BingSearchOptions = {},
-): Promise<SearchResult[]> {
+export async function bingNewsSearch(query: string, opts: BingSearchOptions = {}): Promise<SearchResult[]> {
   const { maxResults = 10, timeoutMs = 15000, env } = opts
 
   const params = new URLSearchParams()
@@ -367,7 +375,7 @@ export async function bingNewsSearch(
           try {
             const parsed = new Date(decodeEntities(dateMatch[1]))
             if (!isNaN(parsed.getTime())) publishedDate = parsed.toISOString()
-          } catch (err) {
+          } catch (_err) {
             // ignore parse errors
           }
         }
@@ -378,7 +386,14 @@ export async function bingNewsSearch(
           if (relativeMatch) {
             const num = parseInt(relativeMatch[1], 10)
             const unit = relativeMatch[2].toLowerCase()
-            const ms = unit === 'minute' ? num * 60_000 : unit === 'hour' ? num * 3_600_000 : unit === 'day' ? num * 86_400_000 : num * 604_800_000
+            const ms =
+              unit === 'minute'
+                ? num * 60_000
+                : unit === 'hour'
+                  ? num * 3_600_000
+                  : unit === 'day'
+                    ? num * 86_400_000
+                    : num * 604_800_000
             publishedDate = new Date(Date.now() - ms).toISOString()
           }
         }
@@ -470,7 +485,12 @@ export async function bingImageSearch(
       const html = await response.text()
 
       // Check if we got a bot detection page
-      if (html.includes('robot') || html.includes('captcha') || html.includes('unusual traffic') || html.length < 1000) {
+      if (
+        html.includes('robot') ||
+        html.includes('captcha') ||
+        html.includes('unusual traffic') ||
+        html.length < 1000
+      ) {
         continue
       }
 
@@ -479,7 +499,10 @@ export async function bingImageSearch(
       let match: RegExpExecArray | null
       while ((match = iuscRegex.exec(html)) !== null && results.length < maxResults) {
         try {
-          const rawJson = decodeEntities(match[1]).replace(/"/g, '"')
+          // decodeEntities already turns &quot; back into " (real Bing HTML
+          // escapes the JSON quotes as &quot; entities inside m="..."), so
+          // the old `.replace(/\"/g, '"')` here was a no-op (2026-08-07).
+          const rawJson = decodeEntities(match[1])
           const data = JSON.parse(rawJson) as Record<string, unknown>
           const imgUrl = (data.murl as string) || (data.imgurl as string)
           const title = (data.t as string) || ''
@@ -499,7 +522,7 @@ export async function bingImageSearch(
               content: `Image from ${extractDomain(imgUrl)}`,
             })
           }
-        } catch (err) {
+        } catch (_err) {
           // Skip malformed entries
         }
       }
@@ -531,4 +554,3 @@ export async function bingImageSearch(
 
   return results
 }
-

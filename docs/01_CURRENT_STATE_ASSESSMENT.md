@@ -1,8 +1,9 @@
 # 01. 현재 상태 평가서 (CURRENT STATE ASSESSMENT)
 
-> 작성일: 2026-08-06 (재검증) · 작성자: CTO 태스크포스
+> 작성일: 2026-08-07 (재감사) · 작성자: CTO 태스크포스
 > **근거**: 실제 코드 분석 + 빌드/타입체크/테스트/eval 실행 결과만 사용. 추측은 "가설"로 명시.
-> **이번 재검증 (2026-08-06 16:10 KST)**: typecheck 0 에러 · 유닛 테스트 66파일 1,230건 통과 · 빌드 1,041.57 kB (gzip 302.56 kB) · 프로덕션 HTTP 200 확인 · eval baseline(500쿼리 median-of-3) 500/500 pass · NDCG@10 0.533
+> **이번 재감사 (2026-08-07 KST)**: typecheck 0 에러 · 유닛 테스트 **70파일 1,351건 통과** · 빌드 1,061.78 kB (gzip 309.42 kB) · **CI 린트 게이트 복구** (lint:eslint:ci exit 0, 세션 전 38 errors+467 warnings로 레드) · eval 최신 median-of-3 (08-06 14:52Z) NDCG@10 0.5113, pass 498/500
+> **이번 세션 수정**: page-view.ts 브라우저 SyntaxError(인용/볼드 렌더링 복구) · util.ts isComparison 정규식 바이트 손상(한국어 비교 감지 복구) · ESLint 38 errors→0. 상세는 STRATEGIC_PLAN S24 / 08_CHANGELOG 참조.
 
 ---
 
@@ -47,15 +48,14 @@
 | 라이브 검색 (en) | `POST /api/search` quantum computing | ✅ bing+wikipedia+hackernews, 2.8s, 결과 정상 |
 | 라이브 검색 (ko) | `POST /api/search` 삼성전자 주가 | ✅ naver+naver-finance+wikipedia, 1.0s, 결과 정상 |
 
-### 2.1 eval 기준선 (2026-08-06 04:41Z, 500쿼리 median-of-3 — 신규 공식 baseline)
+### 2.1 eval 기준선 (최신 아티팩트 2026-08-06 14:52Z, 500쿼리 median-of-3)
 | 지표 | 값 | 비고 |
 |---|---|---|
-| Pass Rate | **100% (500/500)** | 이전(08-05, 180쿼리) 98.9% → 완전 통과 |
-| NDCG@10 | **0.5327** | 이전 0.519~0.553 범위와 일치 |
-| MRR | 0.4626 | P@10 0.2859 |
-| p50 / p95 | 840ms / 2,146ms | p95가 3,502ms → 2,146ms로 개선 |
-| avg time | 1,202ms | |
-| 백엔드 커버리지 | bing 692 · wikipedia 309 · hackernews 245 · google 137 · github 131 · naver 115 · duckduckgo 44 · yahoo 31 · arxiv 23 | — |
+| Pass Rate | **99.6% (498/500)** | 실패 2건: en-fact-01(wikipedia 일시 429, 라이브 재현 정상), zh-general-12(zh 롱테일 커버리지) |
+| NDCG@10 | **0.5113** | 실행 간 0.51~0.55 범위 (노이즈: 08-06 04:41Z 0.5327, README 0.551은 다른 런) |
+| MRR | 0.5017 | P@10 0.2773 |
+| p50 / p95 | 1,847ms / 3,502ms | avg 1,656ms |
+| 백엔드 커버리지 | bing 687 · hackernews 249 · wikipedia 149 · google 136 · github 128 · naver 117 · stack 87 · duckduckgo 78 · yahoo 31 · arxiv 22 | — |
 
 > ⚠️ 08-05 기록된 en-fact-01(wikipedia 429)·zh-general-04는 **S8/S9 수정으로 해소**됨 (wikipedia 프로세스 내 캐시 + eval 페이싱 + zh minResults 완화).
 

@@ -7,7 +7,7 @@
  * DELETE /api/crawl/:id        — Reset crawl state
  */
 
-import { Hono } from 'hono'
+import { Hono, type Context } from 'hono'
 import { logger, toError } from '../lib/logger'
 import { cors } from 'hono/cors'
 import type { AppBindings, ErrorResponse, CrawlRequest, CrawlStartResponse, CrawlStatusResponse } from '../types'
@@ -22,11 +22,11 @@ crawlRoute.use('/*', cors({ origin: '*' }))
 // State-changing endpoints require authentication. Previously these had NO
 // auth, letting anonymous callers drive server-side crawling/SSRF. GET (status
 // read) stays open since it leaks no data beyond a crawl id the caller owns.
-crawlRoute.post('/*', requireAuth as any)
-crawlRoute.delete('/*', requireAuth as any)
+crawlRoute.post('/*', requireAuth)
+crawlRoute.delete('/*', requireAuth)
 
 // Binding check helper
-function checkBinding(c: any): boolean {
+function checkBinding(c: Context<{ Bindings: AppBindings }>): boolean {
   return !!c.env.CRAWLER_DO
 }
 
@@ -37,7 +37,8 @@ crawlRoute.post('/', async (c) => {
   if (!checkBinding(c)) {
     return c.json<ErrorResponse>(
       {
-        detail: 'Crawler requires CRAWLER_DO Durable Object binding. Configure via Cloudflare Dashboard → Pages → ssak-search → Settings → Functions → Durable Objects → Add binding (name: CRAWLER_DO, class: CrawlerDO).',
+        detail:
+          'Crawler requires CRAWLER_DO Durable Object binding. Configure via Cloudflare Dashboard → Pages → ssak-search → Settings → Functions → Durable Objects → Add binding (name: CRAWLER_DO, class: CrawlerDO).',
         code: 'binding_missing',
       },
       501,
@@ -104,7 +105,8 @@ crawlRoute.post('/refresh', async (c) => {
   if (!c.env.SEARCH_INDEX_DB) {
     return c.json<ErrorResponse>(
       {
-        detail: 'Refresh scheduler requires SEARCH_INDEX_DB (D1) binding. Configure via Cloudflare Dashboard → Pages → ssak-search → Settings → Functions → D1.',
+        detail:
+          'Refresh scheduler requires SEARCH_INDEX_DB (D1) binding. Configure via Cloudflare Dashboard → Pages → ssak-search → Settings → Functions → D1.',
         code: 'binding_missing',
       },
       501,
@@ -135,10 +137,7 @@ crawlRoute.post('/refresh', async (c) => {
     })
   } catch (err) {
     logger.error('Refresh scheduler error:', { error: toError(err) })
-    return c.json<ErrorResponse>(
-      { detail: 'Failed to run refresh scheduler', code: 'refresh_error' },
-      500,
-    )
+    return c.json<ErrorResponse>({ detail: 'Failed to run refresh scheduler', code: 'refresh_error' }, 500)
   }
 })
 
@@ -147,10 +146,7 @@ crawlRoute.post('/refresh', async (c) => {
 // ============================================================
 crawlRoute.get('/:id', async (c) => {
   if (!checkBinding(c)) {
-    return c.json<ErrorResponse>(
-      { detail: 'Crawler requires CRAWLER_DO binding', code: 'binding_missing' },
-      501,
-    )
+    return c.json<ErrorResponse>({ detail: 'Crawler requires CRAWLER_DO binding', code: 'binding_missing' }, 501)
   }
 
   const { id } = c.req.param()
@@ -172,10 +168,7 @@ crawlRoute.get('/:id', async (c) => {
     return c.json(response)
   } catch (err) {
     logger.error('Get crawl status error:', { error: toError(err) })
-    return c.json<ErrorResponse>(
-      { detail: 'Failed to get crawl status', code: 'status_error' },
-      500,
-    )
+    return c.json<ErrorResponse>({ detail: 'Failed to get crawl status', code: 'status_error' }, 500)
   }
 })
 
@@ -184,10 +177,7 @@ crawlRoute.get('/:id', async (c) => {
 // ============================================================
 crawlRoute.post('/:id/stop', async (c) => {
   if (!checkBinding(c)) {
-    return c.json<ErrorResponse>(
-      { detail: 'Crawler requires CRAWLER_DO binding', code: 'binding_missing' },
-      501,
-    )
+    return c.json<ErrorResponse>({ detail: 'Crawler requires CRAWLER_DO binding', code: 'binding_missing' }, 501)
   }
 
   const { id } = c.req.param()
@@ -199,10 +189,7 @@ crawlRoute.post('/:id/stop', async (c) => {
     return c.json({ success: true, message: 'Crawl paused', crawl_id: id })
   } catch (err) {
     logger.error('Stop crawl error:', { error: toError(err) })
-    return c.json<ErrorResponse>(
-      { detail: 'Failed to stop crawl', code: 'stop_error' },
-      500,
-    )
+    return c.json<ErrorResponse>({ detail: 'Failed to stop crawl', code: 'stop_error' }, 500)
   }
 })
 
@@ -211,10 +198,7 @@ crawlRoute.post('/:id/stop', async (c) => {
 // ============================================================
 crawlRoute.delete('/:id', async (c) => {
   if (!checkBinding(c)) {
-    return c.json<ErrorResponse>(
-      { detail: 'Crawler requires CRAWLER_DO binding', code: 'binding_missing' },
-      501,
-    )
+    return c.json<ErrorResponse>({ detail: 'Crawler requires CRAWLER_DO binding', code: 'binding_missing' }, 501)
   }
 
   const { id } = c.req.param()
@@ -226,10 +210,7 @@ crawlRoute.delete('/:id', async (c) => {
     return c.json({ success: true, message: 'Crawl state reset', crawl_id: id })
   } catch (err) {
     logger.error('Reset crawl error:', { error: toError(err) })
-    return c.json<ErrorResponse>(
-      { detail: 'Failed to reset crawl', code: 'reset_error' },
-      500,
-    )
+    return c.json<ErrorResponse>({ detail: 'Failed to reset crawl', code: 'reset_error' }, 500)
   }
 })
 

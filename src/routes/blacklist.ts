@@ -8,7 +8,7 @@
  * Requires SEARCH_INDEX_DB binding. Without it, returns 501.
  */
 
-import { Hono } from 'hono'
+import { Hono, type Context } from 'hono'
 import { logger, toError } from '../lib/logger'
 import { cors } from 'hono/cors'
 import type { AppBindings, ErrorResponse } from '../types'
@@ -20,8 +20,8 @@ blacklistRoute.use('/*', cors({ origin: '*' }))
 
 // Blacklist mutation requires auth — anonymous edits would let anyone censor
 // search results globally. GET (list) stays open as read-only observability.
-blacklistRoute.post('/*', requireAuth as any)
-blacklistRoute.delete('/*', requireAuth as any)
+blacklistRoute.post('/*', requireAuth)
+blacklistRoute.delete('/*', requireAuth)
 
 // ============================================================
 // Constants
@@ -34,19 +34,20 @@ const VALID_SOURCES = ['auto', 'manual', 'searxng_1p', 'community'] as const
 // Helpers
 // ============================================================
 
-function checkBinding(c: any): boolean {
+function checkBinding(c: Context<{ Bindings: AppBindings }>): boolean {
   return !!c.env.SEARCH_INDEX_DB
 }
 
-function bindingError(c: any) {
+function bindingError(c: Context<{ Bindings: AppBindings }>) {
   const body: ErrorResponse = {
-    detail: 'Blacklist requires SEARCH_INDEX_DB (D1) binding. Configure via Cloudflare Dashboard → Pages → Settings → Functions → D1.',
+    detail:
+      'Blacklist requires SEARCH_INDEX_DB (D1) binding. Configure via Cloudflare Dashboard → Pages → Settings → Functions → D1.',
     code: 'binding_missing',
   }
   return c.json(body, 501)
 }
 
-function getDb(c: any): D1Database {
+function getDb(c: Context<{ Bindings: AppBindings }>): D1Database {
   return c.env.SEARCH_INDEX_DB as D1Database
 }
 
@@ -78,16 +79,20 @@ blacklistRoute.get('/', async (c) => {
 
     const whereClause = conditions.length > 0 ? ' WHERE ' + conditions.join(' AND ') : ''
 
-    const result = await db.prepare(
-      `SELECT domain, reason, severity, source, blocked_at, expires_at, blocked_count, notes
+    const result = await db
+      .prepare(
+        `SELECT domain, reason, severity, source, blocked_at, expires_at, blocked_count, notes
        FROM domain_blacklist${whereClause}
        ORDER BY blocked_at DESC
-       LIMIT ? OFFSET ?`
-    ).bind(...params, pageSize, offset).all()
+       LIMIT ? OFFSET ?`,
+      )
+      .bind(...params, pageSize, offset)
+      .all()
 
-    const countResult = await db.prepare(
-      `SELECT COUNT(*) as total FROM domain_blacklist${whereClause}`
-    ).bind(...params).first() as { total: number } | null
+    const countResult = (await db
+      .prepare(`SELECT COUNT(*) as total FROM domain_blacklist${whereClause}`)
+      .bind(...params)
+      .first()) as { total: number } | null
 
     return c.json({
       domains: result.results || [],
@@ -126,7 +131,9 @@ blacklistRoute.post('/', async (c) => {
     return c.json(missing, 400)
   }
 
-  const domains = Array.isArray(domainVal) ? domainVal.filter((d): d is string => typeof d === 'string') : [String(domainVal)]
+  const domains = Array.isArray(domainVal)
+    ? domainVal.filter((d): d is string => typeof d === 'string')
+    : [String(domainVal)]
   if (domains.length > 100) {
     const tooMany: ErrorResponse = { detail: 'Maximum 100 domains per request', code: 'too_many_domains' }
     return c.json(tooMany, 400)
@@ -154,9 +161,8 @@ blacklistRoute.post('/', async (c) => {
 
   const reason = String(body.reason || 'Manual block')
   const notes = body.notes ? String(body.notes) : null
-  const expiresAt = typeof body.expires_in_hours === 'number'
-    ? Date.now() + body.expires_in_hours * 60 * 60 * 1000
-    : null
+  const expiresAt =
+    typeof body.expires_in_hours === 'number' ? Date.now() + body.expires_in_hours * 60 * 60 * 1000 : null
 
   const db = getDb(c)
   const now = Date.now()
@@ -164,33 +170,40 @@ blacklistRoute.post('/', async (c) => {
   let skipped = 0
 
   for (const rawDomain of domains) {
-    const domain = rawDomain.trim().toLowerCase().replace(/^www\./, '')
+    const domain = rawDomain
+      .trim()
+      .toLowerCase()
+      .replace(/^www\./, '')
     if (!domain || domain.length < 2 || domain.includes('/') || !domain.includes('.')) {
       skipped++
       continue
     }
 
     try {
-      const existing = await db.prepare(
-        `SELECT domain FROM domain_blacklist WHERE domain = ?`
-      ).bind(domain).first()
+      const existing = await db.prepare(`SELECT domain FROM domain_blacklist WHERE domain = ?`).bind(domain).first()
 
       if (existing) {
-        await db.prepare(
-          `UPDATE domain_blacklist
+        await db
+          .prepare(
+            `UPDATE domain_blacklist
            SET blocked_count = blocked_count + 1,
                reason = ?, severity = ?, source = ?,
                notes = COALESCE(?, notes),
                expires_at = COALESCE(?, expires_at),
                blocked_at = ?
-           WHERE domain = ?`
-        ).bind(reason, severity, source, notes, expiresAt, now, domain).run()
+           WHERE domain = ?`,
+          )
+          .bind(reason, severity, source, notes, expiresAt, now, domain)
+          .run()
         skipped++
       } else {
-        await db.prepare(
-          `INSERT INTO domain_blacklist (domain, reason, severity, source, blocked_at, expires_at, blocked_count, notes)
-           VALUES (?, ?, ?, ?, ?, ?, 1, ?)`
-        ).bind(domain, reason, severity, source, now, expiresAt, notes).run()
+        await db
+          .prepare(
+            `INSERT INTO domain_blacklist (domain, reason, severity, source, blocked_at, expires_at, blocked_count, notes)
+           VALUES (?, ?, ?, ?, ?, ?, 1, ?)`,
+          )
+          .bind(domain, reason, severity, source, now, expiresAt, notes)
+          .run()
         added++
       }
     } catch (err) {
@@ -199,13 +212,16 @@ blacklistRoute.post('/', async (c) => {
     }
   }
 
-  return c.json({
-    success: true,
-    message: `Blacklist updated: ${added} added, ${skipped} skipped`,
-    added,
-    skipped,
-    total: added + skipped,
-  }, added === 0 ? 200 : 201)
+  return c.json(
+    {
+      success: true,
+      message: `Blacklist updated: ${added} added, ${skipped} skipped`,
+      added,
+      skipped,
+      total: added + skipped,
+    },
+    added === 0 ? 200 : 201,
+  )
 })
 
 // ============================================================
@@ -218,15 +234,16 @@ blacklistRoute.delete('/:domain', async (c) => {
   // Try path param first, then query param
   const domain = (c.req.param('domain') || c.req.query('domain') || '').trim().toLowerCase()
   if (!domain || domain.length < 2) {
-    const missingDomain: ErrorResponse = { detail: 'domain is required (path param or ?domain=)', code: 'missing_domain' }
+    const missingDomain: ErrorResponse = {
+      detail: 'domain is required (path param or ?domain=)',
+      code: 'missing_domain',
+    }
     return c.json(missingDomain, 400)
   }
 
   try {
     const db = getDb(c)
-    const result = await db.prepare(
-      `DELETE FROM domain_blacklist WHERE domain = ?`
-    ).bind(domain).run()
+    const result = await db.prepare(`DELETE FROM domain_blacklist WHERE domain = ?`).bind(domain).run()
 
     if (result.meta.changes === 0) {
       const notFound: ErrorResponse = { detail: `Domain not found in blacklist: ${domain}`, code: 'not_found' }

@@ -1,6 +1,6 @@
 /**
  * Agentic Search Pipeline — Full Integration
- * 
+ *
  * Orchestrates the complete Perplexity-style Answer Engine pipeline:
  * 1. Classify query (Fast vs Pro)
  * 2. If Pro: Plan → Execute → Quality Gate → Synthesize
@@ -9,16 +9,17 @@
  */
 
 import type { SearchResponse, SearchAnswer, Topic, TimeRange, SortBy, Env } from '../../types'
-import type { ClassificationResult, ClassifierConfig } from './classifier'
-import { classifyQuery, classifyWithAI, DEFAULT_CLASSIFIER_CONFIG } from './classifier'
-import type { SubQueryPlan } from './planner'
-import { createPlan } from './planner'
-import type { StepResult } from './executor'
-import { executePlan } from './executor'
-import type { SynthesizedAnswer } from './synthesizer'
-import { synthesizeAnswer } from './synthesizer'
-import type { QualityGateResult } from './quality-gate'
-import { runQualityGate } from './quality-gate'
+import {
+  classifyQuery,
+  classifyWithAI,
+  DEFAULT_CLASSIFIER_CONFIG,
+  type ClassificationResult,
+  type ClassifierConfig,
+} from './classifier'
+import { createPlan, type SubQueryPlan } from './planner'
+import { executePlan, type StepResult } from './executor'
+import { synthesizeAnswer, type SynthesizedAnswer } from './synthesizer'
+import { runQualityGate, type QualityGateResult } from './quality-gate'
 import { logger, toError } from '../../lib/logger'
 import type { Ai } from '@cloudflare/workers-types'
 
@@ -118,7 +119,7 @@ export interface AgenticPipelineContext {
  */
 export async function executeAgenticSearch(
   options: AgenticSearchOptions,
-  ctx: AgenticPipelineContext
+  ctx: AgenticPipelineContext,
 ): Promise<AgenticSearchResult> {
   const startTime = Date.now()
   const {
@@ -139,13 +140,14 @@ export async function executeAgenticSearch(
 
   // Step 1: Classify query
   const mergedConfig = { ...DEFAULT_CLASSIFIER_CONFIG, ...classifierConfig }
-  const classification = mode === 'pro'
-    ? classifyQuery(query, { ...mergedConfig, mode: 'pro' })
-    : mode === 'fast'
-      ? classifyQuery(query, { ...mergedConfig, mode: 'fast' })
-      : ctx.ai
-        ? await classifyWithAI(query, ctx.ai, mergedConfig)
-        : classifyQuery(query, mergedConfig)
+  const classification =
+    mode === 'pro'
+      ? classifyQuery(query, { ...mergedConfig, mode: 'pro' })
+      : mode === 'fast'
+        ? classifyQuery(query, { ...mergedConfig, mode: 'fast' })
+        : ctx.ai
+          ? await classifyWithAI(query, ctx.ai, mergedConfig)
+          : classifyQuery(query, mergedConfig)
 
   const resolvedMode = searchDepth === 'advanced' ? 'pro' : classification.mode === 'pro' ? 'pro' : 'fast'
 
@@ -208,7 +210,7 @@ async function executeProPipeline(
     ctx: AgenticPipelineContext
     classification: ClassificationResult
     startTime: number
-  }
+  },
 ): Promise<AgenticSearchResult> {
   const { ctx, startTime, classification } = opts
 
@@ -223,7 +225,7 @@ async function executeProPipeline(
     })
 
     // Step 2b: Execute plan
-    let execution = await executePlan(plan, {
+    const execution = await executePlan(plan, {
       ai: ctx.ai as Ai | undefined,
       maxParallel: 3,
     })
@@ -301,16 +303,18 @@ async function executeProPipeline(
       mode: 'pro',
       classification,
       results: allResults,
-      answer: synthesized ? {
-        text: synthesized.text,
-        confidence: synthesized.confidence,
-        sources: synthesized.citations.map((cite) => ({
-          index: cite.sourceId,
-          url: cite.url,
-          title: cite.title,
-          snippet: cite.snippet,
-        })),
-      } : undefined,
+      answer: synthesized
+        ? {
+            text: synthesized.text,
+            confidence: synthesized.confidence,
+            sources: synthesized.citations.map((cite) => ({
+              index: cite.sourceId,
+              url: cite.url,
+              title: cite.title,
+              snippet: cite.snippet,
+            })),
+          }
+        : undefined,
       synthesizedAnswer: synthesized,
       qualityGate: quality,
       plan,
@@ -358,24 +362,28 @@ async function executeFastPipeline(
     ctx: AgenticPipelineContext
     classification: ClassificationResult
     startTime: number
-  }
+  },
 ): Promise<AgenticSearchResult> {
   const { ctx, startTime, classification } = opts
 
   try {
     // Single-pass search using searchWeb
     const { searchWeb } = await import('./search-tools')
-    const results = await searchWeb({
-      query,
-      maxResults: opts.maxResults,
-      topic: opts.topic as 'general' | 'news' | 'finance',
-    }, ctx.env, ctx.ai)
+    const results = await searchWeb(
+      {
+        query,
+        maxResults: opts.maxResults,
+        topic: opts.topic as 'general' | 'news' | 'finance',
+      },
+      ctx.env,
+      ctx.ai,
+    )
 
     return {
       query,
       mode: 'fast',
       classification,
-      results: results.map(r => ({
+      results: results.map((r) => ({
         title: r.title,
         url: r.url,
         content: r.content,

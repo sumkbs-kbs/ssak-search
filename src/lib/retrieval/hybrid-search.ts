@@ -30,13 +30,13 @@
  *   Prevents near-duplicate results from dominating top positions
  */
 
-import type { SearchResult, Env } from '../../types'
+import type { Env } from '../../types'
 import { logger, toError } from '../logger'
-import { BM25Scorer, type BM25Document, type BM25Result } from './bm25'
+import { BM25Scorer, type BM25Document } from './bm25'
 import { searchIndex } from '../index/pipeline'
 import type { IndexSearchResult } from '../index/types'
 import { CrossEncoderReranker, type RerankDocument } from './reranker'
-import { mmrDiversityFilter, type DiversityResult } from './diversity'
+import { mmrDiversityFilter } from './diversity'
 
 // ============================================================
 // Types
@@ -174,12 +174,7 @@ export class HybridSearchEngine {
    * @param language - Language code for query
    * @returns Sorted array of hybrid search results
    */
-  async search(
-    env: Env,
-    query: string,
-    maxResults: number,
-    language?: string,
-  ): Promise<HybridSearchResult[]> {
+  async search(env: Env, query: string, maxResults: number, language?: string): Promise<HybridSearchResult[]> {
     if (!query) return []
 
     // Step 1: Run BM25 and Vector searches in parallel
@@ -197,13 +192,13 @@ export class HybridSearchEngine {
     // Step 2: RRF Fusion
     let fused: HybridSearchResult[]
     if (bm25.length === 0) {
-      fused = vector.slice(0, maxResults * 3).map(r => ({
+      fused = vector.slice(0, maxResults * 3).map((r) => ({
         ...r,
         source: 'vector' as const,
         componentScores: { bm25: undefined, vector: r.componentScores.vector, rrfScore: r.score },
       }))
     } else if (vector.length === 0) {
-      fused = bm25.slice(0, maxResults * 3).map(r => ({
+      fused = bm25.slice(0, maxResults * 3).map((r) => ({
         ...r,
         source: 'bm25' as const,
         componentScores: { bm25: r.componentScores.bm25, vector: undefined, rrfScore: r.score },
@@ -241,7 +236,7 @@ export class HybridSearchEngine {
       const reranker = new CrossEncoderReranker()
 
       // Convert to RerankDocument format
-      const documents: RerankDocument[] = results.map(r => ({
+      const documents: RerankDocument[] = results.map((r) => ({
         id: r.id,
         title: r.title,
         content: r.content,
@@ -256,7 +251,7 @@ export class HybridSearchEngine {
       })
 
       // Map back to HybridSearchResult
-      return reranked.map(r => ({
+      return reranked.map((r) => ({
         id: r.id,
         title: r.title,
         content: r.content,
@@ -280,12 +275,9 @@ export class HybridSearchEngine {
   /**
    * Apply MMR diversity filtering to ensure result diversity.
    */
-  private diversifyResults(
-    results: HybridSearchResult[],
-    maxResults: number,
-  ): HybridSearchResult[] {
+  private diversifyResults(results: HybridSearchResult[], maxResults: number): HybridSearchResult[] {
     const diverse = mmrDiversityFilter(
-      results.map(r => ({
+      results.map((r) => ({
         id: r.id,
         title: r.title,
         url: r.url,
@@ -303,7 +295,7 @@ export class HybridSearchEngine {
     )
 
     // Map back to HybridSearchResult
-    return diverse.map(r => ({
+    return diverse.map((r) => ({
       id: r.id,
       title: r.title,
       content: r.content,
@@ -349,17 +341,18 @@ export class HybridSearchEngine {
     rankMaps.set('vector', vectorRanks)
 
     // Compute RRF scores for all documents
-    const scored = Array.from(allIds).map(id => {
-      const bm25Item = bm25Results.find(r => r.id === id)
-      const vectorItem = vectorResults.find(r => r.id === id)
-      const item = bm25Item || vectorItem!
+    const scored = Array.from(allIds).map((id) => {
+      const bm25Item = bm25Results.find((r) => r.id === id)
+      const vectorItem = vectorResults.find((r) => r.id === id)
+      // allIds is the UNION of bm25+vector ids, so exactly one lookup hits.
+      const item = bm25Item ?? vectorItem
+      if (!item) throw new Error(`Hybrid search: id ${id} in neither list`)
 
-      const { rrfScore, bm25: bm25Score, vector: vectorScore } = computeRRFScore(
-        id,
-        rankMaps,
-        listWeights,
-        this.config.rrfK,
-      )
+      const {
+        rrfScore,
+        bm25: bm25Score,
+        vector: vectorScore,
+      } = computeRRFScore(id, rankMaps, listWeights, this.config.rrfK)
 
       return {
         ...item,
@@ -385,7 +378,9 @@ export class HybridSearchEngine {
     env: Env,
     query: string,
     maxResults: number,
-    language?: string,
+    // P18 audit: language is accepted for interface parity but BM25/D1
+    // scoring is language-agnostic (no language filter in FTS5 or BM25).
+    _language?: string,
   ): Promise<HybridSearchResult[]> {
     // Try D1 search first
     if (env.SEARCH_INDEX_DB) {
@@ -408,11 +403,7 @@ export class HybridSearchEngine {
    * In production, this would use D1 FTS5 virtual tables.
    * For now, we use a LIKE-based approach that works with existing schema.
    */
-  private async searchD1FTS(
-    env: Env,
-    query: string,
-    maxResults: number,
-  ): Promise<HybridSearchResult[]> {
+  private async searchD1FTS(env: Env, query: string, maxResults: number): Promise<HybridSearchResult[]> {
     if (!env.SEARCH_INDEX_DB) return []
 
     // Try FTS5 first (indexed, ranked). Fall back to LIKE full-scan if the
@@ -422,7 +413,10 @@ export class HybridSearchEngine {
     if (ftsResults.length > 0) return ftsResults
 
     // Fallback: legacy LIKE '%term%' full scan (original implementation).
-    const terms = query.toLowerCase().split(/\s+/).filter(t => t.length > 2)
+    const terms = query
+      .toLowerCase()
+      .split(/\s+/)
+      .filter((t) => t.length > 2)
     if (terms.length === 0) return []
 
     const conditions = terms.map(() => `(LOWER(url) LIKE ? OR LOWER(title) LIKE ?)`)
@@ -457,7 +451,7 @@ export class HybridSearchEngine {
     if (!result.results || result.results.length === 0) return []
 
     // Convert to BM25 documents for scoring
-    const documents: BM25Document[] = result.results.map(r => ({
+    const documents: BM25Document[] = result.results.map((r) => ({
       id: r.id,
       title: r.title,
       content: r.title, // Title is our content proxy for now
@@ -468,7 +462,7 @@ export class HybridSearchEngine {
     // Score with BM25
     const scored = this.bm25Scorer.score(query, documents)
 
-    return scored.map(r => ({
+    return scored.map((r) => ({
       id: r.id,
       title: r.title,
       url: r.url,
@@ -490,22 +484,21 @@ export class HybridSearchEngine {
    * has no FTS-matchable terms; the caller (searchD1FTS) then falls back to
    * the LIKE path.
    */
-  private async searchD1FTS5(
-    env: Env,
-    query: string,
-    maxResults: number,
-  ): Promise<HybridSearchResult[]> {
+  private async searchD1FTS5(env: Env, query: string, maxResults: number): Promise<HybridSearchResult[]> {
     if (!env.SEARCH_INDEX_DB) return []
     // FTS5 MATCH syntax: wrap each term in quotes to avoid special-character
     // interpretation (AND/OR/NEAR, prefix* etc.). Empty/short terms are
     // skipped — FTS5 ignores very short tokens anyway.
-    const terms = query.split(/\s+/).map(t => t.replace(/["']/g, '')).filter(t => t.length > 1)
+    const terms = query
+      .split(/\s+/)
+      .map((t) => t.replace(/["']/g, ''))
+      .filter((t) => t.length > 1)
     if (terms.length === 0) return []
 
     // Build a phrase-style MATCH across terms: '"term1" "term2" ...' (implicit AND).
     // Use OR semantics when AND yields nothing useful for multi-word queries by
     // falling back to OR via the OR operator in FTS5 syntax if needed.
-    const matchExpr = terms.map(t => `"${t}"`).join(' ')
+    const matchExpr = terms.map((t) => `"${t}"`).join(' ')
 
     const sql = `
       SELECT d.id, d.url, d.title, d.domain, d.total_chunks as totalChunks,
@@ -542,9 +535,9 @@ export class HybridSearchEngine {
       // transform relative to the best result in this batch.
       const bestRank = result.results[0].rank_score // most negative = best
       const worstRank = result.results[result.results.length - 1].rank_score
-      const span = (worstRank - bestRank) || 1
+      const span = worstRank - bestRank || 1
 
-      return result.results.map(r => {
+      return result.results.map((r) => {
         const normalized = 1 - (r.rank_score - bestRank) / span // 1 at best, 0 at worst
         return {
           id: r.id,

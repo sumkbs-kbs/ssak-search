@@ -7,7 +7,6 @@
 
 import { Layout } from '../components/Layout'
 
-import { logger, toError } from '../lib/logger'
 // ============================================================
 // Status Page Styles
 // ============================================================
@@ -240,7 +239,23 @@ export function statusPage() {
         {/* Header */}
         <div style="text-align:center;padding:24px 0 16px;">
           <h1 style="font-size:1.5rem;font-weight:700;margin-bottom:4px;">
-            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="vertical-align:middle;margin-right:8px;color:var(--accent);"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              width="24"
+              height="24"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              aria-hidden="true"
+              style="vertical-align:middle;margin-right:8px;color:var(--accent);"
+            >
+              <circle cx="12" cy="12" r="10" />
+              <line x1="12" y1="8" x2="12" y2="12" />
+              <line x1="12" y1="16" x2="12.01" y2="16" />
+            </svg>
             Service Status
           </h1>
           <p style="color:var(--text-secondary);font-size:0.85rem;">
@@ -250,13 +265,34 @@ export function statusPage() {
 
         {/* Status Summary */}
         <div class="status-summary" id="status-container">
-          <div class="status-badge ok" id="status-badge">Checking...</div>
-          <div style="font-size:0.8rem;color:var(--text-tertiary);" id="status-timestamp">Loading...</div>
+          <div class="status-badge ok" id="status-badge">
+            Checking...
+          </div>
+          <div style="font-size:0.8rem;color:var(--text-tertiary);" id="status-timestamp">
+            Loading...
+          </div>
         </div>
 
         {/* Backend Grid */}
         <h2 style="font-size:1rem;font-weight:600;margin-bottom:8px;color:var(--text);">
-          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="vertical-align:middle;margin-right:6px;"><rect x="2" y="2" width="20" height="8" rx="2" ry="2"/><rect x="2" y="14" width="20" height="8" rx="2" ry="2"/><circle cx="6" cy="6" r="1" fill="currentColor"/><circle cx="6" cy="18" r="1" fill="currentColor"/></svg>
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            width="16"
+            height="16"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            aria-hidden="true"
+            style="vertical-align:middle;margin-right:6px;"
+          >
+            <rect x="2" y="2" width="20" height="8" rx="2" ry="2" />
+            <rect x="2" y="14" width="20" height="8" rx="2" ry="2" />
+            <circle cx="6" cy="6" r="1" fill="currentColor" />
+            <circle cx="6" cy="18" r="1" fill="currentColor" />
+          </svg>
           Backends
         </h2>
         <div class="backend-grid" id="backend-grid">
@@ -265,25 +301,48 @@ export function statusPage() {
 
         {/* Metrics Overview */}
         <h2 style="font-size:1rem;font-weight:600;margin-bottom:8px;color:var(--text);">
-          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="vertical-align:middle;margin-right:6px;"><path d="M4 20h16M4 17l4-7 4 3 6-7"/><path d="M20 8V5h-3"/></svg>
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            width="16"
+            height="16"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            aria-hidden="true"
+            style="vertical-align:middle;margin-right:6px;"
+          >
+            <path d="M4 20h16M4 17l4-7 4 3 6-7" />
+            <path d="M20 8V5h-3" />
+          </svg>
           Metrics
         </h2>
         <div class="metrics-section">
           <div class="metrics-grid">
             <div class="metric-card">
-              <div class="metric-value" id="metrics-total-requests">-</div>
+              <div class="metric-value" id="metrics-total-requests">
+                -
+              </div>
               <div class="metric-label">Total Requests</div>
             </div>
             <div class="metric-card">
-              <div class="metric-value" id="metrics-total-errors">-</div>
+              <div class="metric-value" id="metrics-total-errors">
+                -
+              </div>
               <div class="metric-label">Total Errors</div>
             </div>
             <div class="metric-card">
-              <div class="metric-value" id="metrics-avg-latency">-</div>
+              <div class="metric-value" id="metrics-avg-latency">
+                -
+              </div>
               <div class="metric-label">Avg Latency</div>
             </div>
             <div class="metric-card">
-              <div class="metric-value" id="metrics-persistence">-</div>
+              <div class="metric-value" id="metrics-persistence">
+                -
+              </div>
               <div class="metric-label">Metrics Persistence</div>
             </div>
           </div>
@@ -291,7 +350,22 @@ export function statusPage() {
 
         {/* Features */}
         <h2 style="font-size:1rem;font-weight:600;margin-bottom:8px;color:var(--text);">
-          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="vertical-align:middle;margin-right:6px;"><path d="M9 18h6M10 22h4"/><path d="M15.09 14c.18-.98.65-1.74 1.41-2.5A4.65 4.65 0 0018 8 6 6 0 006 8c0 1 .23 2.23 1.5 3.5A4.61 4.61 0 018.91 14"/></svg>
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            width="16"
+            height="16"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            aria-hidden="true"
+            style="vertical-align:middle;margin-right:6px;"
+          >
+            <path d="M9 18h6M10 22h4" />
+            <path d="M15.09 14c.18-.98.65-1.74 1.41-2.5A4.65 4.65 0 0018 8 6 6 0 006 8c0 1 .23 2.23 1.5 3.5A4.61 4.61 0 018.91 14" />
+          </svg>
           Features
         </h2>
         <div class="metrics-section">

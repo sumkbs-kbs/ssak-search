@@ -21,7 +21,6 @@ export default tseslint.config(
       '.wrangler/',
       'coverage/',
       'node_modules/',
-      'eval/',
       'tests/k6/',
       '*.config.*',        // vite.config.ts, vitest.config.ts, etc.
       'ecosystem.config.cjs',
@@ -94,10 +93,22 @@ export default tseslint.config(
       '@typescript-eslint/no-floating-promises': 'off',
       // Allow empty catch blocks in tests
       'no-empty': 'off',
+      // Fixture parsing asserts non-null shapes liberally (b_algo, .text()
+      // on parsed nodes). The runtime cost of `!` here is zero and the
+      // assertions ARE the test — re-narrowing every fixture would add
+      // noise without catching anything the parser's own types wouldn't.
+      // Mirrors the no-explicit-any precedent above (2026-08-07 lint budget
+      // pass: removed 177/232 non-null warnings this way).
+      '@typescript-eslint/no-non-null-assertion': 'off',
     },
   },
 
   // === Eval file overrides ===
+  // S61 (2026-08-09): eval/ was previously in the global ignores — the
+  // overrides below existed but were dead until the directory was added to
+  // the lint gate. Eval scripts legitimately use console for CLI output and
+  // loose typing for versioned artifact shapes; other rules (non-null,
+  // unused, imports) are enforced to keep the whole codebase at 0 warnings.
   {
     files: ['eval/**/*.ts'],
     rules: {

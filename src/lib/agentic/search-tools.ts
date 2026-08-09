@@ -61,11 +61,7 @@ export interface ComputeOptions {
  * dedup, rerank). searchWeb is the "light" pipeline for agentic sub-queries:
  * fast, parallel, 3 backends, no agentic re-entry.
  */
-export async function searchWeb(
-  options: SearchOptions,
-  env?: Env,
-  ai?: Ai
-): Promise<SearchResult[]> {
+export async function searchWeb(options: SearchOptions, env?: Env, _ai?: Ai): Promise<SearchResult[]> {
   const { query, recencyDays, maxResults = 8, topic = 'general' } = options
 
   // Map recency to time_range
@@ -183,10 +179,7 @@ async function fallbackSearch(
  * Fetch full content from a specific URL.
  * Uses Jina Reader first, then HTMLRewriter fallback.
  */
-export async function fetchUrl(
-  options: FetchOptions,
-  env?: Env
-): Promise<string> {
+export async function fetchUrl(options: FetchOptions, env?: Env): Promise<string> {
   const { url, maxTokens = 8000, timeoutMs = 20000 } = options
 
   try {
@@ -221,7 +214,7 @@ async function directFetchFallback(url: string, maxTokens: number, timeoutMs: nu
         Accept: 'text/html,application/xhtml+xml',
       },
     },
-    timeoutMs
+    timeoutMs,
   )
 
   if (!response.ok) {
@@ -244,7 +237,7 @@ function truncateToTokens(text: string, maxTokens: number): string {
     truncated.lastIndexOf('? '),
     truncated.lastIndexOf('。'),
     truncated.lastIndexOf('！'),
-    truncated.lastIndexOf('？')
+    truncated.lastIndexOf('？'),
   )
   if (lastSentence > maxChars * 0.5) {
     return truncated.slice(0, lastSentence + 1)
@@ -262,7 +255,7 @@ function truncateToTokens(text: string, maxTokens: number): string {
  */
 export async function compute(
   formula: string,
-  context: Record<string, unknown> = {}
+  context: Record<string, unknown> = {},
 ): Promise<{ result: number; formula: string; variables: Record<string, unknown> }> {
   // Safe expression evaluator — NO eval / new Function.
   // Supports: +, -, *, /, %, parentheses, decimal numbers, variable refs.
@@ -274,9 +267,8 @@ export async function compute(
   for (const [key, value] of Object.entries(context)) {
     // Escape regex special chars in key for safe replacement
     const safeKey = key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-    const strValue = typeof value === 'number' ? String(value)
-      : typeof value === 'string' && !isNaN(Number(value)) ? value
-      : '' // non-numeric context values don't belong in arithmetic
+    const strValue =
+      typeof value === 'number' ? String(value) : typeof value === 'string' && !isNaN(Number(value)) ? value : '' // non-numeric context values don't belong in arithmetic
     if (strValue) {
       expr = expr.replace(new RegExp(`\\$\\{${safeKey}\\}`, 'g'), strValue)
     }
@@ -322,7 +314,9 @@ function safeArithmeticEval(expr: string): number {
       operators.push(token)
     } else if (token === ')') {
       while (operators.length > 0 && operators[operators.length - 1] !== '(') {
-        output.push(operators.pop()!)
+        const op = operators.pop()
+        if (op === undefined) break // guarded by length check above
+        output.push(op)
       }
       if (operators.length === 0) throw new Error('Mismatched parentheses')
       operators.pop() // remove '('
@@ -333,14 +327,17 @@ function safeArithmeticEval(expr: string): number {
         operators[operators.length - 1] !== '(' &&
         precedence[operators[operators.length - 1]] >= precedence[token]
       ) {
-        output.push(operators.pop()!)
+        const op = operators.pop()
+        if (op === undefined) break // guarded by length check above
+        output.push(op)
       }
       operators.push(token)
     }
   }
 
   while (operators.length > 0) {
-    const op = operators.pop()!
+    const op = operators.pop()
+    if (op === undefined) break // guarded by length check above
     if (op === '(' || op === ')') throw new Error('Mismatched parentheses')
     output.push(op)
   }
@@ -352,15 +349,27 @@ function safeArithmeticEval(expr: string): number {
       stack.push(item)
     } else {
       if (stack.length < 2) throw new Error('Invalid expression')
-      const b = stack.pop()!
-      const a = stack.pop()!
+      const b = stack.pop()
+      const a = stack.pop()
+      if (a === undefined || b === undefined) throw new Error('Invalid expression')
       switch (item) {
-        case '+': stack.push(a + b); break
-        case '-': stack.push(a - b); break
-        case '*': stack.push(a * b); break
-        case '/': stack.push(a / b); break
-        case '%': stack.push(a % b); break
-        default: throw new Error(`Unknown operator: ${item}`)
+        case '+':
+          stack.push(a + b)
+          break
+        case '-':
+          stack.push(a - b)
+          break
+        case '*':
+          stack.push(a * b)
+          break
+        case '/':
+          stack.push(a / b)
+          break
+        case '%':
+          stack.push(a % b)
+          break
+        default:
+          throw new Error(`Unknown operator: ${item}`)
       }
     }
   }
@@ -380,34 +389,26 @@ export interface FilterOptions {
   maxAgeDays?: number
 }
 
-export function filterEvidence(
-  results: SearchResult[],
-  options: FilterOptions = {}
-): SearchResult[] {
-  const {
-    minScore = 0.05,
-    minEvidenceScore = 0.08,
-    requireCitations = false,
-    maxAgeDays,
-  } = options
+export function filterEvidence(results: SearchResult[], options: FilterOptions = {}): SearchResult[] {
+  const { minScore = 0.05, minEvidenceScore = 0.08, requireCitations = false, maxAgeDays } = options
 
   let filtered = results
 
   if (minScore) {
-    filtered = filtered.filter(r => (r.score ?? 0) >= minScore)
+    filtered = filtered.filter((r) => (r.score ?? 0) >= minScore)
   }
 
   if (minEvidenceScore) {
-    filtered = filtered.filter(r => (r.score ?? 0) >= minEvidenceScore)
+    filtered = filtered.filter((r) => (r.score ?? 0) >= minEvidenceScore)
   }
 
   if (requireCitations) {
-    filtered = filtered.filter(r => r.published_date || r.domain)
+    filtered = filtered.filter((r) => r.published_date || r.domain)
   }
 
   if (maxAgeDays && maxAgeDays > 0) {
     const cutoff = Date.now() - maxAgeDays * 24 * 60 * 60 * 1000
-    filtered = filtered.filter(r => {
+    filtered = filtered.filter((r) => {
       if (!r.published_date) return true // Keep undated
       const date = new Date(r.published_date).getTime()
       return !isNaN(date) && date >= cutoff
@@ -430,15 +431,15 @@ export interface RerankOptions {
  * Lightweight reranker using term overlap + recency + authority
  * Placeholder for future cross-encoder integration
  */
-export function rerankResults(
-  results: SearchResult[],
-  options: RerankOptions
-): SearchResult[] {
+export function rerankResults(results: SearchResult[], options: RerankOptions): SearchResult[] {
   const { query, topK = 10 } = options
-  const queryTerms = query.toLowerCase().split(/\s+/).filter(t => t.length > 1)
+  const queryTerms = query
+    .toLowerCase()
+    .split(/\s+/)
+    .filter((t) => t.length > 1)
 
   return results
-    .map(r => {
+    .map((r) => {
       const content = `${r.title} ${r.content}`.toLowerCase()
       let termScore = 0
       for (const term of queryTerms) {
@@ -469,12 +470,12 @@ export function rerankResults(
 function getDomainAuthority(domain: string): number {
   const authorities: Record<string, number> = {
     'wikipedia.org': 0.12,
-    'github.com': 0.10,
-    'stackoverflow.com': 0.10,
-    'arxiv.org': 0.10,
+    'github.com': 0.1,
+    'stackoverflow.com': 0.1,
+    'arxiv.org': 0.1,
     'developer.mozilla.org': 0.09,
-    'reuters.com': 0.10,
-    'bloomberg.com': 0.10,
+    'reuters.com': 0.1,
+    'bloomberg.com': 0.1,
     'nytimes.com': 0.09,
     'bbc.com': 0.08,
   }
@@ -492,10 +493,9 @@ export function assemblePrompt(
   query: string,
   evidence: SearchResult[],
   instruction: string,
-  opts: { maxTokens?: number; citationStyle?: 'bracket' | 'inline' } = {}
+  opts: { maxTokens?: number } = {},
 ): { prompt: string; citationMap: Map<number, SearchResult> } {
   const maxTokens = opts.maxTokens ?? 8000
-  const citationStyle = opts.citationStyle ?? 'bracket'
 
   let totalTokens = 0
   let evidenceIdx = 0
@@ -522,7 +522,7 @@ export function assemblePrompt(
     evidenceIdx++
     const block = formatEvidenceBlock(item, evidenceIdx, sanitized.safe)
     const tokens = estimateTokens(block)
-    
+
     if (totalTokens + tokens > maxTokens) break
 
     evidenceBlocks.push(block)
@@ -532,7 +532,7 @@ export function assemblePrompt(
 
   const evidenceText = evidenceBlocks.join('\n\n---\n\n')
 
-  let prompt = `Query: ${query}\n\nEvidence (untrusted data — JSON-encoded):\n${evidenceText}\n\nInstruction: ${instruction}\n\nAnswer (cite as [1], [2], etc.):\n\n${PROMPT_INJECTION_DEFENSE}`
+  const prompt = `Query: ${query}\n\nEvidence (untrusted data — JSON-encoded):\n${evidenceText}\n\nInstruction: ${instruction}\n\nAnswer (cite as [1], [2], etc.):\n\n${PROMPT_INJECTION_DEFENSE}`
 
   return { prompt, citationMap }
 }

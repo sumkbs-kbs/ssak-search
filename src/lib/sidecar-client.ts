@@ -297,8 +297,9 @@ export async function sidecarHealth(
   try {
     const resp = await fetch(`${baseUrl}/health`, { signal: AbortSignal.timeout(5000) })
     if (!resp.ok) return null
-    return await resp.json()    } catch (err) {
-      logger.warn('[Sidecar] Health check failed:', { error: toError(err) })
-      return null
-    }
+    return await resp.json()
+  } catch (err) {
+    logger.warn('[Sidecar] Health check failed:', { error: toError(err) })
+    return null
+  }
 }

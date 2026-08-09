@@ -13,10 +13,6 @@ export class SocialStrategy implements SearchStrategy {
   readonly focus = 'social' as const
 
   buildTasks(ctx: SearchContext): BackendTask[] {
-    return [
-      buildHackerNewsTask(ctx, 10),
-      buildRedditTask(ctx, 10),
-      buildBingTask(ctx),
-    ]
+    return [buildHackerNewsTask(ctx, 10), buildRedditTask(ctx, 10), buildBingTask(ctx)]
   }
 }

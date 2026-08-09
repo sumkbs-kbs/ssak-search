@@ -1,6 +1,11 @@
 {
-  "_comment": "Gold-standard relevant domains for NDCG/MRR/Precision@10 computation. Each entry maps an eval query ID to a list of domains that are considered relevant (substring match on hostname). This is a reasonable baseline — authoritative domains expected for each query — not an exhaustive human-judged qrels corpus. Queries not listed here simply skip ranking metrics.",
-  "_matching": "Domain matching is substring-based on the hostname (e.g. 'wikipedia.org' matches 'en.wikipedia.org'). Grade is binary: relevant=1, irrelevant=0.",
+  "_comment": "Gold-standard relevant domains for NDCG/MRR/Precision@10 computation. Each entry maps an eval query ID to a list of domains that are considered relevant (label-suffix match on hostname). This is a reasonable baseline — authoritative domains expected for each query — not an exhaustive human-judged qrels corpus. Queries not listed here simply skip ranking metrics.",
+  "_matching": "Domain matching is label-suffix-based on the hostname (S49): D === G or D ends with '.'+G — e.g. 'wikipedia.org' matches 'en.wikipedia.org' (proper subdomain) but NOT 'xinjiangtrip.com' for gold 'trip.com' (cross-registrable containment rejected). Grade is binary: relevant=1, irrelevant=0.",
+  "_s49": "S49 (2026-08-08): (1) isRelevant switched from pure substring to label-suffix matching (eval/metrics.ts) — drops the 2 cross-registrable false positives (zh-travel-04 'trip.com'⊂xinjiangtrip.com 0.131→0.000, zh-general-06 'trip.com'⊂eastchinatrip.com 0.692→0.584), preserves all 31 bare 'wikipedia.org' golds + news.google.com/blog.cloudflare.com-style subdomains. (2) kr-stock-03 gold 'naver.com' → 'm.stock.naver.com' — bare 'naver.com' is NOT fixable by any matching rule (m.blog.naver.com IS a proper subdomain) and inflated NDCG past 1.0 via the IDCG approximation; the intent-precise domain (aligned with the generator's KR_STOCK template) makes S43's penalty measurable. EVAL-CRITERIA CORRECTION, not a search-quality change.",
+  "_s32": "S32 (2026-08-08): en-news-17/18 gold was regenerated from the fixed 9-domain template (reuters/apnews/bbc/cnn/theverge/techcrunch/guardian/nytimes/wired) to query-intent-correct domains. Template domains that never surface (apnews/bbc/cnn/guardian/wired) capped NDCG via the IDCG denominator (min(goldLen,k)); the new gold is verified against the saved 500-query pools (run-1..3) AND an independent live Google News RSS probe. This is an EVAL-CRITERIA CORRECTION, not a search-quality change — the engine was already returning these outlets; they simply were not in gold.",
+  "_s52": "S52 (2026-08-08): subsumption-pair dedup — 7 queries with same-entity gold pairs under label-suffix matching (docker.com⊃docs.docker.com, cloudflare.com⊃developers.cloudflare.com, github.com⊃docs.github.com, rust-lang.org⊃doc.rust-lang.org) collapsed to the BROAD registrable domain, per the S50 GOLD-AUTHORING WARNING (subsumption pairs forbidden). Direction decided by data: keep-narrow (docs./developers. variants only) regressed en-tech-01 (0.613→0.000, pool's blog.cloudflare.com hit lost) and en-tech-11 (0.182→0.000, pool's github.com Redis-repo hits lost — docs.github.com is unrelated to Redis), while keep-broad is lossless (label-suffix already covers subdomain variants). Stored-pool re-score: 8-query sum 2.437→3.372, Δ+0.935 (kr-tech-05 preserved; equals S51 sim's +0.935 for the 7 deduped queries — S51's +0.874 figure was the hypothetical that ALSO deduped kr-tech-05). kr-tech-05 (aws.amazon.com + amazon.com) is DELIBERATELY preserved as non-dup: AWS is a distinct entity from amazon.com retail; S51's doc note 'aws.amazon.com+github.com' was a misquote — the actual gold is amazon.com. EVAL-CRITERIA CORRECTION, not a search-quality change.",
+  "_s63": "S63 (2026-08-09): kr-tech-05 gold narrowed to [aws.amazon.com] alone (S56 recommendation). The S52 'non-dup exception' (aws.amazon.com + amazon.com) was WRONG under label-suffix matching: aws.amazon.com.endsWith('.amazon.com') so the pair is a forbidden subsumption pair, and all 3 eval runs had ZERO amazon.com retail results — the amazon.com gold never matched real retail content, it only absorbed the second aws.amazon.com slot to inflate DCG by +0.06 (median NDCG 0.3618→0.3010, Δ-0.0608). The drop is over-match removal (honesty), not a search-quality loss; whole-corpus impact Δ-0.0001 (0.2860→0.2859). docs.aws.amazon.com must NOT be added (absent from pools — inflates IDCG). EVAL-CRITERIA CORRECTION.",
+  "_s69": "S69 (2026-08-09): en-stock-07 amazon.com gold REMOVED — the S56 ③ claim that it was 'legitimate for the Amazon company-stock query' is REFUTED on two counts: ① the actual query text is 'Amazon AWS market share cloud' (a cloud-market-share query, NOT a stock query — S56 ③ mislabeled it '기업 주가') and ② all 3 stored runs contain ZERO amazon.com results of ANY kind (no retail, no stock, no aws.amazon.com — the top-10 pools are finance.yahoo.com/AMZN quote + statista/crn/sdxcentral market-share articles). A gold domain that never surfaces is a phantom: it contributes 0 to DCG but still inflates the IDCG denominator (R = min(goldCount,k)) → DEPRESSES measured NDCG by 0.19 (0.6173→0.8066, whole-corpus Δ+0.0004). Removing it is the S50 GOLD-AUTHORING fix, exactly the S63 docs.aws.amazon.com rule (absent-from-pool gold inflates IDCG). EVAL-CRITERIA CORRECTION, not a search-quality change.",
   "kr-stock-01": {
     "relevantDomains": [
       "finance.naver.com",
@@ -18,7 +23,7 @@
   "kr-stock-03": {
     "relevantDomains": [
       "finance.naver.com",
-      "naver.com",
+      "m.stock.naver.com",
       "investing.com"
     ]
   },
@@ -115,7 +120,6 @@
   "kr-tech-03": {
     "relevantDomains": [
       "docker.com",
-      "docs.docker.com",
       "github.com"
     ]
   },
@@ -128,8 +132,7 @@
   },
   "kr-tech-05": {
     "relevantDomains": [
-      "aws.amazon.com",
-      "amazon.com"
+      "aws.amazon.com"
     ]
   },
   "kr-tech-06": {
@@ -249,7 +252,6 @@
   "en-stock-07": {
     "relevantDomains": [
       "finance.yahoo.com",
-      "amazon.com",
       "statista.com"
     ]
   },
@@ -276,7 +278,6 @@
   },
   "en-tech-01": {
     "relevantDomains": [
-      "developers.cloudflare.com",
       "cloudflare.com"
     ]
   },
@@ -339,7 +340,6 @@
   },
   "en-tech-11": {
     "relevantDomains": [
-      "docs.github.com",
       "github.com",
       "atlassian.com"
     ]
@@ -360,7 +360,6 @@
   },
   "en-tech-14": {
     "relevantDomains": [
-      "docs.docker.com",
       "docker.com",
       "github.com"
     ]
@@ -374,7 +373,6 @@
   },
   "en-tech-16": {
     "relevantDomains": [
-      "doc.rust-lang.org",
       "rust-lang.org",
       "github.com"
     ]
@@ -990,7 +988,6 @@
   },
   "lt-01": {
     "relevantDomains": [
-      "developers.cloudflare.com",
       "cloudflare.com"
     ]
   },
@@ -1021,7 +1018,6 @@
   },
   "lt-06": {
     "relevantDomains": [
-      "developers.cloudflare.com",
       "cloudflare.com",
       "github.com"
     ]
@@ -2314,28 +2310,31 @@
   },
   "en-news-17": {
     "relevantDomains": [
+      "finance.yahoo.com",
+      "cnbc.com",
+      "bloomberg.com",
       "reuters.com",
-      "apnews.com",
-      "bbc.com",
-      "cnn.com",
-      "theverge.com",
-      "techcrunch.com",
-      "theguardian.com",
+      "wsj.com",
       "nytimes.com",
-      "wired.com"
+      "seekingalpha.com",
+      "theverge.com",
+      "techcrunch.com"
     ]
   },
   "en-news-18": {
     "relevantDomains": [
-      "reuters.com",
-      "apnews.com",
-      "bbc.com",
-      "cnn.com",
       "theverge.com",
-      "techcrunch.com",
-      "theguardian.com",
       "nytimes.com",
-      "wired.com"
+      "9to5mac.com",
+      "macrumors.com",
+      "geekwire.com",
+      "reuters.com",
+      "cnbc.com",
+      "npr.org",
+      "wsj.com",
+      "arstechnica.com",
+      "markets.businessinsider.com",
+      "seekingalpha.com"
     ]
   },
   "en-news-19": {

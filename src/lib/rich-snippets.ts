@@ -55,7 +55,7 @@ function extractJsonLdSnippets(html: string): RichSnippet[] {
         const snippet = jsonLdToSnippet(item)
         if (snippet) snippets.push(snippet)
       }
-    } catch (err) {
+    } catch (_err) {
       // Skip malformed JSON-LD blocks
     }
 
@@ -140,7 +140,16 @@ function resolveType(type: string | string[] | undefined): string | null {
   if (!type) return null
   if (typeof type === 'string') return type
   // Multiple types: pick the most specific one for rich snippets
-  const order = ['Product', 'Recipe', 'Article', 'NewsArticle', 'FAQPage', 'BreadcrumbList', 'LocalBusiness', 'AggregateRating']
+  const order = [
+    'Product',
+    'Recipe',
+    'Article',
+    'NewsArticle',
+    'FAQPage',
+    'BreadcrumbList',
+    'LocalBusiness',
+    'AggregateRating',
+  ]
   for (const t of order) {
     if (type.includes(t)) return t
   }
@@ -317,7 +326,6 @@ function extractMicrodataRating(content: string): { rating: number; review_count
  */
 function extractMetaSnippets(html: string): RichSnippet | null {
   const ogType = extractMetaContent(html, 'og:type')
-  const ogTitle = extractMetaContent(html, 'og:title')
   const articleAuthor = extractMetaContent(html, 'article:author')
 
   // Detect article types from OG
@@ -344,7 +352,10 @@ function extractMetaSnippets(html: string): RichSnippet | null {
  */
 function extractMetaContent(html: string, property: string): string | null {
   // Check property= first, then name=
-  const regex = new RegExp(`<meta[^>]+(?:property|name)=["']${escapeRegExp(property)}["'][^>]*content=["']([^"']+)["']`, 'i')
+  const regex = new RegExp(
+    `<meta[^>]+(?:property|name)=["']${escapeRegExp(property)}["'][^>]*content=["']([^"']+)["']`,
+    'i',
+  )
   const match = regex.exec(html)
   return match?.[1] || null
 }

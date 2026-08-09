@@ -110,10 +110,7 @@ export class SpaceDO extends DurableObject<Env> {
     return results.sort((a, b) => b.updated_at - a.updated_at)
   }
 
-  async updateSpace(
-    spaceId: string,
-    req: UpdateSpaceRequest,
-  ): Promise<SpaceData | null> {
+  async updateSpace(spaceId: string, req: UpdateSpaceRequest): Promise<SpaceData | null> {
     const s = this.spaces.get(spaceId)
     if (!s) return null
 
@@ -136,10 +133,7 @@ export class SpaceDO extends DurableObject<Env> {
     return true
   }
 
-  async addFile(
-    spaceId: string,
-    file: SpaceFile,
-  ): Promise<SpaceData | null> {
+  async addFile(spaceId: string, file: SpaceFile): Promise<SpaceData | null> {
     const s = this.spaces.get(spaceId)
     if (!s) return null
 
@@ -150,10 +144,7 @@ export class SpaceDO extends DurableObject<Env> {
     return this.toPublic(s)
   }
 
-  async removeFile(
-    spaceId: string,
-    fileKey: string,
-  ): Promise<SpaceData | null> {
+  async removeFile(spaceId: string, fileKey: string): Promise<SpaceData | null> {
     const s = this.spaces.get(spaceId)
     if (!s) return null
 
@@ -199,6 +190,7 @@ export interface SpaceRPC {
 }
 
 export function getSpaceStub(env: Env): SpaceRPC {
-  const id = env.SPACE_DO!.idFromName('hub')
-  return env.SPACE_DO!.get(id) as unknown as SpaceRPC
+  if (!env.SPACE_DO) throw new Error('SPACE_DO binding missing — configure the Durable Object binding first')
+  const id = env.SPACE_DO.idFromName('hub')
+  return env.SPACE_DO.get(id) as unknown as SpaceRPC
 }

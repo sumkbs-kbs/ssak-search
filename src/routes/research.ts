@@ -40,7 +40,7 @@ researchRoute.post('/', async (c) => {
   let body: Partial<ResearchRequest>
   try {
     body = await c.req.json()
-  } catch (err) {
+  } catch (_err) {
     return c.json<ErrorResponse>({ detail: 'Invalid JSON body', code: 'invalid_body' }, 400)
   }
 
@@ -52,7 +52,7 @@ researchRoute.post('/', async (c) => {
     return c.json<ErrorResponse>({ detail: 'Query too long (max 2000 chars)', code: 'query_too_long' }, 400)
   }
 
-  const depth = body.depth === 'deep' ? 'deep' as const : 'quick' as const
+  const depth = body.depth === 'deep' ? ('deep' as const) : ('quick' as const)
   const maxSources = Math.min(Math.max(body.max_sources ?? 15, 5), 30)
 
   const request: ResearchRequest = {
@@ -86,12 +86,20 @@ researchRoute.post('/', async (c) => {
 researchRoute.get('/report', async (c) => {
   const query = c.req.query('query') || c.req.query('q')
   if (!query || query.trim().length === 0) {
-    return c.html(`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Research Report</title><style>body{font-family:-apple-system,BlinkMacSystemFont,sans-serif;padding:2rem;max-width:600px;margin:0 auto;color:#1a1a2e}h1{font-size:1.3rem}p{color:#6b7280}a{color:#2563eb;text-decoration:none}</style></head><body><h1>Missing query parameter</h1><p>Please provide a <code>query</code> parameter. Example: <a href="/api/research/report?query=quantum+computing">/api/research/report?query=quantum+computing</a></p></body></html>`, 400)
+    return c.html(
+      `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Research Report</title><style>body{font-family:-apple-system,BlinkMacSystemFont,sans-serif;padding:2rem;max-width:600px;margin:0 auto;color:#1a1a2e}h1{font-size:1.3rem}p{color:#6b7280}a{color:#2563eb;text-decoration:none}</style></head><body><h1>Missing query parameter</h1><p>Please provide a <code>query</code> parameter. Example: <a href="/api/research/report?query=quantum+computing">/api/research/report?query=quantum+computing</a></p></body></html>`,
+      400,
+    )
   }
 
-  const depth = c.req.query('depth') === 'deep' ? 'deep' as const : 'quick' as const
+  const depth = c.req.query('depth') === 'deep' ? ('deep' as const) : ('quick' as const)
   const maxSources = Math.min(Math.max(parseInt(c.req.query('max_sources') || '15', 10) || 15, 5), 30)
-  const fileIds = c.req.query('file_ids')?.split(',').map(s => s.trim()).filter(Boolean).slice(0, 10)
+  const fileIds = c.req
+    .query('file_ids')
+    ?.split(',')
+    .map((s) => s.trim())
+    .filter(Boolean)
+    .slice(0, 10)
 
   try {
     const result = await executeResearch(
@@ -104,7 +112,10 @@ researchRoute.get('/report', async (c) => {
   } catch (err) {
     logger.error('Research report error:', { error: toError(err) })
     const errorMsg = err instanceof Error ? err.message : 'Research failed'
-    return c.html(`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Research Error</title><style>body{font-family:-apple-system,BlinkMacSystemFont,sans-serif;padding:2rem;max-width:600px;margin:0 auto;color:#1a1a2e}h1{font-size:1.3rem;color:#dc2626}p{color:#6b7280}</style></head><body><h1>Research Failed</h1><p>${errorMsg}</p></body></html>`, 500)
+    return c.html(
+      `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Research Error</title><style>body{font-family:-apple-system,BlinkMacSystemFont,sans-serif;padding:2rem;max-width:600px;margin:0 auto;color:#1a1a2e}h1{font-size:1.3rem;color:#dc2626}p{color:#6b7280}</style></head><body><h1>Research Failed</h1><p>${errorMsg}</p></body></html>`,
+      500,
+    )
   }
 })
 
@@ -115,9 +126,14 @@ researchRoute.get('/stream', async (c) => {
     return c.json<ErrorResponse>({ detail: 'Query parameter "query" or "q" is required', code: 'missing_query' }, 400)
   }
 
-  const depth = c.req.query('depth') === 'deep' ? 'deep' as const : 'quick' as const
+  const depth = c.req.query('depth') === 'deep' ? ('deep' as const) : ('quick' as const)
   const maxSources = Math.min(Math.max(parseInt(c.req.query('max_sources') || '15', 10) || 15, 5), 30)
-  const fileIds = c.req.query('file_ids')?.split(',').map(s => s.trim()).filter(Boolean).slice(0, 10)
+  const fileIds = c.req
+    .query('file_ids')
+    ?.split(',')
+    .map((s) => s.trim())
+    .filter(Boolean)
+    .slice(0, 10)
 
   return streamSSE(c, async (sseStream) => {
     let eventId = 0
@@ -125,14 +141,22 @@ researchRoute.get('/stream', async (c) => {
     // Map ResearchProgressEvent type → SSE event name
     const eventName = (t: string): string => {
       switch (t) {
-        case 'sub_query_start': return 'sub_query_start'
-        case 'sub_query_complete': return 'sub_query_complete'
-        case 'refinement_start': return 'refinement_start'
-        case 'refinement_complete': return 'refinement_complete'
-        case 'synthesizing': return 'synthesizing'
-        case 'complete': return 'complete'
-        case 'error': return 'error'
-        default: return 'phase'
+        case 'sub_query_start':
+          return 'sub_query_start'
+        case 'sub_query_complete':
+          return 'sub_query_complete'
+        case 'refinement_start':
+          return 'refinement_start'
+        case 'refinement_complete':
+          return 'refinement_complete'
+        case 'synthesizing':
+          return 'synthesizing'
+        case 'complete':
+          return 'complete'
+        case 'error':
+          return 'error'
+        default:
+          return 'phase'
       }
     }
 
@@ -176,9 +200,14 @@ researchRoute.get('/', async (c) => {
     return c.json<ErrorResponse>({ detail: 'Query parameter "query" or "q" is required', code: 'missing_query' }, 400)
   }
 
-  const depth = c.req.query('depth') === 'deep' ? 'deep' as const : 'quick' as const
+  const depth = c.req.query('depth') === 'deep' ? ('deep' as const) : ('quick' as const)
   const maxSources = Math.min(Math.max(parseInt(c.req.query('max_sources') || '15', 10) || 15, 5), 30)
-  const fileIds = c.req.query('file_ids')?.split(',').map(s => s.trim()).filter(Boolean).slice(0, 10)
+  const fileIds = c.req
+    .query('file_ids')
+    ?.split(',')
+    .map((s) => s.trim())
+    .filter(Boolean)
+    .slice(0, 10)
 
   try {
     const result = await executeResearch(

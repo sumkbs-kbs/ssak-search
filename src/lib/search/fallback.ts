@@ -38,7 +38,7 @@ export async function emergencyFallback(
 
   const env = ctx.env as Env
   let updatedResults = results
-  let updatedBackends = [...usedBackends]
+  const updatedBackends = [...usedBackends]
   let fallbackUsed = false
 
   const searxngConfigured = !!env?.SEARXNG_URL
@@ -62,15 +62,18 @@ export async function emergencyFallback(
         language: fallbackLocale,
       })
       if (idxResults.length > 0) {
-        updatedResults = idxResults.map((r) => ({
-          title: r.title,
-          url: r.url,
-          content: r.content,
-          score: Math.min(r.score, 0.95),
-          domain: r.domain,
-          published_date: r.publishedDate,
-          raw_content: r.content,
-        } as SearchResult))
+        updatedResults = idxResults.map(
+          (r) =>
+            ({
+              title: r.title,
+              url: r.url,
+              content: r.content,
+              score: Math.min(r.score, 0.95),
+              domain: r.domain,
+              published_date: r.publishedDate,
+              raw_content: r.content,
+            }) as SearchResult,
+        )
         updatedBackends.push('self-index')
       }
     } catch (err) {

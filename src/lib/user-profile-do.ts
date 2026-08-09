@@ -78,10 +78,7 @@ export class UserProfileDO extends DurableObject<Env> {
     }
   }
 
-  async updatePreferences(
-    userId: string,
-    prefs: Partial<UserPreferences>,
-  ): Promise<UserProfile> {
+  async updatePreferences(userId: string, prefs: Partial<UserPreferences>): Promise<UserProfile> {
     const p = this.getOrCreate(userId)
     p.preferences = { ...p.preferences, ...prefs }
     p.updated_at = Date.now()
@@ -148,6 +145,8 @@ export interface UserProfileRPC {
 }
 
 export function getProfileStub(env: Env): UserProfileRPC {
-  const id = env.USER_PROFILE_DO!.idFromName('hub')
-  return env.USER_PROFILE_DO!.get(id) as unknown as UserProfileRPC
+  if (!env.USER_PROFILE_DO)
+    throw new Error('USER_PROFILE_DO binding missing — configure the Durable Object binding first')
+  const id = env.USER_PROFILE_DO.idFromName('hub')
+  return env.USER_PROFILE_DO.get(id) as unknown as UserProfileRPC
 }

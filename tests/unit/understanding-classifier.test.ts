@@ -180,7 +180,11 @@ describe('classifyUnderstandingWithAI', () => {
   })
 
   it('falls back to regex when AI run throws', async () => {
-    const ai = { run: async () => { throw new Error('AI unavailable') } } as unknown as Ai
+    const ai = {
+      run: async () => {
+        throw new Error('AI unavailable')
+      },
+    } as unknown as Ai
     const r = await classifyUnderstandingWithAI('React vs Vue', ai)
     expect(r.aiEnhanced).toBe(false)
     expect(r.subType).toBe('comparison')

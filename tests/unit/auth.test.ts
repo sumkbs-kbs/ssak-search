@@ -1,5 +1,11 @@
 import { describe, it, expect } from 'vitest'
-import { validateApiKey, validateApiKeyWithTenant, parseTenantsConfig, checkClientRateLimit, getClientIp } from '../../src/lib/auth'
+import {
+  validateApiKey,
+  validateApiKeyWithTenant,
+  parseTenantsConfig,
+  checkClientRateLimit,
+  getClientIp,
+} from '../../src/lib/auth'
 
 function makeHeaders(obj: Record<string, string>): Headers {
   return new Headers(obj)
@@ -23,42 +29,27 @@ describe('validateApiKey', () => {
   })
 
   it('accepts matching Bearer token', () => {
-    const result = validateApiKey(
-      makeHeaders({ Authorization: 'Bearer secret-key-12345' }),
-      'secret-key-12345',
-    )
+    const result = validateApiKey(makeHeaders({ Authorization: 'Bearer secret-key-12345' }), 'secret-key-12345')
     expect(result.valid).toBe(true)
   })
 
   it('accepts matching X-API-Key header', () => {
-    const result = validateApiKey(
-      makeHeaders({ 'X-API-Key': 'secret-key-12345' }),
-      'secret-key-12345',
-    )
+    const result = validateApiKey(makeHeaders({ 'X-API-Key': 'secret-key-12345' }), 'secret-key-12345')
     expect(result.valid).toBe(true)
   })
 
   it('rejects mismatched Bearer token', () => {
-    const result = validateApiKey(
-      makeHeaders({ Authorization: 'Bearer wrong-key' }),
-      'secret-key-12345',
-    )
+    const result = validateApiKey(makeHeaders({ Authorization: 'Bearer wrong-key' }), 'secret-key-12345')
     expect(result.valid).toBe(false)
   })
 
   it('rejects mismatched X-API-Key', () => {
-    const result = validateApiKey(
-      makeHeaders({ 'X-API-Key': 'wrong-key' }),
-      'secret-key-12345',
-    )
+    const result = validateApiKey(makeHeaders({ 'X-API-Key': 'wrong-key' }), 'secret-key-12345')
     expect(result.valid).toBe(false)
   })
 
   it('ignores non-Bearer Authorization schemes', () => {
-    const result = validateApiKey(
-      makeHeaders({ Authorization: 'BasicYWJj' }),
-      'secret-key-12345',
-    )
+    const result = validateApiKey(makeHeaders({ Authorization: 'BasicYWJj' }), 'secret-key-12345')
     expect(result.valid).toBe(false)
   })
 
@@ -68,10 +59,7 @@ describe('validateApiKey', () => {
     // length mismatch (which is already a vector but a small one). We test
     // that a wrong-but-same-length key still rejects.
     const sameLengthDifferent = 'a'.repeat(15)
-    const result = validateApiKey(
-      makeHeaders({ Authorization: `Bearer ${sameLengthDifferent}` }),
-      'secret-key-12345',
-    )
+    const result = validateApiKey(makeHeaders({ Authorization: `Bearer ${sameLengthDifferent}` }), 'secret-key-12345')
     expect(result.valid).toBe(false)
   })
 })
@@ -151,11 +139,7 @@ describe('validateApiKeyWithTenant', () => {
   })
 
   it('passes with valid multi-tenant key via X-API-Key header', () => {
-    const result = validateApiKeyWithTenant(
-      makeHeaders({ 'X-API-Key': 'sk-beta-456' }),
-      TENANTS_JSON,
-      undefined,
-    )
+    const result = validateApiKeyWithTenant(makeHeaders({ 'X-API-Key': 'sk-beta-456' }), TENANTS_JSON, undefined)
     expect(result.valid).toBe(true)
     expect(result.tenant?.id).toBe('tenant-2')
     expect(result.tenant?.config.rateLimitPerMinute).toBe(10)
@@ -209,10 +193,12 @@ describe('parseTenantsConfig', () => {
   })
 
   it('filters out entries with missing fields', () => {
-    const result = parseTenantsConfig(JSON.stringify([
-      { id: 'a', name: 'A', apiKey: 'key-a' },
-      { id: 'b' }, // missing name and apiKey
-    ]))
+    const result = parseTenantsConfig(
+      JSON.stringify([
+        { id: 'a', name: 'A', apiKey: 'key-a' },
+        { id: 'b' }, // missing name and apiKey
+      ]),
+    )
     expect(result).toHaveLength(1)
     expect(result[0].id).toBe('a')
   })
@@ -231,9 +217,12 @@ describe('checkClientRateLimit with tenant', () => {
     // Exhaust the tenant's limit (5/min)
     let last: { allowed: boolean; remaining: number } | undefined
     for (let i = 0; i < 6; i++) {
-      last = checkClientRateLimit('10.0.0.1', { tenantId, tenantsConfig: JSON.stringify([
-        { id: 'tenant-2', name: 'Beta Inc', apiKey: 'sk-beta-456', rateLimitPerMinute: 5, plan: 'free' },
-      ]) })
+      last = checkClientRateLimit('10.0.0.1', {
+        tenantId,
+        tenantsConfig: JSON.stringify([
+          { id: 'tenant-2', name: 'Beta Inc', apiKey: 'sk-beta-456', rateLimitPerMinute: 5, plan: 'free' },
+        ]),
+      })
     }
     expect(last?.allowed).toBe(false)
     expect(last?.remaining).toBe(0)

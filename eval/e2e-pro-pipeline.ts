@@ -13,8 +13,7 @@
  *   npx tsx eval/e2e-pro-pipeline.ts --json             # JSON output
  */
 
-import { executeAgenticSearch } from '../src/lib/agentic/index'
-import type { AgenticSearchResult } from '../src/lib/agentic/index'
+import { executeAgenticSearch, type AgenticSearchResult } from '../src/lib/agentic/index'
 import type { SearchAnswerSource } from '../src/types'
 
 // ============================================================
@@ -49,11 +48,7 @@ interface VerificationResult {
 }
 
 function normalizeSources(sources: number[] | SearchAnswerSource[]): SearchAnswerSource[] {
-  return sources.map((s, i) =>
-    typeof s === 'number'
-      ? { index: s }
-      : s,
-  )
+  return sources.map((s) => (typeof s === 'number' ? { index: s } : s))
 }
 
 function isValidHttpUrl(url: string): boolean {
@@ -71,10 +66,8 @@ function verifyResult(result: AgenticSearchResult): VerificationResult {
   const hasAnswer = !!answer?.text
   const sources = answer ? normalizeSources(answer.sources) : []
   const citationsWithUrls = sources.filter((s) => s.url && s.url.length > 0)
-  const citationsWithRealUrls = citationsWithUrls.filter((s) => isValidHttpUrl(s.url!))
-  const invalidUrls = citationsWithUrls
-    .filter((s) => !isValidHttpUrl(s.url!))
-    .map((s) => s.url!)
+  const citationsWithRealUrls = citationsWithUrls.filter((s) => isValidHttpUrl(s.url ?? ''))
+  const invalidUrls = citationsWithUrls.filter((s) => !isValidHttpUrl(s.url ?? '')).map((s) => s.url ?? '')
 
   // Verify all URLs are valid HTTP(S)
   const allUrlsValid = invalidUrls.length === 0
@@ -82,7 +75,7 @@ function verifyResult(result: AgenticSearchResult): VerificationResult {
   // Verify citation count matches answer text markers
   let citationCount = 0
   if (hasAnswer) {
-    const markers = answer!.text.match(/\[\d+\]/g) ?? []
+    const markers = answer?.text.match(/\[\d+\]/g) ?? []
     citationCount = new Set(markers.map((m) => parseInt(m.slice(1, -1), 10))).size
   }
 
@@ -161,7 +154,9 @@ async function main() {
 
       if (!jsonMode) {
         if (verification.passed) {
-          console.log(`✅ ${verification.citationCount} citations, ${verification.citationsWithRealUrls} with URLs, conf=${verification.confidence}`)
+          console.log(
+            `✅ ${verification.citationCount} citations, ${verification.citationsWithRealUrls} with URLs, conf=${verification.confidence}`,
+          )
         } else {
           console.log(`❌ ${verification.failureReasons.join('; ')}`)
         }
@@ -197,17 +192,23 @@ async function main() {
   const totalWithUrls = results.reduce((s, r) => s + r.citationsWithRealUrls, 0)
 
   if (jsonMode) {
-    console.log(JSON.stringify({
-      timestamp: new Date().toISOString(),
-      total,
-      passed,
-      failed: total - passed,
-      passRate: total > 0 ? passed / total : 0,
-      avgConfidence,
-      totalCitations,
-      totalCitationsWithUrls: totalWithUrls,
-      results,
-    }, null, 2))
+    console.log(
+      JSON.stringify(
+        {
+          timestamp: new Date().toISOString(),
+          total,
+          passed,
+          failed: total - passed,
+          passRate: total > 0 ? passed / total : 0,
+          avgConfidence,
+          totalCitations,
+          totalCitationsWithUrls: totalWithUrls,
+          results,
+        },
+        null,
+        2,
+      ),
+    )
   } else {
     console.log('\n' + '─'.repeat(60))
     console.log(`  Results: ${passed}/${total} passed`)

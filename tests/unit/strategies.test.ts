@@ -58,8 +58,12 @@ function makeCtx(overrides: Partial<SearchContext> & { focus?: FocusMode } = {})
     japanese: false,
     queryType: 'general' as never,
     sources: {
-      useWikipedia: true, useGitHub: true, useHackerNews: true,
-      useReddit: true, useArxiv: false, useGoogleScholar: false,
+      useWikipedia: true,
+      useGitHub: true,
+      useHackerNews: true,
+      useReddit: true,
+      useArxiv: false,
+      useGoogleScholar: false,
     } as never,
     entityHints: undefined,
     isNews: false,
@@ -157,7 +161,14 @@ describe('Search Strategies — task composition', () => {
     it('adds the EN RSS backends for English news queries (en-news NDCG fix)', () => {
       const ctx = makeCtx({ focus: 'news', korean: false })
       const tasks = getStrategy('news').buildTasks(ctx)
-      expect(taskNames(tasks)).toEqual(['bing', 'bing-news', 'bing-news-rss', 'google-news-rss', 'hackernews', 'reddit'])
+      expect(taskNames(tasks)).toEqual([
+        'bing',
+        'bing-news',
+        'bing-news-rss',
+        'google-news-rss',
+        'hackernews',
+        'reddit',
+      ])
     })
 
     it('adds naver-news AND the ko-RSS feeds for Korean news queries (Phase 6.10)', () => {
@@ -318,6 +329,34 @@ describe('Search Strategies — task composition', () => {
       expect(names).toContain('github')
     })
 
+    it('routes problem-intent EN technical queries to the GitHub Issues API (S19)', () => {
+      // github.com is the #1 technical gold domain (127/158 eval queries);
+      // repos alone missed 46/127 — issues surface real github.com threads.
+      const ctx = makeCtx({ focus: 'all', queryType: 'technical', query: 'how to fix redis cache error' })
+      const names = taskNames(getStrategy('all').buildTasks(ctx))
+      expect(names).toContain('github-issues')
+      expect(names).toContain('github')
+    })
+
+    it('routes problem-intent KOREAN technical queries to GitHub Issues (S19)', () => {
+      // kr-tech gold includes github.com (kr-tech-06 TanStack/query); Korean
+      // problem queries benefit from the (English) issue threads.
+      const ctx = makeCtx({ focus: 'all', queryType: 'technical', korean: true, query: 'React Query 에러 해결' })
+      expect(taskNames(getStrategy('all').buildTasks(ctx))).toContain('github-issues')
+    })
+
+    it('omits github-issues for tutorial/reference technical queries (no problem intent)', () => {
+      const ctx = makeCtx({ focus: 'all', queryType: 'technical', query: 'React hooks tutorial' })
+      expect(taskNames(getStrategy('all').buildTasks(ctx))).not.toContain('github-issues')
+    })
+
+    it('omits github-issues for zh/ja technical queries (community gold is zhihu/juejin/qiita)', () => {
+      const ctxZh = makeCtx({ focus: 'all', queryType: 'technical', chinese: true, query: 'react 报错 解决' })
+      expect(taskNames(getStrategy('all').buildTasks(ctxZh))).not.toContain('github-issues')
+      const ctxJa = makeCtx({ focus: 'all', queryType: 'technical', japanese: true, query: 'react エラー 解決' })
+      expect(taskNames(getStrategy('all').buildTasks(ctxJa))).not.toContain('github-issues')
+    })
+
     it('omits the DDG site:MDN task for EN technical queries WITHOUT doc-lookup markers', () => {
       const ctx = makeCtx({ focus: 'all', queryType: 'technical', query: 'React performance' })
       expect(taskNames(getStrategy('all').buildTasks(ctx))).not.toContain('ddg-site-mdn')
@@ -341,7 +380,12 @@ describe('Search Strategies — task composition', () => {
       // bing ja-tech queries never return the qiita.com gold domain — the
       // official keyless Qiita v2 API is the ToS-safe path. Same gate rule as
       // Stack Exchange: technical queries only, language-specific target.
-      const ctx = makeCtx({ focus: 'all', queryType: 'technical', japanese: true, query: 'React useState チュートリアル' })
+      const ctx = makeCtx({
+        focus: 'all',
+        queryType: 'technical',
+        japanese: true,
+        query: 'React useState チュートリアル',
+      })
       const names = taskNames(getStrategy('all').buildTasks(ctx))
       expect(names).toContain('qiita')
       // no English-only docs tasks
@@ -349,14 +393,29 @@ describe('Search Strategies — task composition', () => {
       expect(names).not.toContain('ddg-site-mdn')
     })
 
-    it('routes Chinese technical queries to the Juejin API (S16 zh/ja community gold)', () => {
+    it('routes Chinese technical queries to the Juejin API + CSDN (S16/S26 zh community gold)', () => {
       // zh-tech-08/09/13 were all-wikipedia pools (NDCG 0.000) — juejin.cn is
-      // the strongest keyless zh tech community gold.
+      // the strongest keyless zh tech community gold; S26 adds CSDN (csdn.net
+      // is gold in 10 zh queries, e.g. zh-tech-03/04).
       const ctx = makeCtx({ focus: 'all', queryType: 'technical', chinese: true, query: 'react hooks 教程' })
       const names = taskNames(getStrategy('all').buildTasks(ctx))
       expect(names).toContain('juejin')
+      expect(names).toContain('csdn')
       expect(names).not.toContain('stack-exchange')
       expect(names).not.toContain('ddg-site-mdn')
+    })
+
+    it('adds the CSDN backend for zh-general queries (S26 cross-language contamination mitigation)', () => {
+      // zh-general-12 (考研复习计划) pools were cross-language contaminated —
+      // bing mkt=zh-CN from a US IP returned 4/10 EU-climate English news
+      // items. CSDN surfaces real Chinese community articles for these.
+      const ctx = makeCtx({ focus: 'all', queryType: 'general', chinese: true, query: '考研复习计划' })
+      const names = taskNames(getStrategy('all').buildTasks(ctx))
+      expect(names).toContain('csdn')
+      expect(names).toContain('bing')
+      expect(names).toContain('wikipedia')
+      // CSDN is NOT a tech-only gate — it fires for zh-general too
+      expect(names).not.toContain('juejin')
     })
 
     it('keeps qiita/juejin tasks out of non-technical Japanese/Chinese queries', () => {
@@ -365,6 +424,9 @@ describe('Search Strategies — task composition', () => {
 
       const ctxZh = makeCtx({ focus: 'all', queryType: 'general', chinese: true, query: '今日新闻' })
       expect(taskNames(getStrategy('all').buildTasks(ctxZh))).not.toContain('juejin')
+      // S26: CSDN deliberately DOES run for zh-general (unlike juejin — it is
+      // not a tech-only gate), so a general zh query keeps it.
+      expect(taskNames(getStrategy('all').buildTasks(ctxZh))).toContain('csdn')
     })
 
     it('keeps qiita/juejin tasks out of English technical queries (EN gold is SO/MDN)', () => {

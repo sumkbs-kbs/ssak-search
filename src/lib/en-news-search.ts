@@ -70,11 +70,7 @@ export interface EnNewsSearchOptions {
  * under fan-out, and a single dropped fetch silently starves the gold domains
  * from the pool). The caller's total budget is split across the two attempts.
  */
-async function fetchRssWithRetry(
-  env: Env | undefined,
-  url: string,
-  timeoutMs: number,
-): Promise<Response | null> {
+async function fetchRssWithRetry(env: Env | undefined, url: string, timeoutMs: number): Promise<Response | null> {
   const perAttempt = Math.max(Math.floor(timeoutMs / 2), 1000)
   for (let attempt = 0; attempt < 2; attempt++) {
     try {
@@ -96,7 +92,7 @@ async function fetchRssWithRetry(
         continue
       }
       return res
-    } catch (err) {
+    } catch (_err) {
       if (attempt === 0) await sleep(200 + Math.floor(Math.random() * 200))
     }
   }
@@ -115,31 +111,31 @@ function sleep(ms: number): Promise<void> {
  * case-insensitively on the trailing segment.
  */
 export const NEWS_SOURCE_DOMAINS: Record<string, string> = {
-  'reuters': 'reuters.com',
+  reuters: 'reuters.com',
   'bbc news': 'bbc.com',
-  'bbc': 'bbc.com',
-  'bloomberg': 'bloomberg.com',
-  'cnbc': 'cnbc.com',
+  bbc: 'bbc.com',
+  bloomberg: 'bloomberg.com',
+  cnbc: 'cnbc.com',
   'ap news': 'apnews.com',
   'associated press': 'apnews.com',
-  'npr': 'npr.org',
+  npr: 'npr.org',
   'the verge': 'theverge.com',
-  'cnet': 'cnet.com',
-  'techcrunch': 'techcrunch.com',
-  'nature': 'nature.com',
+  cnet: 'cnet.com',
+  techcrunch: 'techcrunch.com',
+  nature: 'nature.com',
   'the guardian': 'theguardian.com',
   'financial times': 'ft.com',
-  'ft': 'ft.com',
+  ft: 'ft.com',
   'new york times': 'nytimes.com',
   'the new york times': 'nytimes.com',
   'wall street journal': 'wsj.com',
   'the wall street journal': 'wsj.com',
-  'cnn': 'cnn.com',
-  'forbes': 'forbes.com',
-  'wired': 'wired.com',
-  'axios': 'axios.com',
-  'politico': 'politico.com',
-  'fortune': 'fortune.com',
+  cnn: 'cnn.com',
+  forbes: 'forbes.com',
+  wired: 'wired.com',
+  axios: 'axios.com',
+  politico: 'politico.com',
+  fortune: 'fortune.com',
   'business insider': 'businessinsider.com',
   'the economist': 'economist.com',
   'the hill': 'thehill.com',
@@ -147,139 +143,150 @@ export const NEWS_SOURCE_DOMAINS: Record<string, string> = {
   'nbc news': 'nbcnews.com',
   'abc news': 'abcnews.go.com',
   'cbs news': 'cbsnews.com',
-  'mashable': 'mashable.com',
-  'engadget': 'engadget.com',
-  'arstechnica': 'arstechnica.com',
+  mashable: 'mashable.com',
+  engadget: 'engadget.com',
+  arstechnica: 'arstechnica.com',
   'ieee spectrum': 'spectrum.ieee.org',
-  'iea': 'iea.org',
-  'electrive': 'electrive.com',
-  'krebsonsecurity': 'krebsonsecurity.com',
-  'fivethirtyeight': 'fivethirtyeight.com',
+  iea: 'iea.org',
+  electrive: 'electrive.com',
+  krebsonsecurity: 'krebsonsecurity.com',
+  fivethirtyeight: 'fivethirtyeight.com',
   'quanta magazine': 'quantamagazine.org',
-  'semi': 'semi.org',
-  'ipcc': 'ipcc.ch',
-  'unfccc': 'unfccc.int',
+  semi: 'semi.org',
+  ipcc: 'ipcc.ch',
+  unfccc: 'unfccc.int',
   'gov.uk': 'gov.uk',
-  'openai': 'openai.com',
-  'google': 'blog.google',
-  'apple': 'apple.com',
-  'tesla': 'tesla.com',
-  'spacex': 'spacex.com',
+  openai: 'openai.com',
+  google: 'blog.google',
+  apple: 'apple.com',
+  tesla: 'tesla.com',
+  spacex: 'spacex.com',
   // Phase 6.7: Chinese sources — Google News RSS renders the trailing source
   // name in Chinese, so the EN name map never matched and every zh item fell
   // back to the news.google.com redirect domain (zh-news-01/03 NDCG 0.000
   // even after the locale fix). These are the zh-news eval gold domains +
   // the major mainland outlets Google surfaces for zh-CN queries.
-  '人民网': 'people.com.cn',
-  '人民日报': 'people.com.cn',
-  '新华网': 'xinhuanet.com',
-  '新华社': 'xinhuanet.com',
+  人民网: 'people.com.cn',
+  人民日报: 'people.com.cn',
+  新华网: 'xinhuanet.com',
+  新华社: 'xinhuanet.com',
   '36氪': '36kr.com',
-  '澎湃新闻': 'thepaper.cn',
-  '界面新闻': 'jiemian.com',
-  '央视新闻': 'cctv.com',
-  '央视网': 'cctv.com',
-  '环球网': 'huanqiu.com',
-  '环球时报': 'huanqiu.com',
-  '参考消息': 'cankaoxiaoxi.com',
-  '中国日报': 'chinadaily.com.cn',
-  '北京日报': 'bjd.com.cn',
-  '新京报': 'bjnews.com.cn',
-  '财新': 'caixin.com',
-  '第一财经': 'yicai.com',
-  '每日经济新闻': 'nbd.com.cn',
-  '证券时报': 'stcn.com',
-  '新浪财经': 'finance.sina.com.cn',
-  '观察者网': 'guancha.cn',
-  '虎嗅': 'huxiu.com',
-  '钛媒体': 'tmtpost.com',
-  '雪球': 'xueqiu.com',
-  '网易': '163.com',
-  '搜狐': 'sohu.com',
-  '腾讯新闻': 'news.qq.com',
-  '凤凰网': 'ifeng.com',
-  '汽车之家': 'autohome.com.cn',
+  澎湃新闻: 'thepaper.cn',
+  界面新闻: 'jiemian.com',
+  央视新闻: 'cctv.com',
+  央视网: 'cctv.com',
+  环球网: 'huanqiu.com',
+  环球时报: 'huanqiu.com',
+  参考消息: 'cankaoxiaoxi.com',
+  中国日报: 'chinadaily.com.cn',
+  北京日报: 'bjd.com.cn',
+  新京报: 'bjnews.com.cn',
+  财新: 'caixin.com',
+  第一财经: 'yicai.com',
+  每日经济新闻: 'nbd.com.cn',
+  证券时报: 'stcn.com',
+  新浪财经: 'finance.sina.com.cn',
+  观察者网: 'guancha.cn',
+  虎嗅: 'huxiu.com',
+  钛媒体: 'tmtpost.com',
+  雪球: 'xueqiu.com',
+  网易: '163.com',
+  搜狐: 'sohu.com',
+  腾讯新闻: 'news.qq.com',
+  凤凰网: 'ifeng.com',
+  汽车之家: 'autohome.com.cn',
   // Japanese sources — same pattern for ja-JP feeds (ja-news-01 gold domains).
-  'nhk': 'nhk.or.jp',
-  '日本経済新聞': 'nikkei.com',
-  '日経': 'nikkei.com',
-  'itmedia': 'itmedia.co.jp',
-  '朝日新聞': 'asahi.com',
-  '毎日新聞': 'mainichi.jp',
-  '読売新聞': 'yomiuri.co.jp',
-  '共同通信': 'kyodonews.net',
-  '時事通信': 'jiji.com',
-  '産経新聞': 'sankei.com',
-  '東洋経済': 'toyokeizai.net',
-  'ダイヤモンド': 'diamond.jp',
-  'ブルームバーグ': 'bloomberg.com',
-  'ロイター': 'reuters.com',
-  'ロイター通信': 'reuters.com',
+  nhk: 'nhk.or.jp',
+  日本経済新聞: 'nikkei.com',
+  日経: 'nikkei.com',
+  // S44 (2026-08-08): ja feeds render the NHK name as "NHKニュース" — the
+  // bare 'nhk' key is exact-only short-token, so every NHK item fell back to
+  // the news.google.com redirect (gold nhk.or.jp miss). 'nhkニュース' is a CJK
+  // key → includes matching covers it. 'nikkei' covers latin renderings
+  // ("Nikkei", "Nikkei Asia"). The literal 'bloomberg.co.jp' key serves the
+  // ja-news gold domain for domain-style renderings while the katakana
+  // 'ブルームバーグ' keeps the international bloomberg.com (S42: gold =
+  // nikkei.com/nhk.or.jp/bloomberg.co.jp).
+  nikkei: 'nikkei.com',
+  nhkニュース: 'nhk.or.jp',
+  'bloomberg.co.jp': 'bloomberg.co.jp',
+  itmedia: 'itmedia.co.jp',
+  朝日新聞: 'asahi.com',
+  毎日新聞: 'mainichi.jp',
+  読売新聞: 'yomiuri.co.jp',
+  共同通信: 'kyodonews.net',
+  時事通信: 'jiji.com',
+  産経新聞: 'sankei.com',
+  東洋経済: 'toyokeizai.net',
+  ダイヤモンド: 'diamond.jp',
+  ブルームバーグ: 'bloomberg.com',
+  ロイター: 'reuters.com',
+  ロイター通信: 'reuters.com',
   // Korean sources — Phase 6.10. Google News RSS renders the trailing source
   // name in Korean for hl=ko feeds, so the EN/zh/ja maps never matched and
   // every kr item fell back to the news.google.com redirect domain (kr-news
   // gold domains like yna.co.kr/hani.co.kr/donga.com got no authority bonus
   // and the eval matcher saw google redirects). Verified live (2026-08-05):
   // titles end with " - 연합뉴스", " - JTBC", " - 주간조선", " - samsung.com".
-  '연합뉴스': 'yna.co.kr',
-  '조선일보': 'chosun.com',
-  '조선비즈': 'biz.chosun.com',
-  '주간조선': 'weekly.chosun.com',
-  '중앙일보': 'joongang.co.kr',
-  '중앙SUNDAY': 'joongang.co.kr',
-  '동아일보': 'donga.com',
-  '한겨레': 'hani.co.kr',
-  '경향신문': 'khan.co.kr',
-  '국민일보': 'kmib.co.kr',
-  '서울신문': 'seoul.co.kr',
-  '세계일보': 'segye.com',
-  '문화일보': 'munhwa.com',
-  '한국일보': 'hankookilbo.com',
-  '한국경제': 'hankyung.com',
-  '한국경제신문': 'hankyung.com',
-  '매일경제': 'mk.co.kr',
-  '서울경제': 'sedaily.com',
-  '머니투데이': 'mt.co.kr',
-  '이데일리': 'edaily.co.kr',
-  '헤럴드경제': 'biz.heraldcorp.com',
-  '아시아경제': 'asiae.co.kr',
-  '파이낸셜뉴스': 'fnnews.com',
-  '뉴시스': 'newsis.com',
-  '뉴스1': 'news1.kr',
-  '디지털타임스': 'dt.co.kr',
-  '전자신문': 'etnews.com',
-  '디일렉': 'thelec.kr',
-  '테크M': 'techm.kr',
+  연합뉴스: 'yna.co.kr',
+  조선일보: 'chosun.com',
+  조선비즈: 'biz.chosun.com',
+  주간조선: 'weekly.chosun.com',
+  중앙일보: 'joongang.co.kr',
+  중앙SUNDAY: 'joongang.co.kr',
+  동아일보: 'donga.com',
+  한겨레: 'hani.co.kr',
+  경향신문: 'khan.co.kr',
+  국민일보: 'kmib.co.kr',
+  서울신문: 'seoul.co.kr',
+  세계일보: 'segye.com',
+  문화일보: 'munhwa.com',
+  한국일보: 'hankookilbo.com',
+  한국경제: 'hankyung.com',
+  한국경제신문: 'hankyung.com',
+  매일경제: 'mk.co.kr',
+  서울경제: 'sedaily.com',
+  머니투데이: 'mt.co.kr',
+  이데일리: 'edaily.co.kr',
+  헤럴드경제: 'biz.heraldcorp.com',
+  아시아경제: 'asiae.co.kr',
+  파이낸셜뉴스: 'fnnews.com',
+  뉴시스: 'newsis.com',
+  뉴스1: 'news1.kr',
+  디지털타임스: 'dt.co.kr',
+  전자신문: 'etnews.com',
+  디일렉: 'thelec.kr',
+  테크M: 'techm.kr',
   // NOTE: source keys are lowercased by parseGoogleNewsRss (sourceKey =
   // source.toLowerCase()), so Latin keys MUST be lowercase here — 'JTBC'
   // would never match the 'jtbc' lookup key.
   'zdnet korea': 'zdnet.co.kr',
-  '블로터': 'bloter.net',
-  '지디넷코리아': 'zdnet.co.kr',
-  'jtbc': 'jtbc.co.kr',
-  'sbs': 'sbs.co.kr',
-  'mbc': 'imbc.com',
-  'kbs': 'kbs.co.kr',
-  '채널a': 'ichannela.com',
-  '채널A': 'ichannela.com',
-  'tv조선': 'tv.chosun.com',
-  'TV조선': 'tv.chosun.com',
-  'ytn': 'ytn.co.kr',
-  '연합뉴스TV': 'yna.co.kr',
-  '오마이뉴스': 'ohmynews.com',
-  '프레시안': 'pressian.com',
-  '뉴스타파': 'newstapa.org',
-  '인사이트': 'insight.co.kr',
-  '위키트리': 'wikitree.co.kr',
-  '네이트': 'nate.com',
-  '네이버뉴스': 'naver.com',
+  블로터: 'bloter.net',
+  지디넷코리아: 'zdnet.co.kr',
+  jtbc: 'jtbc.co.kr',
+  sbs: 'sbs.co.kr',
+  mbc: 'imbc.com',
+  kbs: 'kbs.co.kr',
+  채널a: 'ichannela.com',
+  채널A: 'ichannela.com',
+  tv조선: 'tv.chosun.com',
+  TV조선: 'tv.chosun.com',
+  ytn: 'ytn.co.kr',
+  연합뉴스TV: 'yna.co.kr',
+  오마이뉴스: 'ohmynews.com',
+  프레시안: 'pressian.com',
+  뉴스타파: 'newstapa.org',
+  인사이트: 'insight.co.kr',
+  위키트리: 'wikitree.co.kr',
+  네이트: 'nate.com',
+  네이버뉴스: 'naver.com',
   'samsung.com': 'samsung.com',
-  'einfomax': 'einfomax.co.kr',
+  einfomax: 'einfomax.co.kr',
   // Korean-English hybrid names — same lowercase rule (these appear verbatim
   // in the live ko feed, e.g. " - ZDNet Korea", " - TheElec")
-  'theelec': 'thelec.kr',
-  'chosun': 'chosun.com',
-  'joongang': 'joongang.co.kr',
+  theelec: 'thelec.kr',
+  chosun: 'chosun.com',
+  joongang: 'joongang.co.kr',
   // Lever 2a (2026-08-06): 24 more gold domains missing from the map. Before
   // these, their Google News items fell back to the news.google.com redirect
   // domain — the gold matcher saw a redirect and the eval query lost every hit
@@ -295,48 +302,48 @@ export const NEWS_SOURCE_DOMAINS: Record<string, string> = {
   // probe surfaced 新浪/搜狐/金融界 suffixes, not IT之家/中国新闻网 verbatim;
   // the chinanews.com.cn / ecns.cn variants WERE live-verified and map to the
   // same China News Service parent, whose eval gold is chinanews.com):
-  'it之家': 'ithome.com',
-  'ithome': 'ithome.com',
-  '新浪网': 'sina.com.cn',
-  '新浪新闻': 'sina.com.cn',
-  '新浪新闻_手机新浪网': 'sina.com.cn',
-  '中国新闻网': 'chinanews.com',
-  'chinanews': 'chinanews.com',
+  it之家: 'ithome.com',
+  ithome: 'ithome.com',
+  新浪网: 'sina.com.cn',
+  新浪新闻: 'sina.com.cn',
+  新浪新闻_手机新浪网: 'sina.com.cn',
+  中国新闻网: 'chinanews.com',
+  chinanews: 'chinanews.com',
   'chinanews.com.cn': 'chinanews.com',
-  'ecns': 'chinanews.com',
+  ecns: 'chinanews.com',
   'ecns.cn': 'chinanews.com',
-  'cnbeta': 'cnbeta.com',
+  cnbeta: 'cnbeta.com',
   'cnbeta.com': 'cnbeta.com',
   // Japanese outlets:
-  'ファミ通': 'famitsu.com',
-  'デジタル庁': 'digital.go.jp',
+  ファミ通: 'famitsu.com',
+  デジタル庁: 'digital.go.jp',
   // English / tech / industry outlets:
   'the japan times': 'japantimes.co.jp',
   'japan times': 'japantimes.co.jp',
   '9to5mac': '9to5mac.com',
-  'macrumors': 'macrumors.com',
-  'electrek': 'electrek.co',
-  'coindesk': 'coindesk.com',
+  macrumors: 'macrumors.com',
+  electrek: 'electrek.co',
+  coindesk: 'coindesk.com',
   'light reading': 'lightreading.com',
-  'gartner': 'gartner.com',
+  gartner: 'gartner.com',
   'data center dynamics': 'datacenterdynamics.com',
-  'nasaspaceflight': 'nasaspaceflight.com',
-  'waymo': 'waymo.com',
-  'uploadvr': 'uploadvr.com',
+  nasaspaceflight: 'nasaspaceflight.com',
+  waymo: 'waymo.com',
+  uploadvr: 'uploadvr.com',
   'road to vr': 'roadtovr.com',
   // Institutional / governmental gold (en-news-04 europa.eu, en-news-06
   // unfccc already mapped, who.int/fao.org/sec.gov/ces.tech/koreabaseball.com):
-  'europa': 'europa.eu',
+  europa: 'europa.eu',
   'european commission': 'europa.eu',
-  'who': 'who.int',
+  who: 'who.int',
   'world health organization': 'who.int',
-  'fao': 'fao.org',
+  fao: 'fao.org',
   'food and agriculture organization': 'fao.org',
-  'sec': 'sec.gov',
+  sec: 'sec.gov',
   'securities and exchange commission': 'sec.gov',
   'u.s. securities and exchange commission': 'sec.gov',
-  'ces': 'ces.tech',
-  'kbo': 'koreabaseball.com',
+  ces: 'ces.tech',
+  kbo: 'koreabaseball.com',
   'korea baseball organization': 'koreabaseball.com',
 }
 
@@ -345,6 +352,113 @@ function splitGoogleTitle(title: string): { headline: string; source: string } {
   const idx = title.lastIndexOf(' - ')
   if (idx <= 0) return { headline: title, source: '' }
   return { headline: title.slice(0, idx).trim(), source: title.slice(idx + 3).trim() }
+}
+
+/** Lowercase alphanumeric tokens of a source name (CJK keys have no word
+ * boundaries, so CJK matching uses raw `includes` instead). */
+function sourceTokens(name: string): string[] {
+  return name
+    .toLowerCase()
+    .split(/[^a-z0-9]+/)
+    .filter((t) => t.length > 0)
+}
+
+/** True when `tokens` contains `key` as a CONTIGUOUS token subsequence
+ * ("bbc news us" contains "bbc news" but not "news us bbc"). */
+function tokensContain(tokens: readonly string[], key: readonly string[]): boolean {
+  if (key.length === 0 || key.length > tokens.length) return false
+  outer: for (let i = 0; i + key.length <= tokens.length; i++) {
+    for (let j = 0; j < key.length; j++) {
+      if (tokens[i + j] !== key[j]) continue outer
+    }
+    return true
+  }
+  return false
+}
+
+/**
+ * Resolve a Google News trailing source name to a domain.
+ *
+ * S18 (2026-08-06): the previous lookup was exact-match only, so Google's
+ * RENDERED source variants never resolved and every item fell back to the
+ * news.google.com redirect domain (en-news-01/10/14/25 pools were 1-8
+ * redirects deep). Live probes show the feed renders outlet names with
+ * regional/desk suffixes — "BBC News US", "Reuters Breaking News",
+ * "The Guardian Australia", "新浪新闻_手机新浪网". Matching strategy:
+ *
+ *   1. exact match on the lowercased key (unchanged contract)
+ *   2. variant match:
+ *      - CJK keys (hanzi/kana/hangul): raw `includes` when key length >= 2.
+ *        Outlet names are distinctive in CJK scripts, so '央视新闻' resolving
+ *        inside '央视新闻客户端' is intended; 1-char keys stay exact-only.
+ *      - Latin keys: contiguous-Token containment — multi-token keys
+ *        ('bbc news', 'the guardian') or distinctive single tokens
+ *        (length >= 5: 'reuters', 'wired', 'europa') match any source whose
+ *        token stream contains them. Word-boundary matching means 'ft'
+ *        never matches 'FTC', 'sec' never matches 'Section' — but short
+ *        single-token keys ('ft', 'sec', 'who', 'iea', 'cnbc', 'cnn') stay
+ *        exact-only to avoid 'Europa Press' → europa.eu-style collisions
+ *        being worse than the documented single-token trade-off.
+ *
+ * Longest key first so the most specific variant wins ('bbc news' beats
+ * 'bbc' — same domain here, but 'the new york times' must not resolve via
+ * the shorter 'new york times' alias's token set).
+ */
+/**
+ * Map keys excluded from single-token containment matching. 'europa' (6) is
+ * a real collision: the Spanish agency "Europa Press" (europapress.es) would
+ * wrongly resolve to europa.eu (EU institutions). Other distinctive single
+ * tokens (reuters/techcrunch/mashable/...) are safe under word-boundary
+ * matching, so only this one is opted out.
+ */
+const NON_CONTAINABLE_KEYS = new Set(['europa'])
+
+/**
+ * Precomputed containment matcher over NEWS_SOURCE_DOMAINS: entries sorted
+ * longest-key-first, with each key's CJK flag + token array resolved ONCE at
+ * module load (S18 — the previous per-call sort + regex ran for every RSS
+ * item on the Workers hot path, ~250 entries × up to 30 items per query).
+ */
+const CONTAINMENT_ENTRIES: ReadonlyArray<{
+  readonly key: string
+  readonly domain: string
+  readonly isCjk: boolean
+  readonly tokens: readonly string[]
+  readonly multiToken: boolean
+  readonly distinctiveSingle: boolean
+}> = Object.entries(NEWS_SOURCE_DOMAINS)
+  .sort((a, b) => b[0].length - a[0].length)
+  .map(([k, domain]) => {
+    const isCjk = /[\u3040-\u30ff\u4e00-\u9fff\uac00-\ud7af]/.test(k)
+    const tokens = sourceTokens(k)
+    return {
+      key: k,
+      domain,
+      isCjk,
+      tokens,
+      multiToken: !isCjk && tokens.length >= 2,
+      distinctiveSingle: !isCjk && tokens.length === 1 && tokens[0].length >= 5 && !NON_CONTAINABLE_KEYS.has(k),
+    }
+  })
+
+export function resolveNewsSourceDomain(source: string): string | undefined {
+  const key = source.toLowerCase()
+  const exact = NEWS_SOURCE_DOMAINS[key]
+  if (exact) return exact
+
+  const tokens = sourceTokens(source)
+  for (const entry of CONTAINMENT_ENTRIES) {
+    if (entry.isCjk) {
+      // Case-insensitive: CJK keys are identity under toLowerCase, but
+      // mixed-script keys ('채널a' vs rendered '채널A') must match too.
+      if (entry.key.length >= 2 && key.includes(entry.key)) return entry.domain
+      continue
+    }
+    if ((entry.multiToken || entry.distinctiveSingle) && tokensContain(tokens, entry.tokens)) {
+      return entry.domain
+    }
+  }
+  return undefined
 }
 
 /** Normalize an RSS source name: lowercase, collapse " on MSN"/" via MSN". */
@@ -414,8 +528,7 @@ export function parseBingNewsRss(xml: string, query: string, maxResults: number)
     const linkMatch = item.match(/<link>([\s\S]*?)<\/link>/)
     if (!linkMatch) continue
     const rawLink = linkMatch[1].replace(/&amp;/g, '&').trim()
-    const realUrl = extractBingNewsRealUrl(linkMatch[1])
-      ?? (rawLink.includes('apiclick') ? undefined : rawLink)
+    const realUrl = extractBingNewsRealUrl(linkMatch[1]) ?? (rawLink.includes('apiclick') ? undefined : rawLink)
     // Scheme guard: never accept javascript:/data:/relative feed links as URLs.
     if (!realUrl || !/^https?:\/\//i.test(realUrl)) continue
 
@@ -447,6 +560,16 @@ export function parseBingNewsRss(xml: string, query: string, maxResults: number)
  * from NEWS_SOURCE_DOMAINS (title-suffix source) so gold domains get their
  * authority bonus despite the redirect URL; unknown sources fall back to
  * extractDomain of the google link. EXPORTED FOR TESTING.
+ *
+ * S44 (2026-08-08): Google News RSS items since 2024 ALSO carry a
+ * <source url="..."> tag with the outlet's REAL home domain (live probe:
+ * 100/100 ja-JP items, en-US items too — e.g. jp.wsj.com, news.yahoo.co.jp,
+ * www.sankei.com). The title-suffix map alone cannot keep up with the ja
+ * long tail (産経ニュース/サンスポ/オリコンニュース...), so unmapped sources
+ * fall back to the <source url> domain before the google redirect host.
+ * The map still wins first (keeps S18 gold normalization + the deliberate
+ * ブルームバーグ→bloomberg.com contract); the fallback only replaces the
+ * news.google.com fallback for items the map cannot resolve.
  */
 export function parseGoogleNewsRss(xml: string, query: string, maxResults: number): SearchResult[] {
   const results: SearchResult[] = []
@@ -468,8 +591,13 @@ export function parseGoogleNewsRss(xml: string, query: string, maxResults: numbe
     const pubMatch = item.match(/<pubDate>([\s\S]*?)<\/pubDate>/)
     const publishedDate = pubMatch ? parseRssDate(pubMatch[1]) : undefined
 
-    const sourceKey = source.toLowerCase()
-    const domain = NEWS_SOURCE_DOMAINS[sourceKey] ?? extractDomain(url)
+    // S44: authoritative outlet domain from the feed's <source url> tag,
+    // used only when the title-suffix map cannot resolve the source name.
+    const sourceUrlMatch = item.match(/<source url="([^"]*)"[^>]*>/i)
+    const sourceUrl = sourceUrlMatch && /^https?:\/\//i.test(sourceUrlMatch[1]) ? sourceUrlMatch[1] : undefined
+
+    const domain =
+      resolveNewsSourceDomain(source) ?? (sourceUrl ? extractDomain(sourceUrl) : undefined) ?? extractDomain(url)
     const content = source ? `[${source}] ${headline}` : headline
 
     const result: SearchResult = {
@@ -491,19 +619,13 @@ export function parseGoogleNewsRss(xml: string, query: string, maxResults: numbe
  * feed in English (live probe: without it Bing serves Korean results for
  * English queries — the en-news NDCG 0.000 root cause).
  */
-export async function bingNewsRssSearch(
-  query: string,
-  opts: EnNewsSearchOptions = {},
-): Promise<SearchResult[]> {
+export async function bingNewsRssSearch(query: string, opts: EnNewsSearchOptions = {}): Promise<SearchResult[]> {
   const { maxResults = 10, timeoutMs = 8000, env, locale = 'en-US' } = opts
 
   // Locale → Bing mkt/setlang/cc. en-US is the default; zh-CN → CN,
   // ja-JP → JP, ko-KR → KR. Region derives from the locale suffix.
   const mkt = locale
-  const cc = locale.endsWith('-CN') ? 'CN'
-    : locale.endsWith('-JP') ? 'JP'
-    : locale.endsWith('-KR') ? 'KR'
-    : 'US'
+  const cc = locale.endsWith('-CN') ? 'CN' : locale.endsWith('-JP') ? 'JP' : locale.endsWith('-KR') ? 'KR' : 'US'
 
   const params = new URLSearchParams()
   params.append('q', query)
@@ -534,19 +656,13 @@ export async function bingNewsRssSearch(
  * Search English news via Google News RSS. hl=en-US forces the English
  * edition. Returns up to 100 fresh items from authoritative outlets.
  */
-export async function googleNewsRssSearch(
-  query: string,
-  opts: EnNewsSearchOptions = {},
-): Promise<SearchResult[]> {
+export async function googleNewsRssSearch(query: string, opts: EnNewsSearchOptions = {}): Promise<SearchResult[]> {
   const { maxResults = 10, timeoutMs = 8000, env, locale = 'en-US' } = opts
 
   // Locale → Google hl/gl/ceid. ceid is '<region>:<language>' where
   // region comes from the locale suffix (zh-CN → CN, ja-JP → JP, ko-KR → KR).
   const lang = locale.toLowerCase()
-  const gl = locale.endsWith('-CN') ? 'CN'
-    : locale.endsWith('-JP') ? 'JP'
-    : locale.endsWith('-KR') ? 'KR'
-    : 'US'
+  const gl = locale.endsWith('-CN') ? 'CN' : locale.endsWith('-JP') ? 'JP' : locale.endsWith('-KR') ? 'KR' : 'US'
 
   const params = new URLSearchParams()
   params.append('q', query)

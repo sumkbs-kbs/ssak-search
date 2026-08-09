@@ -67,7 +67,9 @@ describe('parseBingHtml', () => {
   })
 
   it('respects maxResults limit', () => {
-    const blocks = Array.from({ length: 20 }, (_, i) => `
+    const blocks = Array.from(
+      { length: 20 },
+      (_, i) => `
       <li class="b_algo">
         <div class="b_algoheader">
           <a href="https://example${i}.com/page">Result ${i} Title</a>
@@ -77,7 +79,8 @@ describe('parseBingHtml', () => {
         </div>
         <cite>example${i}.com</cite>
       </li>
-    `).join('')
+    `,
+    ).join('')
     const html = `<ol>${blocks}</ol>`
     const results = parseBingHtml(html, 'query', 5)
     expect(results).toHaveLength(5)
@@ -571,7 +574,13 @@ describe('bingImageSearch', () => {
   })
 
   it('parses iusc image results with JSON m attribute', async () => {
-    const imageData = { murl: 'https://images.example.com/photo.jpg', t: 'Sunset photo', turl: 'https://thumb.example.com/photo.jpg', mw: 800, mh: 600 }
+    const imageData = {
+      murl: 'https://images.example.com/photo.jpg',
+      t: 'Sunset photo',
+      turl: 'https://thumb.example.com/photo.jpg',
+      mw: 800,
+      mh: 600,
+    }
     const encoded = JSON.stringify(imageData).replace(/&/g, '&amp;').replace(/"/g, '&quot;')
     const html = padHtml(`<a class="iusc" m="${encoded}"></a>`)
     mockFetchWithTimeout.mockResolvedValue({ ok: true, text: () => Promise.resolve(html) })
@@ -608,7 +617,9 @@ describe('bingImageSearch', () => {
   })
 
   it('skips data: image URIs', async () => {
-    const html = padHtml(`<img class="mimg" src="data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw==" />`)
+    const html = padHtml(
+      `<img class="mimg" src="data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw==" />`,
+    )
     mockFetchWithTimeout.mockResolvedValue({ ok: true, text: () => Promise.resolve(html) })
 
     const results = await bingImageSearch('test')
@@ -616,7 +627,9 @@ describe('bingImageSearch', () => {
   })
 
   it('skips iusc entries with malformed JSON', async () => {
-    const validData = JSON.stringify({ murl: 'https://valid.com/img.jpg' }).replace(/&/g, '&amp;').replace(/"/g, '&quot;')
+    const validData = JSON.stringify({ murl: 'https://valid.com/img.jpg' })
+      .replace(/&/g, '&amp;')
+      .replace(/"/g, '&quot;')
     const html = padHtml(`
       <a class="iusc" m="not valid json {"></a>
       <a class="iusc" m="${validData}"></a>

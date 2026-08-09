@@ -228,13 +228,7 @@ describe('hybridScore', () => {
     })
 
     it('fallback is non-negative', () => {
-      const score = hybridScore(
-        'the a',
-        'Some Title',
-        'Some content',
-        undefined,
-        'https://example.com',
-      )
+      const score = hybridScore('the a', 'Some Title', 'Some content', undefined, 'https://example.com')
       expect(score).toBeGreaterThanOrEqual(0)
     })
   })
@@ -368,7 +362,7 @@ describe('recomputeScores', () => {
 
       // Track bm25 calls (indirectly via hybridScore)
       const original = hybridScore
-      let hybridCalled = false
+      const hybridCalled = false
       // Replace hybridScore via module monkey-patch is not trivial,
       // so instead verify behavior: score must equal stock_data-original + authorityBonus
       const [result] = recomputeScores([stockResult], ctx)
@@ -392,13 +386,7 @@ describe('recomputeScores', () => {
       })
 
       const [recomputed] = recomputeScores([result], ctx)
-      const expectedBase = hybridScore(
-        ctx.query,
-        result.title,
-        result.content,
-        result.published_date,
-        result.url,
-      )
+      const expectedBase = hybridScore(ctx.query, result.title, result.content, result.published_date, result.url)
       // developers.cloudflare.com is not in authority-bonus map → bonus = 0
       expect(recomputed.score).toBeCloseTo(expectedBase, 5)
     })
@@ -412,13 +400,7 @@ describe('recomputeScores', () => {
       })
 
       const [recomputed] = recomputeScores([result], ctx)
-      const expectedScore = hybridScore(
-        ctx.query,
-        result.title,
-        result.content,
-        result.published_date,
-        result.url,
-      )
+      const expectedScore = hybridScore(ctx.query, result.title, result.content, result.published_date, result.url)
       expect(recomputed.score).toBeCloseTo(expectedScore, 5)
     })
   })
@@ -559,11 +541,7 @@ describe('applyFilters', () => {
 describe('sortResults', () => {
   it('sorts by score descending for relevance', () => {
     const ctx = makeCtx({ request: { sort_by: 'relevance' } as never })
-    const results = [
-      makeResult({ score: 0.3 }),
-      makeResult({ score: 0.7 }),
-      makeResult({ score: 0.5 }),
-    ]
+    const results = [makeResult({ score: 0.3 }), makeResult({ score: 0.7 }), makeResult({ score: 0.5 })]
     const sorted = sortResults(results, ctx)
     expect(sorted[0].score).toBe(0.7)
     expect(sorted[1].score).toBe(0.5)
@@ -574,7 +552,7 @@ describe('sortResults', () => {
     const ctx = makeCtx({ request: { query: 'test', max_results: 10 } as never })
     const results = [
       // Undated but slightly higher relevance
-      makeResult({ score: 0.60, published_date: undefined }),
+      makeResult({ score: 0.6, published_date: undefined }),
       // Fresh (today) with nearly equal relevance — should win the tie-ish race
       makeResult({ score: 0.59, published_date: new Date().toISOString() }),
     ]
@@ -589,7 +567,7 @@ describe('sortResults', () => {
       // Strong relevance, no date (reference content)
       makeResult({ score: 0.95, published_date: undefined }),
       // Fresh but barely relevant spam
-      makeResult({ score: 0.20, published_date: new Date().toISOString() }),
+      makeResult({ score: 0.2, published_date: new Date().toISOString() }),
     ]
     const sorted = sortResults(results, ctx)
     // 0.7*0.95 = 0.665 > 0.7*0.20 + 0.3 = 0.44 → relevance wins
@@ -626,7 +604,7 @@ describe('sortResults', () => {
     const ctx = makeCtx({ request: { query: 'test', max_results: 10 } as never })
     const results = [
       // Undated but slightly higher relevance
-      makeResult({ score: 0.60, published_date: undefined }),
+      makeResult({ score: 0.6, published_date: undefined }),
       // Fresh (today) with nearly equal relevance — should win the tie-ish race
       makeResult({ score: 0.59, published_date: new Date().toISOString() }),
     ]
@@ -678,11 +656,7 @@ describe('sortResults', () => {
 describe('applyQualityThreshold', () => {
   it('removes results with score < 0.01 floor when strict-filter yields enough results', () => {
     const ctx = makeCtx({ maxResults: 2 })
-    const results = [
-      makeResult({ score: 0.5 }),
-      makeResult({ score: 0.3 }),
-      makeResult({ score: 0.005 }),
-    ]
+    const results = [makeResult({ score: 0.5 }), makeResult({ score: 0.3 }), makeResult({ score: 0.005 })]
     const filtered = applyQualityThreshold(results, ctx)
     expect(filtered.length).toBe(2)
     expect(filtered.every((r) => r.score >= 0.01)).toBe(true)

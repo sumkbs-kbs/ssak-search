@@ -11,7 +11,13 @@ import { Hono } from 'hono'
 import { logger, toError } from '../lib/logger'
 import { z } from 'zod'
 import type { AppBindings, ErrorResponse } from '../types'
-import { searchYouTube, getTranscript, formatTranscriptWithTimestamps, getVideoDetails, extractYouTubeId } from '../lib/youtube-search'
+import {
+  searchYouTube,
+  getTranscript,
+  formatTranscriptWithTimestamps,
+  getVideoDetails,
+  extractYouTubeId,
+} from '../lib/youtube-search'
 
 // ============================================================
 // Schema
@@ -30,15 +36,17 @@ const TranscriptQuery = z.object({
   lang: z.string().optional(),
 })
 
-const VideoDetailsQuery = z.object({
-  // Accept either a full URL or a bare video ID
-  url: z.string().min(1).max(2048).optional(),
-  video_id: z.string().min(1).max(100).optional(),
-  include_transcript: z.coerce.boolean().default(false),
-  lang: z.string().optional(),
-}).refine((v) => v.url || v.video_id, {
-  message: 'Either url or video_id is required',
-})
+const VideoDetailsQuery = z
+  .object({
+    // Accept either a full URL or a bare video ID
+    url: z.string().min(1).max(2048).optional(),
+    video_id: z.string().min(1).max(100).optional(),
+    include_transcript: z.coerce.boolean().default(false),
+    lang: z.string().optional(),
+  })
+  .refine((v) => v.url || v.video_id, {
+    message: 'Either url or video_id is required',
+  })
 
 // ============================================================
 // Route
@@ -56,7 +64,8 @@ video.get('/', (c) => {
       {
         id: 'youtube',
         name: 'YouTube',
-        description: 'Search YouTube videos, fetch subtitles, and extract rich video details (description/keywords/stats) from a URL',
+        description:
+          'Search YouTube videos, fetch subtitles, and extract rich video details (description/keywords/stats) from a URL',
         endpoints: {
           search: 'GET/POST /api/video/search',
           transcript: 'GET /api/video/transcript?video_id=...&format=json|text|srt',
@@ -147,14 +156,11 @@ video.get('/details', async (c) => {
     })
     const { url, video_id, include_transcript, lang } = params
 
-    const target = url || video_id!
+    const target = url || (video_id as string)
     // Validate the target resolves to a video ID up front — a clear 400 is
     // friendlier than a 404 "not found" from the scraper for a bad URL.
     if (!extractYouTubeId(target)) {
-      return c.json<ErrorResponse>(
-        { detail: 'Invalid YouTube URL or video ID', code: 'validation_error' },
-        400,
-      )
+      return c.json<ErrorResponse>({ detail: 'Invalid YouTube URL or video ID', code: 'validation_error' }, 400)
     }
 
     const details = await getVideoDetails(target, { includeTranscript: include_transcript, lang })
@@ -168,7 +174,10 @@ video.get('/details', async (c) => {
     return c.json({ success: true, source: 'youtube', details })
   } catch (err) {
     if (err instanceof z.ZodError) {
-      return c.json<ErrorResponse>({ detail: 'Validation error: url or video_id required', code: 'validation_error' }, 400)
+      return c.json<ErrorResponse>(
+        { detail: 'Validation error: url or video_id required', code: 'validation_error' },
+        400,
+      )
     }
     logger.error('Video details error:', { error: toError(err) })
     return c.json<ErrorResponse>({ detail: 'Video details fetch failed', code: 'internal_error' }, 500)
@@ -199,7 +208,10 @@ video.get('/transcript', async (c) => {
       const srt = formatTranscriptSrt(transcript)
       return c.newResponse(srt, {
         status: 200,
-        headers: { 'Content-Type': 'text/plain; charset=utf-8', 'Content-Disposition': `attachment; filename="${video_id}.srt"` },
+        headers: {
+          'Content-Type': 'text/plain; charset=utf-8',
+          'Content-Disposition': `attachment; filename="${video_id}.srt"`,
+        },
       })
     }
 

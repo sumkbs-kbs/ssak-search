@@ -9,7 +9,7 @@
  * Instead, provide env with no D1/Vectorize bindings → graceful early return.
  */
 
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi } from 'vitest'
 import type { Env } from '../../src/types'
 import type { IndexQueueMessage } from '../../src/lib/index/types'
 import { logger } from '../../src/lib/logger'
@@ -36,9 +36,7 @@ describe('indexQueueConsumer', () => {
     }
 
     // Should not throw — pipeline gracefully handles missing bindings
-    await expect(
-      indexQueueConsumer({ queue: 'index-queue', messages: [{ body: msg }] }, env),
-    ).resolves.toBeUndefined()
+    await expect(indexQueueConsumer({ queue: 'index-queue', messages: [{ body: msg }] }, env)).resolves.toBeUndefined()
   })
 
   it('processes INDEX_URL messages with options', async () => {
@@ -50,9 +48,7 @@ describe('indexQueueConsumer', () => {
       payload: { url: 'https://example.com/doc', title: 'Test', html: '<html></html>', options: { language: 'ko' } },
     }
 
-    await expect(
-      indexQueueConsumer({ queue: 'index-queue', messages: [{ body: msg }] }, env),
-    ).resolves.toBeUndefined()
+    await expect(indexQueueConsumer({ queue: 'index-queue', messages: [{ body: msg }] }, env)).resolves.toBeUndefined()
   })
 
   it('processes REINDEX_URL messages gracefully', async () => {
@@ -65,9 +61,7 @@ describe('indexQueueConsumer', () => {
       payload: { url: 'https://example.com/stale', force: true },
     }
 
-    await expect(
-      indexQueueConsumer({ queue: 'index-queue', messages: [{ body: msg }] }, env),
-    ).resolves.toBeUndefined()
+    await expect(indexQueueConsumer({ queue: 'index-queue', messages: [{ body: msg }] }, env)).resolves.toBeUndefined()
 
     expect(logSpy).toHaveBeenCalled()
     logSpy.mockRestore()
@@ -82,9 +76,7 @@ describe('indexQueueConsumer', () => {
       payload: { url: 'https://example.com/old-page' },
     }
 
-    await expect(
-      indexQueueConsumer({ queue: 'index-queue', messages: [{ body: msg }] }, env),
-    ).resolves.toBeUndefined()
+    await expect(indexQueueConsumer({ queue: 'index-queue', messages: [{ body: msg }] }, env)).resolves.toBeUndefined()
   })
 
   it('processes REFRESH_SCHEDULE messages gracefully', async () => {
@@ -97,9 +89,7 @@ describe('indexQueueConsumer', () => {
       payload: {} as IndexQueueMessage['payload'],
     } as IndexQueueMessage
 
-    await expect(
-      indexQueueConsumer({ queue: 'index-queue', messages: [{ body: msg }] }, env),
-    ).resolves.toBeUndefined()
+    await expect(indexQueueConsumer({ queue: 'index-queue', messages: [{ body: msg }] }, env)).resolves.toBeUndefined()
 
     expect(logSpy).toHaveBeenCalled()
     logSpy.mockRestore()
@@ -114,9 +104,7 @@ describe('indexQueueConsumer', () => {
       payload: { urls: [{ url: 'https://example.com/a', title: 'A', html: '<p>A</p>' }] },
     }
 
-    await expect(
-      indexQueueConsumer({ queue: 'index-queue', messages: [{ body: msg }] }, env),
-    ).resolves.toBeUndefined()
+    await expect(indexQueueConsumer({ queue: 'index-queue', messages: [{ body: msg }] }, env)).resolves.toBeUndefined()
   })
 
   it('processes multiple messages in a batch', async () => {
@@ -124,13 +112,16 @@ describe('indexQueueConsumer', () => {
     const env = createMinimalEnv()
 
     const messages = [
-      { body: { type: 'INDEX_URL' as const, payload: { url: 'https://example.com/1', title: 'Doc 1', html: '<p>1</p>' } } as const },
+      {
+        body: {
+          type: 'INDEX_URL' as const,
+          payload: { url: 'https://example.com/1', title: 'Doc 1', html: '<p>1</p>' },
+        } as const,
+      },
       { body: { type: 'DELETE_URL' as const, payload: { url: 'https://example.com/old' } } as const },
     ]
 
-    await expect(
-      indexQueueConsumer({ queue: 'index-queue', messages: messages as any }, env),
-    ).resolves.toBeUndefined()
+    await expect(indexQueueConsumer({ queue: 'index-queue', messages: messages as any }, env)).resolves.toBeUndefined()
   })
 
   it('handles errors gracefully without throwing', async () => {
@@ -142,9 +133,7 @@ describe('indexQueueConsumer', () => {
       payload: { url: 'https://example.com/doc', title: 'Test', html: '<html></html>' },
     }
 
-    await expect(
-      indexQueueConsumer({ queue: 'index-queue', messages: [{ body: msg }] }, env),
-    ).resolves.toBeUndefined()
+    await expect(indexQueueConsumer({ queue: 'index-queue', messages: [{ body: msg }] }, env)).resolves.toBeUndefined()
   })
 
   it('handles unknown message types gracefully', async () => {
@@ -153,9 +142,7 @@ describe('indexQueueConsumer', () => {
 
     const msg = { type: 'UNKNOWN_TYPE', payload: {} } as unknown as IndexQueueMessage
 
-    await expect(
-      indexQueueConsumer({ queue: 'index-queue', messages: [{ body: msg }] }, env),
-    ).resolves.toBeUndefined()
+    await expect(indexQueueConsumer({ queue: 'index-queue', messages: [{ body: msg }] }, env)).resolves.toBeUndefined()
   })
 
   it('recovers from errors in one message and processes the next', async () => {
@@ -163,13 +150,16 @@ describe('indexQueueConsumer', () => {
     const env = createMinimalEnv()
 
     const messages = [
-      { body: { type: 'INDEX_URL' as const, payload: { url: '', title: '', html: '' } } as const },  // empty → will gracefully handle
-      { body: { type: 'INDEX_URL' as const, payload: { url: 'https://example.com/2', title: 'Doc 2', html: '<p>2</p>' } } as const },
+      { body: { type: 'INDEX_URL' as const, payload: { url: '', title: '', html: '' } } as const }, // empty → will gracefully handle
+      {
+        body: {
+          type: 'INDEX_URL' as const,
+          payload: { url: 'https://example.com/2', title: 'Doc 2', html: '<p>2</p>' },
+        } as const,
+      },
     ]
 
-    await expect(
-      indexQueueConsumer({ queue: 'index-queue', messages: messages as any }, env),
-    ).resolves.toBeUndefined()
+    await expect(indexQueueConsumer({ queue: 'index-queue', messages: messages as any }, env)).resolves.toBeUndefined()
   })
 })
 

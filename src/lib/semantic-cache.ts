@@ -63,11 +63,7 @@ interface SemanticCacheResult {
   score: number
 }
 
-async function embedQuery(
-  env: Env,
-  query: string,
-  language?: string,
-): Promise<number[] | undefined> {
+async function embedQuery(env: Env, query: string, language?: string): Promise<number[] | undefined> {
   try {
     const service = new EmbeddingService({ preferredModel: 'pplx-embed-v1-0.6b' }, env)
     const result = await service.embed({
@@ -125,9 +121,12 @@ export async function semanticCacheLookup(
     if (options?.paramsSig !== undefined && storedSig !== options.paramsSig) continue
 
     try {
-      const row = await db.prepare(
-        'SELECT cache_key, query, response_json, created_at, last_accessed, access_count FROM semantic_cache WHERE cache_key = ?',
-      ).bind(storedKey).first<StoredEntry>()
+      const row = await db
+        .prepare(
+          'SELECT cache_key, query, response_json, created_at, last_accessed, access_count FROM semantic_cache WHERE cache_key = ?',
+        )
+        .bind(storedKey)
+        .first<StoredEntry>()
       if (!row) continue
       if (now - row.created_at > SEMANTIC_CACHE_TTL_MS) {
         // Expired — delete lazily and try the next match.
@@ -136,11 +135,12 @@ export async function semanticCacheLookup(
       }
       const response = JSON.parse(row.response_json) as SearchResponse
       // Update LRU bookkeeping (non-blocking — failure must not cost a hit).
-      db.prepare(
-        'UPDATE semantic_cache SET last_accessed = ?, access_count = access_count + 1 WHERE cache_key = ?',
-      ).bind(now, storedKey).run().catch((err: unknown) => {
-        logger.warn('[SemanticCache] LRU update failed:', { error: toError(err) })
-      })
+      db.prepare('UPDATE semantic_cache SET last_accessed = ?, access_count = access_count + 1 WHERE cache_key = ?')
+        .bind(now, storedKey)
+        .run()
+        .catch((err: unknown) => {
+          logger.warn('[SemanticCache] LRU update failed:', { error: toError(err) })
+        })
       return { response, matchedQuery: row.query, score: match.score }
     } catch (err) {
       logger.warn('[SemanticCache] D1 lookup failed:', { error: toError(err) })
@@ -172,24 +172,29 @@ export async function semanticCacheStore(
   const vectorId = semanticVectorId(cacheKey)
 
   try {
-    await index.upsert([{
-      id: vectorId,
-      values: embedding,
-      metadata: {
-        cache_key: cacheKey,
-        params_sig: options?.paramsSig ?? '',
-        query: query.slice(0, 200),
-        created_at: now,
+    await index.upsert([
+      {
+        id: vectorId,
+        values: embedding,
+        metadata: {
+          cache_key: cacheKey,
+          params_sig: options?.paramsSig ?? '',
+          query: query.slice(0, 200),
+          created_at: now,
+        },
       },
-    }])
-    await db.prepare(
-      `INSERT INTO semantic_cache (cache_key, query, response_json, created_at, last_accessed, access_count)
+    ])
+    await db
+      .prepare(
+        `INSERT INTO semantic_cache (cache_key, query, response_json, created_at, last_accessed, access_count)
        VALUES (?, ?, ?, ?, ?, 1)
        ON CONFLICT(cache_key) DO UPDATE SET
          response_json = excluded.response_json,
          created_at = excluded.created_at,
          last_accessed = excluded.last_accessed`,
-    ).bind(cacheKey, query.slice(0, 500), JSON.stringify(response), now, now).run()
+      )
+      .bind(cacheKey, query.slice(0, 500), JSON.stringify(response), now, now)
+      .run()
     // LRU eviction — bounded, best-effort, after the write.
     await evictIfNeeded(db, index)
   } catch (err) {
@@ -197,14 +202,18 @@ export async function semanticCacheStore(
   }
 }
 
-async function evictIfNeeded(db: NonNullable<Env['SEARCH_INDEX_DB']>, index: NonNullable<Env['SEMANTIC_CACHE_INDEX']>): Promise<void> {
+async function evictIfNeeded(
+  db: NonNullable<Env['SEARCH_INDEX_DB']>,
+  index: NonNullable<Env['SEMANTIC_CACHE_INDEX']>,
+): Promise<void> {
   const countRow = await db.prepare('SELECT COUNT(*) AS n FROM semantic_cache').first<{ n: number }>()
   const overflow = (countRow?.n ?? 0) - SEMANTIC_CACHE_MAX_ENTRIES
   if (overflow <= 0) return
 
-  const victims = await db.prepare(
-    'SELECT cache_key FROM semantic_cache ORDER BY last_accessed ASC LIMIT ?',
-  ).bind(Math.min(overflow, SEMANTIC_CACHE_EVICT_BATCH)).all<{ cache_key: string }>()
+  const victims = await db
+    .prepare('SELECT cache_key FROM semantic_cache ORDER BY last_accessed ASC LIMIT ?')
+    .bind(Math.min(overflow, SEMANTIC_CACHE_EVICT_BATCH))
+    .all<{ cache_key: string }>()
   if (!victims.results || victims.results.length === 0) return
 
   for (const victim of victims.results) {

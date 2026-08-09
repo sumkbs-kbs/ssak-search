@@ -79,7 +79,8 @@ export function parseStackExchangeResponse(data: unknown, query: string, maxResu
     const tags = Array.isArray(item.tags) ? (item.tags as string[]).slice(0, 3).join(', ') : ''
     const answered = item.is_answered === true ? '[answered] ' : ''
     const votes = typeof item.score === 'number' && item.score > 0 ? ` ↑${item.score}` : ''
-    const answers = typeof item.answer_count === 'number' && item.answer_count > 0 ? ` (${item.answer_count} answers)` : ''
+    const answers =
+      typeof item.answer_count === 'number' && item.answer_count > 0 ? ` (${item.answer_count} answers)` : ''
     const content = truncateToTokens(`${answered}${title}${votes}${answers}${tags ? ` [${tags}]` : ''}`, 500)
 
     results.push({

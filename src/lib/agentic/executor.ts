@@ -69,7 +69,7 @@ interface InternalExecutorOptions {
 async function executeStep(
   step: SubQueryStep,
   context: ExecutionContext,
-  opts: InternalExecutorOptions
+  opts: InternalExecutorOptions,
 ): Promise<StepResult> {
   const citations: Citation[] = []
 
@@ -81,7 +81,7 @@ async function executeStep(
         const params = step.params as { query: string; recency_days?: number; max_results?: number }
         // Resolve query template with context from dependencies
         const resolvedQuery = resolveTemplate(params.query, context)
-        
+
         const results = await searchWeb({
           query: resolvedQuery,
           recencyDays: params.recency_days,
@@ -106,7 +106,7 @@ async function executeStep(
       case 'fetch_url': {
         const params = step.params as { url: string; max_tokens?: number }
         const resolvedUrl = resolveTemplate(params.url, context)
-        
+
         const content = await fetchUrl({
           url: resolvedUrl,
           maxTokens: params.max_tokens ?? 8000,
@@ -135,7 +135,7 @@ async function executeStep(
           }
         }
         const mergedContext = { ...params.context, ...depContext }
-        
+
         evidence = await compute(params.formula, mergedContext)
         break
       }
@@ -241,9 +241,7 @@ export class PlanExecutor {
 
     while (remaining.size > 0) {
       // Find all steps whose dependencies are met by completed steps
-      const ready = [...remaining].filter(
-        (step) => step.depends_on.every((depId) => context.completedSteps.has(depId)),
-      )
+      const ready = [...remaining].filter((step) => step.depends_on.every((depId) => context.completedSteps.has(depId)))
       if (ready.length === 0) {
         // Deadlock — remaining steps have unmet deps (circular or failed deps)
         logger.warn(`[Executor] ${remaining.size} steps have unmet dependencies, running anyway`)
@@ -287,16 +285,17 @@ export class PlanExecutor {
         for (let j = 0; j < settled.length; j++) {
           const entry = chunk[j]
           const s = settled[j]
-          const result: StepResult = s.status === 'fulfilled'
-            ? s.value
-            : {
-                stepId: entry.stepId,
-                question: entry.question,
-                tool: entry.tool,
-                success: false,
-                error: String((settled[j] as PromiseRejectedResult).reason),
-                citations: [],
-              }
+          const result: StepResult =
+            s.status === 'fulfilled'
+              ? s.value
+              : {
+                  stepId: entry.stepId,
+                  question: entry.question,
+                  tool: entry.tool,
+                  success: false,
+                  error: String((settled[j] as PromiseRejectedResult).reason),
+                  citations: [],
+                }
           context.stepResults.set(result.stepId, result)
           context.allCitations.push(...result.citations)
           if (result.success) {
@@ -327,7 +326,7 @@ export class PlanExecutor {
   private topologicalSort(steps: SubQueryStep[]): SubQueryStep[] {
     const visited = new Set<number>()
     const result: SubQueryStep[] = []
-    const stepMap = new Map(steps.map(s => [s.id, s]))
+    const stepMap = new Map(steps.map((s) => [s.id, s]))
 
     function visit(stepId: number) {
       if (visited.has(stepId)) return
@@ -354,7 +353,7 @@ export class PlanExecutor {
 
 export async function executePlan(
   plan: SubQueryPlan,
-  opts: ExecutorOptions = {}
+  opts: ExecutorOptions = {},
 ): Promise<{
   context: ExecutionContext
   allCitations: Citation[]

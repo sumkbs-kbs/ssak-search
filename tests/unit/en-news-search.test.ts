@@ -25,11 +25,13 @@ import {
   extractBingNewsRealUrl,
   bingNewsRssSearch,
   googleNewsRssSearch,
+  resolveNewsSourceDomain,
 } from '../../src/lib/en-news-search'
 
 describe('extractBingNewsRealUrl — apiclick 실 URL 추출', () => {
   it('extracts the real URL after entity-decoding the link', () => {
-    const link = 'http://www.bing.com/news/apiclick.aspx?ref=FexRss&amp;aid=&amp;tid=abc' +
+    const link =
+      'http://www.bing.com/news/apiclick.aspx?ref=FexRss&amp;aid=&amp;tid=abc' +
       '&amp;url=https%3a%2f%2fwww.cnbc.com%2f2026%2f07%2f08%2fopenai-expanding.html' +
       '&amp;c=1&amp;mkt=en-us'
     expect(extractBingNewsRealUrl(link)).toBe('https://www.cnbc.com/2026/07/08/openai-expanding.html')
@@ -96,7 +98,8 @@ describe('parseBingNewsRss', () => {
   })
 
   it('rejects non-http(s) scheme links (javascript:/data:)', () => {
-    const malicious = `<rss><channel>` +
+    const malicious =
+      `<rss><channel>` +
       `<item><title>XSS attempt</title><link>javascript:alert(1)</link><pubDate>Thu, 30 Jul 2026 17:41:28 GMT</pubDate></item>` +
       `<item><title>Data scheme</title><link>data:text/html,hi</link><pubDate>Thu, 30 Jul 2026 17:41:28 GMT</pubDate></item>` +
       `</channel></rss>`
@@ -142,7 +145,12 @@ describe('bingNewsRssSearch / googleNewsRssSearch — retry/가용성', () => {
 
   it('bingNewsRssSearch retries once on 429 and succeeds', async () => {
     mockFetchWithTimeout
-      .mockResolvedValueOnce({ ok: false, status: 429, body: { cancel: async () => {} }, text: async () => '' } as unknown as Response)
+      .mockResolvedValueOnce({
+        ok: false,
+        status: 429,
+        body: { cancel: async () => {} },
+        text: async () => '',
+      } as unknown as Response)
       .mockResolvedValueOnce({ ok: true, status: 200, text: async () => BING_RSS } as unknown as Response)
 
     const results = await bingNewsRssSearch('OpenAI GPT-5 release', { maxResults: 10, timeoutMs: 4000 })
@@ -152,7 +160,12 @@ describe('bingNewsRssSearch / googleNewsRssSearch — retry/가용성', () => {
 
   it('googleNewsRssSearch retries once on 5xx and succeeds', async () => {
     mockFetchWithTimeout
-      .mockResolvedValueOnce({ ok: false, status: 503, body: { cancel: async () => {} }, text: async () => '' } as unknown as Response)
+      .mockResolvedValueOnce({
+        ok: false,
+        status: 503,
+        body: { cancel: async () => {} },
+        text: async () => '',
+      } as unknown as Response)
       .mockResolvedValueOnce({ ok: true, status: 200, text: async () => GOOGLE_RSS } as unknown as Response)
 
     const results = await googleNewsRssSearch('OpenAI GPT-5', { maxResults: 10, timeoutMs: 4000 })
@@ -161,7 +174,12 @@ describe('bingNewsRssSearch / googleNewsRssSearch — retry/가용성', () => {
   })
 
   it('returns empty when the feed is down after retries', async () => {
-    mockFetchWithTimeout.mockResolvedValue({ ok: false, status: 503, body: { cancel: async () => {} }, text: async () => '' } as unknown as Response)
+    mockFetchWithTimeout.mockResolvedValue({
+      ok: false,
+      status: 503,
+      body: { cancel: async () => {} },
+      text: async () => '',
+    } as unknown as Response)
     const results = await bingNewsRssSearch('q', { maxResults: 10, timeoutMs: 4000 })
     expect(results).toEqual([])
     expect(mockFetchWithTimeout).toHaveBeenCalledTimes(2)
@@ -170,7 +188,11 @@ describe('bingNewsRssSearch / googleNewsRssSearch — retry/가용성', () => {
   // Phase 6.10 — ko-KR locale wiring: Bing must pass mkt/setlang/cc=KR,
   // Google hl/gl/ceid=KR:ko, so Korean news queries stop getting en-US feeds.
   it('bingNewsRssSearch sends ko-KR locale params', async () => {
-    mockFetchWithTimeout.mockResolvedValueOnce({ ok: true, status: 200, text: async () => BING_RSS } as unknown as Response)
+    mockFetchWithTimeout.mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      text: async () => BING_RSS,
+    } as unknown as Response)
     await bingNewsRssSearch('삼성전자 뉴스', { maxResults: 10, timeoutMs: 4000, locale: 'ko-KR' })
     const url = String(mockFetchWithTimeout.mock.calls[0][1])
     expect(url).toContain('mkt=ko-KR')
@@ -179,7 +201,11 @@ describe('bingNewsRssSearch / googleNewsRssSearch — retry/가용성', () => {
   })
 
   it('googleNewsRssSearch sends ko-KR locale params', async () => {
-    mockFetchWithTimeout.mockResolvedValueOnce({ ok: true, status: 200, text: async () => GOOGLE_RSS } as unknown as Response)
+    mockFetchWithTimeout.mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      text: async () => GOOGLE_RSS,
+    } as unknown as Response)
     await googleNewsRssSearch('삼성전자 뉴스', { maxResults: 10, timeoutMs: 4000, locale: 'ko-KR' })
     const url = String(mockFetchWithTimeout.mock.calls[0][1])
     expect(url).toContain('hl=ko-KR')
@@ -209,6 +235,68 @@ describe('parseGoogleNewsRss', () => {
 
   it('falls back to the redirect URL domain for unknown sources', () => {
     const results = parseGoogleNewsRss(GOOGLE_RSS, 'q', 10)
+    expect(results[2].domain).toBe('news.google.com')
+  })
+
+  // S18 (2026-08-06): Google renders source names with regional/desk
+  // suffixes ("BBC News US", "Reuters Breaking News"). The exact-match map
+  // left these unresolved → every item fell back to the news.google.com
+  // redirect domain (eval: 140 redirect slots in the en-news family).
+  it('resolves regional/desk variants of mapped sources via token containment', () => {
+    expect(resolveNewsSourceDomain('BBC News US')).toBe('bbc.com')
+    expect(resolveNewsSourceDomain('Reuters Breaking News')).toBe('reuters.com')
+    expect(resolveNewsSourceDomain('The Guardian Australia')).toBe('theguardian.com')
+    expect(resolveNewsSourceDomain('Financial Times US')).toBe('ft.com')
+    expect(resolveNewsSourceDomain('Wired UK')).toBe('wired.com')
+    expect(resolveNewsSourceDomain('新浪新闻_手机新浪网')).toBe('sina.com.cn')
+    expect(resolveNewsSourceDomain('이데일리경제')).toBe('edaily.co.kr')
+  })
+
+  it('exact source names still resolve exactly (unchanged contract)', () => {
+    expect(resolveNewsSourceDomain('Reuters')).toBe('reuters.com')
+    expect(resolveNewsSourceDomain('BBC News')).toBe('bbc.com')
+    expect(resolveNewsSourceDomain('WHO')).toBe('who.int')
+    expect(resolveNewsSourceDomain('SEC')).toBe('sec.gov')
+  })
+
+  // Short keys ('ft','sec','who','iea','cnbc','cnn') are exact-only —
+  // containment must not fire on words that merely SHARE a token or are
+  // substrings at word level ("FTC" must not match 'ft', "Section" must
+  // not match 'sec', "CNBC International" is documented as unresolved).
+  it('does NOT false-positive short keys or unlisted variants', () => {
+    expect(resolveNewsSourceDomain('FTC')).toBeUndefined()
+    expect(resolveNewsSourceDomain('Section 504 News')).toBeUndefined()
+    expect(resolveNewsSourceDomain('CNBC International')).toBeUndefined()
+    expect(resolveNewsSourceDomain('The New York')).toBeUndefined()
+  })
+
+  it('parseGoogleNewsRss resolves a variant source to its gold domain', () => {
+    const variantRss = `<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0">
+<channel>
+  <item>
+    <title>EU finalizes AI rules - Reuters Breaking News</title>
+    <link>https://news.google.com/rss/articles/CBMv1?oc=5</link>
+    <pubDate>Thu, 30 Jul 2026 20:29:58 GMT</pubDate>
+  </item>
+  <item>
+    <title>EU AI rules detailed - BBC News US</title>
+    <link>https://news.google.com/rss/articles/CBMv2?oc=5</link>
+    <pubDate>Thu, 30 Jul 2026 19:00:00 GMT</pubDate>
+  </item>
+  <item>
+    <title>EU AI rules market report - MarketsandMarkets</title>
+    <link>https://news.google.com/rss/articles/CBMv3?oc=5</link>
+    <pubDate>Thu, 30 Jul 2026 18:00:00 GMT</pubDate>
+  </item>
+</channel>
+</rss>`
+    const results = parseGoogleNewsRss(variantRss, 'EU AI rules', 10)
+    expect(results.length).toBe(3)
+    // Variant sources now resolve to their gold domains (S18)
+    expect(results[0].domain).toBe('reuters.com')
+    expect(results[1].domain).toBe('bbc.com')
+    // Unlisted sources still fall back to the redirect domain
     expect(results[2].domain).toBe('news.google.com')
   })
 
@@ -350,5 +438,89 @@ ${items.map((t, i) => `<item>\n<title>${t}</title>\n<link>https://news.google.co
     expect(results[4].domain).toBe('samsung.com')
     // Unmapped sources still fall back to the redirect domain
     expect(results[5].domain).toBe('news.google.com')
+  })
+
+  // S44 (2026-08-08) — ja-news gold coverage. Live probe of the ja-JP feed:
+  // 100/100 items carry a <source url="..."> tag with the REAL outlet
+  // domain, while the rendered title-suffix names are often unmapped
+  // (NHKニュース/産経ニュース/サンスポ/オリコンニュース...). The map is
+  // extended AND the source-url becomes the fallback before the google
+  // redirect host.
+  it('resolves the S44 ja keys (NHKニュース / nikkei / literal bloomberg.co.jp)', () => {
+    expect(resolveNewsSourceDomain('NHKニュース')).toBe('nhk.or.jp')
+    expect(resolveNewsSourceDomain('nikkei')).toBe('nikkei.com')
+    expect(resolveNewsSourceDomain('Nikkei Asia')).toBe('nikkei.com')
+    expect(resolveNewsSourceDomain('bloomberg.co.jp')).toBe('bloomberg.co.jp')
+    // The katakana name keeps the international .com mapping (S42 contract)
+    expect(resolveNewsSourceDomain('ブルームバーグ')).toBe('bloomberg.com')
+  })
+
+  it('resolves ja feed items via map + <source url> fallback', () => {
+    const jaRss = `<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0">
+<channel>
+  <item>
+    <title>円安の影響を徹底解説 - NHKニュース</title>
+    <link>https://news.google.com/rss/articles/CBMj1?oc=5</link>
+    <source url="https://news.web.nhk">NHKニュース</source>
+    <pubDate>Mon, 04 Aug 2026 10:00:00 GMT</pubDate>
+  </item>
+  <item>
+    <title>日経平均の見通しを分析 - 日本経済新聞</title>
+    <link>https://news.google.com/rss/articles/CBMj2?oc=5</link>
+    <source url="https://www.nikkei.com">日本経済新聞</source>
+    <pubDate>Mon, 04 Aug 2026 09:00:00 GMT</pubDate>
+  </item>
+  <item>
+    <title>市場の最新動向を速報 - ブルームバーグ</title>
+    <link>https://news.google.com/rss/articles/CBMj3?oc=5</link>
+    <source url="https://www.bloomberg.co.jp">ブルームバーグ</source>
+    <pubDate>Mon, 04 Aug 2026 08:00:00 GMT</pubDate>
+  </item>
+  <item>
+    <title>為替市場の今後を展望 - WSJ</title>
+    <link>https://news.google.com/rss/articles/CBMj4?oc=5</link>
+    <source url="https://jp.wsj.com">WSJ</source>
+    <pubDate>Mon, 04 Aug 2026 07:00:00 GMT</pubDate>
+  </item>
+  <item>
+    <title>経済政策の影響を検証 - 産経ニュース</title>
+    <link>https://news.google.com/rss/articles/CBMj5?oc=5</link>
+    <source url="https://www.sankei.com">産経ニュース</source>
+    <pubDate>Mon, 04 Aug 2026 06:00:00 GMT</pubDate>
+  </item>
+  <item>
+    <title>エンタメの最新情報を紹介 - オリコンニュース</title>
+    <link>https://news.google.com/rss/articles/CBMj6?oc=5</link>
+    <source url="https://www.oricon.co.jp">オリコンニュース</source>
+    <pubDate>Mon, 04 Aug 2026 05:00:00 GMT</pubDate>
+  </item>
+  <item>
+    <title>未マッピングの配信元から記事</title>
+    <link>https://news.google.com/rss/articles/CBMj7?oc=5</link>
+    <pubDate>Mon, 04 Aug 2026 04:00:00 GMT</pubDate>
+  </item>
+</channel>
+</rss>`
+
+    const results = parseGoogleNewsRss(jaRss, 'ニュース', 10)
+    expect(results.length).toBe(7)
+    // Map wins first — NHKニュース resolves to the gold nhk.or.jp (not the
+    // truncated 'news.web.nhk' the source tag carries), nikkei via the map
+    // (source tag agrees), and ブルームバーグ keeps bloomberg.com (S42
+    // contract — the map deliberately outranks the .co.jp source tag).
+    expect(results[0].domain).toBe('nhk.or.jp')
+    expect(results[1].domain).toBe('nikkei.com')
+    expect(results[2].domain).toBe('bloomberg.com')
+    // Unmapped rendered names now resolve via the <source url> domain instead
+    // of the news.google.com redirect (was the fallback before S44).
+    // NOTE: 'wsj' is NOT in NEWS_SOURCE_DOMAINS (short single-token keys are
+    // exact-only per S18) — if a future map addition maps 'wsj'→wsj.com, this
+    // assertion must move to wsj.com (map-first contract).
+    expect(results[3].domain).toBe('jp.wsj.com')
+    expect(results[4].domain).toBe('sankei.com')
+    expect(results[5].domain).toBe('oricon.co.jp')
+    // Items WITHOUT a source tag keep the redirect-host fallback (unchanged)
+    expect(results[6].domain).toBe('news.google.com')
   })
 })

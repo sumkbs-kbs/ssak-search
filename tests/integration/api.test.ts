@@ -19,13 +19,29 @@ const worker = (exports as unknown as { default: WorkerModule }).default
 // Helpers
 // ---------------------------------------------------------------------------
 
-async function fetchJson(path: string, init?: RequestInit): Promise<{
+// The workerd pool runs every API test through ONE isolate with the same
+// client IP, so the per-IP 30/min client rate limit (auth.ts) would 429 the
+// later /api/extract tests (verified: HEAD state fails all 6 extract tests
+// with 429). Each request gets a unique X-Forwarded-For so rate-limit keys
+// are per-request and never accumulate across tests.
+let requestSeq = 0
+
+function withUniqueIp(init?: RequestInit): RequestInit {
+  const headers = new Headers(init?.headers)
+  headers.set('X-Forwarded-For', `198.51.100.${(requestSeq++ % 250) + 1}`)
+  return { ...init, headers }
+}
+
+async function fetchJson(
+  path: string,
+  init?: RequestInit,
+): Promise<{
   status: number
   headers: Headers
   body: unknown
 }> {
   const url = `https://ssak-search.pages.dev${path}`
-  const res = await worker.fetch(url, init)
+  const res = await worker.fetch(url, withUniqueIp(init))
   const text = await res.text()
   let body: unknown
   try {
@@ -36,13 +52,16 @@ async function fetchJson(path: string, init?: RequestInit): Promise<{
   return { status: res.status, headers: res.headers, body }
 }
 
-async function fetchText(path: string, init?: RequestInit): Promise<{
+async function fetchText(
+  path: string,
+  init?: RequestInit,
+): Promise<{
   status: number
   headers: Headers
   body: string
 }> {
   const url = `https://ssak-search.pages.dev${path}`
-  const res = await worker.fetch(url, init)
+  const res = await worker.fetch(url, withUniqueIp(init))
   return { status: res.status, headers: res.headers, body: await res.text() }
 }
 
@@ -116,6 +135,32 @@ describe('GET /api/metrics', () => {
 // ---------------------------------------------------------------------------
 
 describe('POST /api/search', () => {
+  it('returns 429 when the per-IP client rate limit is exceeded', async () => {
+    // Open mode (no TENANTS_CONFIG/SEARCH_API_KEY in the worker) applies
+    // DEFAULT_RATE_LIMIT=30/min per client IP (auth.ts). Fire 31 requests
+    // from ONE fixed IP — the 31st must be rejected with 429. This keeps the
+    // client rate limiter exercised by integration tests (the unique-IP
+    // helper used elsewhere deliberately bypasses it so tests don't poison
+    // each other, which would otherwise leave the 429 path uncovered).
+    //
+    // NOTE: must call worker.fetch directly — withUniqueIp() would overwrite
+    // the fixed X-Forwarded-For with a fresh unique IP every request.
+    let lastStatus = 0
+    for (let i = 0; i < 31; i++) {
+      const res = await worker.fetch('https://ssak-search.pages.dev/api/search', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Forwarded-For': '198.51.100.200',
+        },
+        body: JSON.stringify({ query: 'rate limit probe', max_results: 1 }),
+      })
+      lastStatus = res.status
+      if (lastStatus === 429) break
+    }
+    expect(lastStatus).toBe(429)
+  })
+
   it('returns 400 for empty query', async () => {
     const { status, body } = await fetchJson('/api/search', {
       method: 'POST',
@@ -129,7 +174,7 @@ describe('POST /api/search', () => {
   })
 
   it('returns 400 for missing query', async () => {
-    const { status, body } = await fetchJson('/api/search', {
+    const { status } = await fetchJson('/api/search', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({}),
@@ -179,7 +224,7 @@ describe('POST /api/search', () => {
   })
 
   it('rejects over-large include_domains', async () => {
-    const { status, body } = await fetchJson('/api/search', {
+    const { status } = await fetchJson('/api/search', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -306,9 +351,7 @@ describe('Structured logging — x-request-id header', () => {
     const rid = headers.get('x-request-id')
     expect(rid).toBeTruthy()
     // Should be a UUID format
-    expect(rid).toMatch(
-      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i,
-    )
+    expect(rid).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i)
   })
 })
 

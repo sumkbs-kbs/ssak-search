@@ -48,12 +48,15 @@ import type { AppBindings, ErrorResponse } from '../types'
 
 const openaiRoute = new Hono<{ Bindings: AppBindings }>()
 
-openaiRoute.use('/*', cors({
-  origin: '*',
-  allowMethods: ['POST', 'OPTIONS'],
-  allowHeaders: ['Content-Type', 'Authorization'],
-  maxAge: 86400,
-}))
+openaiRoute.use(
+  '/*',
+  cors({
+    origin: '*',
+    allowMethods: ['POST', 'OPTIONS'],
+    allowHeaders: ['Content-Type', 'Authorization'],
+    maxAge: 86400,
+  }),
+)
 
 // ============================================================
 // Types
@@ -71,7 +74,7 @@ interface OpenAIFunctionTool {
   function: {
     name: string
     description?: string
-    parameters: Record<string, any>
+    parameters: Record<string, unknown>
   }
 }
 
@@ -170,7 +173,7 @@ openaiRoute.post('/chat/completions', async (c) => {
   }
 
   // Extract query from last user message
-  const lastUserMsg = [...body.messages].reverse().find(m => m.role === 'user')
+  const lastUserMsg = [...body.messages].reverse().find((m) => m.role === 'user')
   if (!lastUserMsg) {
     return c.json({ error: { message: 'No user message found', type: 'invalid_request_error' } }, 400)
   }
@@ -190,9 +193,7 @@ openaiRoute.post('/chat/completions', async (c) => {
   const toolChoice = body.tool_choice ?? 'none'
 
   // Check if web_search tool is requested
-  const hasWebSearchTool = tools.some(
-    t => t.type === 'function' && t.function.name === 'web_search',
-  )
+  const hasWebSearchTool = tools.some((t) => t.type === 'function' && t.function.name === 'web_search')
 
   // Determine if we should execute search as a tool call
   // 'auto': always search (our model == search engine)
@@ -207,12 +208,21 @@ openaiRoute.post('/chat/completions', async (c) => {
     // Build the internal API URL
     const searchUrl = new URL(c.req.url)
     const baseUrl = `${searchUrl.protocol}//${searchUrl.host}`
+    const authHeader = c.req.header('Authorization')
+    const apiKeyHeader = c.req.header('X-API-Key')
     const authHeaders: Record<string, string> = {
-      ...(c.req.header('Authorization') ? { 'Authorization': c.req.header('Authorization')! } : {}),
-      ...(c.req.header('X-API-Key') ? { 'X-API-Key': c.req.header('X-API-Key')! } : {}),
+      ...(authHeader ? { Authorization: authHeader } : {}),
+      ...(apiKeyHeader ? { 'X-API-Key': apiKeyHeader } : {}),
     }
 
-    let responseData: any
+    // Search/research responses share the shape we read below; unknown keeps
+    // the downstream field access explicit without an escape hatch.
+    let responseData: {
+      results?: Array<{ title?: string; url?: string; content?: string; score?: number }>
+      sources?: Array<{ title?: string; url?: string; content?: string; score?: number }>
+      answer?: { text?: string }
+      backend?: string
+    } = {}
     let responseTime = Date.now() - startTime
 
     if (isResearch) {
@@ -229,12 +239,18 @@ openaiRoute.post('/chat/completions', async (c) => {
 
       if (!researchRes.ok) {
         let errDetail: string | undefined
-        try { const e = await researchRes.json() as Record<string, unknown>; errDetail = e?.detail as string | undefined } catch (err) {
+        try {
+          const e = (await researchRes.json()) as Record<string, unknown>
+          errDetail = e?.detail as string | undefined
+        } catch (err) {
           logger.warn('[OpenAI] Failed to parse research error response:', { error: toError(err) })
         }
-        return c.json({
-          error: { message: String(errDetail ?? '') || 'Research failed', type: 'research_error' },
-        }, 502)
+        return c.json(
+          {
+            error: { message: String(errDetail ?? '') || 'Research failed', type: 'research_error' },
+          },
+          502,
+        )
       }
 
       responseData = await researchRes.json()
@@ -255,12 +271,18 @@ openaiRoute.post('/chat/completions', async (c) => {
 
       if (!searchRes.ok) {
         let errDetail: string | undefined
-        try { const e = await searchRes.json() as Record<string, unknown>; errDetail = e?.detail as string | undefined } catch (err) {
+        try {
+          const e = (await searchRes.json()) as Record<string, unknown>
+          errDetail = e?.detail as string | undefined
+        } catch (err) {
           logger.warn('[OpenAI] Failed to parse search error response:', { error: toError(err) })
         }
-        return c.json({
-          error: { message: String(errDetail ?? '') || 'Search failed', type: 'search_error' },
-        }, 502)
+        return c.json(
+          {
+            error: { message: String(errDetail ?? '') || 'Search failed', type: 'search_error' },
+          },
+          502,
+        )
       }
 
       responseData = await searchRes.json()
@@ -268,18 +290,18 @@ openaiRoute.post('/chat/completions', async (c) => {
     }
 
     // Format response
-    const results = ((responseData.results || responseData.sources || []).map((r: any) => ({
+    const results = (responseData.results || responseData.sources || []).map((r) => ({
       title: r.title || '',
       url: r.url || '',
       content: r.content || '',
       score: r.score || 0,
-    })))
+    }))
 
-    const answer = responseData.answer || undefined
+    const answer = responseData.answer?.text ? { text: responseData.answer.text } : undefined
     const formattedContent = formatSearchResultsAsContent(results, answer)
 
     // Estimate token counts
-    const promptTokens = estimateTokens(body.messages.map(m => m.content ?? '').join(' '))
+    const promptTokens = estimateTokens(body.messages.map((m) => m.content ?? '').join(' '))
     const completionTokens = estimateTokens(formattedContent)
 
     // === Streaming response ===
@@ -287,112 +309,130 @@ openaiRoute.post('/chat/completions', async (c) => {
       const streamId = generateId()
       const created = Math.floor(Date.now() / 1000)
 
-      return streamSSE(c, async (stream) => {
-        try {
-          // 1. Role chunk
-          await stream.writeSSE({
-            data: JSON.stringify({
-              id: streamId,
-              object: 'chat.completion.chunk',
-              created,
-              model,
-              choices: [{ index: 0, delta: { role: 'assistant', ...(shouldExecuteToolCall ? { content: null } : {}) }, finish_reason: null }],
-            }),
-          })
-
-          // 2. Tool call chunks FIRST (before content) so the AI SDK
-          //    can process tool_calls before text deltas
-          if (shouldExecuteToolCall) {
-            const toolCallId = `call_${crypto.randomUUID().slice(0, 8)}`
-            // Tool call declaration
+      return streamSSE(
+        c,
+        async (stream) => {
+          try {
+            // 1. Role chunk
             await stream.writeSSE({
               data: JSON.stringify({
                 id: streamId,
                 object: 'chat.completion.chunk',
                 created,
                 model,
-                choices: [{
-                  index: 0,
-                  delta: {
-                    tool_calls: [{
-                      index: 0,
-                      id: toolCallId,
-                      type: 'function',
-                      function: { name: 'web_search', arguments: '' },
-                    }],
+                choices: [
+                  {
+                    index: 0,
+                    delta: { role: 'assistant', ...(shouldExecuteToolCall ? { content: null } : {}) },
+                    finish_reason: null,
                   },
-                  finish_reason: null,
-                }],
+                ],
               }),
             })
-            // Tool call arguments
-            const toolArgs = JSON.stringify({
-              query,
-              max_results: maxResults,
-              search_depth: isDeep ? 'advanced' : 'basic',
-              include_answer: true,
-            })
-            await stream.writeSSE({
-              data: JSON.stringify({
-                id: streamId,
-                object: 'chat.completion.chunk',
-                created,
-                model,
-                choices: [{
-                  index: 0,
-                  delta: {
-                    tool_calls: [{
-                      index: 0,
-                      function: { arguments: toolArgs },
-                    }],
-                  },
-                  finish_reason: null,
-                }],
-              }),
-            })
-          }
 
-          // 3. Content chunks (only when not executing tool calls)
-          if (!shouldExecuteToolCall) {
-            const words = formattedContent.split(/(?<=\s)/)
-            for (const word of words) {
+            // 2. Tool call chunks FIRST (before content) so the AI SDK
+            //    can process tool_calls before text deltas
+            if (shouldExecuteToolCall) {
+              const toolCallId = `call_${crypto.randomUUID().slice(0, 8)}`
+              // Tool call declaration
               await stream.writeSSE({
                 data: JSON.stringify({
                   id: streamId,
                   object: 'chat.completion.chunk',
                   created,
                   model,
-                  choices: [{ index: 0, delta: { content: word }, finish_reason: null }],
+                  choices: [
+                    {
+                      index: 0,
+                      delta: {
+                        tool_calls: [
+                          {
+                            index: 0,
+                            id: toolCallId,
+                            type: 'function',
+                            function: { name: 'web_search', arguments: '' },
+                          },
+                        ],
+                      },
+                      finish_reason: null,
+                    },
+                  ],
+                }),
+              })
+              // Tool call arguments
+              const toolArgs = JSON.stringify({
+                query,
+                max_results: maxResults,
+                search_depth: isDeep ? 'advanced' : 'basic',
+                include_answer: true,
+              })
+              await stream.writeSSE({
+                data: JSON.stringify({
+                  id: streamId,
+                  object: 'chat.completion.chunk',
+                  created,
+                  model,
+                  choices: [
+                    {
+                      index: 0,
+                      delta: {
+                        tool_calls: [
+                          {
+                            index: 0,
+                            function: { arguments: toolArgs },
+                          },
+                        ],
+                      },
+                      finish_reason: null,
+                    },
+                  ],
                 }),
               })
             }
+
+            // 3. Content chunks (only when not executing tool calls)
+            if (!shouldExecuteToolCall) {
+              const words = formattedContent.split(/(?<=\s)/)
+              for (const word of words) {
+                await stream.writeSSE({
+                  data: JSON.stringify({
+                    id: streamId,
+                    object: 'chat.completion.chunk',
+                    created,
+                    model,
+                    choices: [{ index: 0, delta: { content: word }, finish_reason: null }],
+                  }),
+                })
+              }
+            }
+
+            // 4. Final chunk — finish_reason
+            const finalFinishReason = shouldExecuteToolCall ? 'tool_calls' : 'stop'
+            await stream.writeSSE({
+              data: JSON.stringify({
+                id: streamId,
+                object: 'chat.completion.chunk',
+                created,
+                model,
+                choices: [{ index: 0, delta: {}, finish_reason: finalFinishReason }],
+                usage: {
+                  prompt_tokens: promptTokens,
+                  completion_tokens: completionTokens,
+                  total_tokens: promptTokens + completionTokens,
+                },
+              }),
+            })
+
+            // 5. Done signal
+            await stream.writeSSE({ data: '[DONE]' })
+          } catch (streamErr) {
+            logger.error('SSE stream error:', { error: toError(streamErr) })
           }
-
-          // 4. Final chunk — finish_reason
-          const finalFinishReason = shouldExecuteToolCall ? 'tool_calls' : 'stop'
-          await stream.writeSSE({
-            data: JSON.stringify({
-              id: streamId,
-              object: 'chat.completion.chunk',
-              created,
-              model,
-              choices: [{ index: 0, delta: {}, finish_reason: finalFinishReason }],
-              usage: {
-                prompt_tokens: promptTokens,
-                completion_tokens: completionTokens,
-                total_tokens: promptTokens + completionTokens,
-              },
-            }),
-          })
-
-          // 5. Done signal
-          await stream.writeSSE({ data: '[DONE]' })
-        } catch (streamErr) {
-          logger.error('SSE stream error:', { error: toError(streamErr) })
-        }
-      }, async (err, _stream) => {
-        logger.error('SSE stream fatal error:', { error: toError(err) })
-      })
+        },
+        async (err, _stream) => {
+          logger.error('SSE stream fatal error:', { error: toError(err) })
+        },
+      )
     }
 
     // === Build tool_calls if function calling is active ===
@@ -400,21 +440,23 @@ openaiRoute.post('/chat/completions', async (c) => {
     let finishReason: 'stop' | 'tool_calls' = 'stop'
 
     if (shouldExecuteToolCall) {
-      const toolArgs: Record<string, any> = {
+      const toolArgs: Record<string, unknown> = {
         query,
         max_results: maxResults,
         search_depth: isDeep ? 'advanced' : 'basic',
         include_answer: true,
       }
 
-      toolCalls = [{
-        id: `call_${crypto.randomUUID().slice(0, 8)}`,
-        type: 'function',
-        function: {
-          name: 'web_search',
-          arguments: JSON.stringify(toolArgs),
+      toolCalls = [
+        {
+          id: `call_${crypto.randomUUID().slice(0, 8)}`,
+          type: 'function',
+          function: {
+            name: 'web_search',
+            arguments: JSON.stringify(toolArgs),
+          },
         },
-      }]
+      ]
       finishReason = 'tool_calls'
     }
 
@@ -424,15 +466,17 @@ openaiRoute.post('/chat/completions', async (c) => {
       object: 'chat.completion',
       created: Math.floor(Date.now() / 1000),
       model,
-      choices: [{
-        index: 0,
-        message: {
-          role: 'assistant',
-          content: toolCalls ? null : formattedContent,
-          ...(toolCalls ? { tool_calls: toolCalls } : {}),
+      choices: [
+        {
+          index: 0,
+          message: {
+            role: 'assistant',
+            content: toolCalls ? null : formattedContent,
+            ...(toolCalls ? { tool_calls: toolCalls } : {}),
+          },
+          finish_reason: finishReason,
         },
-        finish_reason: finishReason,
-      }],
+      ],
       usage: {
         prompt_tokens: promptTokens,
         completion_tokens: completionTokens,
@@ -442,17 +486,20 @@ openaiRoute.post('/chat/completions', async (c) => {
         results_count: results.length,
         response_time_ms: responseTime,
         backend: responseData.backend || (isResearch ? 'research' : 'unknown'),
-        sources: results.slice(0, 5).map((r: any) => ({ title: r.title, url: r.url })),
+        sources: results.slice(0, 5).map((r) => ({ title: r.title, url: r.url })),
       },
     })
   } catch (err) {
     logger.error('OpenAI compat error:', { error: toError(err) })
-    return c.json({
-      error: {
-        message: err instanceof Error ? err.message : 'Internal error',
-        type: 'internal_error',
+    return c.json(
+      {
+        error: {
+          message: err instanceof Error ? err.message : 'Internal error',
+          type: 'internal_error',
+        },
       },
-    }, 500)
+      500,
+    )
   }
 })
 

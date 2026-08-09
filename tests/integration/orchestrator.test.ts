@@ -5,7 +5,9 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { executeSearch } from '../../src/lib/orchestrator'
+import { executeSearch, __clearMemoryCacheForTests } from '../../src/lib/orchestrator'
+import { __resetRateLimiterStateForTests } from '../../src/lib/rate-limiter'
+import { clearWikipediaCache, resetWikidataRateState, resetDbpediaLangRateState } from '../../src/lib/specialized'
 import type { SearchRequest, SearchDepth, Topic, Env } from '../../src/types'
 
 // Mock the external fetch for all backends
@@ -54,12 +56,16 @@ const BING_HTML = `
 <html><body>
   <ol id="b_results">
     <li class="b_algo">
-      <h2><a href="https://example.com/1">Test Result 1</a></h2>
-      <p>This is a test snippet about the query topic.</p>
+      <div class="b_algoheader">
+        <a href="https://example.com/1">Test Result 1</a>
+      </div>
+      <div class="b_caption"><p class="b_lineclamp3">This is a test snippet about the query topic.</p></div>
     </li>
     <li class="b_algo">
-      <h2><a href="https://example.com/2">Test Result 2</a></h2>
-      <p>Another relevant snippet for the search query.</p>
+      <div class="b_algoheader">
+        <a href="https://example.com/2">Test Result 2</a>
+      </div>
+      <div class="b_caption"><p class="b_lineclamp3">Another relevant snippet for the search query.</p></div>
     </li>
   </ol>
 </body></html>
@@ -71,13 +77,13 @@ const NAVER_HTML = `
   <ul class="lst_total">
     <li>
       <div class="total_tit">
-        <a href="https://m.search.naver.com/link?u=https%3A%2F%2Fnaver-result.com%2F1">Naver Result 1</a>
+        <a href="https://n.news.naver.com/mnews/article/001/0000001">Naver Result 1</a>
       </div>
       <div class="api_txt_lines dsc">네이버 검색 결과 요약입니다.</div>
     </li>
     <li>
       <div class="total_tit">
-        <a href="https://m.search.naver.com/link?u=https%3A%2F%2Fnaver-result.com%2F2">Naver Result 2</a>
+        <a href="https://m.blog.naver.com/example/222">Naver Result 2</a>
       </div>
       <div class="api_txt_lines dsc">두 번째 네이버 결과입니다.</div>
     </li>
@@ -85,49 +91,79 @@ const NAVER_HTML = `
 </body></html>
 `
 
-const WIKIPEDIA_HTML = `
-<!DOCTYPE html>
-<html><body>
-  <div class="mw-search-result-heading">
-    <a href="/wiki/Quantum_computing">Quantum computing</a>
-  </div>
-  <div class="searchresult">Quantum computing is a type of computation...</div>
-  <div class="mw-search-result-heading">
-    <a href="/wiki/Quantum_mechanics">Quantum mechanics</a>
-  </div>
-  <div class="searchresult">Quantum mechanics is a fundamental theory...</div>
-</body></html>
-`
+// wikipediaSearch parses the REST API JSON ({pages: [{title, key, excerpt}]})
+const WIKIPEDIA_JSON = JSON.stringify({
+  pages: [
+    {
+      title: 'Quantum computing',
+      key: 'Quantum_computing',
+      excerpt: 'Quantum computing is a type of computation...',
+      description: 'Field of computing',
+    },
+    {
+      title: 'Quantum mechanics',
+      key: 'Quantum_mechanics',
+      excerpt: 'Quantum mechanics is a fundamental theory...',
+      description: 'Physics theory',
+    },
+  ],
+})
 
-const GITHUB_HTML = `
-<!DOCTYPE html>
-<html><body>
-  <div class="repo-list">
-    <div class="repo-list-item">
-      <h3><a href="/user/repo1">user/repo1</a></h3>
-      <p>Description of repo 1</p>
-    </div>
-    <div class="repo-list-item">
-      <h3><a href="/user/repo2">user/repo2</a></h3>
-      <p>Description of repo 2</p>
-    </div>
-  </div>
-</body></html>
-`
+function wikiResponse() {
+  return new Response(WIKIPEDIA_JSON, { status: 200, headers: { 'content-type': 'application/json' } })
+}
 
-const HN_HTML = `
-<!DOCTYPE html>
-<html><body>
-  <table class="itemlist">
-    <tr class="athing">
-      <td class="title"><span class="rank">1.</span><a href="https://news.ycombinator.com/item?id=1">HN Story 1</a></td>
-    </tr>
-    <tr class="athing">
-      <td class="title"><span class="rank">2.</span><a href="https://news.ycombinator.com/item?id=2">HN Story 2</a></td>
-    </tr>
-  </table>
-</body></html>
-`
+// githubSearch parses the /search/repositories JSON API response
+const GITHUB_JSON = JSON.stringify({
+  items: [
+    {
+      full_name: 'user/repo1',
+      description: 'Description of repo 1',
+      html_url: 'https://github.com/user/repo1',
+      stargazers_count: 100,
+      language: 'TypeScript',
+    },
+    {
+      full_name: 'user/repo2',
+      description: 'Description of repo 2',
+      html_url: 'https://github.com/user/repo2',
+      stargazers_count: 50,
+      language: 'JavaScript',
+    },
+  ],
+})
+
+function githubResponse() {
+  return new Response(GITHUB_JSON, { status: 200, headers: { 'content-type': 'application/json' } })
+}
+
+// hackerNewsSearch parses the Algolia JSON API ({hits: [{title, url, objectID}]}).
+// Titles must share tokens with the query — hackerNewsSearch drops hits with
+// relevance < 0.08 against the ORIGINAL query (computed from title only).
+const HN_JSON = JSON.stringify({
+  hits: [
+    {
+      title: 'React useEffect cleanup best practices',
+      url: 'https://example.com/story1',
+      points: 120,
+      num_comments: 30,
+      objectID: '1',
+      created_at: '2024-01-15T10:00:00Z',
+    },
+    {
+      title: 'React hooks useEffect cleanup patterns',
+      url: 'https://example.com/story2',
+      points: 80,
+      num_comments: 20,
+      objectID: '2',
+      created_at: '2024-01-14T10:00:00Z',
+    },
+  ],
+})
+
+function hnResponse() {
+  return new Response(HN_JSON, { status: 200, headers: { 'content-type': 'application/json' } })
+}
 
 const REDDIT_HTML = `
 <!DOCTYPE html>
@@ -165,6 +201,25 @@ describe('Orchestrator executeSearch() Integration', () => {
   let env: Env
 
   beforeEach(() => {
+    // The workerd pool runs all tests in ONE isolate; the module-level
+    // circuit breaker / rate windows would otherwise leak failures from one
+    // test into the next (throw-based failure tests open the bing circuit).
+    __resetRateLimiterStateForTests()
+    // The wikipedia in-process cache must be cleared too — an S35 DBpedia
+    // fallback result cached in a previous test would otherwise leak into the
+    // next (a mock-fetch assertion expecting NO dbpedia call would silently
+    // pass while backend shows 'dbpedia' from cache).
+    clearWikipediaCache()
+    // S36/S38 rate guards are module-level and leak across tests in the
+    // shared workerd isolate — an S38 test that 429s wikidata arms a 60s
+    // cooldown that would silently skip Wikidata (and spuriously fire the
+    // dbpedia-lang 2nd tier) in the NEXT test.
+    resetWikidataRateState()
+    resetDbpediaLangRateState()
+    // The orchestrator's 120s in-memory response cache would also leak the
+    // previous test's response for the same query (S35 fallback test caches a
+    // 'bing+dbpedia' response that must not satisfy the wikipedia-success test).
+    __clearMemoryCacheForTests()
     vi.clearAllMocks()
     env = createMockEnv()
   })
@@ -172,7 +227,7 @@ describe('Orchestrator executeSearch() Integration', () => {
   it('returns results for general query with multiple backends', async () => {
     // Setup mock responses for each backend
     let callCount = 0
-    mockFetch.mockImplementation(async (url: string | URL, init?: RequestInit) => {
+    mockFetch.mockImplementation(async (url: string | URL, _init?: RequestInit) => {
       callCount++
       const urlStr = url.toString()
 
@@ -180,13 +235,13 @@ describe('Orchestrator executeSearch() Integration', () => {
         return new Response(BING_HTML, { status: 200, headers: { 'content-type': 'text/html' } })
       }
       if (urlStr.includes('wikipedia.org')) {
-        return new Response(WIKIPEDIA_HTML, { status: 200, headers: { 'content-type': 'text/html' } })
+        return wikiResponse()
       }
       if (urlStr.includes('github.com')) {
-        return new Response(GITHUB_HTML, { status: 200, headers: { 'content-type': 'text/html' } })
+        return githubResponse()
       }
-      if (urlStr.includes('news.ycombinator.com')) {
-        return new Response(HN_HTML, { status: 200, headers: { 'content-type': 'text/html' } })
+      if (urlStr.includes('hn.algolia.com')) {
+        return hnResponse()
       }
       if (urlStr.includes('reddit.com')) {
         return new Response(REDDIT_HTML, { status: 200, headers: { 'content-type': 'text/html' } })
@@ -252,7 +307,7 @@ describe('Orchestrator executeSearch() Integration', () => {
         return new Response(BING_HTML, { status: 200, headers: { 'content-type': 'text/html' } })
       }
       if (urlStr.includes('wikipedia.org')) {
-        return new Response(WIKIPEDIA_HTML, { status: 200, headers: { 'content-type': 'text/html' } })
+        return wikiResponse()
       }
       return new Response('', { status: 404 })
     })
@@ -267,14 +322,14 @@ describe('Orchestrator executeSearch() Integration', () => {
 
   it('handles Chinese query with Bing mkt=zh-CN', async () => {
     let bingCalledWithZhCN = false
-    mockFetch.mockImplementation(async (url: string | URL, init?: RequestInit) => {
+    mockFetch.mockImplementation(async (url: string | URL, _init?: RequestInit) => {
       const urlStr = url.toString()
       if (urlStr.includes('bing.com') && urlStr.includes('mkt=zh-CN')) {
         bingCalledWithZhCN = true
         return new Response(BING_HTML, { status: 200, headers: { 'content-type': 'text/html' } })
       }
       if (urlStr.includes('wikipedia.org')) {
-        return new Response(WIKIPEDIA_HTML, { status: 200, headers: { 'content-type': 'text/html' } })
+        return wikiResponse()
       }
       return new Response('', { status: 404 })
     })
@@ -288,13 +343,13 @@ describe('Orchestrator executeSearch() Integration', () => {
 
   it('returns financial backend for stock queries', async () => {
     const STOCK_CARD_HTML = `
-      <div class="stock_top">
-        <strong class="stock_name">삼성전자</strong>
-        <span class="stock_code">005930</span>
-        <em class="stock_exchange">KOSPI</em>
-        <strong class="price">75,000</strong>
-        <span class="change">상승 +1,200 (+1.63%)</span>
+      <div class="stock_top" data-stock-top>
+        <strong class="item_name">삼성전자</strong>
+        <span class="stock_ref">005930<span class="exchange_name">KOSPI</span></span>
+        <span class="stock_price">75,000</span>원
+        <span>상승 1,200 (1.63%)</span>
       </div>
+    </div>
     `
     mockFetch.mockImplementation(async (url: string | URL) => {
       const urlStr = url.toString()
@@ -308,7 +363,7 @@ describe('Orchestrator executeSearch() Integration', () => {
         return new Response(BING_HTML, { status: 200, headers: { 'content-type': 'text/html' } })
       }
       if (urlStr.includes('wikipedia.org')) {
-        return new Response(WIKIPEDIA_HTML, { status: 200, headers: { 'content-type': 'text/html' } })
+        return wikiResponse()
       }
       return new Response('', { status: 404 })
     })
@@ -324,10 +379,10 @@ describe('Orchestrator executeSearch() Integration', () => {
     mockFetch.mockImplementation(async (url: string | URL) => {
       const urlStr = url.toString()
       if (urlStr.includes('github.com')) {
-        return new Response(GITHUB_HTML, { status: 200, headers: { 'content-type': 'text/html' } })
+        return githubResponse()
       }
-      if (urlStr.includes('news.ycombinator.com')) {
-        return new Response(HN_HTML, { status: 200, headers: { 'content-type': 'text/html' } })
+      if (urlStr.includes('hn.algolia.com')) {
+        return hnResponse()
       }
       if (urlStr.includes('bing.com')) {
         return new Response(BING_HTML, { status: 200, headers: { 'content-type': 'text/html' } })
@@ -335,7 +390,10 @@ describe('Orchestrator executeSearch() Integration', () => {
       return new Response('', { status: 404 })
     })
 
-    const request = createSearchRequest({ query: 'React useEffect cleanup best practices', topic: 'technical' as Topic })
+    const request = createSearchRequest({
+      query: 'React useEffect cleanup best practices',
+      topic: 'technical' as Topic,
+    })
     const result = await executeSearch(request, { env })
 
     expect(result.results.length).toBeGreaterThan(0)
@@ -345,22 +403,16 @@ describe('Orchestrator executeSearch() Integration', () => {
 
   it('uses news backends for news queries', async () => {
     const BING_NEWS_HTML = `
-      <div class="news-card">
-        <a href="https://news.example.com/1"><h3>News Title 1</h3></a>
-        <span>2 hours ago</span>
-      </div>
-      <div class="news-card">
-        <a href="https://news.example.com/2"><h3>News Title 2</h3></a>
-        <span>5 hours ago</span>
-      </div>
+      <div class="newscard vr" data-url="https://news.example.com/1" data-title="News Title 1" data-author="Reporter" data-published="2024-01-15T10:00:00Z"></div>
+      <div class="newscard vr" data-url="https://news.example.com/2" data-title="News Title 2" data-author="Editor" data-published="2024-01-15T08:00:00Z"></div>
     `
     mockFetch.mockImplementation(async (url: string | URL) => {
       const urlStr = url.toString()
       if (urlStr.includes('bing.com/news')) {
         return new Response(BING_NEWS_HTML, { status: 200, headers: { 'content-type': 'text/html' } })
       }
-      if (urlStr.includes('news.ycombinator.com')) {
-        return new Response(HN_HTML, { status: 200, headers: { 'content-type': 'text/html' } })
+      if (urlStr.includes('hn.algolia.com')) {
+        return hnResponse()
       }
       if (urlStr.includes('reddit.com')) {
         return new Response(REDDIT_HTML, { status: 200, headers: { 'content-type': 'text/html' } })
@@ -390,7 +442,7 @@ describe('Orchestrator executeSearch() Integration', () => {
     const result = await executeSearch(request, { env })
 
     // Should deduplicate by URL
-    const urls = result.results.map(r => r.url)
+    const urls = result.results.map((r) => r.url)
     const uniqueUrls = new Set(urls)
     expect(uniqueUrls.size).toBe(urls.length)
   })
@@ -399,12 +451,17 @@ describe('Orchestrator executeSearch() Integration', () => {
     // Return many low-quality results to trigger tier relaxation
     const LOW_QUALITY_HTML = `
       <ol id="b_results">
-        ${Array.from({ length: 20 }, (_, i) => `
+        ${Array.from(
+          { length: 20 },
+          (_, i) => `
           <li class="b_algo">
-            <h2><a href="https://lowquality${i}.com/page">Low Quality ${i}</a></h2>
-            <p>Unrelated spam content with no relevance to query.</p>
+            <div class="b_algoheader">
+              <a href="https://lowquality${i}.com/page">Low Quality ${i}</a>
+            </div>
+            <div class="b_caption"><p class="b_lineclamp3">Unrelated spam content with no relevance to query.</p></div>
           </li>
-        `).join('')}
+        `,
+        ).join('')}
       </ol>
     `
     mockFetch.mockImplementation(async (url: string | URL) => {
@@ -463,12 +520,16 @@ describe('Orchestrator executeSearch() Integration', () => {
     const DATED_HTML = `
       <ol id="b_results">
         <li class="b_algo">
-          <h2><a href="https://example.com/new">New Article</a></h2>
-          <p><cite>https://example.com/new</cite> <span>2 hours ago</span></p>
+          <div class="b_algoheader">
+            <a href="https://example.com/new">New Article</a>
+          </div>
+          <div class="b_caption"><p class="b_lineclamp2">Jul 24, 2026 · New article content.</p></div>
         </li>
         <li class="b_algo">
-          <h2><a href="https://example.com/old">Old Article</a></h2>
-          <p><cite>https://example.com/old</cite> <span>2 years ago</span></p>
+          <div class="b_algoheader">
+            <a href="https://example.com/old">Old Article</a>
+          </div>
+          <div class="b_caption"><p class="b_lineclamp2">Jul 24, 2025 · Old article content.</p></div>
         </li>
       </ol>
     `
@@ -499,7 +560,7 @@ describe('Orchestrator executeSearch() Integration', () => {
         return new Response(NAVER_HTML, { status: 200, headers: { 'content-type': 'text/html' } })
       }
       if (urlStr.includes('wikipedia.org')) {
-        return new Response(WIKIPEDIA_HTML, { status: 200, headers: { 'content-type': 'text/html' } })
+        return wikiResponse()
       }
       return new Response('', { status: 404 })
     })
@@ -512,7 +573,12 @@ describe('Orchestrator executeSearch() Integration', () => {
     expect(result.fallback_used).toBe(false) // Not full fallback, just partial backend failure
   })
 
-  it('triggers DDG fallback only when all primary backends fail', async () => {
+  it('serves results from DDG when other backends fail (DDG is a primary general backend)', async () => {
+    // Since S15, DDG is a PRIMARY general backend (not just emergency
+    // fallback) when SearXNG is unconfigured: all.ts pushes buildDuckDuckGoTask
+    // for non-Korean general queries. So when every other backend fails, DDG
+    // still produces results and emergencyFallback is never triggered
+    // (fallback_used=false is correct).
     const DDG_HTML = `
       <html><body>
         <a class="result__a" href="https://ddg-result.com/1">DDG Result 1</a>
@@ -521,7 +587,13 @@ describe('Orchestrator executeSearch() Integration', () => {
     `
     mockFetch.mockImplementation(async (url: string | URL) => {
       const urlStr = url.toString()
-      if (urlStr.includes('bing.com') || urlStr.includes('naver.com') || urlStr.includes('wikipedia.org') || urlStr.includes('github.com')) {
+      if (
+        urlStr.includes('bing.com') ||
+        urlStr.includes('naver.com') ||
+        urlStr.includes('wikipedia.org') ||
+        urlStr.includes('github.com') ||
+        urlStr.includes('hn.algolia.com')
+      ) {
         throw new Error('All primary backends down')
       }
       if (urlStr.includes('duckduckgo.com')) {
@@ -534,8 +606,9 @@ describe('Orchestrator executeSearch() Integration', () => {
     const result = await executeSearch(request, { env })
 
     expect(result.results.length).toBeGreaterThan(0)
-    expect(result.fallback_used).toBe(true)
-    expect(result.backend).toContain('ddg')
+    expect(result.backend).toContain('duckduckgo')
+    // DDG ran as a primary backend, so no emergency fallback is needed.
+    expect(result.fallback_used).toBe(false)
   })
 
   it('generates related queries', async () => {
@@ -553,6 +626,328 @@ describe('Orchestrator executeSearch() Integration', () => {
     const rq = result.related_queries!
     expect(Array.isArray(rq)).toBe(true)
     expect(rq.length).toBeGreaterThan(0)
-    expect(rq.every(q => typeof q === 'string')).toBe(true)
+    expect(rq.every((q) => typeof q === 'string')).toBe(true)
+  })
+
+  // ── S35: orchestrator-level DBpedia mirror fallback ───────────────────
+  // wikipedia expected (factual query) but the REST+Action chain 429s → the
+  // wikipedia backend is missing from usedBackends → the orchestrator fires
+  // dbpediaSearch AFTER the fanout, recovering en.wikipedia.org gold URLs
+  // with its OWN timeout, independent of fanout's 4500ms wikipedia ceiling.
+
+  it('recovers wikipedia gold via the DBpedia mirror when wikipedia 429s (S35)', async () => {
+    let dbpediaCalled = false
+    mockFetch.mockImplementation(async (url: string | URL) => {
+      const urlStr = url.toString()
+      // wikipedia REST + Action endpoints 429 (wikipediaSearch retries 3× then
+      // skips the Action fallback on REST-429 — all these hit wikipedia.org)
+      if (urlStr.includes('wikipedia.org')) {
+        return new Response('', { status: 429 })
+      }
+      if (urlStr.includes('lookup.dbpedia.org')) {
+        dbpediaCalled = true
+        const DBPEDIA_JSON = JSON.stringify({
+          docs: [
+            {
+              resource: ['http://dbpedia.org/resource/Quantum_computing'],
+              label: ['<B>Quantum</B> <B>computing</B>'],
+              comment: ['Quantum computing is the use of quantum-mechanical phenomena'],
+            },
+          ],
+        })
+        return new Response(DBPEDIA_JSON, { status: 200, headers: { 'content-type': 'application/json' } })
+      }
+      if (urlStr.includes('bing.com')) {
+        return new Response(BING_HTML, { status: 200, headers: { 'content-type': 'text/html' } })
+      }
+      return new Response('', { status: 404 })
+    })
+
+    const request = createSearchRequest({ query: 'what is quantum computing' })
+    const result = await executeSearch(request, { env })
+
+    // The DBpedia mirror actually fired after the fanout saw wikipedia missing.
+    expect(dbpediaCalled).toBe(true)
+    // And its en.wikipedia.org gold URL made it into the final pool.
+    const wikiHit = result.results.find((r) => r.url === 'https://en.wikipedia.org/wiki/Quantum_computing')
+    expect(wikiHit).toBeDefined()
+    expect(wikiHit!.domain).toBe('en.wikipedia.org')
+  })
+
+  it('does NOT fire the DBpedia mirror when wikipedia succeeds (zero added latency)', async () => {
+    let dbpediaCalled = false
+    mockFetch.mockImplementation(async (url: string | URL) => {
+      const urlStr = url.toString()
+      if (urlStr.includes('wikipedia.org')) {
+        return wikiResponse()
+      }
+      if (urlStr.includes('lookup.dbpedia.org')) {
+        dbpediaCalled = true
+        return new Response(JSON.stringify({ docs: [] }), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        })
+      }
+      if (urlStr.includes('bing.com')) {
+        return new Response(BING_HTML, { status: 200, headers: { 'content-type': 'text/html' } })
+      }
+      return new Response('', { status: 404 })
+    })
+
+    const request = createSearchRequest({ query: 'what is quantum computing' })
+    const result = await executeSearch(request, { env })
+
+    // wikipedia produced results → usedBackends has 'wikipedia' → no fallback.
+    expect(dbpediaCalled).toBe(false)
+    expect(result.backend).toContain('wikipedia')
+    expect(result.backend).not.toContain('dbpedia')
+  })
+
+  it('routes non-EN wikipedia failures to Wikidata, NOT the EN-only DBpedia mirror (S36)', async () => {
+    let dbpediaCalled = false
+    let wikidataCalled = false
+    mockFetch.mockImplementation(async (url: string | URL) => {
+      const urlStr = url.toString()
+      if (urlStr.includes('wikipedia.org')) {
+        return new Response('', { status: 429 })
+      }
+      if (urlStr.includes('lookup.dbpedia.org')) {
+        dbpediaCalled = true
+        return new Response(JSON.stringify({ docs: [] }), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        })
+      }
+      if (urlStr.includes('www.wikidata.org/w/api.php')) {
+        wikidataCalled = true
+        if (urlStr.includes('wbsearchentities')) {
+          return new Response(
+            JSON.stringify({
+              search: [
+                {
+                  id: 'Q176555',
+                  label: '量子コンピュータ',
+                  description: '量子力学的な重ね合わせを用いて並列性を実現するとされるコンピュータ',
+                },
+              ],
+            }),
+            { status: 200, headers: { 'content-type': 'application/json' } },
+          )
+        }
+        return new Response(
+          JSON.stringify({
+            entities: {
+              Q176555: {
+                sitelinks: {
+                  jawiki: {
+                    url: 'https://ja.wikipedia.org/wiki/%E9%87%8F%E5%AD%90%E3%82%B3%E3%83%B3%E3%83%94%E3%83%A5%E3%83%BC%E3%82%BF',
+                  },
+                },
+              },
+            },
+          }),
+          { status: 200, headers: { 'content-type': 'application/json' } },
+        )
+      }
+      if (urlStr.includes('bing.com')) {
+        return new Response(BING_HTML, { status: 200, headers: { 'content-type': 'text/html' } })
+      }
+      return new Response('', { status: 404 })
+    })
+
+    // Japanese query → effectiveWikiLang = ja → dbpediaSearch language guard
+    // short-circuits (EN-only Lookup); the Wikidata mirror recovers the
+    // ja.wikipedia.org gold instead.
+    const request = createSearchRequest({ query: '量子コンピュータとは' })
+    const result = await executeSearch(request, { env })
+
+    expect(dbpediaCalled).toBe(false)
+    expect(wikidataCalled).toBe(true)
+    expect(result.backend).toContain('wikidata')
+    const wikiHit = result.results.find(
+      (r) =>
+        r.url ===
+        'https://ja.wikipedia.org/wiki/%E9%87%8F%E5%AD%90%E3%82%B3%E3%83%B3%E3%83%94%E3%83%A5%E3%83%BC%E3%82%BF',
+    )
+    expect(wikiHit).toBeDefined()
+    expect(wikiHit!.domain).toBe('ja.wikipedia.org')
+  })
+
+  // ── S36: non-EN (ja/zh/ko) wikipedia mirror fallback via Wikidata ────
+  // S34 measured 13 still-vulnerable non-EN queries (gold = ja/zh.wikipedia
+  // .org) that the EN-only DBpedia Lookup cannot cover. The wikipedia.org
+  // 429 window is shared across ALL language wikis (same wikimedia gateway),
+  // so the mirror lives on Wikidata (different infra): label search →
+  // sitelink fetch → canonical <lang>.wikipedia.org gold URL.
+
+  it('recovers zh.wikipedia.org gold via the Wikidata mirror when wikipedia 429s (S36)', async () => {
+    let wikidataCalled = false
+    mockFetch.mockImplementation(async (url: string | URL) => {
+      const urlStr = url.toString()
+      if (urlStr.includes('wikipedia.org')) {
+        return new Response('', { status: 429 })
+      }
+      if (urlStr.includes('www.wikidata.org/w/api.php')) {
+        wikidataCalled = true
+        if (urlStr.includes('wbsearchentities')) {
+          return new Response(
+            JSON.stringify({
+              search: [{ id: 'Q20514253', label: '区块链', description: '一种去中心化的分布式账本技术' }],
+            }),
+            { status: 200, headers: { 'content-type': 'application/json' } },
+          )
+        }
+        // wbgetentities — sitelink fetch
+        return new Response(
+          JSON.stringify({
+            entities: {
+              Q20514253: {
+                sitelinks: { zhwiki: { url: 'https://zh.wikipedia.org/wiki/%E5%8C%BA%E5%9D%97%E9%93%BE' } },
+              },
+            },
+          }),
+          { status: 200, headers: { 'content-type': 'application/json' } },
+        )
+      }
+      if (urlStr.includes('bing.com')) {
+        return new Response(BING_HTML, { status: 200, headers: { 'content-type': 'text/html' } })
+      }
+      return new Response('', { status: 404 })
+    })
+
+    const request = createSearchRequest({ query: '什么是区块链技术' })
+    const result = await executeSearch(request, { env })
+
+    expect(wikidataCalled).toBe(true)
+    expect(result.backend).toContain('wikidata')
+    // The reconstructed zh.wikipedia.org gold URL made it into the pool.
+    const wikiHit = result.results.find((r) => r.url === 'https://zh.wikipedia.org/wiki/%E5%8C%BA%E5%9D%97%E9%93%BE')
+    expect(wikiHit).toBeDefined()
+    expect(wikiHit!.domain).toBe('zh.wikipedia.org')
+  })
+
+  it('does NOT fire the Wikidata mirror when wikipedia succeeds (zero added latency)', async () => {
+    let wikidataCalled = false
+    mockFetch.mockImplementation(async (url: string | URL) => {
+      const urlStr = url.toString()
+      if (urlStr.includes('wikipedia.org')) {
+        return wikiResponse()
+      }
+      if (urlStr.includes('www.wikidata.org/w/api.php')) {
+        wikidataCalled = true
+        return new Response(JSON.stringify({ search: [] }), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        })
+      }
+      if (urlStr.includes('bing.com')) {
+        return new Response(BING_HTML, { status: 200, headers: { 'content-type': 'text/html' } })
+      }
+      return new Response('', { status: 404 })
+    })
+
+    const request = createSearchRequest({ query: '什么是区块链技术' })
+    const result = await executeSearch(request, { env })
+
+    // wikipedia produced results → usedBackends has 'wikipedia' → no fallback.
+    expect(wikidataCalled).toBe(false)
+    expect(result.backend).toContain('wikipedia')
+    expect(result.backend).not.toContain('wikidata')
+  })
+
+  // ── S38: ja.dbpedia.org SPARQL 2nd-tier fallback ──────────────────────
+  // For ja queries, when wikipedia AND Wikidata both fail, the ja.dbpedia.org
+  // SPARQL endpoint (a THIRD infrastructure) recovers ja.wikipedia.org gold.
+  // zh/ko endpoints are down, so the 2nd tier is ja-only.
+
+  it('recovers ja.wikipedia.org gold via the dbpedia-lang 2nd tier when wikipedia AND wikidata 429 (S38)', async () => {
+    let dbpediaLangCalled = false
+    mockFetch.mockImplementation(async (url: string | URL) => {
+      const urlStr = url.toString()
+      if (urlStr.includes('wikipedia.org')) {
+        return new Response('', { status: 429 })
+      }
+      if (urlStr.includes('www.wikidata.org/w/api.php')) {
+        return new Response('', { status: 429 })
+      }
+      if (urlStr.includes('ja.dbpedia.org/sparql')) {
+        dbpediaLangCalled = true
+        return new Response(
+          JSON.stringify({
+            results: {
+              bindings: [
+                { s: { type: 'uri', value: 'http://ja.dbpedia.org/resource/%E4%BA%BA%E5%B7%A5%E7%9F%A5%E8%83%BD' } },
+              ],
+            },
+          }),
+          { status: 200, headers: { 'content-type': 'application/json' } },
+        )
+      }
+      if (urlStr.includes('bing.com')) {
+        return new Response(BING_HTML, { status: 200, headers: { 'content-type': 'text/html' } })
+      }
+      return new Response('', { status: 404 })
+    })
+
+    const request = createSearchRequest({ query: '人工知能の仕組み' })
+    const result = await executeSearch(request, { env })
+
+    expect(dbpediaLangCalled).toBe(true)
+    expect(result.backend).toContain('dbpedia-lang')
+    const wikiHit = result.results.find(
+      (r) => r.url === 'https://ja.wikipedia.org/wiki/%E4%BA%BA%E5%B7%A5%E7%9F%A5%E8%83%BD',
+    )
+    expect(wikiHit).toBeDefined()
+    expect(wikiHit!.domain).toBe('ja.wikipedia.org')
+  })
+
+  it('does NOT fire the dbpedia-lang 2nd tier when Wikidata already recovered the gold', async () => {
+    let dbpediaLangCalled = false
+    mockFetch.mockImplementation(async (url: string | URL) => {
+      const urlStr = url.toString()
+      if (urlStr.includes('wikipedia.org')) {
+        return new Response('', { status: 429 })
+      }
+      if (urlStr.includes('www.wikidata.org/w/api.php')) {
+        if (urlStr.includes('wbsearchentities')) {
+          return new Response(
+            JSON.stringify({
+              search: [{ id: 'Q11660', label: '人工知能', description: '人間の知能をコンピュータで模倣する技術' }],
+            }),
+            { status: 200, headers: { 'content-type': 'application/json' } },
+          )
+        }
+        return new Response(
+          JSON.stringify({
+            entities: {
+              Q11660: {
+                sitelinks: { jawiki: { url: 'https://ja.wikipedia.org/wiki/%E4%BA%BA%E5%B7%A5%E7%9F%A5%E8%83%BD' } },
+              },
+            },
+          }),
+          { status: 200, headers: { 'content-type': 'application/json' } },
+        )
+      }
+      if (urlStr.includes('ja.dbpedia.org/sparql')) {
+        dbpediaLangCalled = true
+        return new Response(JSON.stringify({ results: { bindings: [] } }), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        })
+      }
+      if (urlStr.includes('bing.com')) {
+        return new Response(BING_HTML, { status: 200, headers: { 'content-type': 'text/html' } })
+      }
+      return new Response('', { status: 404 })
+    })
+
+    const request = createSearchRequest({ query: '人工知能の仕組み' })
+    const result = await executeSearch(request, { env })
+
+    // Wikidata recovered the gold → dbpedia-lang must NOT fire (saves the
+    // flaky endpoint + latency; the 2nd tier is only for Wikidata failure).
+    expect(dbpediaLangCalled).toBe(false)
+    expect(result.backend).toContain('wikidata')
+    expect(result.backend).not.toContain('dbpedia-lang')
   })
 })

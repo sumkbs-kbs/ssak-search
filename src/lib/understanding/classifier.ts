@@ -21,20 +21,20 @@ import { logger, toError } from '../logger'
 export type SearchIntent = 'informational' | 'navigational' | 'transactional' | 'commercial'
 
 export type QuerySubType =
-  | 'definition'       // "what is X"
-  | 'how-to'           // "how to X"
-  | 'tutorial'         // "X tutorial"
-  | 'comparison'       // "X vs Y"
-  | 'analysis'         // "analyze X"
-  | 'troubleshooting'  // "X not working"
-  | 'list'             // "top X", "best X"
-  | 'factual'          // "who invented X"
-  | 'news'             // "X latest news"
-  | 'academic'         // "X research paper"
-  | 'financial'        // "X stock price"
-  | 'opinion'          // "X review/thoughts"
-  | 'location'         // "X near me"
-  | 'download'         // "download X"
+  | 'definition' // "what is X"
+  | 'how-to' // "how to X"
+  | 'tutorial' // "X tutorial"
+  | 'comparison' // "X vs Y"
+  | 'analysis' // "analyze X"
+  | 'troubleshooting' // "X not working"
+  | 'list' // "top X", "best X"
+  | 'factual' // "who invented X"
+  | 'news' // "X latest news"
+  | 'academic' // "X research paper"
+  | 'financial' // "X stock price"
+  | 'opinion' // "X review/thoughts"
+  | 'location' // "X near me"
+  | 'download' // "download X"
   | 'general'
 
 export type ScriptType = 'korean' | 'chinese' | 'japanese' | 'latin' | 'mixed' | 'other'
@@ -78,7 +78,7 @@ const INTENT_PATTERNS: Array<{
     patterns: [
       /^(open|go to|navigate|visit|login|sign in|dashboard)\b/i,
       /\b(website|homepage|site|app|login|signup)\b.*\b(open|go|access)\b/i,
-      /^[\w.-]+\.[a-z]{2,}\s*$/i,  // domain.com
+      /^[\w.-]+\.[a-z]{2,}\s*$/i, // domain.com
       /\b(facebook|twitter|github|linkedin|youtube|netflix|spotify)\b/i,
     ],
     weight: 0.6,
@@ -296,12 +296,12 @@ const COMPLEXITY_FAST_PATTERNS = [
 // ============================================================
 
 const TEMPORAL_PATTERNS = [
-  /\b(20\d{2})\b/,          // years: 2024, 2025, etc.
+  /\b(20\d{2})\b/, // years: 2024, 2025, etc.
   /\b(today|yesterday|tomorrow|this week|this month|this year|last week|next week)\b/i,
   /\b(January|February|March|April|May|June|July|August|September|October|November|December)\b/i,
-  /\b(Q[1-4])\b/,           // quarters: Q1, Q2, etc.
-  /\b(H1|H2)\b/,            // half-year: H1, H2
-  /\d{1,2}[/-]\d{1,2}[/-]\d{2,4}/,  // dates: 01/15/2024
+  /\b(Q[1-4])\b/, // quarters: Q1, Q2, etc.
+  /\b(H1|H2)\b/, // half-year: H1, H2
+  /\d{1,2}[/-]\d{1,2}[/-]\d{2,4}/, // dates: 01/15/2024
 ]
 
 // ============================================================
@@ -312,9 +312,7 @@ const TEMPORAL_PATTERNS = [
  * Classify a query's intent, sub-type, script, and complexity.
  * Pure regex-based — works without any external dependencies.
  */
-export function classifyUnderstanding(
-  query: string,
-): UnderstandingResult {
+export function classifyUnderstanding(query: string): UnderstandingResult {
   const trimmed = query.trim()
 
   // --- Script Detection ---
@@ -324,8 +322,8 @@ export function classifyUnderstanding(
   const isQuestion = QUESTION_PATTERNS.some((p) => p.test(trimmed))
 
   // --- Intent Detection ---
-  let intentScores: Record<SearchIntent, number> = {
-    informational: 0.3,  // base assumption
+  const intentScores: Record<SearchIntent, number> = {
+    informational: 0.3, // base assumption
     navigational: 0,
     transactional: 0,
     commercial: 0,
@@ -352,16 +350,26 @@ export function classifyUnderstanding(
   }
 
   // Pick highest scoring intent
-  const intent = (Object.entries(intentScores) as [SearchIntent, number][])
-    .reduce((a, b) => (a[1] >= b[1] ? a : b))[0]
+  const intent = (Object.entries(intentScores) as [SearchIntent, number][]).reduce((a, b) => (a[1] >= b[1] ? a : b))[0]
   const intentConfidence = Math.min(1, intentScores[intent])
 
   // --- Sub-Type Detection ---
-  let subTypeScores: Record<QuerySubType, number> = {
-    definition: 0, 'how-to': 0, tutorial: 0, comparison: 0,
-    analysis: 0, troubleshooting: 0, list: 0, factual: 0,
-    news: 0, academic: 0, financial: 0, opinion: 0,
-    location: 0, download: 0, general: 0.1,
+  const subTypeScores: Record<QuerySubType, number> = {
+    definition: 0,
+    'how-to': 0,
+    tutorial: 0,
+    comparison: 0,
+    analysis: 0,
+    troubleshooting: 0,
+    list: 0,
+    factual: 0,
+    news: 0,
+    academic: 0,
+    financial: 0,
+    opinion: 0,
+    location: 0,
+    download: 0,
+    general: 0.1,
   }
 
   for (const { subType, patterns, weight } of SUBTYPE_PATTERNS) {
@@ -378,19 +386,30 @@ export function classifyUnderstanding(
     navigational: ['definition'],
     transactional: ['download', 'how-to', 'opinion'],
     commercial: ['comparison', 'list', 'opinion'],
-    informational: ['definition', 'how-to', 'tutorial', 'analysis', 'troubleshooting',
-      'factual', 'news', 'academic', 'financial', 'location'],
+    informational: [
+      'definition',
+      'how-to',
+      'tutorial',
+      'analysis',
+      'troubleshooting',
+      'factual',
+      'news',
+      'academic',
+      'financial',
+      'location',
+    ],
   }
 
   const compatible = intentToSubType[intent] || ['general']
   for (const st of Object.keys(subTypeScores) as QuerySubType[]) {
     if (!compatible.includes(st)) {
-      subTypeScores[st] *= 0.5  // penalize incompatible subtypes
+      subTypeScores[st] *= 0.5 // penalize incompatible subtypes
     }
   }
 
-  const subType = (Object.entries(subTypeScores) as [QuerySubType, number][])
-    .reduce((a, b) => (a[1] >= b[1] ? a : b))[0]
+  const subType = (Object.entries(subTypeScores) as [QuerySubType, number][]).reduce((a, b) =>
+    a[1] >= b[1] ? a : b,
+  )[0]
   const subTypeConfidence = Math.min(1, subTypeScores[subType])
 
   // --- Complexity Score (for pro routing) ---
@@ -481,10 +500,7 @@ export interface LLMEnhancedResult extends UnderstandingResult {
 /**
  * Classify with LLM enhancement. Falls back to regex-based classifier.
  */
-export async function classifyUnderstandingWithAI(
-  query: string,
-  ai: Ai | undefined,
-): Promise<LLMEnhancedResult> {
+export async function classifyUnderstandingWithAI(query: string, ai: Ai | undefined): Promise<LLMEnhancedResult> {
   const base = classifyUnderstanding(query)
 
   if (!ai) {
@@ -508,32 +524,44 @@ export async function classifyUnderstandingWithAI(
 
     // Map LLM intent to our types
     const llmIntent = ['informational', 'navigational', 'transactional', 'commercial'].includes(parsed.intent)
-      ? parsed.intent as SearchIntent
+      ? (parsed.intent as SearchIntent)
       : base.intent
 
     const llmSubType = [
-      'definition', 'how-to', 'tutorial', 'comparison', 'analysis',
-      'troubleshooting', 'list', 'factual', 'news', 'academic',
-      'financial', 'opinion', 'location', 'download', 'general',
+      'definition',
+      'how-to',
+      'tutorial',
+      'comparison',
+      'analysis',
+      'troubleshooting',
+      'list',
+      'factual',
+      'news',
+      'academic',
+      'financial',
+      'opinion',
+      'location',
+      'download',
+      'general',
     ].includes(parsed.subType)
-      ? parsed.subType as QuerySubType
+      ? (parsed.subType as QuerySubType)
       : base.subType
 
-    const llmLanguage = [
-      'korean', 'chinese', 'japanese', 'latin', 'mixed', 'other',
-    ].includes(parsed.language)
-      ? parsed.language as ScriptType
+    const llmLanguage = ['korean', 'chinese', 'japanese', 'latin', 'mixed', 'other'].includes(parsed.language)
+      ? (parsed.language as ScriptType)
       : base.script
 
     const entities: LLMEntity[] = Array.isArray(parsed.entities)
-      ? parsed.entities.filter(
-          (e: { text?: unknown; type?: unknown; confidence?: unknown }) =>
-            e && typeof e.text === 'string' && typeof e.type === 'string' && typeof e.confidence === 'number'
-        ).map((e: { text: string; type: string; confidence: number }) => ({
-          text: e.text,
-          type: e.type as LLMEntity['type'],
-          confidence: Math.min(1, Math.max(0, e.confidence)),
-        }))
+      ? parsed.entities
+          .filter(
+            (e: { text?: unknown; type?: unknown; confidence?: unknown }) =>
+              e && typeof e.text === 'string' && typeof e.type === 'string' && typeof e.confidence === 'number',
+          )
+          .map((e: { text: string; type: string; confidence: number }) => ({
+            text: e.text,
+            type: e.type as LLMEntity['type'],
+            confidence: Math.min(1, Math.max(0, e.confidence)),
+          }))
       : []
 
     return {

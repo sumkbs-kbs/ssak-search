@@ -123,7 +123,7 @@ export const MODEL_REGISTRY: ModelConfig[] = [
     costPer1KInput: 0,
     maxTokens: 4096,
     supportsStreaming: true,
-    quality: 0.50,
+    quality: 0.5,
     latencyP50Ms: 150,
     label: 'LLaVA 7B (Local, Vision)',
     requiredKey: 'OLLAMA_BASE_URL',
@@ -181,7 +181,7 @@ export const MODEL_REGISTRY: ModelConfig[] = [
     costPer1KInput: 0.00025,
     maxTokens: 4096,
     supportsStreaming: true,
-    quality: 0.80,
+    quality: 0.8,
     latencyP50Ms: 1000,
     label: 'Claude 3 Haiku',
     requiredKey: 'ANTHROPIC_API_KEY',
@@ -221,7 +221,7 @@ export const MODEL_REGISTRY: ModelConfig[] = [
     costPer1KInput: 0,
     maxTokens: 4096,
     supportsStreaming: true,
-    quality: 0.50,
+    quality: 0.5,
     latencyP50Ms: 350,
     label: 'Mistral 7B (Free)',
     requiredKey: 'AI_BINDING',
@@ -235,7 +235,7 @@ export const MODEL_REGISTRY: ModelConfig[] = [
     costPer1KInput: 0,
     maxTokens: 2000,
     supportsStreaming: false,
-    quality: 0.30,
+    quality: 0.3,
     latencyP50Ms: 50,
     label: 'Extractive Summary (Free)',
   },
@@ -270,15 +270,13 @@ export interface CostTracking {
  * When OLLAMA_BASE_URL is set, auto-discovers installed models via /api/tags
  * and dynamically adds them to the available set — no more hardcoded model guessing.
  */
-export async function getAvailableModels(
-  env?: {
-    OPENAI_API_KEY?: string
-    ANTHROPIC_API_KEY?: string
-    OLLAMA_BASE_URL?: string
-    OPENROUTER_API_KEY?: string
-    AI?: unknown
-  },
-): Promise<ModelConfig[]> {
+export async function getAvailableModels(env?: {
+  OPENAI_API_KEY?: string
+  ANTHROPIC_API_KEY?: string
+  OLLAMA_BASE_URL?: string
+  OPENROUTER_API_KEY?: string
+  AI?: unknown
+}): Promise<ModelConfig[]> {
   // Non-Ollama models: filter by available env keys/bindings
   const nonOllamaModels = MODEL_REGISTRY.filter((m) => {
     if (m.provider === 'ollama') return false // handled separately below
@@ -361,12 +359,12 @@ export function selectBestModel(
   }
 
   if (options.maxCostPerRequestUSD !== undefined) {
+    const maxCost = options.maxCostPerRequestUSD
     candidates = candidates.filter((m) => {
       const estimatedOutputTokens = 600
       const estimatedInputTokens = 2000
-      const cost = (estimatedInputTokens / 1000) * m.costPer1KInput +
-                   (estimatedOutputTokens / 1000) * m.costPer1KOutput
-      return cost <= options.maxCostPerRequestUSD!
+      const cost = (estimatedInputTokens / 1000) * m.costPer1KInput + (estimatedOutputTokens / 1000) * m.costPer1KOutput
+      return cost <= maxCost
     })
   }
 
@@ -388,13 +386,8 @@ export function selectBestModel(
 /**
  * Compute estimated cost for a model run.
  */
-export function estimateCost(
-  model: ModelConfig,
-  inputTokens: number,
-  outputTokens: number,
-): number {
-  return (inputTokens / 1000) * model.costPer1KInput +
-         (outputTokens / 1000) * model.costPer1KOutput
+export function estimateCost(model: ModelConfig, inputTokens: number, outputTokens: number): number {
+  return (inputTokens / 1000) * model.costPer1KInput + (outputTokens / 1000) * model.costPer1KOutput
 }
 
 /**
@@ -534,7 +527,7 @@ function extractParamCount(model: OllamaModelTag): number {
  * Higher params → higher quality, with diminishing returns.
  */
 function estimateModelQuality(paramCount: number): number {
-  if (paramCount >= 100) return Math.min(0.95, 0.80 + (paramCount - 100) * 0.002)
+  if (paramCount >= 100) return Math.min(0.95, 0.8 + (paramCount - 100) * 0.002)
   if (paramCount >= 70) return 0.88
   if (paramCount >= 30) return 0.82
   if (paramCount >= 20) return 0.75
@@ -687,9 +680,9 @@ async function* streamOpenAICompatible(
                 outputTokens = estimateTokenCount(totalContent)
               }
             }
-    } catch (err) {
-      logger.debug('[LLMRouter] Non-JSON SSE line (expected):', { error: toError(err) })
-    }
+          } catch (err) {
+            logger.debug('[LLMRouter] Non-JSON SSE line (expected):', { error: toError(err) })
+          }
         }
       }
     }
@@ -702,7 +695,7 @@ async function* streamOpenAICompatible(
     outputTokens = estimateTokenCount(totalContent)
   }
 
-  const modelConfig = MODEL_REGISTRY.find(m => m.id === model) || MODEL_REGISTRY[MODEL_REGISTRY.length - 1]
+  const modelConfig = MODEL_REGISTRY.find((m) => m.id === model) || MODEL_REGISTRY[MODEL_REGISTRY.length - 1]
   return {
     modelId: model,
     modelLabel: modelConfig.label,
@@ -731,13 +724,7 @@ export async function* streamOpenAI(
     signal?: AbortSignal
   } = {},
 ): AsyncGenerator<string, CostTracking, undefined> {
-  return yield* streamOpenAICompatible(
-    'https://api.openai.com/v1',
-    apiKey,
-    prompt,
-    systemMsg,
-    options,
-  )
+  return yield* streamOpenAICompatible('https://api.openai.com/v1', apiKey, prompt, systemMsg, options)
 }
 
 /**
@@ -790,13 +777,7 @@ export async function* streamOpenRouter(
     signal?: AbortSignal
   } = {},
 ): AsyncGenerator<string, CostTracking, undefined> {
-  return yield* streamOpenAICompatible(
-    'https://openrouter.ai/api/v1',
-    apiKey,
-    prompt,
-    systemMsg,
-    options,
-  )
+  return yield* streamOpenAICompatible('https://openrouter.ai/api/v1', apiKey, prompt, systemMsg, options)
 }
 
 /**
@@ -830,7 +811,7 @@ export async function generateOllamaAnswer(
     throw new Error(`Ollama API error ${response.status}: ${errText || response.statusText}`)
   }
 
-  const data = await response.json() as { choices?: Array<{ message?: { content?: string } }> }
+  const data = (await response.json()) as { choices?: Array<{ message?: { content?: string } }> }
   const text = data.choices?.[0]?.message?.content?.trim()
   if (!text || text.length < 10) throw new Error('Ollama returned empty response')
   return text
@@ -852,7 +833,7 @@ export async function generateOpenRouterAnswer(
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      'Authorization': `Bearer ${apiKey}`,
+      Authorization: `Bearer ${apiKey}`,
     },
     signal: AbortSignal.timeout(10_000), // 10s cap — prevents indefinite hang on slow free models
     body: JSON.stringify({
@@ -872,7 +853,7 @@ export async function generateOpenRouterAnswer(
     throw new Error(`OpenRouter API error ${response.status}: ${errText || response.statusText}`)
   }
 
-  const data = await response.json() as { choices?: Array<{ message?: { content?: string } }> }
+  const data = (await response.json()) as { choices?: Array<{ message?: { content?: string } }> }
   const text = data.choices?.[0]?.message?.content?.trim()
   if (!text || text.length < 10) throw new Error('OpenRouter returned empty response')
   return text
@@ -983,7 +964,8 @@ export async function* streamAnthropic(
     outputTokens = estimateTokenCount(totalContent)
   }
 
-  const modelConfig = MODEL_REGISTRY.find(m => m.id === model || m.id.includes('claude')) || MODEL_REGISTRY[MODEL_REGISTRY.length - 1]
+  const modelConfig =
+    MODEL_REGISTRY.find((m) => m.id === model || m.id.includes('claude')) || MODEL_REGISTRY[MODEL_REGISTRY.length - 1]
   return {
     modelId: model,
     modelLabel: modelConfig.label,

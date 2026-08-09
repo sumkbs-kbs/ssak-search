@@ -189,26 +189,78 @@ export function spacesPage() {
         <div style="display:flex;justify-content:space-between;align-items:center;padding:24px 0 16px;">
           <div>
             <h1 style="font-size:1.5rem;font-weight:700;">
-              <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="vertical-align:middle;margin-right:8px;color:var(--accent);"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="9" y1="21" x2="9" y2="9"/></svg>
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                width="24"
+                height="24"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                aria-hidden="true"
+                style="vertical-align:middle;margin-right:8px;color:var(--accent);"
+              >
+                <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
+                <line x1="3" y1="9" x2="21" y2="9" />
+                <line x1="9" y1="21" x2="9" y2="9" />
+              </svg>
               Spaces
             </h1>
             <p style="color:var(--text-secondary);font-size:0.85rem;">Organize your research with workspaces</p>
           </div>
           <button class="btn btn-primary" onclick="openCreate()">
-            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="vertical-align:middle;"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              width="14"
+              height="14"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2.5"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              aria-hidden="true"
+              style="vertical-align:middle;"
+            >
+              <line x1="12" y1="5" x2="12" y2="19" />
+              <line x1="5" y1="12" x2="19" y2="12" />
+            </svg>
             New Space
           </button>
         </div>
 
         <div id="spaces-list">
           <div style="text-align:center;padding:40px;color:var(--text-tertiary);">
-            <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="display:block;margin:0 auto 12px;opacity:0.4;"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="9" y1="21" x2="9" y2="9"/></svg>
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              width="32"
+              height="32"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.5"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              aria-hidden="true"
+              style="display:block;margin:0 auto 12px;opacity:0.4;"
+            >
+              <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
+              <line x1="3" y1="9" x2="21" y2="9" />
+              <line x1="9" y1="21" x2="9" y2="9" />
+            </svg>
             <p style="font-size:0.85rem;">Loading spaces...</p>
           </div>
         </div>
 
         {/* Dialog overlay */}
-        <div id="dialog-overlay" class="dialog-overlay" style="display:none;" onclick="if(event.target===this)closeDialog()">
+        <div
+          id="dialog-overlay"
+          class="dialog-overlay"
+          style="display:none;"
+          onclick="if(event.target===this)closeDialog()"
+        >
           <div class="dialog" onclick="event.stopPropagation()">
             <h2 id="dialog-title">Create Space</h2>
             <label for="space-name-input">Name</label>
@@ -216,11 +268,26 @@ export function spacesPage() {
             <label for="space-desc-input">Description</label>
             <textarea id="space-desc-input" placeholder="What is this space about?" rows={2}></textarea>
             <label for="space-instr-input">System Instructions</label>
-            <textarea id="space-instr-input" placeholder="AI context instructions for search in this space..." rows={3}></textarea>
+            <textarea
+              id="space-instr-input"
+              placeholder="AI context instructions for search in this space..."
+              rows={3}
+            ></textarea>
             <div class="dialog-actions">
-              <button id="delete-btn" class="btn btn-ghost" style="color:var(--error);margin-right:auto;" onclick="deleteSpace()">Delete</button>
-              <button class="btn btn-ghost" onclick="closeDialog()">Cancel</button>
-              <button class="btn btn-primary" onclick="saveSpace()">Save</button>
+              <button
+                id="delete-btn"
+                class="btn btn-ghost"
+                style="color:var(--error);margin-right:auto;"
+                onclick="deleteSpace()"
+              >
+                Delete
+              </button>
+              <button class="btn btn-ghost" onclick="closeDialog()">
+                Cancel
+              </button>
+              <button class="btn btn-primary" onclick="saveSpace()">
+                Save
+              </button>
             </div>
           </div>
         </div>

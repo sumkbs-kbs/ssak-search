@@ -7,7 +7,15 @@
 
 import type { SearchStrategy } from './types'
 import type { BackendTask, SearchContext } from '../context'
-import { buildBingNewsTask, buildBingTask, buildHackerNewsTask, buildRedditTask, buildNaverNewsTask, buildBingNewsRssTask, buildGoogleNewsRssTask } from '../backend-tasks'
+import {
+  buildBingNewsTask,
+  buildBingTask,
+  buildHackerNewsTask,
+  buildRedditTask,
+  buildNaverNewsTask,
+  buildBingNewsRssTask,
+  buildGoogleNewsRssTask,
+} from '../backend-tasks'
 
 export class NewsStrategy implements SearchStrategy {
   readonly focus = 'news' as const

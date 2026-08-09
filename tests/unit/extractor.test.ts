@@ -57,7 +57,10 @@ describe('extractContent Naver news routing (Strategy 0.5)', () => {
     // example.com must go through the generic pipeline only. Stub fetch so the
     // generic readers stay hermetic (no real network in unit tests).
     mockNaverNewsExtract.mockResolvedValue({
-      url: 'https://example.com/', raw_content: '', success: false, error: 'nope',
+      url: 'https://example.com/',
+      raw_content: '',
+      success: false,
+      error: 'nope',
     })
     const originalFetch = globalThis.fetch
     globalThis.fetch = vi.fn().mockRejectedValue(new Error('network disabled in test')) as unknown as typeof fetch

@@ -13,7 +13,7 @@
  * GET    /api/library/collections/:id/items — List items in a collection
  */
 
-import { Hono } from 'hono'
+import { Hono, type Context } from 'hono'
 import { logger, toError } from '../lib/logger'
 import { cors } from 'hono/cors'
 import type { AppBindings, ErrorResponse } from '../types'
@@ -22,7 +22,7 @@ import { getLibraryStub } from '../lib/library-do'
 const libraryRoute = new Hono<{ Bindings: AppBindings }>()
 libraryRoute.use('/*', cors({ origin: '*' }))
 
-function checkBinding(c: any): boolean {
+function checkBinding(c: Context<{ Bindings: AppBindings }>): boolean {
   return !!c.env.LIBRARY_DO
 }
 
@@ -33,11 +33,18 @@ function checkBinding(c: any): boolean {
 // POST /api/library/collections
 libraryRoute.post('/collections', async (c) => {
   if (!checkBinding(c)) {
-    return c.json<ErrorResponse>({ detail: 'Requires LIBRARY_DO binding. Configure via Cloudflare Dashboard.', code: 'binding_missing' }, 501)
+    return c.json<ErrorResponse>(
+      { detail: 'Requires LIBRARY_DO binding. Configure via Cloudflare Dashboard.', code: 'binding_missing' },
+      501,
+    )
   }
 
   let body: { name?: string; description?: string }
-  try { body = await c.req.json() } catch (err) { return c.json<ErrorResponse>({ detail: 'Invalid JSON', code: 'invalid_body' }, 400) }
+  try {
+    body = await c.req.json()
+  } catch (_err) {
+    return c.json<ErrorResponse>({ detail: 'Invalid JSON', code: 'invalid_body' }, 400)
+  }
 
   if (!body.name || typeof body.name !== 'string' || body.name.trim().length === 0) {
     return c.json<ErrorResponse>({ detail: 'Collection name is required', code: 'missing_name' }, 400)
@@ -95,7 +102,11 @@ libraryRoute.put('/collections/:id', async (c) => {
 
   const { id } = c.req.param()
   let body: Record<string, unknown>
-  try { body = await c.req.json() } catch (err) { return c.json<ErrorResponse>({ detail: 'Invalid JSON', code: 'invalid_body' }, 400) }
+  try {
+    body = await c.req.json()
+  } catch (_err) {
+    return c.json<ErrorResponse>({ detail: 'Invalid JSON', code: 'invalid_body' }, 400)
+  }
 
   const updates: Record<string, string> = {}
   if (typeof body.name === 'string') updates.name = body.name.trim()
@@ -161,13 +172,24 @@ libraryRoute.post('/items', async (c) => {
     return c.json<ErrorResponse>({ detail: 'Requires LIBRARY_DO binding', code: 'binding_missing' }, 501)
   }
 
-  let body: any
-  try { body = await c.req.json() } catch (err) { return c.json<ErrorResponse>({ detail: 'Invalid JSON', code: 'invalid_body' }, 400) }
+  let body: {
+    query?: unknown
+    collection_id?: unknown
+    answer?: unknown
+    sources?: unknown
+    tags?: unknown
+    depth?: unknown
+  }
+  try {
+    body = (await c.req.json()) as typeof body
+  } catch (_err) {
+    return c.json<ErrorResponse>({ detail: 'Invalid JSON', code: 'invalid_body' }, 400)
+  }
 
-  if (!body.query || typeof body.query !== 'string' || body.query.trim().length === 0) {
+  if (typeof body.query !== 'string' || body.query.trim().length === 0) {
     return c.json<ErrorResponse>({ detail: 'Query is required', code: 'missing_query' }, 400)
   }
-  if (!body.collection_id || typeof body.collection_id !== 'string') {
+  if (typeof body.collection_id !== 'string') {
     return c.json<ErrorResponse>({ detail: 'collection_id is required', code: 'missing_collection_id' }, 400)
   }
 
@@ -176,10 +198,10 @@ libraryRoute.post('/items', async (c) => {
     const result = await stub.createItem({
       collection_id: body.collection_id,
       query: body.query.trim(),
-      answer: body.answer,
-      sources: Array.isArray(body.sources) ? body.sources : undefined,
-      tags: Array.isArray(body.tags) ? body.tags : undefined,
-      depth: body.depth,
+      answer: body.answer as string | undefined,
+      sources: Array.isArray(body.sources) ? (body.sources as Array<{ title: string; url: string }>) : undefined,
+      tags: Array.isArray(body.tags) ? (body.tags as string[]) : undefined,
+      depth: body.depth as string | undefined,
     })
     if (!result) return c.json<ErrorResponse>({ detail: 'Collection not found', code: 'collection_not_found' }, 404)
     return c.json(result, 201)

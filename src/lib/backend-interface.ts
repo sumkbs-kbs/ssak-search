@@ -79,7 +79,7 @@ class BackendRegistry {
     return this.all().filter((b) => {
       try {
         return b.shouldUse(query, queryType, language)
-      } catch (err) {
+      } catch (_err) {
         return false
       }
     })

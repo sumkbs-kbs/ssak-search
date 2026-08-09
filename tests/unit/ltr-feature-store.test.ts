@@ -73,9 +73,21 @@ describe('computeResultFeatures', () => {
 
   it('scores fresh dates 1 and one-year-old dates 0', () => {
     const now = new Date('2026-08-01T00:00:00Z').getTime()
-    const fresh = computeResultFeatures('q', makeResult({ published_date: '2026-08-01T00:00:00Z' }), feats, undefined, now)
+    const fresh = computeResultFeatures(
+      'q',
+      makeResult({ published_date: '2026-08-01T00:00:00Z' }),
+      feats,
+      undefined,
+      now,
+    )
     expect(fresh[8]).toBe(1)
-    const old = computeResultFeatures('q', makeResult({ published_date: '2025-08-01T00:00:00Z' }), feats, undefined, now)
+    const old = computeResultFeatures(
+      'q',
+      makeResult({ published_date: '2025-08-01T00:00:00Z' }),
+      feats,
+      undefined,
+      now,
+    )
     expect(old[8]).toBe(0)
   })
 

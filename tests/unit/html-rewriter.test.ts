@@ -84,9 +84,7 @@ describe('HTML content extraction logic', () => {
 
   it('removes script and style blocks', () => {
     const html = '<p>Text</p><script>alert("xss")</script><style>.x{color:red}</style><p>More</p>'
-    const cleaned = html
-      .replace(/<script[\s\S]*?<\/script>/gi, ' ')
-      .replace(/<style[\s\S]*?<\/style>/gi, ' ')
+    const cleaned = html.replace(/<script[\s\S]*?<\/script>/gi, ' ').replace(/<style[\s\S]*?<\/style>/gi, ' ')
     expect(cleaned).not.toContain('alert')
     expect(cleaned).not.toContain('color')
     expect(cleaned).toContain('Text')
@@ -94,7 +92,10 @@ describe('HTML content extraction logic', () => {
 
   it('removes HTML tags for text extraction', () => {
     const html = '<article><h1>Title</h1><p>Paragraph one.</p><p>Paragraph two.</p></article>'
-    const text = html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim()
+    const text = html
+      .replace(/<[^>]+>/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim()
     expect(text).toContain('Title')
     expect(text).toContain('Paragraph one')
   })

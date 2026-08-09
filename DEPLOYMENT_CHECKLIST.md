@@ -414,7 +414,7 @@ curl -s https://your-worker.pages.dev/api/monitor | python3 -m json.tool
 
 | # | 워크플로우 | 파일 | 트리거 | 설명 |
 |---|-----------|------|--------|------|
-| 7.1 | **CI** | `.github/workflows/ci.yml` | PR, push to main | 타입체크 + 테스트 + 빌드 (병렬) |
+| 7.1 | **CI** | `.github/workflows/ci.yml` | PR, push to main | **린트 0-경고 게이트 (`lint:eslint:ci`)** + 타입체크 + 유닛테스트 + 빌드 (병렬) — ESLint 경고/에러 1건이라도 발생하면 `build` 잡이 `needs` 차단으로 함께 실패 (S29) |
 | 7.2 | **Deploy** | `.github/workflows/deploy.yml` | main push, workflow_dispatch | CI 아티팩트 재사용 → Pages 배포 |
 | 7.3 | **Monitor** | `.github/workflows/monitor.yml` | 15분마다 스케줄 | `/api/health` 체크 → Slack 알림 |
 
@@ -425,6 +425,11 @@ curl -s https://your-worker.pages.dev/api/monitor | python3 -m json.tool
 # 수동 배포 테스트
 npx wrangler pages deploy dist/ --project-name=search-engine-api --branch=main
 ```
+
+> **브랜치 보호 권장 (S29)**: main 브랜치 보호 규칙에서 **`lint-typecheck`와 `unit-tests`를
+> required status checks로 지정**할 것 — 그래야 lint 0-경고 게이트가 실패한 PR이 머지되지
+> 않는다 (워크플로우 실패로는 부족 — 머지 차단은 브랜치 보호 규칙이 담당).
+> GitHub → Settings → Branches → Add rule → `main` → Require status checks to pass → `lint-typecheck`, `unit-tests`
 
 ### 7.2 package.json 스크립트
 

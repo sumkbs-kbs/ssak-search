@@ -169,7 +169,8 @@ export const translations: Record<Locale, Partial<Record<TranslationKey, string>
     'chat.placeholder': '질문을 입력하세요...',
     'chat.searching': '검색 중...',
     'chat.synthesizing': '답변 생성 중...',
-    'chat.error_do': '채팅 엔드포인트는 THREAD_DO Durable Object 바인딩이 필요합니다. Cloudflare 대시보드에서 설정하세요.',
+    'chat.error_do':
+      '채팅 엔드포인트는 THREAD_DO Durable Object 바인딩이 필요합니다. Cloudflare 대시보드에서 설정하세요.',
     'chat.view_sources': '모든 출처 보기',
     'chat.hide_sources': '출처 숨기기',
     // Results
@@ -349,7 +350,8 @@ export const translations: Record<Locale, Partial<Record<TranslationKey, string>
     'chat.placeholder': 'フォローアップの質問...',
     'chat.searching': '検索中...',
     'chat.synthesizing': '回答を生成中...',
-    'chat.error_do': 'チャットにはTHREAD_DO Durable Objectバインディングが必要です。Cloudflareダッシュボードで設定してください。',
+    'chat.error_do':
+      'チャットにはTHREAD_DO Durable Objectバインディングが必要です。Cloudflareダッシュボードで設定してください。',
     'chat.view_sources': 'すべてのソースを表示',
     'chat.hide_sources': 'ソースを隠す',
     'results.empty_title': '検索結果が見つかりません',

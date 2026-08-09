@@ -14,12 +14,11 @@ import { logger, toError } from '../lib/logger'
 import { cors } from 'hono/cors'
 import type { AppBindings, SearchResult, ErrorResponse } from '../types'
 import { bingNewsSearch } from '../lib/bing-search'
-import { hackerNewsSearch, redditSearch, wikipediaSearch } from '../lib/specialized'
+import { hackerNewsSearch, redditSearch } from '../lib/specialized'
 import { validateApiKeyWithTenant, checkClientRateLimit, getClientIp } from '../lib/auth'
 import { auditAuthFailure, audit } from '../lib/audit'
 import { setMetricsEnv, recordSearchSubrequests } from '../lib/metrics'
-import { cacheKey, getCached, setCached } from '../lib/cache'
-import { executeSearch } from '../lib/orchestrator'
+import { getCached, setCached } from '../lib/cache'
 
 // ============================================================
 // Types
@@ -32,8 +31,8 @@ export interface NewsSearchRequest {
   query: string
   max_results?: number
   source?: NewsSource
-  date_from?: string  // ISO 8601
-  date_to?: string    // ISO 8601
+  date_from?: string // ISO 8601
+  date_to?: string // ISO 8601
   sort_by?: NewsSort
 }
 
@@ -81,25 +80,18 @@ async function executeNewsSearch(
   // Bing News always available
   if (source === 'all' || source === 'bing') {
     tasks.push(
-      bingNewsSearch(query, { maxResults: Math.ceil(maxResults * 1.2), env })
-        .catch(() => [] as SearchResult[]),
+      bingNewsSearch(query, { maxResults: Math.ceil(maxResults * 1.2), env }).catch(() => [] as SearchResult[]),
     )
   }
 
   // HackerNews — tech/news queries
   if (source === 'all' || source === 'hackernews') {
-    tasks.push(
-      hackerNewsSearch(query, { maxResults: Math.ceil(maxResults * 0.5) })
-        .catch(() => [] as SearchResult[]),
-    )
+    tasks.push(hackerNewsSearch(query, { maxResults: Math.ceil(maxResults * 0.5) }).catch(() => [] as SearchResult[]))
   }
 
   // Reddit — discussion/news
   if (source === 'all' || source === 'reddit') {
-    tasks.push(
-      redditSearch(query, { maxResults: Math.ceil(maxResults * 0.5) })
-        .catch(() => [] as SearchResult[]),
-    )
+    tasks.push(redditSearch(query, { maxResults: Math.ceil(maxResults * 0.5) }).catch(() => [] as SearchResult[]))
   }
 
   const settled = await Promise.allSettled(tasks)
@@ -147,31 +139,52 @@ async function fetchTrending(env?: AppBindings): Promise<NewsTrendingItem[]> {
 const newsRoute = new Hono<{ Bindings: AppBindings; Variables: { tenantId: string; tenantPlan: string } }>()
 
 // CORS
-newsRoute.use('/*', cors({
-  origin: '*',
-  allowMethods: ['GET', 'POST', 'OPTIONS'],
-  allowHeaders: ['Content-Type', 'Authorization', 'X-API-Key'],
-  maxAge: 86400,
-}))
+newsRoute.use(
+  '/*',
+  cors({
+    origin: '*',
+    allowMethods: ['GET', 'POST', 'OPTIONS'],
+    allowHeaders: ['Content-Type', 'Authorization', 'X-API-Key'],
+    maxAge: 86400,
+  }),
+)
 
 // Auth + rate limit middleware
 newsRoute.use('/*', async (c, next) => {
   const clientIp = getClientIp(c.req.raw.headers)
   const contentLength = parseInt(c.req.raw.headers.get('Content-Length') ?? '0', 10)
   if (contentLength > 64 * 1024) {
-    audit({ eventType: 'invalid_input', severity: 'low', outcome: 'blocked', resource: c.req.path, actor: clientIp, context: { contentLength } })
+    audit({
+      eventType: 'invalid_input',
+      severity: 'low',
+      outcome: 'blocked',
+      resource: c.req.path,
+      actor: clientIp,
+      context: { contentLength },
+    })
     return c.json<ErrorResponse>({ detail: 'Request body too large (max 64KB)', code: 'payload_too_large' }, 413)
   }
 
   const authResult = validateApiKeyWithTenant(c.req.raw.headers, c.env.TENANTS_CONFIG, c.env.SEARCH_API_KEY)
   if (!authResult.valid) {
-    auditAuthFailure({ reason: authResult.reason || 'Invalid or missing API key', clientIp, resource: c.req.path, attempt: 'none' })
+    auditAuthFailure({
+      reason: authResult.reason || 'Invalid or missing API key',
+      clientIp,
+      resource: c.req.path,
+      attempt: 'none',
+    })
     return c.json<ErrorResponse>({ detail: authResult.reason || 'Unauthorized', code: 'unauthorized' }, 401)
   }
 
-  const rateLimit = checkClientRateLimit(clientIp, { tenantId: authResult.tenant?.id, tenantsConfig: c.env.TENANTS_CONFIG })
+  const rateLimit = checkClientRateLimit(clientIp, {
+    tenantId: authResult.tenant?.id,
+    tenantsConfig: c.env.TENANTS_CONFIG,
+  })
   if (!rateLimit.allowed) {
-    return c.json<ErrorResponse>({ detail: 'Rate limit exceeded. Try again later.', code: 'rate_limited' }, 429, { 'X-RateLimit-Remaining': '0', 'Retry-After': '60' })
+    return c.json<ErrorResponse>({ detail: 'Rate limit exceeded. Try again later.', code: 'rate_limited' }, 429, {
+      'X-RateLimit-Remaining': '0',
+      'Retry-After': '60',
+    })
   }
 
   c.header('X-Tenant-Id', authResult.tenant?.id ?? '__default__')
@@ -206,7 +219,7 @@ newsRoute.post('/', async (c) => {
   let body: Partial<NewsSearchRequest>
   try {
     body = await c.req.json()
-  } catch (err) {
+  } catch (_err) {
     return c.json<ErrorResponse>({ detail: 'Invalid JSON body', code: 'invalid_body' }, 400)
   }
 
@@ -260,7 +273,10 @@ newsRoute.post('/', async (c) => {
     return c.json<NewsSearchResponse>(response)
   } catch (err) {
     logger.error('News search error:', { error: toError(err) })
-    return c.json<ErrorResponse>({ detail: err instanceof Error ? err.message : 'News search failed', code: 'news_search_error' }, 500)
+    return c.json<ErrorResponse>(
+      { detail: err instanceof Error ? err.message : 'News search failed', code: 'news_search_error' },
+      500,
+    )
   }
 })
 
@@ -301,7 +317,10 @@ newsRoute.get('/', async (c) => {
     return c.json<NewsSearchResponse>(response)
   } catch (err) {
     logger.error('News search error:', { error: toError(err) })
-    return c.json<ErrorResponse>({ detail: err instanceof Error ? err.message : 'News search failed', code: 'news_search_error' }, 500)
+    return c.json<ErrorResponse>(
+      { detail: err instanceof Error ? err.message : 'News search failed', code: 'news_search_error' },
+      500,
+    )
   }
 })
 

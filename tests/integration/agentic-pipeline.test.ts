@@ -13,7 +13,6 @@
 
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { classifyQuery, DEFAULT_CLASSIFIER_CONFIG } from '../../src/lib/agentic/classifier'
-import type { ClassifierConfig } from '../../src/lib/agentic/classifier'
 
 // ============================================================
 // Mock Setup
@@ -90,7 +89,8 @@ describe('Agentic Pipeline — Search Tools (direct backend calls)', () => {
     // Mock Bing response
     mockFetch.mockResolvedValueOnce({
       ok: true,
-      text: async () => `<html><li class="b_algo"><h2><a href="https://example.com/result1">Result 1</a></h2><p>Content 1</p></li></html>`,
+      text: async () =>
+        `<html><li class="b_algo"><h2><a href="https://example.com/result1">Result 1</a></h2><p>Content 1</p></li></html>`,
     })
 
     // Import after mocks are set
@@ -119,8 +119,20 @@ describe('Agentic Pipeline — Synthesizer', () => {
         stepId: 1,
         success: true,
         evidence: [
-          { title: 'Source A', url: 'https://a.com', content: 'Evidence from source A about topic', score: 0.8, domain: 'a.com' },
-          { title: 'Source B', url: 'https://b.com', content: 'Evidence from source B about topic', score: 0.7, domain: 'b.com' },
+          {
+            title: 'Source A',
+            url: 'https://a.com',
+            content: 'Evidence from source A about topic',
+            score: 0.8,
+            domain: 'a.com',
+          },
+          {
+            title: 'Source B',
+            url: 'https://b.com',
+            content: 'Evidence from source B about topic',
+            score: 0.7,
+            domain: 'b.com',
+          },
         ],
         citations: [],
         durationMs: 100,
@@ -129,17 +141,22 @@ describe('Agentic Pipeline — Synthesizer', () => {
 
     const mockPlan = {
       original_query: 'test query',
-      steps: [{ id: 1, question: 'sub q1', tool: 'web_search' as const, params: {}, output_role: 'evidence' as const, depends_on: [] }],
+      steps: [
+        {
+          id: 1,
+          question: 'sub q1',
+          tool: 'web_search' as const,
+          params: {},
+          output_role: 'evidence' as const,
+          depends_on: [],
+        },
+      ],
       complexity: 'moderate' as const,
       confidence: 0.8,
       synthesis_instruction: 'Synthesize the evidence',
     }
 
-    const { prompt, evidenceMap } = assembleSynthesizerPrompt(
-      'test query',
-      mockStepResults as any,
-      mockPlan as any,
-    )
+    const { prompt, evidenceMap } = assembleSynthesizerPrompt('test query', mockStepResults as any, mockPlan as any)
 
     // Prompt should contain [1] and [2] evidence markers
     expect(prompt).toContain('[1]')
@@ -187,17 +204,22 @@ describe('Agentic Pipeline — Synthesizer', () => {
 
     const mockPlan = {
       original_query: 'test query',
-      steps: [{ id: 1, question: 'sub q1', tool: 'web_search' as const, params: {}, output_role: 'evidence' as const, depends_on: [] }],
+      steps: [
+        {
+          id: 1,
+          question: 'sub q1',
+          tool: 'web_search' as const,
+          params: {},
+          output_role: 'evidence' as const,
+          depends_on: [],
+        },
+      ],
       complexity: 'moderate' as const,
       confidence: 0.8,
       synthesis_instruction: 'Synthesize the evidence',
     }
 
-    const { prompt, evidenceMap } = assembleSynthesizerPrompt(
-      'test query',
-      mockStepResults as any,
-      mockPlan as any,
-    )
+    const { prompt, evidenceMap } = assembleSynthesizerPrompt('test query', mockStepResults as any, mockPlan as any)
 
     // Injected source A is excluded — no raw injection text in the prompt
     expect(prompt).not.toContain('Ignore all previous instructions')
@@ -219,11 +241,14 @@ describe('Agentic Pipeline — Synthesizer', () => {
 
     // Build a fake evidenceMap
     const evidenceMap = new Map([
-      [1, [
-        { stepId: 1, sourceId: 1, title: 'Title A', url: 'https://a.com', snippet: 'Snippet A', timestamp: '' },
-        { stepId: 1, sourceId: 2, title: 'Title B', url: 'https://b.com', snippet: 'Snippet B', timestamp: '' },
-        { stepId: 1, sourceId: 3, title: 'Title C', url: 'https://c.com', snippet: 'Snippet C', timestamp: '' },
-      ]],
+      [
+        1,
+        [
+          { stepId: 1, sourceId: 1, title: 'Title A', url: 'https://a.com', snippet: 'Snippet A', timestamp: '' },
+          { stepId: 1, sourceId: 2, title: 'Title B', url: 'https://b.com', snippet: 'Snippet B', timestamp: '' },
+          { stepId: 1, sourceId: 3, title: 'Title C', url: 'https://c.com', snippet: 'Snippet C', timestamp: '' },
+        ],
+      ],
     ])
 
     // Access private method via any
@@ -249,11 +274,9 @@ describe('Agentic Pipeline — Synthesizer', () => {
       { stepId: 1, sourceId: 2, title: 'Bad', url: '', snippet: '', timestamp: '' },
     ]
 
-    const warnings = (synthesizer as any).validateAnswer(
-      'The answer is [1] and also [2].',
-      usedCitations,
-      [{ stepId: 1, success: true, evidence: [], citations: [], durationMs: 100 }],
-    )
+    const warnings = (synthesizer as any).validateAnswer('The answer is [1] and also [2].', usedCitations, [
+      { stepId: 1, success: true, evidence: [], citations: [], durationMs: 100 },
+    ])
 
     const urlWarning = warnings.find((w: string) => w.includes('no source URL'))
     expect(urlWarning).toBeDefined()
@@ -268,11 +291,9 @@ describe('Agentic Pipeline — Synthesizer', () => {
       { stepId: 1, sourceId: 1, title: 'Good', url: 'https://valid.com', snippet: '', timestamp: '' },
     ]
 
-    const warnings = (synthesizer as any).validateAnswer(
-      'According to [5], which does not exist.',
-      usedCitations,
-      [{ stepId: 1, success: true, evidence: [], citations: [], durationMs: 100 }],
-    )
+    const warnings = (synthesizer as any).validateAnswer('According to [5], which does not exist.', usedCitations, [
+      { stepId: 1, success: true, evidence: [], citations: [], durationMs: 100 },
+    ])
 
     const hallucinationWarning = warnings.find((w: string) => w.includes('non-existent evidence'))
     expect(hallucinationWarning).toBeDefined()
@@ -297,11 +318,7 @@ describe('Agentic Pipeline — Synthesizer', () => {
     expect(highConf).toBeGreaterThanOrEqual(0.8)
 
     // 0 citations, 3 warnings → lower confidence than high-conf case
-    const lowConf = (synthesizer as any).calculateConfidence(
-      [],
-      stepResults,
-      3,
-    )
+    const lowConf = (synthesizer as any).calculateConfidence([], stepResults, 3)
     expect(lowConf).toBeLessThan(highConf)
   })
 })
@@ -319,7 +336,13 @@ describe('Agentic Pipeline — Quality Gate', () => {
         stepId: 1,
         success: true,
         evidence: [
-          { title: 'Result 1', url: 'https://example.com', content: 'Good evidence', score: 0.8, domain: 'example.com' },
+          {
+            title: 'Result 1',
+            url: 'https://example.com',
+            content: 'Good evidence',
+            score: 0.8,
+            domain: 'example.com',
+          },
         ],
         citations: [],
         durationMs: 500,
@@ -328,7 +351,13 @@ describe('Agentic Pipeline — Quality Gate', () => {
         stepId: 2,
         success: true,
         evidence: [
-          { title: 'Result 2', url: 'https://example2.com', content: 'More evidence', score: 0.7, domain: 'example2.com' },
+          {
+            title: 'Result 2',
+            url: 'https://example2.com',
+            content: 'More evidence',
+            score: 0.7,
+            domain: 'example2.com',
+          },
         ],
         citations: [],
         durationMs: 400,

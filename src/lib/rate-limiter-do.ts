@@ -76,7 +76,12 @@ export const HOST_CONFIGS: Record<string, HostConfig> = {
   'search.naver.com': { maxConcurrent: 3, failureThreshold: 5, resetTimeoutMs: 60_000, rateLimitPerMinute: 80 },
   'en.wikipedia.org': { maxConcurrent: 3, failureThreshold: 5, resetTimeoutMs: 30_000, rateLimitPerMinute: 100 },
   'api.github.com': { maxConcurrent: 2, failureThreshold: 3, resetTimeoutMs: 60_000, rateLimitPerMinute: 60 },
-  'hacker-news.firebaseio.com': { maxConcurrent: 3, failureThreshold: 5, resetTimeoutMs: 30_000, rateLimitPerMinute: 100 },
+  'hacker-news.firebaseio.com': {
+    maxConcurrent: 3,
+    failureThreshold: 5,
+    resetTimeoutMs: 30_000,
+    rateLimitPerMinute: 100,
+  },
   'www.reddit.com': { maxConcurrent: 2, failureThreshold: 5, resetTimeoutMs: 60_000, rateLimitPerMinute: 60 },
   'export.arxiv.org': { maxConcurrent: 2, failureThreshold: 3, resetTimeoutMs: 60_000, rateLimitPerMinute: 30 },
   'r.jina.ai': { maxConcurrent: 3, failureThreshold: 5, resetTimeoutMs: 60_000, rateLimitPerMinute: 60 },
@@ -208,7 +213,11 @@ export class RateLimiterDO extends DurableObject<Env> {
     if (circuit.tripped) {
       const elapsed = now - circuit.openedAt
       if (elapsed < getBackoffMs(circuit.tripCount)) {
-        return { allowed: false, reason: 'circuit_open', retryAfter: Math.ceil((getBackoffMs(circuit.tripCount) - elapsed) / 1000) }
+        return {
+          allowed: false,
+          reason: 'circuit_open',
+          retryAfter: Math.ceil((getBackoffMs(circuit.tripCount) - elapsed) / 1000),
+        }
       }
       // Half-open: allow exactly one probe request
       if (circuit.probeInFlight) {
@@ -457,9 +466,10 @@ export interface RateLimiterRPC {
  * Usage: const limiter = getRateLimiter(env); await limiter.acquire('www.bing.com');
  */
 export function getRateLimiter(env: Env): RateLimiterRPC {
+  if (!env.RATE_LIMITER) throw new Error('RATE_LIMITER binding missing — configure the Durable Object binding first')
   // Single DO instance named "global" - all hosts coordinated through it
-  const id = env.RATE_LIMITER!.idFromName('global')
-  return env.RATE_LIMITER!.get(id) as unknown as RateLimiterRPC
+  const id = env.RATE_LIMITER.idFromName('global')
+  return env.RATE_LIMITER.get(id) as unknown as RateLimiterRPC
 }
 
 export {}

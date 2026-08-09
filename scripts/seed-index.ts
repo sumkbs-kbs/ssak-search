@@ -234,12 +234,19 @@ async function runStaticSeed(args: Args): Promise<{ succeeded: number; failed: n
   }
 
   if (args.dryRun) {
-    console.log(`  [dry-run] would POST ${limited.length} URLs to ${args.apiUrl}/api/index`)
+    console.log(`  [dry-run] would POST ${limited.length} URLs to ${args.apiUrl ?? '(none)'}/api/index`)
     for (const e of limited.slice(0, 5)) {
       console.log(`    - ${e.url}`)
     }
     if (limited.length > 5) console.log(`    ... and ${limited.length - 5} more`)
     return { succeeded: limited.length, failed: 0 }
+  }
+
+  // Non-dry-run: --api-url was validated in parseArgs, so it is required here.
+  const apiUrl = args.apiUrl
+  if (!apiUrl) {
+    console.error('❌ --api-url is required (or use --dry-run)')
+    return { succeeded: 0, failed: 0 }
   }
 
   // The API accepts up to 20 URLs per request, but each URL costs several
@@ -258,7 +265,7 @@ async function runStaticSeed(args: Args): Promise<{ succeeded: number; failed: n
   const results = await pooledMap(batches, args.concurrency, async (batch, i) => {
     const urls = batch.map((b) => b.url)
     try {
-      const r = await indexBatch(args.apiUrl!, args.apiKey, urls)
+      const r = await indexBatch(apiUrl, args.apiKey, urls)
       succeeded += r.succeeded
       failed += r.failed
       const pct = Math.round(((i + 1) / batches.length) * 100)
@@ -301,7 +308,12 @@ async function runDynamicSeed(args: Args): Promise<{ succeeded: number; failed: 
     return { succeeded: 0, failed: 0 }
   }
 
-  const base = args.apiUrl!.replace(/\/$/, '')
+  const apiUrl = args.apiUrl
+  if (!apiUrl) {
+    console.error('❌ --api-url is required (or use --dry-run)')
+    return { succeeded: 0, failed: 0 }
+  }
+  const base = apiUrl.replace(/\/$/, '')
   const headers: Record<string, string> = { 'Content-Type': 'application/json' }
   if (args.apiKey) headers['Authorization'] = `Bearer ${args.apiKey}`
 
@@ -332,7 +344,7 @@ async function runDynamicSeed(args: Args): Promise<{ succeeded: number; failed: 
       if (urls.length === 0) return
 
       // Index those URLs.
-      const r = await indexBatch(args.apiUrl!, args.apiKey, urls)
+      const r = await indexBatch(apiUrl, args.apiKey, urls)
       succeeded += r.succeeded
       failed += r.failed
       const pct = Math.round((idx / limited.length) * 100)
@@ -387,7 +399,7 @@ async function main() {
   console.log(`  Dry run:     ${args.dryRun}`)
 
   if (!args.dryRun) {
-    await waitForHealthReady(args.apiUrl!, args.apiKey)
+    if (args.apiUrl) await waitForHealthReady(args.apiUrl, args.apiKey)
   }
 
   let totalSucceeded = 0

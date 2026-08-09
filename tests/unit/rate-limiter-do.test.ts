@@ -19,14 +19,22 @@ function createMockDOState() {
   return {
     storage: {
       get: vi.fn(async (key: string) => storage.get(key)),
-      put: vi.fn(async (key: string, value: unknown) => { storage.set(key, value) }),
+      put: vi.fn(async (key: string, value: unknown) => {
+        storage.set(key, value)
+      }),
       delete: vi.fn(async (key: string) => storage.delete(key)),
       deleteAll: vi.fn(async () => storage.clear()),
-      setAlarm: vi.fn(async (time: number) => { alarmTime = time }),
-      deleteAlarm: vi.fn(async () => { alarmTime = null }),
+      setAlarm: vi.fn(async (time: number) => {
+        alarmTime = time
+      }),
+      deleteAlarm: vi.fn(async () => {
+        alarmTime = null
+      }),
       getAlarm: vi.fn(async () => alarmTime),
     },
-    blockConcurrencyWhile: vi.fn(async (fn: () => Promise<void>) => { await fn() }),
+    blockConcurrencyWhile: vi.fn(async (fn: () => Promise<void>) => {
+      await fn()
+    }),
     waitUntil: vi.fn(),
     id: { toString: () => 'test-do-id' },
     tags: [],

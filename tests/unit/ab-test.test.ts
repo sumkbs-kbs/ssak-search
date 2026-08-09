@@ -18,7 +18,9 @@ function createMockDOState() {
   return {
     storage: {
       get: vi.fn(async (key: string) => storage.get(key)),
-      put: vi.fn(async (key: string, value: unknown) => { storage.set(key, value) }),
+      put: vi.fn(async (key: string, value: unknown) => {
+        storage.set(key, value)
+      }),
       delete: vi.fn(async (key: string) => storage.delete(key)),
       deleteAll: vi.fn(async () => storage.clear()),
       setAlarm: vi.fn(),
@@ -35,7 +37,9 @@ function createMockDOState() {
       }),
       _map: storage,
     },
-    blockConcurrencyWhile: vi.fn(async (fn: () => Promise<void>) => { await fn() }),
+    blockConcurrencyWhile: vi.fn(async (fn: () => Promise<void>) => {
+      await fn()
+    }),
     waitUntil: vi.fn(),
     id: { toString: () => 'test-do-id' },
     tags: [],
@@ -76,15 +80,33 @@ describe('ExperimentDO', () => {
 
   it('register rejects names that violate the pattern', async () => {
     for (const bad of ['UPPER', 'has:colon', 'has space', '한글', '']) {
-      const res = await doInstance.register({ name: bad, variants: [{ key: 'control', weight: 50 }, { key: 'treatment', weight: 50 }] })
+      const res = await doInstance.register({
+        name: bad,
+        variants: [
+          { key: 'control', weight: 50 },
+          { key: 'treatment', weight: 50 },
+        ],
+      })
       expect(res.ok).toBe(false)
     }
-    const res = await doInstance.register({ name: 'x'.repeat(41), variants: [{ key: 'control', weight: 50 }, { key: 'treatment', weight: 50 }] })
+    const res = await doInstance.register({
+      name: 'x'.repeat(41),
+      variants: [
+        { key: 'control', weight: 50 },
+        { key: 'treatment', weight: 50 },
+      ],
+    })
     expect(res.ok).toBe(false)
   })
 
   it('register rejects duplicate experiment names', async () => {
-    const input = { name: 'ltr-ranking', variants: [{ key: 'control', weight: 50 }, { key: 'treatment', weight: 50 }] }
+    const input = {
+      name: 'ltr-ranking',
+      variants: [
+        { key: 'control', weight: 50 },
+        { key: 'treatment', weight: 50 },
+      ],
+    }
     expect((await doInstance.register(input)).ok).toBe(true)
     const res = await doInstance.register(input)
     expect(res.ok).toBe(false)
@@ -95,17 +117,50 @@ describe('ExperimentDO', () => {
     // Single variant
     expect((await doInstance.register({ name: 'e1', variants: [{ key: 'control', weight: 100 }] })).ok).toBe(false)
     // Duplicate keys
-    expect((await doInstance.register({ name: 'e2', variants: [{ key: 'a', weight: 50 }, { key: 'a', weight: 50 }] })).ok).toBe(false)
+    expect(
+      (
+        await doInstance.register({
+          name: 'e2',
+          variants: [
+            { key: 'a', weight: 50 },
+            { key: 'a', weight: 50 },
+          ],
+        })
+      ).ok,
+    ).toBe(false)
     // Weights not summing to 100
-    expect((await doInstance.register({ name: 'e3', variants: [{ key: 'a', weight: 30 }, { key: 'b', weight: 30 }] })).ok).toBe(false)
+    expect(
+      (
+        await doInstance.register({
+          name: 'e3',
+          variants: [
+            { key: 'a', weight: 30 },
+            { key: 'b', weight: 30 },
+          ],
+        })
+      ).ok,
+    ).toBe(false)
     // Non-integer / out-of-range weight
-    expect((await doInstance.register({ name: 'e4', variants: [{ key: 'a', weight: 50.5 }, { key: 'b', weight: 49.5 }] })).ok).toBe(false)
+    expect(
+      (
+        await doInstance.register({
+          name: 'e4',
+          variants: [
+            { key: 'a', weight: 50.5 },
+            { key: 'b', weight: 49.5 },
+          ],
+        })
+      ).ok,
+    ).toBe(false)
   })
 
   it('register rejects unknown primary_metric', async () => {
     const res = await doInstance.register({
       name: 'e1',
-      variants: [{ key: 'a', weight: 50 }, { key: 'b', weight: 50 }],
+      variants: [
+        { key: 'a', weight: 50 },
+        { key: 'b', weight: 50 },
+      ],
       primary_metric: 'bogus' as any,
     })
     expect(res.ok).toBe(false)
@@ -115,7 +170,10 @@ describe('ExperimentDO', () => {
     const res = await doInstance.register({
       name: 'ltr-ranking',
       description: 'LTR A/B',
-      variants: [{ key: 'control', weight: 50 }, { key: 'treatment', weight: 50 }],
+      variants: [
+        { key: 'control', weight: 50 },
+        { key: 'treatment', weight: 50 },
+      ],
       primary_metric: 'ctr',
     })
     expect(res.ok).toBe(true)
@@ -127,7 +185,13 @@ describe('ExperimentDO', () => {
   })
 
   it('setStatus pauses and resumes an experiment', async () => {
-    await doInstance.register({ name: 'ltr-ranking', variants: [{ key: 'control', weight: 50 }, { key: 'treatment', weight: 50 }] })
+    await doInstance.register({
+      name: 'ltr-ranking',
+      variants: [
+        { key: 'control', weight: 50 },
+        { key: 'treatment', weight: 50 },
+      ],
+    })
     expect((await doInstance.setStatus('ltr-ranking', 'paused')).ok).toBe(true)
     expect((await doInstance.setStatus('ltr-ranking', 'running')).ok).toBe(true)
     expect((await doInstance.setStatus('missing', 'running')).ok).toBe(false)
@@ -138,7 +202,13 @@ describe('ExperimentDO', () => {
   // ----------------------------------------------------------
 
   it('assign is deterministic per user and respects weights', async () => {
-    await doInstance.register({ name: 'ltr-ranking', variants: [{ key: 'control', weight: 50 }, { key: 'treatment', weight: 50 }] })
+    await doInstance.register({
+      name: 'ltr-ranking',
+      variants: [
+        { key: 'control', weight: 50 },
+        { key: 'treatment', weight: 50 },
+      ],
+    })
     const v1 = await doInstance.assign('ltr-ranking', 'user-1')
     const v2 = await doInstance.assign('ltr-ranking', 'user-1')
     expect(v1).toBe(v2)
@@ -155,7 +225,13 @@ describe('ExperimentDO', () => {
   })
 
   it('assign returns null for unknown, paused, or missing-user', async () => {
-    await doInstance.register({ name: 'ltr-ranking', variants: [{ key: 'control', weight: 50 }, { key: 'treatment', weight: 50 }] })
+    await doInstance.register({
+      name: 'ltr-ranking',
+      variants: [
+        { key: 'control', weight: 50 },
+        { key: 'treatment', weight: 50 },
+      ],
+    })
     expect(await doInstance.assign('missing', 'u1')).toBeNull()
     expect(await doInstance.assign('ltr-ranking', null)).toBeNull()
     expect(await doInstance.assign('ltr-ranking', '')).toBeNull()
@@ -168,13 +244,29 @@ describe('ExperimentDO', () => {
   // ----------------------------------------------------------
 
   it('recordImpression/Click/Latency/Error update counters and store events', async () => {
-    await doInstance.register({ name: 'ltr-ranking', variants: [{ key: 'control', weight: 50 }, { key: 'treatment', weight: 50 }] })
+    await doInstance.register({
+      name: 'ltr-ranking',
+      variants: [
+        { key: 'control', weight: 50 },
+        { key: 'treatment', weight: 50 },
+      ],
+    })
     const impId = await doInstance.recordImpression({
-      experiment: 'ltr-ranking', variant: 'control', user_id: null,
-      impression_id: 'imp-1', query: 'react', result_count: 10,
+      experiment: 'ltr-ranking',
+      variant: 'control',
+      user_id: null,
+      impression_id: 'imp-1',
+      query: 'react',
+      result_count: 10,
     })
     expect(impId).toBe('imp-1')
-    await doInstance.recordClick({ experiment: 'ltr-ranking', variant: 'control', user_id: null, impression_id: 'imp-1', position: 1 })
+    await doInstance.recordClick({
+      experiment: 'ltr-ranking',
+      variant: 'control',
+      user_id: null,
+      impression_id: 'imp-1',
+      position: 1,
+    })
     await doInstance.recordLatency({ experiment: 'ltr-ranking', variant: 'control', latency_ms: 120 })
     await doInstance.recordError({ experiment: 'ltr-ranking', variant: 'control' })
 
@@ -199,10 +291,20 @@ describe('ExperimentDO', () => {
     const writeDataPoint = vi.fn()
     const env = { ANALYTICS: { writeDataPoint } }
     const doWithAnalytics = new ExperimentDOClass(createMockDOState(), env)
-    await doWithAnalytics.register({ name: 'ltr-ranking', variants: [{ key: 'control', weight: 50 }, { key: 'treatment', weight: 50 }] })
+    await doWithAnalytics.register({
+      name: 'ltr-ranking',
+      variants: [
+        { key: 'control', weight: 50 },
+        { key: 'treatment', weight: 50 },
+      ],
+    })
     await doWithAnalytics.recordImpression({
-      experiment: 'ltr-ranking', variant: 'control', user_id: null,
-      impression_id: 'imp-1', query: 'q', result_count: 5,
+      experiment: 'ltr-ranking',
+      variant: 'control',
+      user_id: null,
+      impression_id: 'imp-1',
+      query: 'q',
+      result_count: 5,
     })
     expect(writeDataPoint).toHaveBeenCalledTimes(1)
     const args = writeDataPoint.mock.calls[0][0]
@@ -212,17 +314,33 @@ describe('ExperimentDO', () => {
   })
 
   it('prunes events older than 30 days during cleanup', async () => {
-    await doInstance.register({ name: 'ltr-ranking', variants: [{ key: 'control', weight: 50 }, { key: 'treatment', weight: 50 }] })
+    await doInstance.register({
+      name: 'ltr-ranking',
+      variants: [
+        { key: 'control', weight: 50 },
+        { key: 'treatment', weight: 50 },
+      ],
+    })
     vi.useFakeTimers()
     vi.setSystemTime(new Date('2026-07-01T00:00:00Z'))
     await doInstance.recordImpression({
-      experiment: 'ltr-ranking', variant: 'control', user_id: null,
-      impression_id: 'old-1', query: 'q', result_count: 5,
+      experiment: 'ltr-ranking',
+      variant: 'control',
+      user_id: null,
+      impression_id: 'old-1',
+      query: 'q',
+      result_count: 5,
     })
 
     vi.setSystemTime(new Date('2026-08-10T00:00:00Z'))
     for (let i = 0; i < 26; i++) {
-      await doInstance.recordClick({ experiment: 'ltr-ranking', variant: 'control', user_id: null, impression_id: `imp-${i}`, position: 1 })
+      await doInstance.recordClick({
+        experiment: 'ltr-ranking',
+        variant: 'control',
+        user_id: null,
+        impression_id: `imp-${i}`,
+        position: 1,
+      })
     }
 
     const keys = [...(doState.storage._map as Map<string, unknown>).keys()]
@@ -237,17 +355,33 @@ describe('ExperimentDO', () => {
     for (let i = 0; i < count; i++) {
       const impId = `imp-${variant}-${i}`
       await doInstance.recordImpression({
-        experiment: 'ltr-ranking', variant, user_id: null,
-        impression_id: impId, query: 'q', result_count: 10,
+        experiment: 'ltr-ranking',
+        variant,
+        user_id: null,
+        impression_id: impId,
+        query: 'q',
+        result_count: 10,
       })
       if (clickEvery > 0 && i % clickEvery === 0) {
-        await doInstance.recordClick({ experiment: 'ltr-ranking', variant, user_id: null, impression_id: impId, position: startPos })
+        await doInstance.recordClick({
+          experiment: 'ltr-ranking',
+          variant,
+          user_id: null,
+          impression_id: impId,
+          position: startPos,
+        })
       }
     }
   }
 
   it('analyze reports insufficient_data below the sample threshold', async () => {
-    await doInstance.register({ name: 'ltr-ranking', variants: [{ key: 'control', weight: 50 }, { key: 'treatment', weight: 50 }] })
+    await doInstance.register({
+      name: 'ltr-ranking',
+      variants: [
+        { key: 'control', weight: 50 },
+        { key: 'treatment', weight: 50 },
+      ],
+    })
     await seedImpressions('control', 10)
     await seedImpressions('treatment', 10)
     const a = await doInstance.analyze('ltr-ranking', 30)
@@ -257,7 +391,13 @@ describe('ExperimentDO', () => {
   })
 
   it('analyze declares the higher-CTR variant the winner', async () => {
-    await doInstance.register({ name: 'ltr-ranking', variants: [{ key: 'control', weight: 50 }, { key: 'treatment', weight: 50 }] })
+    await doInstance.register({
+      name: 'ltr-ranking',
+      variants: [
+        { key: 'control', weight: 50 },
+        { key: 'treatment', weight: 50 },
+      ],
+    })
     await seedImpressions('control', 60) // 0 clicks
     await seedImpressions('treatment', 60, 3) // clicks at position 1 every 3rd impression
     const a = await doInstance.analyze('ltr-ranking', 30)
@@ -269,7 +409,14 @@ describe('ExperimentDO', () => {
   })
 
   it('analyze measures latency with lower-is-better direction', async () => {
-    await doInstance.register({ name: 'ltr-ranking', variants: [{ key: 'control', weight: 50 }, { key: 'treatment', weight: 50 }], primary_metric: 'latency' })
+    await doInstance.register({
+      name: 'ltr-ranking',
+      variants: [
+        { key: 'control', weight: 50 },
+        { key: 'treatment', weight: 50 },
+      ],
+      primary_metric: 'latency',
+    })
     for (let i = 0; i < 40; i++) {
       await doInstance.recordLatency({ experiment: 'ltr-ranking', variant: 'control', latency_ms: 200 })
       await doInstance.recordLatency({ experiment: 'ltr-ranking', variant: 'treatment', latency_ms: 80 })
@@ -278,7 +425,7 @@ describe('ExperimentDO', () => {
     expect(a?.insufficient_data).toBe(false)
     expect(a?.significant).toBe(true)
     expect(a?.winner).toBe('treatment')
-    expect(a?.treatment?.latency_mean_ms).toBeLessThan(a?.control?.latency_mean_ms!)
+    expect(a?.treatment?.latency_mean_ms ?? Infinity).toBeLessThan(a?.control?.latency_mean_ms ?? Infinity)
   })
 
   it('analyze returns null for unknown experiment', async () => {
@@ -290,7 +437,13 @@ describe('ExperimentDO', () => {
   // ----------------------------------------------------------
 
   it('reset wipes experiments and events', async () => {
-    await doInstance.register({ name: 'ltr-ranking', variants: [{ key: 'control', weight: 50 }, { key: 'treatment', weight: 50 }] })
+    await doInstance.register({
+      name: 'ltr-ranking',
+      variants: [
+        { key: 'control', weight: 50 },
+        { key: 'treatment', weight: 50 },
+      ],
+    })
     await seedImpressions('control', 5)
     await doInstance.reset()
     expect(await doInstance.list()).toHaveLength(0)
@@ -316,7 +469,10 @@ describe('ab-test pure helpers', () => {
 
   it('pickVariant maps [0,1) to weighted buckets', async () => {
     const { pickVariant } = await import('../../src/lib/experiments/ab-test')
-    const variants = [{ key: 'control', weight: 30 }, { key: 'treatment', weight: 70 }]
+    const variants = [
+      { key: 'control', weight: 30 },
+      { key: 'treatment', weight: 70 },
+    ]
     expect(pickVariant(variants, 0)).toBe('control')
     expect(pickVariant(variants, 0.29)).toBe('control')
     expect(pickVariant(variants, 0.3)).toBe('treatment')

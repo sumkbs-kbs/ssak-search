@@ -14,10 +14,14 @@
 
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 
-function createMockResponse(overrides: Partial<{
-  ok: boolean; status: number; body: string;
-  jsonData: Record<string, unknown>;
-}> = {}) {
+function createMockResponse(
+  overrides: Partial<{
+    ok: boolean
+    status: number
+    body: string
+    jsonData: Record<string, unknown>
+  }> = {},
+) {
   const body = overrides.body || ''
   const ok = overrides.ok !== undefined ? overrides.ok : true
   const status = overrides.status !== undefined ? overrides.status : 200
@@ -54,7 +58,8 @@ describe('extractContent with Sidecar fallback', () => {
           jsonData: {
             success: true,
             url: 'https://example.com/article',
-            content: 'Sidecar extracted content for testing purposes. This should be long enough to pass the 50-char minimum content length check.',
+            content:
+              'Sidecar extracted content for testing purposes. This should be long enough to pass the 50-char minimum content length check.',
           },
         })
       }
@@ -64,10 +69,12 @@ describe('extractContent with Sidecar fallback', () => {
 
     const { extractContent } = await import('../../src/lib/extractor')
 
-    const results = await extractContent(
-      ['https://example.com/article'],
-      { maxTokens: 200, timeoutMs: 5000, jinaApiKey: undefined, env: { SIDECAR_URL: 'http://localhost:8000' } as any },
-    )
+    const results = await extractContent(['https://example.com/article'], {
+      maxTokens: 200,
+      timeoutMs: 5000,
+      jinaApiKey: undefined,
+      env: { SIDECAR_URL: 'http://localhost:8000' } as any,
+    })
 
     // Should get result from sidecar fallback
     expect(results.length).toBeGreaterThan(0)
@@ -83,10 +90,12 @@ describe('extractContent with Sidecar fallback', () => {
 
     const { extractContent } = await import('../../src/lib/extractor')
 
-    const results = await extractContent(
-      ['https://example.com/article'],
-      { maxTokens: 200, timeoutMs: 3000, jinaApiKey: undefined, env: {} as any },
-    )
+    const results = await extractContent(['https://example.com/article'], {
+      maxTokens: 200,
+      timeoutMs: 3000,
+      jinaApiKey: undefined,
+      env: {} as any,
+    })
 
     // Should handle gracefully even without sidecar
     expect(Array.isArray(results)).toBe(true)
@@ -105,10 +114,12 @@ describe('extractContent with Sidecar fallback', () => {
 
     const { extractContent } = await import('../../src/lib/extractor')
 
-    const results = await extractContent(
-      ['https://example.com/article'],
-      { maxTokens: 200, timeoutMs: 3000, jinaApiKey: undefined, env: { SIDECAR_URL: 'http://localhost:8000' } as any },
-    )
+    const results = await extractContent(['https://example.com/article'], {
+      maxTokens: 200,
+      timeoutMs: 3000,
+      jinaApiKey: undefined,
+      env: { SIDECAR_URL: 'http://localhost:8000' } as any,
+    })
 
     // Should handle gracefully
     expect(Array.isArray(results)).toBe(true)

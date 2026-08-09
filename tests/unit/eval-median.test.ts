@@ -116,10 +116,18 @@ describe('computeMedianReport', () => {
       mkResult('q1', { responseTimeMs: 800, backends: ['bing'], response: { query: 'q1', results: [] } as never }),
     ])
     const r2 = mkReport('t2', [
-      mkResult('q1', { responseTimeMs: 1200, backends: ['bing', 'wikipedia'], response: { query: 'q1', results: [] } as never }),
+      mkResult('q1', {
+        responseTimeMs: 1200,
+        backends: ['bing', 'wikipedia'],
+        response: { query: 'q1', results: [] } as never,
+      }),
     ])
     const r3 = mkReport('t3', [
-      mkResult('q1', { responseTimeMs: 1000, backends: ['bing', 'wikipedia'], response: { query: 'q1', results: [] } as never }),
+      mkResult('q1', {
+        responseTimeMs: 1000,
+        backends: ['bing', 'wikipedia'],
+        response: { query: 'q1', results: [] } as never,
+      }),
     ])
 
     const median = computeMedianReport([r1, r2, r3], queries)

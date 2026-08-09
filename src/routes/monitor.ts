@@ -23,7 +23,7 @@ import { Hono } from 'hono'
 import { cors } from 'hono/cors'
 import type { AppBindings } from '../types'
 import { getBackendHealth } from '../lib/rate-limiter'
-import { getPrometheusMetrics, getUsageStats, getCacheMetrics, getQps, getLatencyPercentiles } from '../lib/metrics'
+import { getUsageStats, getCacheMetrics, getQps, getLatencyPercentiles } from '../lib/metrics'
 import { sendPagerDutyEvent } from '../lib/pagerduty'
 import { getClickLogStub } from '../lib/ltr/click-logger'
 import { getExperimentStub } from '../lib/experiments/ab-test'
@@ -42,7 +42,10 @@ monitorRoute.use('/*', cors({ origin: '*' }))
  * Each DO access is isolated — a missing binding or RPC error degrades
  * that section to `unavailable` without failing the whole monitor call.
  */
-async function collectQualityMetrics(c: { env: AppBindings; executionCtx: { waitUntil(p: Promise<unknown>): void } }): Promise<{
+async function collectQualityMetrics(c: {
+  env: AppBindings
+  executionCtx: { waitUntil(p: Promise<unknown>): void }
+}): Promise<{
   ltr: {
     available: boolean
     impressions?: number
@@ -127,8 +130,8 @@ async function collectQualityMetrics(c: { env: AppBindings; executionCtx: { wait
 // ============================================================
 const SLO_TARGETS = {
   availability: { target: 0.999, budgetMinutes: 43.8 }, // 99.9% → 43.8 min/month
-  latencyP99: { targetMs: 15000, budgetMinutes: 432 },  // 15s → 7.2 hours/month
-  cacheHitRate: { target: 0.6 },                         // 60%
+  latencyP99: { targetMs: 15000, budgetMinutes: 432 }, // 15s → 7.2 hours/month
+  cacheHitRate: { target: 0.6 }, // 60%
 }
 
 // ============================================================
@@ -154,9 +157,6 @@ monitorRoute.get('/', async (c) => {
   // Collect health data
   const circuitHealth = await getBackendHealth(c.env)
 
-  // Parse Prometheus metrics for additional data points
-  const promMetrics = getPrometheusMetrics()
-
   // Get usage stats
   const usage = getUsageStats()
 
@@ -164,33 +164,33 @@ monitorRoute.get('/', async (c) => {
   const cache = getCacheMetrics()
 
   // Build per-backend status
-  const backends: Record<string, {
-    status: string
-    latencyMs?: number
-    failures: number
-    inflight: number
-    circuitTripped: boolean
-    successRate?: number
-    totalRequests?: number
-    backoffMs?: number
-    tripCount?: number
-  }> = {}
+  const backends: Record<
+    string,
+    {
+      status: string
+      latencyMs?: number
+      failures: number
+      inflight: number
+      circuitTripped: boolean
+      successRate?: number
+      totalRequests?: number
+      backoffMs?: number
+      tripCount?: number
+    }
+  > = {}
 
   let allHealthy = true
   let anyDegraded = false
   let backendCount = 0
 
   for (const [host, state] of Object.entries(circuitHealth)) {
-    const status = state.status === 'healthy' ? 'operational'
-      : state.status === 'degraded' ? 'degraded'
-      : 'down'
+    const status = state.status === 'healthy' ? 'operational' : state.status === 'degraded' ? 'degraded' : 'down'
 
     if (status === 'down') allHealthy = false
     if (status === 'degraded') anyDegraded = true
 
-    const successRate = state.totalRequests && state.totalRequests > 0
-      ? 1 - (state.totalFailures ?? 0) / state.totalRequests
-      : undefined
+    const successRate =
+      state.totalRequests && state.totalRequests > 0 ? 1 - (state.totalFailures ?? 0) / state.totalRequests : undefined
 
     // D.4 — success rate below threshold counts as degraded for overall status
     if (successRate !== undefined && successRate < ALERT_RULES.backendSuccessRateThreshold) {
@@ -212,18 +212,14 @@ monitorRoute.get('/', async (c) => {
   }
 
   // Compute overall status
-  const overallStatus = allHealthy
-    ? (anyDegraded ? 'degraded' : 'ok')
-    : 'partial_outage'
+  const overallStatus = allHealthy ? (anyDegraded ? 'degraded' : 'ok') : 'partial_outage'
 
   // Compute error budget remaining (simplified — assumes 30-day window)
-  const uptimeRatio = usage.totalRequests > 0
-    ? 1 - (usage.totalErrors / usage.totalRequests)
-    : 1
+  const uptimeRatio = usage.totalRequests > 0 ? 1 - usage.totalErrors / usage.totalRequests : 1
 
-  const errorBudgetRemaining = Math.max(0,
-    (uptimeRatio - SLO_TARGETS.availability.target)
-    / (1 - SLO_TARGETS.availability.target) * 100
+  const errorBudgetRemaining = Math.max(
+    0,
+    ((uptimeRatio - SLO_TARGETS.availability.target) / (1 - SLO_TARGETS.availability.target)) * 100,
   )
 
   // Alert assessment
@@ -236,9 +232,7 @@ monitorRoute.get('/', async (c) => {
   }> = []
 
   // Error rate check
-  const errorRate = usage.totalRequests > 0
-    ? usage.totalErrors / usage.totalRequests
-    : 0
+  const errorRate = usage.totalRequests > 0 ? usage.totalErrors / usage.totalRequests : 0
 
   if (errorRate > 0.001) {
     alerts.push({
@@ -260,7 +254,7 @@ monitorRoute.get('/', async (c) => {
 
   // Latency check — based on health probe times
   if (backendCount > 0) {
-    const degradedOrDown = Object.values(backends).filter(b => b.status !== 'operational').length
+    const degradedOrDown = Object.values(backends).filter((b) => b.status !== 'operational').length
     if (degradedOrDown > Math.ceil(backendCount / 2)) {
       alerts.push({
         severity: 'critical',
@@ -277,9 +271,9 @@ monitorRoute.get('/', async (c) => {
     alerts.push({
       severity: 'info',
       rule: 'LowCacheHitRate',
-      message: `Cache hit rate ${(cache.hitRatio * 100).toFixed(0)}% below ${(SLO_TARGETS.cacheHitRate.target * 100)}% target`,
+      message: `Cache hit rate ${(cache.hitRatio * 100).toFixed(0)}% below ${SLO_TARGETS.cacheHitRate.target * 100}% target`,
       current: `${(cache.hitRatio * 100).toFixed(0)}%`,
-      threshold: `${(SLO_TARGETS.cacheHitRate.target * 100)}%`,
+      threshold: `${SLO_TARGETS.cacheHitRate.target * 100}%`,
     })
   }
 
@@ -318,19 +312,21 @@ monitorRoute.get('/', async (c) => {
       alerts.push({
         severity: 'critical',
         rule: 'BackendSuccessRateLow',
-        message: `Backend ${host} success rate ${(successRate * 100).toFixed(1)}% below ${(ALERT_RULES.backendSuccessRateThreshold * 100)}%`,
+        message: `Backend ${host} success rate ${(successRate * 100).toFixed(1)}% below ${ALERT_RULES.backendSuccessRateThreshold * 100}%`,
         current: `${(successRate * 100).toFixed(1)}%`,
-        threshold: `${(ALERT_RULES.backendSuccessRateThreshold * 100)}%`,
+        threshold: `${ALERT_RULES.backendSuccessRateThreshold * 100}%`,
       })
       // Fire-and-forget PagerDuty (dedup_key per host)
       const routingKey = c.env.PAGERDUTY_ROUTING_KEY
       if (routingKey) {
-        c.executionCtx.waitUntil(sendPagerDutyEvent(routingKey, {
-          summary: `Backend ${host} success rate below 90%`,
-          source: host,
-          severity: 'critical',
-          dedupKey: `backend-success-${host}`,
-        }))
+        c.executionCtx.waitUntil(
+          sendPagerDutyEvent(routingKey, {
+            summary: `Backend ${host} success rate below 90%`,
+            source: host,
+            severity: 'critical',
+            dedupKey: `backend-success-${host}`,
+          }),
+        )
       }
     }
   }
@@ -377,7 +373,7 @@ monitorRoute.get('/', async (c) => {
         p99Target: `${SLO_TARGETS.latencyP99.targetMs}ms`,
       },
       cacheHitRate: {
-        target: `${(SLO_TARGETS.cacheHitRate.target * 100)}%`,
+        target: `${SLO_TARGETS.cacheHitRate.target * 100}%`,
         current: `${(cache.hitRatio * 100).toFixed(1)}%`,
       },
     },
@@ -429,7 +425,8 @@ monitorRoute.get('/', async (c) => {
   }
 
   // Determine HTTP status code based on severity
-  const httpStatus: 200 | 503 = overallStatus === 'partial_outage' || alerts.some(a => a.severity === 'critical') ? 503 : 200
+  const httpStatus: 200 | 503 =
+    overallStatus === 'partial_outage' || alerts.some((a) => a.severity === 'critical') ? 503 : 200
 
   return c.json(response, httpStatus)
 })

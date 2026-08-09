@@ -12,7 +12,6 @@ import { Hono } from 'hono'
 import { logger, toError } from '../lib/logger'
 import { cors } from 'hono/cors'
 import type { AppBindings, ErrorResponse } from '../types'
-import { fetchWithTimeout } from '../lib/util'
 
 const suggestRoute = new Hono<{ Bindings: AppBindings }>()
 
@@ -49,10 +48,7 @@ const SUGGEST_PROVIDERS = [
 ]
 
 /** Fetch suggestions from a provider with timeout */
-async function fetchSuggestions(
-  provider: typeof SUGGEST_PROVIDERS[0],
-  query: string,
-): Promise<string[] | null> {
+async function fetchSuggestions(provider: (typeof SUGGEST_PROVIDERS)[0], query: string): Promise<string[] | null> {
   try {
     const controller = new AbortController()
     const timer = setTimeout(() => controller.abort(), 3000)

@@ -333,12 +333,12 @@ export function pageViewPage(): string {
       // Convert citations [N] to styled spans
       let html = text
         .replace(/</g, '&lt;').replace(/>/g, '&gt;')
-        .replace(/\[(\d+)\]/g, (_, n) => {
+        .replace(/\\[(\\d+)\\]/g, (_, n) => {
           const idx = parseInt(n) - 1
           return '<sup><span class="citation" onclick="scrollToSource(' + idx + ')">' + n + '</span></sup>'
         })
         // Convert markdown-like bold
-        .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+        .replace(/\\*\\*(.+?)\\*\\*/g, '<strong>$1</strong>')
         // Convert markdown code
         .replace(/\`([^\`]+)\`/g, '<code>$1</code>')
 

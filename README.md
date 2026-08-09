@@ -12,12 +12,13 @@
 
 | 지표 | 값 |
 |------|-----|
-| **NDCG@10** | 0.551 (MRR: 0.463, P@10: 0.294) |
-| **Pass Rate** | 100.0% (500/500) |
-| **Avg Time** | 1.45s (p50: 819ms, p95: 1.9s) |
+| **NDCG@10** | 0.51~0.55 (런별 편차; 최신 median-of-3 0.5113 — MRR 0.502, P@10 0.277) |
+| **Pass Rate** | 99.6% (498/500, 08-06 최신 런 — en-fact-01 wikipedia 일시 429, zh-general-12 커버리지) |
+| **Avg Time** | 1.66s (p50: 1.85s, p95: 3.5s) |
 | **Bundle Size** | 1,033 kB (gzip: 299 kB) |
 
 - 골드셋 180 → **500쿼리** 확장 (KR 70 / EN 180 / ZH 57 / JA 43 / cross 150), 전 쿼리 골드 표준 1:1
+- 유닛 테스트 **1,381건** (71파일) · **CI 린트 게이트 그린** (`lint:eslint:ci`, **--max-warnings=0** — 회귀 시 CI 즉시 실패, ci.yml에 연결)
 - 3회 실행 **중앙값(median) 집계**: `npm run eval:median` — 백엔드 rate-limit 노이즈에 강건
 - wikipedia 백엔드 안정화(S9): 프로세스 내 결과 캐시 + eval 전용 페이싱 → en-fact-01 등 wikipedia 필수 쿼리 안정 통과
 - 상세 벤치마크: `npm run eval:ci` / `npm run eval:median:ci`

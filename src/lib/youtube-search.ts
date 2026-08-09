@@ -65,7 +65,8 @@ export interface CaptionTrack {
 }
 
 const YT_SEARCH = 'https://www.youtube.com/results?search_query='
-const USER_AGENT = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+const USER_AGENT =
+  'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
 
 // ============================================================
 // URL → video ID extraction
@@ -135,11 +136,7 @@ export function extractYouTubeId(input: string): string | null {
  * Search YouTube for videos matching a query.
  * Parses the initial YT initial data from the search page HTML.
  */
-export async function searchYouTube(
-  query: string,
-  maxResults = 10,
-  signal?: AbortSignal,
-): Promise<YouTubeVideo[]> {
+export async function searchYouTube(query: string, maxResults = 10, signal?: AbortSignal): Promise<YouTubeVideo[]> {
   const url = YT_SEARCH + encodeURIComponent(query)
 
   const resp = await fetch(url, {
@@ -213,7 +210,10 @@ export function parseVideoData(jsonStr: string, maxResults: number): YouTubeVide
           description = parts.join(' ').trim()
         }
         if (!description && renderer?.descriptionSnippet?.runs) {
-          description = renderer.descriptionSnippet.runs.map((r: { text?: string }) => r.text ?? '').join(' ').trim()
+          description = renderer.descriptionSnippet.runs
+            .map((r: { text?: string }) => r.text ?? '')
+            .join(' ')
+            .trim()
         }
 
         videos.push({
@@ -262,9 +262,7 @@ export function formatTimestamp(seconds: number): string {
  * Format transcript segments as readable text with timestamps.
  */
 export function formatTranscriptWithTimestamps(segments: TranscriptSegment[]): string {
-  return segments
-    .map((s) => `[${formatTimestamp(s.start)}] ${s.text}`)
-    .join('\n')
+  return segments.map((s) => `[${formatTimestamp(s.start)}] ${s.text}`).join('\n')
 }
 
 /**
@@ -308,8 +306,9 @@ export async function getTranscript(
 
     // Handle both array and { segments, langs, generated } response formats
     const raw = data as { segments?: Array<{ text: string; start: number; dur: number }>; langs?: string[] }
-    const segments: Array<{ text: string; start: number; dur: number }> =
-      Array.isArray(data) ? (data as Array<{ text: string; start: number; dur: number }>) : raw.segments ?? []
+    const segments: Array<{ text: string; start: number; dur: number }> = Array.isArray(data)
+      ? (data as Array<{ text: string; start: number; dur: number }>)
+      : (raw.segments ?? [])
 
     return segments.map((s) => ({
       text: s.text || '',
@@ -327,13 +326,10 @@ export async function getTranscript(
  */
 export async function getTranscriptLanguages(videoId: string): Promise<string[]> {
   try {
-    const resp = await fetch(
-      `https://youtubetranscript.com/api?vid=${encodeURIComponent(videoId)}`,
-      {
-        headers: { 'User-Agent': USER_AGENT },
-        cf: { cacheTtl: 3600, cacheEverything: true },
-      },
-    )
+    const resp = await fetch(`https://youtubetranscript.com/api?vid=${encodeURIComponent(videoId)}`, {
+      headers: { 'User-Agent': USER_AGENT },
+      cf: { cacheTtl: 3600, cacheEverything: true },
+    })
     if (!resp.ok) return []
     const data: unknown = await resp.json()
     const raw = data as { langs?: string[] }
@@ -376,11 +372,17 @@ export async function getTranscriptFromTimedtext(
     // try JSON.parse first and only fall back to XML when that fails.
     try {
       const data: unknown = JSON.parse(raw)
-      const events = (data as { events?: Array<{ tStartMs?: number; dDurationMs?: number; segs?: Array<{ utf8?: string }> }> })?.events ?? []
+      const events =
+        (data as { events?: Array<{ tStartMs?: number; dDurationMs?: number; segs?: Array<{ utf8?: string }> }> })
+          ?.events ?? []
       const segs: TranscriptSegment[] = []
       for (const ev of events) {
         if (!Array.isArray(ev?.segs)) continue
-        const text = ev.segs.map((s) => s?.utf8 ?? '').join('').replace(/\s+/g, ' ').trim()
+        const text = ev.segs
+          .map((s) => s?.utf8 ?? '')
+          .join('')
+          .replace(/\s+/g, ' ')
+          .trim()
         if (!text) continue
         segs.push({
           text,
@@ -423,16 +425,16 @@ export async function getTranscriptFromTimedtext(
 /**
  * Search YouTube and fetch transcripts for each result.
  */
-export async function searchWithTranscripts(
-  query: string,
-  maxResults = 5,
-): Promise<YouTubeVideoWithTranscript[]> {
+export async function searchWithTranscripts(query: string, maxResults = 5): Promise<YouTubeVideoWithTranscript[]> {
   const videos = await searchYouTube(query, maxResults)
 
   const withTranscripts: YouTubeVideoWithTranscript[] = []
   for (const video of videos) {
     const transcript = await getTranscript(video.id)
-    const transcriptText = transcript.map((s) => s.text).join(' ').slice(0, 10000)
+    const transcriptText = transcript
+      .map((s) => s.text)
+      .join(' ')
+      .slice(0, 10000)
     withTranscripts.push({ ...video, transcript, transcript_text: transcriptText })
   }
 
@@ -470,20 +472,19 @@ export function parsePlayerResponse(jsonStr: string): YouTubeVideoDetails | null
     const captionTracks = data?.captions?.playerCaptionsTracklistRenderer?.captionTracks
     const parsedTracks: CaptionTrack[] = Array.isArray(captionTracks)
       ? captionTracks
-        .map((t: Record<string, unknown>): CaptionTrack | null => {
-          const baseUrl = typeof t.baseUrl === 'string' ? t.baseUrl : ''
-          if (!baseUrl) return null
-          const name = t.name && typeof t.name === 'object'
-            ? (t.name as { simpleText?: string }).simpleText
-            : undefined
-          return {
-            baseUrl,
-            languageCode: typeof t.languageCode === 'string' ? t.languageCode : '',
-            name,
-            kind: typeof t.kind === 'string' ? t.kind : undefined,
-          }
-        })
-        .filter((t): t is CaptionTrack => t !== null)
+          .map((t: Record<string, unknown>): CaptionTrack | null => {
+            const baseUrl = typeof t.baseUrl === 'string' ? t.baseUrl : ''
+            if (!baseUrl) return null
+            const name =
+              t.name && typeof t.name === 'object' ? (t.name as { simpleText?: string }).simpleText : undefined
+            return {
+              baseUrl,
+              languageCode: typeof t.languageCode === 'string' ? t.languageCode : '',
+              name,
+              kind: typeof t.kind === 'string' ? t.kind : undefined,
+            }
+          })
+          .filter((t): t is CaptionTrack => t !== null)
       : []
 
     const details: YouTubeVideoDetails = {
@@ -675,7 +676,12 @@ export async function youtubeExtract(
       includeTranscript: true,
     })
     if (!details) {
-      return { url, raw_content: '', success: false, error: 'YouTube details could not be extracted (blocked or layout changed)' }
+      return {
+        url,
+        raw_content: '',
+        success: false,
+        error: 'YouTube details could not be extracted (blocked or layout changed)',
+      }
     }
     const content = buildYouTubeEvidenceText(details, { maxTokens })
     if (!content.trim()) {
@@ -730,7 +736,10 @@ export async function getVideoDetails(
 
     if (options.includeTranscript) {
       details.transcript = await fetchTranscriptForVideo(details, { lang: options.lang, signal: options.signal })
-      details.transcript_text = details.transcript.map((s) => s.text).join(' ').slice(0, 10000)
+      details.transcript_text = details.transcript
+        .map((s) => s.text)
+        .join(' ')
+        .slice(0, 10000)
     }
 
     return details
@@ -766,7 +775,10 @@ export async function youtubeSearch(
     if (includeTranscripts) {
       const transcript = await getTranscript(video.id)
       if (transcript.length > 0) {
-        const transcriptText = transcript.map((s) => s.text).join(' ').slice(0, 2000)
+        const transcriptText = transcript
+          .map((s) => s.text)
+          .join(' ')
+          .slice(0, 2000)
         content += `\n\nTranscript excerpt:\n${transcriptText}`
       }
     }

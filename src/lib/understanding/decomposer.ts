@@ -28,9 +28,7 @@ const SUBJECT_TYPES = ['person', 'organization', 'place', 'product', 'technology
 function subjectOf(text: string): string | null {
   const result = extractEntities(text)
   const strong = result.entities.find(
-    (e) =>
-      e.confidence >= 0.8 &&
-      (SUBJECT_TYPES as readonly string[]).includes(e.type)
+    (e) => e.confidence >= 0.8 && (SUBJECT_TYPES as readonly string[]).includes(e.type),
   )
   return strong ? strong.text : null
 }
@@ -97,12 +95,8 @@ function dedupe(items: string[]): string[] {
  */
 export function decomposeQuery(query: string): DecomposedQuery {
   const trimmed = query.trim()
-  const entityTexts = extractEntities(trimmed).entities
-    .filter(
-      (e) =>
-        e.confidence >= 0.7 &&
-        (SUBJECT_TYPES as readonly string[]).includes(e.type)
-    )
+  const entityTexts = extractEntities(trimmed)
+    .entities.filter((e) => e.confidence >= 0.7 && (SUBJECT_TYPES as readonly string[]).includes(e.type))
     .map((e) => e.text)
   const uniqueEntities = dedupe(entityTexts)
 

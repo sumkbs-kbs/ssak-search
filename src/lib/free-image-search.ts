@@ -119,7 +119,7 @@ export async function flickrImageSearch(
       return []
     }
 
-    const data = await resp.json() as FlickrSearchResponse
+    const data = (await resp.json()) as FlickrSearchResponse
 
     if (data.stat !== 'ok' || !data.photos?.photo) {
       return []
@@ -180,7 +180,7 @@ export async function unsplashImageSearch(
   try {
     const resp = await fetch(`${UNSPLASH_API}?${params}`, {
       headers: {
-        'Authorization': `Client-ID ${accessKey}`,
+        Authorization: `Client-ID ${accessKey}`,
         'Accept-Version': 'v1',
       },
       cf: { cacheTtl: 300, cacheEverything: true },
@@ -191,7 +191,7 @@ export async function unsplashImageSearch(
       return []
     }
 
-    const data = await resp.json() as UnsplashSearchResponse
+    const data = (await resp.json()) as UnsplashSearchResponse
 
     if (!data.results?.length) {
       return []
@@ -233,9 +233,7 @@ export async function searchAllFreeImageSources(
 
   // Always search Bing (no key required)
   const { bingImageSearch } = await import('./bing-search')
-  tasks.push(
-    bingImageSearch(query, { maxResults: maxResults * 2, timeoutMs: 10000, env })
-  )
+  tasks.push(bingImageSearch(query, { maxResults: maxResults * 2, timeoutMs: 10000, env }))
 
   // Always search DuckDuckGo as fallback (no key required)
   tasks.push(duckDuckGoImageSearch(query, { maxResults: maxResults * 2, timeoutMs: 10000, env }))
@@ -266,7 +264,8 @@ export async function searchAllFreeImageSources(
     filtered = filtered.filter((r) => (r.width ?? 9999) < 300 || (r.height ?? 9999) < 300)
   } else if (size === 'medium') {
     filtered = filtered.filter((r) => {
-      const w = r.width ?? 0; const h = r.height ?? 0
+      const w = r.width ?? 0
+      const h = r.height ?? 0
       return (w >= 300 && w <= 1200) || (h >= 300 && h <= 1200)
     })
   } else if (size === 'large') {

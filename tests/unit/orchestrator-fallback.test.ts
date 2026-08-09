@@ -44,7 +44,9 @@ vi.mock('../../src/lib/specialized', () => ({
   arxivSearch: vi.fn().mockResolvedValue([]),
   duckDuckGoInstantAnswer: vi.fn().mockResolvedValue(null),
   detectQueryType: vi.fn().mockReturnValue('general'),
-  getSourcesForQueryType: vi.fn().mockReturnValue({ wikipedia: true, github: false, hackernews: true, reddit: false, arxiv: false }),
+  getSourcesForQueryType: vi
+    .fn()
+    .mockReturnValue({ wikipedia: true, github: false, hackernews: true, reddit: false, arxiv: false }),
 }))
 vi.mock('../../src/lib/google-scholar', () => ({
   searchGoogleScholarAsResults: vi.fn().mockResolvedValue([]),
@@ -93,23 +95,32 @@ const { executeSearch } = await import('../../src/lib/orchestrator')
 import type { AppBindings, SearchRequest } from '../../src/types'
 
 function makeIndexResult(domain: string) {
-  return [{
-    id: 'vec-1',
-    title: `Indexed doc for ${domain}`,
-    url: `https://${domain}/page`,
-    content: 'Evergreen content from the self-index corpus.',
-    score: 0.88,
-    domain,
-    source: 'hybrid' as const,
-    componentScores: { rrfScore: 0.88 },
-  }]
+  return [
+    {
+      id: 'vec-1',
+      title: `Indexed doc for ${domain}`,
+      url: `https://${domain}/page`,
+      content: 'Evergreen content from the self-index corpus.',
+      score: 0.88,
+      domain,
+      source: 'hybrid' as const,
+      componentScores: { rrfScore: 0.88 },
+    },
+  ]
 }
 
 function makeBindings(withIndex: boolean): AppBindings {
   const base: Record<string, unknown> = {}
   if (withIndex) {
     base.VECTORIZE_INDEX = { query: async () => ({ matches: [] }), upsert: async () => {}, describe: async () => ({}) }
-    base.SEARCH_INDEX_DB = { prepare: () => ({ bind: () => ({ first: async () => null, all: async () => ({ results: [] }), run: async () => undefined }), first: async () => null, all: async () => ({ results: [] }), run: async () => undefined }) }
+    base.SEARCH_INDEX_DB = {
+      prepare: () => ({
+        bind: () => ({ first: async () => null, all: async () => ({ results: [] }), run: async () => undefined }),
+        first: async () => null,
+        all: async () => ({ results: [] }),
+        run: async () => undefined,
+      }),
+    }
   }
   return base as AppBindings
 }
@@ -134,54 +145,66 @@ describe('executeSearch — self-index emergency fallback (Phase 1)', () => {
   // generous headroom.
   const TEST_TIMEOUT = 15_000
 
-  it('falls back to hybridSearch when all live backends AND the candidate index return 0 results', async () => {
-    // The index runs as a candidate task first; if it returns [] there too,
-    // results.length === 0 triggers the Priority-0 emergency fallback which
-    // calls hybridSearch again. First call → [], second call → results.
-    const query = `fallback-test-${Date.now()}`
-    hybridSearchMock
-      .mockResolvedValueOnce([]) // candidate self-index task (orchestrator.ts:395)
-      .mockResolvedValueOnce(makeIndexResult('example.com')) // emergency fallback (Priority 0)
+  it(
+    'falls back to hybridSearch when all live backends AND the candidate index return 0 results',
+    async () => {
+      // The index runs as a candidate task first; if it returns [] there too,
+      // results.length === 0 triggers the Priority-0 emergency fallback which
+      // calls hybridSearch again. First call → [], second call → results.
+      const query = `fallback-test-${Date.now()}`
+      hybridSearchMock
+        .mockResolvedValueOnce([]) // candidate self-index task (orchestrator.ts:395)
+        .mockResolvedValueOnce(makeIndexResult('example.com')) // emergency fallback (Priority 0)
 
-    const response = await executeSearch(makeRequest(query), {
-      env: makeBindings(true),
-      ai: undefined,
-    })
+      const response = await executeSearch(makeRequest(query), {
+        env: makeBindings(true),
+        ai: undefined,
+      })
 
-    expect(hybridSearchMock).toHaveBeenCalledTimes(2)
-    expect(response.results.length).toBeGreaterThan(0)
-    expect(response.backend).toContain('self-index')
-    expect(response.fallback_used).toBe(true)
-  }, TEST_TIMEOUT)
+      expect(hybridSearchMock).toHaveBeenCalledTimes(2)
+      expect(response.results.length).toBeGreaterThan(0)
+      expect(response.backend).toContain('self-index')
+      expect(response.fallback_used).toBe(true)
+    },
+    TEST_TIMEOUT,
+  )
 
-  it('does not call hybridSearch fallback when index bindings are absent', async () => {
-    const query = `no-index-${Date.now()}-${Math.random()}`
-    hybridSearchMock.mockResolvedValue([])
+  it(
+    'does not call hybridSearch fallback when index bindings are absent',
+    async () => {
+      const query = `no-index-${Date.now()}-${Math.random()}`
+      hybridSearchMock.mockResolvedValue([])
 
-    const response = await executeSearch(makeRequest(query), {
-      env: makeBindings(false),
-      ai: undefined,
-    })
+      const response = await executeSearch(makeRequest(query), {
+        env: makeBindings(false),
+        ai: undefined,
+      })
 
-    // Without bindings the candidate self-index task is skipped entirely,
-    // and the emergency fallback can't run either (indexBound=false).
-    expect(hybridSearchMock).not.toHaveBeenCalled()
-    expect(response.results.length).toBe(0)
-    expect(response.backend).toBe('failed')
-  }, TEST_TIMEOUT)
+      // Without bindings the candidate self-index task is skipped entirely,
+      // and the emergency fallback can't run either (indexBound=false).
+      expect(hybridSearchMock).not.toHaveBeenCalled()
+      expect(response.results.length).toBe(0)
+      expect(response.backend).toBe('failed')
+    },
+    TEST_TIMEOUT,
+  )
 
-  it('serves indexed content directly from the candidate task when the index has results', async () => {
-    // When the candidate index task returns results, no fallback is needed —
-    // the index is already in usedBackends and results.length > 0.
-    const query = `content-${Date.now()}-${Math.random()}`
-    hybridSearchMock.mockResolvedValue(makeIndexResult('indexed-domain.org'))
+  it(
+    'serves indexed content directly from the candidate task when the index has results',
+    async () => {
+      // When the candidate index task returns results, no fallback is needed —
+      // the index is already in usedBackends and results.length > 0.
+      const query = `content-${Date.now()}-${Math.random()}`
+      hybridSearchMock.mockResolvedValue(makeIndexResult('indexed-domain.org'))
 
-    const response = await executeSearch(makeRequest(query), {
-      env: makeBindings(true),
-      ai: undefined,
-    })
+      const response = await executeSearch(makeRequest(query), {
+        env: makeBindings(true),
+        ai: undefined,
+      })
 
-    expect(response.results.some((r) => r.url.includes('indexed-domain.org'))).toBe(true)
-    expect(response.backend).toContain('self-index')
-  }, TEST_TIMEOUT)
+      expect(response.results.some((r) => r.url.includes('indexed-domain.org'))).toBe(true)
+      expect(response.backend).toContain('self-index')
+    },
+    TEST_TIMEOUT,
+  )
 })

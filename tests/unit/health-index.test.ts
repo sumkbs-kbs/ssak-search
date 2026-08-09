@@ -25,7 +25,12 @@ function emptyEnv(): AppBindings {
 /** Env where only Vectorize is bound (D1 misconfigured). */
 function vectorizeOnlyEnv(): AppBindings {
   return {
-    VECTORIZE_INDEX: { query: async () => ({ matches: [] }), upsert: async () => {}, describe: async () => ({} as never), deleteByIds: async () => {} } as never,
+    VECTORIZE_INDEX: {
+      query: async () => ({ matches: [] }),
+      upsert: async () => {},
+      describe: async () => ({}) as never,
+      deleteByIds: async () => {},
+    } as never,
   } as AppBindings
 }
 
@@ -68,7 +73,14 @@ describe('probeIndexHealth', () => {
   })
 
   it('reports configured:false when only D1 is bound (Vectorize missing)', async () => {
-    const d1 = { prepare: () => ({ first: async () => null, all: async () => ({ results: [] }), run: async () => undefined, bind: () => ({ first: async () => null }) }) } as unknown as D1Database
+    const d1 = {
+      prepare: () => ({
+        first: async () => null,
+        all: async () => ({ results: [] }),
+        run: async () => undefined,
+        bind: () => ({ first: async () => null }),
+      }),
+    } as unknown as D1Database
     const env = { SEARCH_INDEX_DB: d1 } as AppBindings
     const info = await probeIndexHealth(env)
     expect(info.configured).toBe(false)
@@ -78,7 +90,14 @@ describe('probeIndexHealth', () => {
 
   it('reports empty corpus when both bindings present but 0 documents', async () => {
     // getIndexStats aggregates from D1; null/zero rows → 0 documents.
-    const env = envWithStats({ totalUrls: 0, totalChunks: 0, indexedChunks: 0, failedUrls: 0, avgImportance: 0, lastIndexedAt: 0 })
+    const env = envWithStats({
+      totalUrls: 0,
+      totalChunks: 0,
+      indexedChunks: 0,
+      failedUrls: 0,
+      avgImportance: 0,
+      lastIndexedAt: 0,
+    })
     const info = await probeIndexHealth(env)
     expect(info.configured).toBe(true)
     expect(info.total_documents).toBe(0)
@@ -86,7 +105,14 @@ describe('probeIndexHealth', () => {
   })
 
   it('reports healthy when both bindings present and documents indexed', async () => {
-    const env = envWithStats({ totalUrls: 1500, totalChunks: 9000, indexedChunks: 9000, failedUrls: 5, avgImportance: 0.6, lastIndexedAt: Date.now() })
+    const env = envWithStats({
+      totalUrls: 1500,
+      totalChunks: 9000,
+      indexedChunks: 9000,
+      failedUrls: 5,
+      avgImportance: 0.6,
+      lastIndexedAt: Date.now(),
+    })
     const info = await probeIndexHealth(env)
     expect(info.configured).toBe(true)
     expect(info.total_documents).toBe(1500)
@@ -95,7 +121,14 @@ describe('probeIndexHealth', () => {
   })
 
   it('reports degraded when failure ratio exceeds 10%', async () => {
-    const env = envWithStats({ totalUrls: 100, totalChunks: 500, indexedChunks: 400, failedUrls: 20, avgImportance: 0.5, lastIndexedAt: Date.now() })
+    const env = envWithStats({
+      totalUrls: 100,
+      totalChunks: 500,
+      indexedChunks: 400,
+      failedUrls: 20,
+      avgImportance: 0.5,
+      lastIndexedAt: Date.now(),
+    })
     const info = await probeIndexHealth(env)
     expect(info.configured).toBe(true)
     // 20 failed / 100 total = 0.2 > 0.1 → degraded
@@ -104,7 +137,9 @@ describe('probeIndexHealth', () => {
 
   it('degrades gracefully when D1 query throws', async () => {
     // A D1 whose .first() rejects simulates an unreachable database.
-    const throwingFirst = async () => { throw new Error('D1 unreachable') }
+    const throwingFirst = async () => {
+      throw new Error('D1 unreachable')
+    }
     const throwingPrepare = () => ({
       bind: () => ({ first: throwingFirst, all: async () => ({ results: [] }), run: async () => undefined }),
       first: throwingFirst,
@@ -112,7 +147,12 @@ describe('probeIndexHealth', () => {
       run: async () => undefined,
     })
     const d1 = { prepare: throwingPrepare } as unknown as D1Database
-    const vectorize = { query: async () => ({ matches: [] }), upsert: async () => {}, describe: async () => ({}) as never, deleteByIds: async () => {} } as unknown as AppBindings['VECTORIZE_INDEX']
+    const vectorize = {
+      query: async () => ({ matches: [] }),
+      upsert: async () => {},
+      describe: async () => ({}) as never,
+      deleteByIds: async () => {},
+    } as unknown as AppBindings['VECTORIZE_INDEX']
     const env = { VECTORIZE_INDEX: vectorize, SEARCH_INDEX_DB: d1 } as AppBindings
 
     const info = await probeIndexHealth(env)

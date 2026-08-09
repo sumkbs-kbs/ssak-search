@@ -13,9 +13,9 @@
  *   - 'deep':  5+ sub-queries, up to 2 refinement passes
  */
 
-import type { SearchResult } from '../types'
 import { logger, toError } from './logger'
 import { executeSearch } from './orchestrator'
+import type { Env } from '../types'
 
 export interface ResearchRequest {
   query: string
@@ -57,11 +57,26 @@ export interface ResearchResponse {
 export type ResearchProgressEvent =
   | { type: 'phase'; phase: string; message: string; timestamp: number }
   | { type: 'sub_query_start'; sub_query: string; index: number; total: number; timestamp: number }
-  | { type: 'sub_query_complete'; sub_query: string; index: number; total: number; sources_found: number; sources_so_far: number; timestamp: number }
+  | {
+      type: 'sub_query_complete'
+      sub_query: string
+      index: number
+      total: number
+      sources_found: number
+      sources_so_far: number
+      timestamp: number
+    }
   | { type: 'refinement_start'; pass: number; gap_queries: string[]; timestamp: number }
   | { type: 'refinement_complete'; pass: number; sources_found: number; sources_so_far: number; timestamp: number }
   | { type: 'synthesizing'; sources_count: number; timestamp: number }
-  | { type: 'complete'; query: string; sources_count: number; sub_queries_count: number; response_time_ms: number; timestamp: number }
+  | {
+      type: 'complete'
+      query: string
+      sources_count: number
+      sub_queries_count: number
+      response_time_ms: number
+      timestamp: number
+    }
   | { type: 'error'; message: string; timestamp: number }
 
 export type ProgressCallback = (event: ResearchProgressEvent) => void | Promise<void>
@@ -70,7 +85,7 @@ function emit(cb: ProgressCallback | undefined, event: ResearchProgressEvent): v
   if (cb) {
     try {
       void Promise.resolve(cb(event))
-    } catch (err) {
+    } catch (_err) {
       // Non-critical — swallow callback errors
     }
   }
@@ -87,7 +102,7 @@ function emit(cb: ProgressCallback | undefined, event: ResearchProgressEvent): v
 async function generateSubQueries(
   query: string,
   depth: 'quick' | 'deep',
-  ai?: any,
+  ai?: Ai,
   context?: Array<{ query: string; answer: string }>,
   fileContext?: string,
 ): Promise<string[]> {
@@ -106,11 +121,7 @@ async function generateSubQueries(
   const queries: string[] = [query]
 
   if (depth === 'quick') {
-    queries.push(
-      `${query} overview`,
-      `${query} recent developments 2026`,
-      `${query} key facts`,
-    )
+    queries.push(`${query} overview`, `${query} recent developments 2026`, `${query} key facts`)
   } else {
     queries.push(
       `${query} overview and introduction`,
@@ -131,15 +142,16 @@ async function generateSubQueries(
 async function aiGenerateSubQueries(
   query: string,
   depth: 'quick' | 'deep',
-  ai: any,
+  ai: Ai,
   context?: Array<{ query: string; answer: string }>,
   fileContext?: string,
 ): Promise<string[]> {
   const targetCount = depth === 'quick' ? 3 : 6
 
-  const contextBlock = context && context.length > 0
-    ? `\nCONVERSATION CONTEXT (previous exchanges):\n${context.map((c, i) => `  Q${i + 1}: ${c.query}\n  A${i + 1}: ${c.answer.slice(0, 300)}`).join('\n\n')}\n\nThe current query is a FOLLOW-UP to this conversation. Generate sub-queries that build on the previous answers.\n`
-    : ''
+  const contextBlock =
+    context && context.length > 0
+      ? `\nCONVERSATION CONTEXT (previous exchanges):\n${context.map((c, i) => `  Q${i + 1}: ${c.query}\n  A${i + 1}: ${c.answer.slice(0, 300)}`).join('\n\n')}\n\nThe current query is a FOLLOW-UP to this conversation. Generate sub-queries that build on the previous answers.\n`
+      : ''
 
   const fileBlock = fileContext
     ? `\nUPLOADED DOCUMENTS (user-provided context):\n${fileContext.slice(0, 2000)}\n\nConsider these documents when generating sub-queries. Include sub-queries that reference or build upon the uploaded content.\n`
@@ -192,7 +204,7 @@ Example output format:
 async function collectEvidence(
   subQueries: string[],
   maxSources: number,
-  config: { env?: any; ai?: any },
+  config: { env?: Env; ai?: Ai },
   onProgress?: ProgressCallback,
 ): Promise<ResearchSource[]> {
   const seenUrls = new Set<string>()
@@ -200,7 +212,13 @@ async function collectEvidence(
 
   // Emit start events for all sub-queries
   for (let i = 0; i < subQueries.length; i++) {
-    emit(onProgress, { type: 'sub_query_start', sub_query: subQueries[i], index: i, total: subQueries.length, timestamp: Date.now() })
+    emit(onProgress, {
+      type: 'sub_query_start',
+      sub_query: subQueries[i],
+      index: i,
+      total: subQueries.length,
+      timestamp: Date.now(),
+    })
   }
 
   // Fire all searches in parallel but track each individually for streaming
@@ -271,7 +289,7 @@ async function detectGaps(
   query: string,
   sources: ResearchSource[],
   depth: 'quick' | 'deep',
-  ai?: any,
+  ai?: Ai,
 ): Promise<{ hasGaps: boolean; additionalQueries: string[] }> {
   // Minimum source threshold
   const minSources = depth === 'deep' ? 6 : 3
@@ -286,7 +304,10 @@ async function detectGaps(
   if (!ai) return { hasGaps: false, additionalQueries: [] }
 
   // Use AI to detect information gaps
-  const sourceTitles = sources.slice(0, 8).map((s) => `- ${s.title} (${s.url})`).join('\n')
+  const sourceTitles = sources
+    .slice(0, 8)
+    .map((s) => `- ${s.title} (${s.url})`)
+    .join('\n')
 
   try {
     const prompt = `You are a research quality analyst. Evaluate whether the following sources are SUFFICIENT to comprehensively answer the research query.
@@ -344,7 +365,7 @@ async function synthesizeAnswer(
   query: string,
   sources: ResearchSource[],
   subQueries: string[],
-  ai: any,
+  ai: Ai,
   context?: Array<{ query: string; answer: string }>,
   fileContext?: string,
 ): Promise<string> {
@@ -355,9 +376,10 @@ async function synthesizeAnswer(
 
   const subQueryList = subQueries.map((sq, i) => `  ${i + 1}. "${sq}"`).join('\n')
 
-  const contextBlock = context && context.length > 0
-    ? `\nCONVERSATION CONTEXT (previous exchanges in this thread):\n${context.map((c, i) => `  Q${i + 1}: ${c.query}\n  A${i + 1}: ${c.answer.slice(0, 500)}`).join('\n\n')}\n\nThe user's current query is a FOLLOW-UP to this conversation. Build upon the previous answers—do NOT repeat what was already said. Focus on NEW information that addresses the follow-up.\n`
-    : ''
+  const contextBlock =
+    context && context.length > 0
+      ? `\nCONVERSATION CONTEXT (previous exchanges in this thread):\n${context.map((c, i) => `  Q${i + 1}: ${c.query}\n  A${i + 1}: ${c.answer.slice(0, 500)}`).join('\n\n')}\n\nThe user's current query is a FOLLOW-UP to this conversation. Build upon the previous answers—do NOT repeat what was already said. Focus on NEW information that addresses the follow-up.\n`
+      : ''
 
   const fileBlock = fileContext
     ? `\nUPLOADED DOCUMENTS (user-provided reference material):\n${fileContext.slice(0, 3000)}\n\nIncorporate information from these documents into your answer where relevant. Cite them by filename.\n`
@@ -394,7 +416,8 @@ RULES:
       messages: [
         {
           role: 'system',
-          content: 'You are a research analyst that produces well-structured reports with inline citations. Use markdown formatting including headings, bold, and bullet points.',
+          content:
+            'You are a research analyst that produces well-structured reports with inline citations. Use markdown formatting including headings, bold, and bullet points.',
         },
         { role: 'user', content: prompt },
       ],
@@ -426,7 +449,7 @@ interface FileRecord {
 /**
  * Fetch uploaded file contents from R2 to include as research context.
  */
-async function fetchFileContext(env: any, fileIds: string[]): Promise<string> {
+async function fetchFileContext(env: Env | undefined, fileIds: string[]): Promise<string> {
   if (!env?.UPLOAD_BUCKET || !fileIds || fileIds.length === 0) return ''
 
   const blocks: string[] = []
@@ -438,11 +461,11 @@ async function fetchFileContext(env: any, fileIds: string[]): Promise<string> {
 
       const record: FileRecord = JSON.parse(await metaObj.text())
       const content = record.text_content?.slice(0, 4000) || ''
-      const keyPoints = record.key_points?.map(k => `  - ${k}`).join('\n') || ''
+      const keyPoints = record.key_points?.map((k) => `  - ${k}`).join('\n') || ''
       const summary = record.summary ? `Summary: ${record.summary}` : ''
 
       blocks.push(
-        `--- UPLOADED FILE: "${record.filename}" ---\n${summary}${keyPoints ? '\nKey Points:\n' + keyPoints : ''}\n\nContent:\n${content}\n--- END FILE ---`
+        `--- UPLOADED FILE: "${record.filename}" ---\n${summary}${keyPoints ? '\nKey Points:\n' + keyPoints : ''}\n\nContent:\n${content}\n--- END FILE ---`,
       )
     } catch (err) {
       logger.warn(`Failed to fetch file context for ${fileId}:`, { error: toError(err) })
@@ -462,7 +485,7 @@ async function fetchFileContext(env: any, fileIds: string[]): Promise<string> {
  */
 export async function executeResearch(
   request: ResearchRequest,
-  config: { env?: any; ai?: any },
+  config: { env?: Env; ai?: Ai },
   onProgress?: ProgressCallback,
 ): Promise<ResearchResponse> {
   const startTime = Date.now()
@@ -471,16 +494,31 @@ export async function executeResearch(
   // Fetch uploaded file context if file_ids provided (Phase 2.2b)
   let fileContext = ''
   if (file_ids && file_ids.length > 0 && config.env) {
-    emit(onProgress, { type: 'phase', phase: 'file_context', message: 'Loading uploaded file context...', timestamp: Date.now() })
+    emit(onProgress, {
+      type: 'phase',
+      phase: 'file_context',
+      message: 'Loading uploaded file context...',
+      timestamp: Date.now(),
+    })
     fileContext = await fetchFileContext(config.env, file_ids)
   }
 
-  emit(onProgress, { type: 'phase', phase: 'decomposition', message: 'Generating sub-queries...', timestamp: Date.now() })
+  emit(onProgress, {
+    type: 'phase',
+    phase: 'decomposition',
+    message: 'Generating sub-queries...',
+    timestamp: Date.now(),
+  })
 
   // Phase 1: AI-powered sub-query generation (with conversation + file context)
   const subQueries = await generateSubQueries(query, depth, config.ai, context, fileContext)
 
-  emit(onProgress, { type: 'phase', phase: 'search', message: `Searching ${subQueries.length} sub-queries...`, timestamp: Date.now() })
+  emit(onProgress, {
+    type: 'phase',
+    phase: 'search',
+    message: `Searching ${subQueries.length} sub-queries...`,
+    timestamp: Date.now(),
+  })
 
   // Phase 2: Collect evidence from all sub-queries
   let sources = await collectEvidence(subQueries, max_sources, config, onProgress)
@@ -491,7 +529,12 @@ export async function executeResearch(
   const maxRefinements = depth === 'deep' ? 2 : 1
 
   for (let pass = 0; pass < maxRefinements; pass++) {
-    emit(onProgress, { type: 'phase', phase: 'gap_analysis', message: 'Analyzing for information gaps...', timestamp: Date.now() })
+    emit(onProgress, {
+      type: 'phase',
+      phase: 'gap_analysis',
+      message: 'Analyzing for information gaps...',
+      timestamp: Date.now(),
+    })
 
     const gapResult = await detectGaps(query, sources, depth, config.ai)
     if (!gapResult.hasGaps) break
@@ -604,7 +647,7 @@ function tryParseJsonArray(text: string): string[] | null {
     if (Array.isArray(parsed) && parsed.every((i) => typeof i === 'string')) {
       return parsed
     }
-  } catch (err) {
+  } catch (_err) {
     // Not valid
   }
   return null
@@ -616,7 +659,7 @@ function tryParseJson(text: string): Record<string, unknown> | null {
     const jsonStr = match ? match[1] || match[0] : text
     const parsed = JSON.parse(jsonStr)
     if (parsed && typeof parsed === 'object') return parsed
-  } catch (err) {
+  } catch (_err) {
     // Not valid
   }
   return null

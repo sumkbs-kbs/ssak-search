@@ -68,9 +68,7 @@ function main() {
     // the Dashboard and capture the real UUID. It is not necessarily wrong
     // for local dev, but production deploy requires a concrete id.
     if (d1.database_id === 'auto' || !d1.database_id) {
-      result.warnings.push(
-        `D1 database_id is "${d1.database_id}" — set the real UUID for production:`,
-      )
+      result.warnings.push(`D1 database_id is "${d1.database_id}" — set the real UUID for production:`)
       result.warnings.push('  1. npx wrangler d1 create search-engine-index')
       result.warnings.push('  2. Copy the printed database_id into wrangler.jsonc')
     }
@@ -91,7 +89,9 @@ function main() {
     console.error('')
     console.error('Required wrangler.jsonc configuration:')
     console.error('  "vectorize": [ { "binding": "VECTORIZE_INDEX", "index_name": "search-engine-dense" } ]')
-    console.error('  "d1_databases": [ { "binding": "SEARCH_INDEX_DB", "database_name": "search-engine-index", "database_id": "<UUID>" } ]')
+    console.error(
+      '  "d1_databases": [ { "binding": "SEARCH_INDEX_DB", "database_name": "search-engine-index", "database_id": "<UUID>" } ]',
+    )
     console.error('')
     console.error('Then run: POST /api/index/init   (creates the D1 schema)')
     process.exit(1)

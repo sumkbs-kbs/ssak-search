@@ -4,11 +4,7 @@
 
 import { describe, it, expect } from 'vitest'
 
-import {
-  extractEntities,
-  extractEntityHints,
-  extractKeyTerms,
-} from '../../src/lib/understanding/entity-extractor'
+import { extractEntities, extractEntityHints, extractKeyTerms } from '../../src/lib/understanding/entity-extractor'
 
 // ============================================================
 // extractEntities

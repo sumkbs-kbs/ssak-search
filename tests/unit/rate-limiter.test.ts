@@ -10,7 +10,14 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 // Clear the module-level state between tests
 vi.resetModules()
 
-import { canRequest, acquire, release, getBackendHealth, getRateLimitStatus, __resetRateLimiterStateForTests } from '../../src/lib/rate-limiter'
+import {
+  canRequest,
+  acquire,
+  release,
+  getBackendHealth,
+  getRateLimitStatus,
+  __resetRateLimiterStateForTests,
+} from '../../src/lib/rate-limiter'
 import type { AppBindings } from '../../src/types'
 
 const mockEnv: AppBindings = {} as AppBindings

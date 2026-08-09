@@ -20,19 +20,68 @@ const GOLD_PATH = join(process.cwd(), 'eval', 'gold-standards.json')
 
 // ── Language × topic authoritative-domain pools (substring-matched) ────────
 const KR_STOCK = ['finance.naver.com', 'm.stock.naver.com', 'investing.com']
-const KR_NEWS = ['n.news.naver.com', 'yna.co.kr', 'hankyung.com', 'sedaily.com', 'khan.co.kr', 'chosun.com', 'donga.com']
-const KR_TECH = ['github.com', 'stackoverflow.com', 'velog.io', 'inflearn.com', 'tistory.com', 'medium.com', 'developer.mozilla.org']
+const KR_NEWS = [
+  'n.news.naver.com',
+  'yna.co.kr',
+  'hankyung.com',
+  'sedaily.com',
+  'khan.co.kr',
+  'chosun.com',
+  'donga.com',
+]
+const KR_TECH = [
+  'github.com',
+  'stackoverflow.com',
+  'velog.io',
+  'inflearn.com',
+  'tistory.com',
+  'medium.com',
+  'developer.mozilla.org',
+]
 const KR_GENERAL = ['namu.wiki', 'blog.naver.com', 'terms.naver.com', 'youtube.com']
 
 const EN_STOCK = ['finance.yahoo.com', 'nasdaq.com', 'investing.com', 'marketwatch.com', 'cnbc.com', 'reuters.com']
-const EN_TECH = ['github.com', 'stackoverflow.com', 'developer.mozilla.org', 'dev.to', 'medium.com', 'freecodecamp.org', 'digitalocean.com']
-const EN_NEWS = ['reuters.com', 'apnews.com', 'bbc.com', 'cnn.com', 'theverge.com', 'techcrunch.com', 'theguardian.com', 'nytimes.com', 'wired.com']
-const EN_FACT = ['en.wikipedia.org', 'britannica.com', 'nasa.gov', 'howstuffworks.com', 'scientificamerican.com', 'nationalgeographic.com']
+const EN_TECH = [
+  'github.com',
+  'stackoverflow.com',
+  'developer.mozilla.org',
+  'dev.to',
+  'medium.com',
+  'freecodecamp.org',
+  'digitalocean.com',
+]
+const EN_NEWS = [
+  'reuters.com',
+  'apnews.com',
+  'bbc.com',
+  'cnn.com',
+  'theverge.com',
+  'techcrunch.com',
+  'theguardian.com',
+  'nytimes.com',
+  'wired.com',
+]
+const EN_FACT = [
+  'en.wikipedia.org',
+  'britannica.com',
+  'nasa.gov',
+  'howstuffworks.com',
+  'scientificamerican.com',
+  'nationalgeographic.com',
+]
 const EN_ACAD = ['arxiv.org', 'semanticscholar.org', 'paperswithcode.com', 'openreview.net', 'acm.org']
 const EN_GENERAL = ['reddit.com', 'quora.com', 'healthline.com', 'webmd.com', 'nytimes.com', 'wikihow.com']
 
 const ZH_FACT = ['zh.wikipedia.org', 'baike.baidu.com', 'zhihu.com']
-const ZH_NEWS = ['36kr.com', 'ithome.com', 'people.com.cn', 'xinhuanet.com', 'sina.com.cn', 'chinanews.com', 'cnbeta.com']
+const ZH_NEWS = [
+  '36kr.com',
+  'ithome.com',
+  'people.com.cn',
+  'xinhuanet.com',
+  'sina.com.cn',
+  'chinanews.com',
+  'cnbeta.com',
+]
 const ZH_TECH = ['juejin.cn', 'csdn.net', 'segmentfault.com', 'zhihu.com', 'github.com', 'cnblogs.com']
 const ZH_GENERAL = ['ctrip.com', 'mafengwo.cn', 'dianping.com', 'xiaohongshu.com', 'zhihu.com', 'trip.com']
 const ZH_TRAVEL = ['ctrip.com', 'mafengwo.cn', 'xiaohongshu.com', 'trip.com', 'qunar.com']
@@ -154,8 +203,44 @@ const NEW_GOLD: Record<string, string[]> = {
 
   // ENGLISH — news (25)
   'en-news-16': [...EN_NEWS, 'macrumors.com', '9to5mac.com'],
-  'en-news-17': EN_NEWS,
-  'en-news-18': EN_NEWS,
+  // S32 (2026-08-08): en-news-17/18 are DELIBERATELY deviated from EN_NEWS.
+  // The template (big-5 + tech) mismatched the earnings/ruling intent — live
+  // pool evidence (run-1..3, 3×): 'Meta earnings latest' surfaces finance
+  // outlets (finance.yahoo/cnbc/bloomberg/wsj at ranks 1-7), 'Google antitrust
+  // ruling' surfaces Apple-deal tech media (9to5mac/macrumors/geekwire/npr).
+  // Template domains that never surface (apnews/bbc/cnn/guardian/wired) cap
+  // NDCG through the IDCG denominator (min(goldLen, k)) and were removed.
+  // NOTE: gold-standards.json is authoritative — this generator SKIPS ids
+  // that already exist, so this entry only matters for a fresh regenerate.
+  // Independent cross-check (Google News RSS live, 2026-08-08): 'Meta
+  // earnings' surfaces finance.yahoo/cnbc/reuters/seekingalpha; 'Google
+  // antitrust ruling' surfaces reuters/cnbc/npr/wsj — seekingalpha@17 and
+  // wsj@18 were added on that evidence.
+  'en-news-17': [
+    'finance.yahoo.com',
+    'cnbc.com',
+    'bloomberg.com',
+    'reuters.com',
+    'wsj.com',
+    'nytimes.com',
+    'seekingalpha.com',
+    'theverge.com',
+    'techcrunch.com',
+  ],
+  'en-news-18': [
+    'theverge.com',
+    'nytimes.com',
+    '9to5mac.com',
+    'macrumors.com',
+    'geekwire.com',
+    'reuters.com',
+    'cnbc.com',
+    'npr.org',
+    'wsj.com',
+    'arstechnica.com',
+    'markets.businessinsider.com',
+    'seekingalpha.com',
+  ],
   'en-news-19': [...EN_NEWS, 'huggingface.co'],
   'en-news-20': EN_NEWS,
   'en-news-21': [...EN_NEWS, 'quantamagazine.org'],
@@ -436,6 +521,29 @@ for (const [id, domains] of Object.entries(NEW_GOLD)) {
 }
 
 writeFileSync(GOLD_PATH, `${JSON.stringify(gold, null, 2)}\n`, 'utf-8')
+
+// ── Validation: subsumption-pair guard (S52) ───────────────────────────────
+// S50's GOLD-AUTHORING WARNING forbids label-suffix subsumption pairs within a
+// single query's gold (docker.com + docs.docker.com both match docs.docker.com
+// results → the S50 DCG cap under-counts when only the subdomain variant
+// surfaces). S52 deduped the 7 existing pairs in the JSON; this guard keeps
+// NEW_GOLD from reintroducing them. kr-tech-05 was the former exemption —
+// S56 proved aws.amazon.com + amazon.com IS a forbidden subsumption pair
+// (amazon.com retail never appears in pools; it only absorbed the second
+// aws.amazon.com slot via label-suffix), so the gold was narrowed to
+// [aws.amazon.com] alone (S63) and the exemption removed — the guard now
+// covers every NEW_GOLD entry unconditionally.
+for (const [id, domains] of Object.entries(NEW_GOLD)) {
+  for (const a of domains) {
+    for (const b of domains) {
+      if (a !== b && a.endsWith(`.${b}`)) {
+        console.warn(
+          `⚠️  S52 guard: ${id} has subsumption pair ${b} ⊃ ${a} — the broader ${b} already matches ${a} via label-suffix. Keep only ONE (prefer the broad registrable domain; see S52).`,
+        )
+      }
+    }
+  }
+}
 
 // ── Validation: every query in EVAL_QUERIES must have gold ─────────────────
 const queriesSrc = readFileSync(join(process.cwd(), 'eval', 'queries.ts'), 'utf-8')

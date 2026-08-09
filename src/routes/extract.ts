@@ -20,12 +20,15 @@ import { auditAuthFailure, auditRateLimit, audit } from '../lib/audit'
 
 const extractRoute = new Hono<{ Bindings: AppBindings; Variables: { tenantId: string; tenantPlan: string } }>()
 
-extractRoute.use('/*', cors({
-  origin: '*',
-  allowMethods: ['GET', 'POST', 'OPTIONS'],
-  allowHeaders: ['Content-Type', 'Authorization', 'X-API-Key'],
-  maxAge: 86400,
-}))
+extractRoute.use(
+  '/*',
+  cors({
+    origin: '*',
+    allowMethods: ['GET', 'POST', 'OPTIONS'],
+    allowHeaders: ['Content-Type', 'Authorization', 'X-API-Key'],
+    maxAge: 86400,
+  }),
+)
 
 // Auth + rate limit middleware (same as search)
 extractRoute.use('/*', async (c, next) => {
@@ -34,11 +37,15 @@ extractRoute.use('/*', async (c, next) => {
   // thousands of subrequests against arbitrary hosts.
   const contentLength = parseInt(c.req.raw.headers.get('Content-Length') ?? '0', 10)
   if (contentLength > 64 * 1024) {
-    audit({ eventType: 'invalid_input', severity: 'low', outcome: 'blocked', resource: c.req.path, actor: clientIp, context: { contentLength } })
-    return c.json<ErrorResponse>(
-      { detail: 'Request body too large (max 64KB)', code: 'payload_too_large' },
-      413,
-    )
+    audit({
+      eventType: 'invalid_input',
+      severity: 'low',
+      outcome: 'blocked',
+      resource: c.req.path,
+      actor: clientIp,
+      context: { contentLength },
+    })
+    return c.json<ErrorResponse>({ detail: 'Request body too large (max 64KB)', code: 'payload_too_large' }, 413)
   }
 
   // Multi-tenant API key validation
@@ -48,12 +55,13 @@ extractRoute.use('/*', async (c, next) => {
       reason: authResult.reason || 'Unauthorized',
       clientIp,
       resource: c.req.path,
-      attempt: c.req.raw.headers.get('Authorization')?.startsWith('Bearer ') ? 'bearer' : c.req.raw.headers.get('X-API-Key') ? 'x-api-key' : 'none',
+      attempt: c.req.raw.headers.get('Authorization')?.startsWith('Bearer ')
+        ? 'bearer'
+        : c.req.raw.headers.get('X-API-Key')
+          ? 'x-api-key'
+          : 'none',
     })
-    return c.json<ErrorResponse>(
-      { detail: authResult.reason || 'Unauthorized', code: 'unauthorized' },
-      401,
-    )
+    return c.json<ErrorResponse>({ detail: authResult.reason || 'Unauthorized', code: 'unauthorized' }, 401)
   }
 
   const tenantId = authResult.tenant?.id
@@ -65,11 +73,7 @@ extractRoute.use('/*', async (c, next) => {
   })
   if (!rateLimit.allowed) {
     auditRateLimit(clientIp, c.req.path, rateLimit.remaining)
-    return c.json<ErrorResponse>(
-      { detail: 'Rate limit exceeded', code: 'rate_limited' },
-      429,
-      { 'Retry-After': '60' },
-    )
+    return c.json<ErrorResponse>({ detail: 'Rate limit exceeded', code: 'rate_limited' }, 429, { 'Retry-After': '60' })
   }
 
   // Set tenant context headers
@@ -121,7 +125,7 @@ extractRoute.post('/', async (c) => {
   let body: Partial<ExtractRequest>
   try {
     body = await c.req.json()
-  } catch (err) {
+  } catch (_err) {
     return c.json<ErrorResponse>({ detail: 'Invalid JSON body', code: 'invalid_body' }, 400)
   }
 
@@ -183,15 +187,15 @@ extractRoute.get('/', async (c) => {
     return c.json<ErrorResponse>({ detail: 'urls parameter is required (comma-separated)', code: 'missing_urls' }, 400)
   }
 
-  const urls = urlsParam.split(',').map((u) => u.trim()).filter(Boolean)
+  const urls = urlsParam
+    .split(',')
+    .map((u) => u.trim())
+    .filter(Boolean)
   if (urls.length === 0) {
     return c.json<ErrorResponse>({ detail: 'At least one URL is required', code: 'missing_urls' }, 400)
   }
   if (urls.length > MAX_EXTRACT_URLS) {
-    return c.json<ErrorResponse>(
-      { detail: `Too many URLs (max ${MAX_EXTRACT_URLS})`, code: 'invalid_urls' },
-      400,
-    )
+    return c.json<ErrorResponse>({ detail: `Too many URLs (max ${MAX_EXTRACT_URLS})`, code: 'invalid_urls' }, 400)
   }
   // Per-URL length guard for GET path.
   for (const u of urls) {

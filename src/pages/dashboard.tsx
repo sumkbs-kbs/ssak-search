@@ -503,7 +503,7 @@ function renderStockCard(r, data, position) {
   const expVariant = data && data.experiment ? data.experiment.variant : '';
   const expImpression = data && data.experiment ? data.experiment.impression_id : '';
   const q = data ? data.query : '';
-  html += '<a href="' + escapeAttr(r.url) + '" target="_blank" rel="noopener" onclick="trackClick(\\\'' + escapeAttr(q) + '\\\',\\\'' + escapeAttr(r.url) + '\\\',' + position + ',\\\'' + escapeAttr(expName) + '\\\',\\\'' + escapeAttr(expVariant) + '\\\',\\\'' + escapeAttr(expImpression) + '\\\')" style="color:var(--accent);text-decoration:none;font-weight:500;"><i class="fas fa-external-link-alt"></i> View quote</a>';
+  html += '<a href="' + escapeAttr(r.url) + '" target="_blank" rel="noopener" onclick="trackClick(\\'' + escapeAttr(q) + '\\',\\'' + escapeAttr(r.url) + '\\',' + position + ',\\'' + escapeAttr(expName) + '\\',\\'' + escapeAttr(expVariant) + '\\',\\'' + escapeAttr(expImpression) + '\\')" style="color:var(--accent);text-decoration:none;font-weight:500;"><i class="fas fa-external-link-alt"></i> View quote</a>';
   html += '</div></div>';
   return html;
 }
@@ -604,7 +604,7 @@ function renderSearchResults(data, area) {
       else if (/comparison|pros|cons|vs|alternatives/i.test(q)) icon = 'fa-scale-balanced';
       else if (/update|latest|news|impact/i.test(q)) icon = 'fa-newspaper';
       else if (/documentation|reference|api/i.test(q)) icon = 'fa-code';
-      html += '<span class="related-chip" onclick="quickSearch(\\\'' + escapeAttr(q) + '\\\')"><span class="chip-icon"><i class="fas ' + icon + '"></i></span> ' + escapeHtml(q) + '</span>';
+      html += '<span class="related-chip" onclick="quickSearch(\\'' + escapeAttr(q) + '\\')"><span class="chip-icon"><i class="fas ' + icon + '"></i></span> ' + escapeHtml(q) + '</span>';
     }
     html += '</div></div>';
   }
@@ -670,7 +670,7 @@ function renderKnowledgePanel(kg) {
     for (const ent of kg.related_entities) {
       const href = ent.url || '#';
       const target = ent.url ? 'target="_blank"' : '';
-      html += '<a class="related-entity-chip" href="' + escapeAttr(href) + '" ' + target + ' rel="noopener" onclick="if(this.href===\\'#\\'){event.preventDefault();quickSearch(\\\'' + escapeAttr(ent.name) + '\\\')}">';
+      html += '<a class="related-entity-chip" href="' + escapeAttr(href) + '" ' + target + ' rel="noopener" onclick="if(this.href===\\'#\\'){event.preventDefault();quickSearch(\\'' + escapeAttr(ent.name) + '\\')}">';
       if (ent.type) {
         const typeIcons2 = { reference: 'fa-book', technology: 'fa-microchip', social: 'fa-users', academic: 'fa-graduation-cap', video: 'fa-video' };
         const ic = typeIcons2[ent.type] || 'fa-tag';
@@ -808,7 +808,7 @@ function escapeHtml(s) {
 
 function escapeAttr(s) {
   if (!s) return '';
-  return String(s).replace(/'/g, "&apos;").replace(/\"/g, "&quot;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  return String(s).replace(/'/g, "&apos;").replace(/"/g, "&quot;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
 
 function trackClick(query, url, position, expName, expVariant, expImpression) {
@@ -866,7 +866,12 @@ const QUICK_SEARCHES = [
 // ============================================================
 export function dashboardPage() {
   return (
-    <Layout title="Search Engine — Dashboard" currentPage="search" headExtra={`<style>${DASHBOARD_CSS}</style>`} bodyScripts={`<script>${DASHBOARD_SCRIPT}</script>`}>
+    <Layout
+      title="Search Engine — Dashboard"
+      currentPage="search"
+      headExtra={`<style>${DASHBOARD_CSS}</style>`}
+      bodyScripts={`<script>${DASHBOARD_SCRIPT}</script>`}
+    >
       {/* Tab Navigation */}
       <TabNav tabs={TABS} initialTab="web" />
 

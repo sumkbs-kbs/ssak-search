@@ -12,7 +12,7 @@
 
 import { SELF_INDEX_QUERIES } from './queries-self'
 import { runSelfIndexEval, diffSelfIndexBaseline } from './runner-self'
-import { saveSelfIndexBaseline, loadSelfIndexBaseline, compareWithSelfIndexBaseline } from './baseline-self'
+import { saveSelfIndexBaseline, compareWithSelfIndexBaseline } from './baseline-self'
 import { formatReport, formatReportJSON, formatReportSummary } from './reporter'
 
 interface CliArgs {
@@ -30,11 +30,22 @@ function parseArgs(): CliArgs {
 
   for (let i = 0; i < args.length; i++) {
     switch (args[i]) {
-      case '--help': opts.help = true; break
-      case '--save': opts.save = true; break
-      case '--json': opts.json = true; break
-      case '--summary': opts.summary = true; break
-      case '--ci': opts.ci = true; opts.json = true; break
+      case '--help':
+        opts.help = true
+        break
+      case '--save':
+        opts.save = true
+        break
+      case '--json':
+        opts.json = true
+        break
+      case '--summary':
+        opts.summary = true
+        break
+      case '--ci':
+        opts.ci = true
+        opts.json = true
+        break
       case '--tag':
         opts.tag = args[++i]
         break
@@ -69,7 +80,8 @@ Options:
   // Filter queries by tag if specified
   let queries = SELF_INDEX_QUERIES
   if (opts.tag) {
-    queries = SELF_INDEX_QUERIES.filter((q) => q.tags?.includes(opts.tag!))
+    const tag = opts.tag
+    queries = SELF_INDEX_QUERIES.filter((q) => q.tags?.includes(tag))
     if (queries.length === 0) {
       console.error(`No self-index queries found for tag "${opts.tag}"`)
       process.exit(1)
@@ -113,8 +125,9 @@ Options:
     const summary = formatReportSummary(report, regressions)
     try {
       const fs = await import('node:fs')
-      if (process.env.GITHUB_STEP_SUMMARY) {
-        fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY!, summary + '\n')
+      const stepSummary = process.env.GITHUB_STEP_SUMMARY
+      if (stepSummary) {
+        fs.appendFileSync(stepSummary, summary + '\n')
       }
     } catch {
       console.error(summary)

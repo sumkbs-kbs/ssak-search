@@ -1,15 +1,17 @@
 # 05. 마스터 체크리스트 (MASTER CHECKLIST)
 
 > 상태: `[x]` 완료·검증 · `[~]` 일부 구현/추가 검증 · `[ ]` 미구현 · `[!]` 문제 발견 · `[?]` 자료 부족
-> 기준: 2026-08-06 재검증 (코드 분석 + 실행 검증)
+> 기준: 2026-08-07 재감사 (코드 분석 + 실행 검증) — S18~S23 미커밋 변경 포함, CI 린트 게이트 복구 완료
 
 ## 1. 프로젝트 실행
 - [x] 의존성 설치 (node_modules 정상)
 - [x] 타입체크 0 에러 (`npm run typecheck`)
 - [x] 빌드 성공 (`npm run build`, 1,041 kB / gzip 302 kB)
-- [x] 유닛 테스트 **1,230건** 통과 (`npm test`, 66파일 0 실패)
-- [x] eval 벤치마크 실행 가능 (**500쿼리 × median-of-3, 100% pass**)
-- [x] 프로덕션 헬스체크 **HTTP 200 — 가동 중** (partial_outage: brave 미설정 등)
+- [x] 유닛 테스트 **1,351건** 통과 (`npm test`, 70파일 0 실패)
+- [x] eval 벤치마크 실행 가능 (**500쿼리 × median-of-3, 99.6% pass — 08-06 최신 런**)
+- [x] **CI 린트 게이트 복구** (lint:eslint:ci exit 0 — 세션 전 38 errors+467 warnings로 레드)
+- [x] **lint:eslint:ci(--max-warnings=0) CI 연결 명시화 (S29)** — ci.yml `Lint (ESLint — 0-warning gate)` 스텝 + Step Summary, README 수치 갱신
+- [~] **브랜치 보호 규칙 (S29 권장)** — main에 `lint-typecheck`·`unit-tests` required status checks 지정 (GitHub 설정, 코드로 불가)
 - [~] 로컬 서버 기동 — 미실행 상태 (start-local.sh 대기)
 
 ## 2. 요구사항
@@ -39,7 +41,10 @@
 - [x] arXiv / OpenAlex / Google Scholar
 - [x] Yahoo Finance / Naver Finance
 - [x] YouTube / 무료 이미지 / Product Hunt / G2
-- [x] SearXNG / Jina (선택)
+- [x] SearXNG / Jina (선택 — 코드 통합됨, 배포 가이드 docs/13)
+- [x] zh 커뮤니티: Juejin (S16) + CSDN (S26, 키리스 — zh-tech+zh-general)
+- [x] ja 커뮤니티: Qiita (S16, 키리스 — 쿼터 가드 포함)
+- [~] zhihu — 비CN IP 400 차단 (SearXNG Baidu/Bing zh 엔진으로 우회 가능, 미검증)
 - [~] 야후 가용성 — waitFor로 완화, 잔여 노이즈 존재
 - [x] 한국 금융 일반 웹 폴백 (buildBingTask, S8)
 - [~] 정부·특허·지도·소셜 — 미지원
@@ -140,7 +145,7 @@
 - [~] user_id 수집 정책 — 명시 필요
 
 ## 16. 테스트
-- [x] 유닛 **1,230건**
+- [x] 유닛 **1,351건**
 - [x] 통합 7개 파일
 - [x] eval **500쿼리 + gold 1:1** + median-of-3 집계
 - [x] k6 부하 스크립트
@@ -169,6 +174,8 @@
 - [x] SECURITY.md / SLO.md / AUDIT.md / DEPLOYMENT_CHECKLIST.md
 - [x] 01~10 산출물 (이번 세션)
 - [~] docs.ts(API 문서 페이지) 최신성 — 검증 필요
+- [!] ~~page-view.ts 브라우저 SyntaxError~~ → 수정 완료 (S24, 인용/볼드 렌더링 복구)
+- [!] ~~util.ts isComparison 바이트 손상~~ → 수정 완료 (S24, 한국어 비교 감지 복구)
 
 ## 20. 사용자 경험
 - [x] SSR 대시보드/채팅/상태/사용량 페이지

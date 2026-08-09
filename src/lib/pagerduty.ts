@@ -31,10 +31,7 @@ const PD_EVENTS_URL = 'https://events.pagerduty.com/v2/enqueue'
  * No-op when the routing key is not configured.
  * Returns true when the event was accepted (HTTP 202).
  */
-export async function sendPagerDutyEvent(
-  routingKey: string | undefined,
-  input: PagerDutyEventInput,
-): Promise<boolean> {
+export async function sendPagerDutyEvent(routingKey: string | undefined, input: PagerDutyEventInput): Promise<boolean> {
   if (!routingKey) {
     logger.info('[PagerDuty] No routing key configured, event skipped', { summary: input.summary })
     return false

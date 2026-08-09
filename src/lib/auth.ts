@@ -20,6 +20,7 @@
 import type { AppBindings } from '../types'
 import { logger, toError } from './logger'
 import type { ApiKeyMeta } from './api-key-do'
+import type { Context, MiddlewareHandler, Next } from 'hono'
 
 // ============================================================
 // Tenant Configuration
@@ -79,7 +80,8 @@ export function parseTenantsConfig(raw: string | undefined): TenantConfig[] {
     if (!Array.isArray(parsed)) return []
     return parsed.filter(
       (t: unknown): t is TenantConfig =>
-        typeof t === 'object' && t !== null &&
+        typeof t === 'object' &&
+        t !== null &&
         typeof (t as TenantConfig).id === 'string' &&
         typeof (t as TenantConfig).name === 'string' &&
         typeof (t as TenantConfig).apiKey === 'string',
@@ -121,14 +123,14 @@ export function resolveTenant(
 export function getTenantRateLimit(tenantId: string, tenantsConfig: string | undefined): number {
   if (tenantId === '__default__') return DEFAULT_RATE_LIMIT
   const tenants = parseTenantsConfig(tenantsConfig)
-  const t = tenants.find(t => t.id === tenantId)
+  const t = tenants.find((t) => t.id === tenantId)
   return t?.rateLimitPerMinute ?? DEFAULT_RATE_LIMIT
 }
 
 export function getTenantPerIpRateLimit(tenantId: string, tenantsConfig: string | undefined): number {
   if (tenantId === '__default__') return DEFAULT_RATE_LIMIT
   const tenants = parseTenantsConfig(tenantsConfig)
-  const t = tenants.find(t => t.id === tenantId)
+  const t = tenants.find((t) => t.id === tenantId)
   return t?.perIpRateLimit ?? t?.rateLimitPerMinute ?? DEFAULT_RATE_LIMIT
 }
 
@@ -165,10 +167,7 @@ export function extractApiKeyToken(headers: Headers): string | null {
  * Validate API key from request headers against multi-tenant config.
  * Returns tenant info on success.
  */
-export function validateApiKey(
-  headers: Headers,
-  expectedKey: string | undefined,
-): { valid: boolean; reason?: string } {
+export function validateApiKey(headers: Headers, expectedKey: string | undefined): { valid: boolean; reason?: string } {
   return validateApiKeyWithTenant(headers, undefined, expectedKey)
 }
 
@@ -213,10 +212,7 @@ export function validateApiKeyWithTenant(
  *
  * Falls back to legacy TENANTS_CONFIG / SEARCH_API_KEY if DO is unavailable.
  */
-export async function validateApiKeyAsync(
-  headers: Headers,
-  env: AppBindings,
-): Promise<AuthResult> {
+export async function validateApiKeyAsync(headers: Headers, env: AppBindings): Promise<AuthResult> {
   // Open mode check
   if (!env.SEARCH_API_KEY && !env.TENANTS_CONFIG && !env.API_KEY_DO) {
     return { valid: true, tenant: { id: '__default__', config: DEFAULT_TENANT } }
@@ -285,10 +281,7 @@ export async function validateApiKeyAsync(
  *     return c.json({ error: 'Insufficient scope' }, 403)
  *   }
  */
-export function hasSufficientScope(
-  requiredScope: 'read' | 'write' | 'admin',
-  keyMeta?: ApiKeyMeta,
-): boolean {
+export function hasSufficientScope(requiredScope: 'read' | 'write' | 'admin', keyMeta?: ApiKeyMeta): boolean {
   if (!keyMeta) return true // Legacy keys (no scope info) = full access
 
   const scopeLevel: Record<string, number> = {
@@ -372,11 +365,7 @@ export function getActiveClientCount(): number {
  * Handles Cloudflare's CF-Connecting-IP and standard X-Forwarded-For.
  */
 export function getClientIp(headers: Headers): string {
-  return (
-    headers.get('CF-Connecting-IP') ||
-    headers.get('X-Forwarded-For')?.split(',')[0]?.trim() ||
-    'unknown'
-  )
+  return headers.get('CF-Connecting-IP') || headers.get('X-Forwarded-For')?.split(',')[0]?.trim() || 'unknown'
 }
 
 // ============================================================
@@ -404,13 +393,13 @@ export function getClientIp(headers: Headers): string {
 //   - DO failure: deny-by-default. A transient DO error must NOT widen
 //     privileges; it fails the request closed, not open.
 
-type HonoContext = {
-  req: { raw: Request; path: string }
-  env: AppBindings
-  json: (body: unknown, status: number) => Response
-  set: (key: string, value: unknown) => void
-}
-type NextFn = () => Promise<void>
+// Hono-native context so requireAuth/requireAdmin are real MiddlewareHandlers
+// (routes previously needed `as any` to register them — removed 2026-08-07
+// lint budget pass). Env is narrowed to Bindings only: the tenant stash via
+// c.set('tenantId', …) had NO consumer in any route (verified 2026-08-07),
+// so the Variables merge it forced broke route context assignment — dropped.
+type HonoContext = Context<{ Bindings: AppBindings }>
+type NextFn = Next
 
 function unauthorizedResponse(c: HonoContext, reason: string, code: string): Response {
   return c.json({ detail: reason, code }, 401)
@@ -425,7 +414,7 @@ function forbiddenResponse(c: HonoContext, reason: string, code: string): Respon
  * state-changing routes (crawl/index/blacklist/keys) must never accept
  * anonymous traffic, even when public search runs unauthenticated.
  */
-export async function requireAuth(c: HonoContext, next: NextFn): Promise<Response | void> {
+export const requireAuth: MiddlewareHandler<{ Bindings: AppBindings }> = async (c: HonoContext, next: NextFn) => {
   // Open mode: no auth material to validate against → deny closed.
   if (!c.env.SEARCH_API_KEY && !c.env.TENANTS_CONFIG && !c.env.API_KEY_DO) {
     return unauthorizedResponse(
@@ -438,9 +427,6 @@ export async function requireAuth(c: HonoContext, next: NextFn): Promise<Respons
   if (!result.valid) {
     return unauthorizedResponse(c, result.reason || 'Unauthorized', 'unauthorized')
   }
-  // Stash tenant for downstream handlers
-  c.set('tenantId', result.tenant?.id ?? '__default__')
-  c.set('tenantPlan', result.tenant?.config.plan ?? 'pro')
   await next()
 }
 
@@ -452,15 +438,11 @@ export async function requireAuth(c: HonoContext, next: NextFn): Promise<Respons
  * SEARCH_API_KEY mode grants admin ONLY when the request presents that key
  * (no DO available).
  */
-export async function requireAdmin(c: HonoContext, next: NextFn): Promise<Response | void> {
+export const requireAdmin: MiddlewareHandler<{ Bindings: AppBindings }> = async (c: HonoContext, next: NextFn) => {
   // Step 1: validate the key first (rejects missing/invalid/open-mode-no-key).
   // Open mode is denied here too — admin powers are never anonymous.
   if (!c.env.SEARCH_API_KEY && !c.env.TENANTS_CONFIG && !c.env.API_KEY_DO) {
-    return forbiddenResponse(
-      c,
-      'Admin scope required — configure API_KEY_DO or SEARCH_API_KEY',
-      'insufficient_scope',
-    )
+    return forbiddenResponse(c, 'Admin scope required — configure API_KEY_DO or SEARCH_API_KEY', 'insufficient_scope')
   }
   const result = await validateApiKeyAsync(c.req.raw.headers, c.env)
   if (!result.valid) {
@@ -486,6 +468,5 @@ export async function requireAdmin(c: HonoContext, next: NextFn): Promise<Respon
     }
   }
 
-  c.set('tenantId', result.tenant?.id ?? '__default__')
   await next()
 }

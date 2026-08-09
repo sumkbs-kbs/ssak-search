@@ -9,7 +9,7 @@
  *   X-Return-Format: markdown
  */
 
-import type { SearchResult, SearchRequest, Env } from '../types'
+import type { SearchResult, Env } from '../types'
 import { fetchWithTimeout, extractDomain, parseDate, truncateToTokens, computeScore } from './util'
 
 const JINA_SEARCH_BASE = 'https://s.jina.ai/'
@@ -28,18 +28,8 @@ export interface JinaSearchOptions {
  * This endpoint returns a single aggregated page of results as markdown.
  * We parse the structured result blocks (URL headers + content sections).
  */
-export async function jinaSearch(
-  query: string,
-  opts: JinaSearchOptions = {},
-): Promise<SearchResult[]> {
-  const {
-    apiKey,
-    maxResults = 10,
-    includeRawContent = false,
-    maxTokens = 4000,
-    timeoutMs = 20000,
-    env,
-  } = opts
+export async function jinaSearch(query: string, opts: JinaSearchOptions = {}): Promise<SearchResult[]> {
+  const { apiKey, maxResults = 10, includeRawContent = false, maxTokens = 4000, timeoutMs = 20000, env } = opts
 
   // Build the search URL with query parameters
   const encodedQuery = encodeURIComponent(query)
@@ -57,12 +47,7 @@ export async function jinaSearch(
     headers['Authorization'] = `Bearer ${apiKey}`
   }
 
-  const response = await fetchWithTimeout(
-    env,
-    searchUrl,
-    { headers },
-    timeoutMs,
-  )
+  const response = await fetchWithTimeout(env, searchUrl, { headers }, timeoutMs)
 
   if (!response.ok) {
     throw new Error(`Jina search failed: ${response.status} ${response.statusText}`)
@@ -146,10 +131,8 @@ function parseJinaTextResponse(
 ): SearchResult[] {
   const results: SearchResult[] = []
   // Jina text format: blocks separated by "## " or "### " headers with URLs
-  // Each block starts with a URL line and has a Title: line
-  const blocks = text.split(/(?:^|\n)(?:Title:|URL:)/i)
-
-  // Alternative: split by double newlines with URL markers
+  // Each block starts with a URL line and has a Title: line; we split by
+  // double-newline URL markers below.
   const urlBlocks = text.split(/\n(?=https?:\/\/)/)
 
   for (const block of urlBlocks) {
@@ -204,12 +187,7 @@ export async function jinaExtract(
     headers['X-Retain-Images'] = 'none'
   }
 
-  const response = await fetchWithTimeout(
-    env,
-    readerUrl,
-    { headers },
-    timeoutMs,
-  )
+  const response = await fetchWithTimeout(env, readerUrl, { headers }, timeoutMs)
 
   if (!response.ok) {
     throw new Error(`Jina reader failed: ${response.status}`)

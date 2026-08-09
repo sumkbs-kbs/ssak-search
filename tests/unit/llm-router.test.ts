@@ -5,7 +5,7 @@
  * selectBestModel, estimateTokenCount, estimateCost, getOllamaBaseUrl, discoverOllamaModels
  */
 
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+import { describe, it, expect, vi } from 'vitest'
 
 async function getModule() {
   return await import('../../src/lib/llm-router')
@@ -54,7 +54,7 @@ describe('MODEL_REGISTRY', () => {
     const extractive = mod.MODEL_REGISTRY.find((m: any) => m.provider === 'extractive')
     expect(extractive).toBeDefined()
     if (!extractive) return
-    expect(extractive.quality).toBe(0.30)
+    expect(extractive.quality).toBe(0.3)
     expect(extractive.costPer1KOutput).toBe(0)
     expect(extractive.costPer1KInput).toBe(0)
   })
@@ -120,7 +120,7 @@ describe('buildFallbackChain', () => {
       { id: 'free-model', provider: 'extractive', tier: 'free', quality: 0.3 },
       { id: 'premium-model', provider: 'openai', tier: 'premium', quality: 0.95 },
       { id: 'budget-model', provider: 'workers-ai', tier: 'budget', quality: 0.55 },
-      { id: 'standard-model', provider: 'anthropic', tier: 'standard', quality: 0.80 },
+      { id: 'standard-model', provider: 'anthropic', tier: 'standard', quality: 0.8 },
     ] as any[]
     const chain = mod.buildFallbackChain(models)
     const tiers = chain.map((m: any) => m.tier)
@@ -153,8 +153,30 @@ describe('selectBestModel', () => {
   it('selects highest quality model by default', async () => {
     const mod = await getModule()
     const models = [
-      { id: 'low', provider: 'openai', tier: 'budget', quality: 0.3, costPer1KInput: 0, costPer1KOutput: 0, maxTokens: 1000, supportsStreaming: false, latencyP50Ms: 100, label: 'Low' },
-      { id: 'high', provider: 'openai', tier: 'premium', quality: 0.9, costPer1KInput: 0, costPer1KOutput: 0, maxTokens: 1000, supportsStreaming: false, latencyP50Ms: 100, label: 'High' },
+      {
+        id: 'low',
+        provider: 'openai',
+        tier: 'budget',
+        quality: 0.3,
+        costPer1KInput: 0,
+        costPer1KOutput: 0,
+        maxTokens: 1000,
+        supportsStreaming: false,
+        latencyP50Ms: 100,
+        label: 'Low',
+      },
+      {
+        id: 'high',
+        provider: 'openai',
+        tier: 'premium',
+        quality: 0.9,
+        costPer1KInput: 0,
+        costPer1KOutput: 0,
+        maxTokens: 1000,
+        supportsStreaming: false,
+        latencyP50Ms: 100,
+        label: 'High',
+      },
     ] as any[]
     const selected = mod.selectBestModel(models)
     expect(selected.id).toBe('high')
@@ -163,8 +185,30 @@ describe('selectBestModel', () => {
   it('filters by streaming support when requireStreaming=true', async () => {
     const mod = await getModule()
     const models = [
-      { id: 'streaming-ok', provider: 'openai', tier: 'budget', quality: 0.3, costPer1KInput: 0, costPer1KOutput: 0, maxTokens: 1000, supportsStreaming: true, latencyP50Ms: 100, label: 'S' },
-      { id: 'no-stream', provider: 'openai', tier: 'premium', quality: 0.9, costPer1KInput: 0, costPer1KOutput: 0, maxTokens: 1000, supportsStreaming: false, latencyP50Ms: 100, label: 'NS' },
+      {
+        id: 'streaming-ok',
+        provider: 'openai',
+        tier: 'budget',
+        quality: 0.3,
+        costPer1KInput: 0,
+        costPer1KOutput: 0,
+        maxTokens: 1000,
+        supportsStreaming: true,
+        latencyP50Ms: 100,
+        label: 'S',
+      },
+      {
+        id: 'no-stream',
+        provider: 'openai',
+        tier: 'premium',
+        quality: 0.9,
+        costPer1KInput: 0,
+        costPer1KOutput: 0,
+        maxTokens: 1000,
+        supportsStreaming: false,
+        latencyP50Ms: 100,
+        label: 'NS',
+      },
     ] as any[]
     const selected = mod.selectBestModel(models, { requireStreaming: true })
     expect(selected.id).toBe('streaming-ok')
@@ -173,8 +217,30 @@ describe('selectBestModel', () => {
   it('prefers tier when preferTier is set', async () => {
     const mod = await getModule()
     const models = [
-      { id: 'prem', provider: 'openai', tier: 'premium', quality: 0.9, costPer1KInput: 0, costPer1KOutput: 0, maxTokens: 1000, supportsStreaming: false, latencyP50Ms: 100, label: 'P' },
-      { id: 'budget', provider: 'openai', tier: 'budget', quality: 0.7, costPer1KInput: 0, costPer1KOutput: 0, maxTokens: 1000, supportsStreaming: false, latencyP50Ms: 100, label: 'B' },
+      {
+        id: 'prem',
+        provider: 'openai',
+        tier: 'premium',
+        quality: 0.9,
+        costPer1KInput: 0,
+        costPer1KOutput: 0,
+        maxTokens: 1000,
+        supportsStreaming: false,
+        latencyP50Ms: 100,
+        label: 'P',
+      },
+      {
+        id: 'budget',
+        provider: 'openai',
+        tier: 'budget',
+        quality: 0.7,
+        costPer1KInput: 0,
+        costPer1KOutput: 0,
+        maxTokens: 1000,
+        supportsStreaming: false,
+        latencyP50Ms: 100,
+        label: 'B',
+      },
     ] as any[]
     const selected = mod.selectBestModel(models, { preferTier: 'budget' })
     expect(selected.id).toBe('budget')
@@ -183,7 +249,18 @@ describe('selectBestModel', () => {
   it('falls back to last resort when no model matches filters', async () => {
     const mod = await getModule()
     const models = [
-      { id: 'no-stream', provider: 'openai', tier: 'budget', quality: 0.3, costPer1KInput: 0, costPer1KOutput: 0, maxTokens: 1000, supportsStreaming: false, latencyP50Ms: 100, label: 'NS' },
+      {
+        id: 'no-stream',
+        provider: 'openai',
+        tier: 'budget',
+        quality: 0.3,
+        costPer1KInput: 0,
+        costPer1KOutput: 0,
+        maxTokens: 1000,
+        supportsStreaming: false,
+        latencyP50Ms: 100,
+        label: 'NS',
+      },
     ] as any[]
     const selected = mod.selectBestModel(models, { requireStreaming: true })
     expect(selected.provider).toBe('extractive')
@@ -246,12 +323,16 @@ describe('getOllamaBaseUrl', () => {
 
   it('uses custom URL from env', async () => {
     const mod = await getModule()
-    expect(mod.getOllamaBaseUrl({ OLLAMA_BASE_URL: 'http://192.168.1.100:11434' })).toBe('http://192.168.1.100:11434/v1')
+    expect(mod.getOllamaBaseUrl({ OLLAMA_BASE_URL: 'http://192.168.1.100:11434' })).toBe(
+      'http://192.168.1.100:11434/v1',
+    )
   })
 
   it('handles URL already containing /v1', async () => {
     const mod = await getModule()
-    expect(mod.getOllamaBaseUrl({ OLLAMA_BASE_URL: 'http://192.168.1.100:11434/v1' })).toBe('http://192.168.1.100:11434/v1')
+    expect(mod.getOllamaBaseUrl({ OLLAMA_BASE_URL: 'http://192.168.1.100:11434/v1' })).toBe(
+      'http://192.168.1.100:11434/v1',
+    )
   })
 
   it('strips trailing slashes before appending /v1', async () => {
@@ -292,8 +373,18 @@ describe('discoverOllamaModels', () => {
       ok: true,
       json: async () => ({
         models: [
-          { name: 'gemma2:9b', size: 7340032000, digest: 'abc', details: { parameter_size: '9B', quantization_level: 'Q4_K_M' } },
-          { name: 'llama3.2:3b', size: 2450000000, digest: 'def', details: { parameter_size: '3B', quantization_level: 'Q4_K_M' } },
+          {
+            name: 'gemma2:9b',
+            size: 7340032000,
+            digest: 'abc',
+            details: { parameter_size: '9B', quantization_level: 'Q4_K_M' },
+          },
+          {
+            name: 'llama3.2:3b',
+            size: 2450000000,
+            digest: 'def',
+            details: { parameter_size: '3B', quantization_level: 'Q4_K_M' },
+          },
         ],
       }),
     })
@@ -317,9 +408,7 @@ describe('discoverOllamaModels caching', () => {
     const fetchMock = vi.fn().mockResolvedValue({
       ok: true,
       json: async () => ({
-        models: [
-          { name: 'gemma2:9b', size: 7340032000, digest: 'abc', details: { parameter_size: '9B' } },
-        ],
+        models: [{ name: 'gemma2:9b', size: 7340032000, digest: 'abc', details: { parameter_size: '9B' } }],
       }),
     })
     globalThis.fetch = fetchMock

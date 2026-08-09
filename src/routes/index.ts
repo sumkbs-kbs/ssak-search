@@ -13,7 +13,7 @@
  * Without bindings, endpoints return 501 with setup guidance.
  */
 
-import { Hono } from 'hono'
+import { Hono, type Context } from 'hono'
 import { logger, toError } from '../lib/logger'
 import { cors } from 'hono/cors'
 import type { AppBindings, ErrorResponse } from '../types'
@@ -21,7 +21,7 @@ import { IndexingPipeline, searchIndex, type IndexingJobResult } from '../lib/in
 import { INDEX_SCHEMA } from '../lib/index/index'
 import { RefreshScheduler } from '../lib/index/scheduler'
 import { extractContent } from '../lib/extractor'
-import { hashString, extractDomain } from '../lib/index/chunker'
+import { extractDomain } from '../lib/index/chunker'
 import { requireAuth } from '../lib/auth'
 
 const indexRoute = new Hono<{ Bindings: AppBindings }>()
@@ -31,8 +31,8 @@ indexRoute.use('/*', cors({ origin: '*' }))
 // Index mutation (POST/DELETE) requires auth — anonymous indexing would let
 // anyone poison the global search index. GET (stats/search/documents) stays
 // open as read-only observability.
-indexRoute.post('/*', requireAuth as any)
-indexRoute.delete('/*', requireAuth as any)
+indexRoute.post('/*', requireAuth)
+indexRoute.delete('/*', requireAuth)
 
 // ============================================================
 // Helpers
@@ -46,11 +46,14 @@ function checkBindings(env: AppBindings): { ok: boolean; missing: string[] } {
   return { ok: missing.length === 0, missing }
 }
 
-function bindingError(c: any, missing: string[]) {
-  return c.json({
-    detail: `Index requires ${missing.join(' + ')} binding(s). Configure via Cloudflare Dashboard → Pages → Settings → Functions → Bindings.`,
-    code: 'binding_missing',
-  } as ErrorResponse, 501)
+function bindingError(c: Context<{ Bindings: AppBindings }>, missing: string[]) {
+  return c.json(
+    {
+      detail: `Index requires ${missing.join(' + ')} binding(s). Configure via Cloudflare Dashboard → Pages → Settings → Functions → Bindings.`,
+      code: 'binding_missing',
+    } as ErrorResponse,
+    501,
+  )
 }
 
 /**
@@ -137,9 +140,10 @@ indexRoute.post('/init', async (c) => {
 
     // Store initialization timestamp in index_stats
     const now = Date.now()
-    await (c.env.SEARCH_INDEX_DB as D1Database).prepare(
-      `INSERT OR REPLACE INTO index_stats (key, value, updated_at) VALUES (?, ?, ?)`
-    ).bind('schema_initialized_at', String(now), now).run()
+    await (c.env.SEARCH_INDEX_DB as D1Database)
+      .prepare(`INSERT OR REPLACE INTO index_stats (key, value, updated_at) VALUES (?, ?, ?)`)
+      .bind('schema_initialized_at', String(now), now)
+      .run()
 
     return c.json({
       success: true,
@@ -222,7 +226,7 @@ indexRoute.post('/', async (c) => {
 
       const title = extractResult.title || extractDomain(url)
       const html = extractResult.raw_content || ''
-      
+
       if (html.length < 50) {
         results.push({
           success: false,
@@ -247,7 +251,7 @@ indexRoute.post('/', async (c) => {
 
       // Small delay between URLs
       if (urlList.length > 1) {
-        await new Promise(r => setTimeout(r, 200))
+        await new Promise((r) => setTimeout(r, 200))
       }
     } catch (err) {
       results.push({
@@ -261,14 +265,17 @@ indexRoute.post('/', async (c) => {
     }
   }
 
-  const succeeded = results.filter(r => r.success).length
-  const failed = results.filter(r => !r.success).length
+  const succeeded = results.filter((r) => r.success).length
+  const failed = results.filter((r) => !r.success).length
 
-  return c.json({
-    message: `Indexing complete: ${succeeded} succeeded, ${failed} failed`,
-    results,
-    stats: { total: results.length, succeeded, failed },
-  }, failed > 0 && succeeded === 0 ? 500 : 200)
+  return c.json(
+    {
+      message: `Indexing complete: ${succeeded} succeeded, ${failed} failed`,
+      results,
+      stats: { total: results.length, succeeded, failed },
+    },
+    failed > 0 && succeeded === 0 ? 500 : 200,
+  )
 })
 
 // ============================================================
@@ -332,7 +339,8 @@ indexRoute.get('/search', async (c) => {
 
   const topK = Math.min(Math.max(parseInt(c.req.query('top_k') || '10', 10) || 10, 1), 50)
   const minScore = parseFloat(c.req.query('min_score') || '0.15') || 0.15
-  const recencyDays = c.req.query('recency_days') ? parseInt(c.req.query('recency_days')!, 10) : undefined
+  const recencyRaw = c.req.query('recency_days')
+  const recencyDays = recencyRaw ? parseInt(recencyRaw, 10) : undefined
   const language = c.req.query('language') || undefined
 
   // POST-style search also supported
@@ -379,7 +387,8 @@ indexRoute.get('/documents', async (c) => {
   const status = c.req.query('status') // optional filter: indexed, pending, failed, stale
 
   try {
-    let sql = 'SELECT id, url, title, domain, language, total_chunks as totalChunks, importance, last_indexed as lastIndexed, next_index_at as nextIndexAt, status, created_at as createdAt, updated_at as updatedAt FROM documents WHERE status != \'deleted\''
+    let sql =
+      "SELECT id, url, title, domain, language, total_chunks as totalChunks, importance, last_indexed as lastIndexed, next_index_at as nextIndexAt, status, created_at as createdAt, updated_at as updatedAt FROM documents WHERE status != 'deleted'"
     const params: unknown[] = []
 
     if (status) {
@@ -390,16 +399,22 @@ indexRoute.get('/documents', async (c) => {
     sql += ' ORDER BY last_indexed DESC LIMIT ? OFFSET ?'
     params.push(pageSize, offset)
 
-    const result = await (c.env.SEARCH_INDEX_DB as D1Database).prepare(sql).bind(...params).all()
+    const result = await (c.env.SEARCH_INDEX_DB as D1Database)
+      .prepare(sql)
+      .bind(...params)
+      .all()
 
     // Get total count
-    let countSql = 'SELECT COUNT(*) as total FROM documents WHERE status != \'deleted\''
+    let countSql = "SELECT COUNT(*) as total FROM documents WHERE status != 'deleted'"
     const countParams: unknown[] = []
     if (status) {
       countSql += ' AND status = ?'
       countParams.push(status)
     }
-    const countResult = await (c.env.SEARCH_INDEX_DB as D1Database).prepare(countSql).bind(...countParams).first<{ total: number }>()
+    const countResult = await (c.env.SEARCH_INDEX_DB as D1Database)
+      .prepare(countSql)
+      .bind(...countParams)
+      .first<{ total: number }>()
 
     return c.json({
       documents: result.results || [],

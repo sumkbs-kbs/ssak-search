@@ -20,7 +20,15 @@
 
 import type { SearchResult, StockData, Env } from '../types'
 import { logger, toError } from './logger'
-import { fetchWithTimeout, extractDomain, stripHtml, decodeEntities, computeScore, truncateToTokens, parseFlexibleDate } from './util'
+import {
+  fetchWithTimeout,
+  extractDomain,
+  stripHtml,
+  decodeEntities,
+  computeScore,
+  truncateToTokens,
+  parseFlexibleDate,
+} from './util'
 
 const NAVER_SEARCH_URL = 'https://m.search.naver.com/search.naver'
 
@@ -39,10 +47,7 @@ export interface NaverSearchOptions {
  * Search using Naver's mobile web endpoint.
  * No API key required. Best for Korean-language queries.
  */
-export async function naverSearch(
-  query: string,
-  opts: NaverSearchOptions = {},
-): Promise<SearchResult[]> {
+export async function naverSearch(query: string, opts: NaverSearchOptions = {}): Promise<SearchResult[]> {
   const { maxResults = 15, timeoutMs = 12000, env } = opts
   const results: SearchResult[] = []
   const seenUrls = new Set<string>()
@@ -75,7 +80,7 @@ export async function naverSearch(
       const status = response.status
       if ((status === 429 || status >= 500) && !opts._retry) {
         const jitter = Math.random() * 1500 + 500 // 0.5–2s
-        await new Promise(r => setTimeout(r, jitter))
+        await new Promise((r) => setTimeout(r, jitter))
         logger.info('[ssak] Retrying Naver (status=' + status + ')')
         return naverSearch(query, { ...opts, _retry: true })
       }
@@ -155,8 +160,7 @@ function stockNameMatchesQuery(stockName: string, query: string): 'high' | 'part
   // Company name appears inside the query — accept only if bounded by
   // non-Hangul on both sides. This is what stops "한화" from matching
   // "한화에오": the char after "한화" is "에" (Hangul) → not a boundary.
-  const isBoundary = (ch: string | undefined) =>
-    ch === undefined || /[^가-힣]/.test(ch)
+  const isBoundary = (ch: string | undefined) => ch === undefined || /[^가-힣]/.test(ch)
   const idx = q.indexOf(name)
   if (idx !== -1) {
     const before = idx > 0 ? q[idx - 1] : undefined
@@ -166,8 +170,7 @@ function stockNameMatchesQuery(stockName: string, query: string): 'high' | 'part
 
   // Token overlap: split on non-letter/digit boundaries and look for a shared
   // meaningful token (length >= 2). Catches multi-word names.
-  const tokenize = (s: string) =>
-    s.split(/[^\p{L}\p{N}]+/u).filter((t) => t.length >= 2)
+  const tokenize = (s: string) => s.split(/[^\p{L}\p{N}]+/u).filter((t) => t.length >= 2)
   const nameTokens = new Set(tokenize(name))
   const queryTokens = tokenize(q)
   const overlap = queryTokens.some((t) => nameTokens.has(t))
@@ -226,7 +229,8 @@ export function parseStockCard(html: string, query: string): SearchResult[] {
 
   // Extract change amount and percentage — "상승 14,000 (1.51%)" or "하락 14,000 (-1.51%)"
   // Also handle arrow characters: ▲ (up), ▼ (down), → (flat)
-  const changeMatch = blockText.match(/(상승|하락|보합|▲|▼|→)\s*([\d,]+)\s*\(([-+]?\d+\.?\d*)%\)/) ||
+  const changeMatch =
+    blockText.match(/(상승|하락|보합|▲|▼|→)\s*([\d,]+)\s*\(([-+]?\d+\.?\d*)%\)/) ||
     html.match(/(상승|하락|보합|▲|▼|→)\s*([\d,]+)\s*\(([-+]?\d+\.?\d*)%\)/)
   let changeDir = ''
   let changeAmt = ''
@@ -249,17 +253,20 @@ export function parseStockCard(html: string, query: string): SearchResult[] {
   const content = parts.join(' | ')
 
   // Build structured StockData
-  const stockData: StockData | undefined = (stockCode && price) ? {
-    name: stockName,
-    ticker: stockCode,
-    exchange: exchange || 'KOSPI',
-    price: parseInt(price.replace(/,/g, ''), 10) || 0,
-    currency: 'KRW',
-    change: changeAmt ? parseInt(changeAmt.replace(/,/g, ''), 10) * (changeDir === '하락' ? -1 : 1) : 0,
-    change_percent: changePct ? parseFloat(changePct) : 0,
-    direction: changeDir === '하락' ? 'down' : changeDir === '상승' ? 'up' : 'flat',
-    source: 'naver',
-  } : undefined
+  const stockData: StockData | undefined =
+    stockCode && price
+      ? {
+          name: stockName,
+          ticker: stockCode,
+          exchange: exchange || 'KOSPI',
+          price: parseInt(price.replace(/,/g, ''), 10) || 0,
+          currency: 'KRW',
+          change: changeAmt ? parseInt(changeAmt.replace(/,/g, ''), 10) * (changeDir === '하락' ? -1 : 1) : 0,
+          change_percent: changePct ? parseFloat(changePct) : 0,
+          direction: changeDir === '하락' ? 'down' : changeDir === '상승' ? 'up' : 'flat',
+          source: 'naver',
+        }
+      : undefined
 
   // Naver stock detail page
   // Skip the stock card entirely when Naver rendered a company whose name
@@ -283,7 +290,7 @@ export function parseStockCard(html: string, query: string): SearchResult[] {
 
     // Sub-pages inherit a proportional demotion when the card is only a partial
     // match — they're still useful context but mustn't crowd out better hits.
-    const subScore = queryStockRelevance === 'high' ? 0.80 : 0.5
+    const subScore = queryStockRelevance === 'high' ? 0.8 : 0.5
     results.push({
       title: `${stockName} 재무제표 — 네이버증권`,
       url: `https://m.stock.naver.com/domestic/stock/${stockCode}/finance/quarter`,
@@ -410,7 +417,11 @@ export function parseLinks(html: string, query: string, maxResults: number): Sea
     if (!rawTitle || rawTitle.length < 4) continue
 
     // Skip nav elements like "더보기", "전체", "다음", "이전", etc.
-    if (/^(더보기|전체보기|더보기$|전체$|다음|이전|목록으로|바로가기|접기|펼치기|로그인|회원가입|my|검색)$/i.test(rawTitle)) {
+    if (
+      /^(더보기|전체보기|더보기$|전체$|다음|이전|목록으로|바로가기|접기|펼치기|로그인|회원가입|my|검색)$/i.test(
+        rawTitle,
+      )
+    ) {
       continue
     }
 

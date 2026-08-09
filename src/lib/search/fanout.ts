@@ -22,7 +22,7 @@ import type { BackendTask } from './context'
 // typically happens in 300-700ms. Phase 2/3 still give slow backends room,
 // but the early-exit threshold at phase 1 is "enough to fill a page".
 const PHASES = [
-  { waitMs: 800, minResults: -1 },  // -1 → computed from maxResults at call time
+  { waitMs: 800, minResults: -1 }, // -1 → computed from maxResults at call time
   { waitMs: 1800, minResults: -1 },
   { waitMs: 3500, minResults: 0 },
 ] as const
@@ -50,7 +50,7 @@ const PHASES = [
 // retry chain finish inside the fanout window.
 const BACKEND_TIMEOUT_MS: Record<string, number> = {
   'self-index': 2500,
-  'bing': 2000,
+  bing: 2000,
   'bing-news': 2000,
   // English news RSS feeds — a single fast XML round-trip (~300–800ms).
   // 2500ms leaves room for a slow feed without delaying the fan-out.
@@ -60,7 +60,7 @@ const BACKEND_TIMEOUT_MS: Record<string, number> = {
   'bing-finance': 2000,
   'bing-writing': 2000,
   'bing-youtube': 2000,
-  'naver': 2500,
+  naver: 2500,
   // naver-news dual-fetch mode (recency intent) loads TWO m_news pages in
   // parallel — wall time ≈ max(page1, page2), but each page can retry on
   // 429/5xx with up to 2s of jitter (fetch ≈800ms + jitter ≤2s + retry ≈800ms
@@ -70,17 +70,17 @@ const BACKEND_TIMEOUT_MS: Record<string, number> = {
   // ~300–800ms and are unaffected by this ceiling.
   'naver-news': 4000,
   'naver-finance': 4000,
-  'wikipedia': 4500,
-  'github': 2000,
-  'hackernews': 1800,
-  'reddit': 2000,
-  'arxiv': 2500,
+  wikipedia: 4500,
+  github: 2000,
+  hackernews: 1800,
+  reddit: 2000,
+  arxiv: 2500,
   'google-scholar': 2000,
-  'searxng': 3000,
-  'duckduckgo': 2000,
-  'brave': 2000,
+  searxng: 3000,
+  duckduckgo: 2000,
+  brave: 2000,
   'yahoo-finance': 4500,
-  'youtube': 2500,
+  youtube: 2500,
 }
 
 interface TaskResult {
@@ -165,7 +165,8 @@ export async function fanoutBackends(
         resolve()
       }, backendTimeout)
 
-      task.run()
+      task
+        .run()
         .then((value) => {
           if (settled) return
           settled = true

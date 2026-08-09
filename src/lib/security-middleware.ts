@@ -119,11 +119,9 @@ export async function securityMiddleware(c: Context<{ Bindings: AppBindings }>, 
             context: { limit: IP_RATE_LIMIT, type: 'ip_based' },
           })
 
-          return c.json(
-            { detail: 'Rate limit exceeded. Sign up for an API key at /docs', code: 'rate_limited' },
-            429,
-            { 'Retry-After': '60' },
-          )
+          return c.json({ detail: 'Rate limit exceeded. Sign up for an API key at /docs', code: 'rate_limited' }, 429, {
+            'Retry-After': '60',
+          })
         }
       }
     }
@@ -167,17 +165,20 @@ export async function securityMiddleware(c: Context<{ Bindings: AppBindings }>, 
       const contentType = c.res.headers.get('Content-Type') || ''
       if (contentType.includes('text/html')) {
         // ── DOCTYPE 추가 (Quirks Mode 방지) ──
-        // HTMLBody를 텍스트로 읽어 <!DOCTYPE html>이 없으면 앞에 추가.
-        // HTMLRewriter로는 root 요소 앞에 내용을 삽입할 수 없으므로
-        // 본문 문자열 조작으로 처리.
+        // 본문을 한 번만 읽고 (text()) DOCTYPE이 없으면 앞에 추가한 뒤,
+        // 그 TEXT로 새 Response를 구성한다. 원본 c.res.body 스트림은
+        // text()로 소비되었으므로 재사용 불가 — HTMLRewriter.transform은
+        // 항상 이 새 Response에 적용해야 한다 (2026-08-07: 기존 코드는
+        // DOCTYPE이 이미 있는 페이지에서 소비된 body를 transform에 넘겨
+        // "Body has already been used"로 nonce 주입이 통째로 실패했다).
         const body = await c.res.text()
-        if (!body.startsWith('<!DOCTYPE') && !body.startsWith('<!doctype')) {
-          c.res = new Response('<!DOCTYPE html>\n' + body, {
-            status: c.res.status,
-            statusText: c.res.statusText,
-            headers: c.res.headers,
-          })
-        }
+        const doctyped =
+          body.startsWith('<!DOCTYPE') || body.startsWith('<!doctype') ? body : '<!DOCTYPE html>\n' + body
+        c.res = new Response(doctyped, {
+          status: c.res.status,
+          statusText: c.res.statusText,
+          headers: c.res.headers,
+        })
 
         const rewriter = new HTMLRewriter()
 

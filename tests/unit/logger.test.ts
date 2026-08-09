@@ -80,7 +80,7 @@ describe('Logger', () => {
       logger.debug('Debug message', { foo: 'bar' })
       expect(spy).toHaveBeenCalled()
       const buffer = getLogBuffer()
-      expect(buffer.some(e => e.message === 'Debug message' && e.level === 'debug')).toBe(true)
+      expect(buffer.some((e) => e.message === 'Debug message' && e.level === 'debug')).toBe(true)
       spy.mockRestore()
     })
 
@@ -89,7 +89,7 @@ describe('Logger', () => {
       logger.info('Info message')
       expect(spy).toHaveBeenCalled()
       const buffer = getLogBuffer()
-      expect(buffer.some(e => e.message === 'Info message' && e.level === 'info')).toBe(true)
+      expect(buffer.some((e) => e.message === 'Info message' && e.level === 'info')).toBe(true)
       spy.mockRestore()
     })
 
@@ -98,7 +98,7 @@ describe('Logger', () => {
       logger.warn('Warning message')
       expect(spy).toHaveBeenCalled()
       const buffer = getLogBuffer()
-      expect(buffer.some(e => e.message === 'Warning message' && e.level === 'warn')).toBe(true)
+      expect(buffer.some((e) => e.message === 'Warning message' && e.level === 'warn')).toBe(true)
       spy.mockRestore()
     })
 
@@ -107,7 +107,7 @@ describe('Logger', () => {
       logger.error('Error message')
       expect(spy).toHaveBeenCalled()
       const buffer = getLogBuffer()
-      expect(buffer.some(e => e.message === 'Error message' && e.level === 'error')).toBe(true)
+      expect(buffer.some((e) => e.message === 'Error message' && e.level === 'error')).toBe(true)
       spy.mockRestore()
     })
 
@@ -194,7 +194,7 @@ describe('Logger', () => {
       logAuthFailure('Invalid API key', { clientIp: '1.2.3.4' })
       expect(spy).toHaveBeenCalled()
       const warnCalls = spy.mock.calls
-      const auditEntry = warnCalls.find(c => JSON.parse(c[0]).message === 'AUDIT: auth_failure')
+      const auditEntry = warnCalls.find((c) => JSON.parse(c[0]).message === 'AUDIT: auth_failure')
       expect(auditEntry).toBeDefined()
       const parsed = JSON.parse(auditEntry![0])
       expect(parsed.eventType).toBe('auth_failure')
@@ -206,7 +206,7 @@ describe('Logger', () => {
       const spy = vi.spyOn(console, 'warn')
       logAuthFailure('Invalid', { clientIp: '192.168.1.1' })
       const warnCalls = spy.mock.calls
-      const auditEntry = warnCalls.find(c => JSON.parse(c[0]).message === 'AUDIT: auth_failure')
+      const auditEntry = warnCalls.find((c) => JSON.parse(c[0]).message === 'AUDIT: auth_failure')
       const parsed = JSON.parse(auditEntry![0])
       expect(parsed.clientIp).toBe('192.168.1.1')
       spy.mockRestore()
@@ -218,7 +218,7 @@ describe('Logger', () => {
       const spy = vi.spyOn(console, 'warn')
       logRateLimitExceeded('1.2.3.4')
       const warnCalls = spy.mock.calls
-      const auditEntry = warnCalls.find(c => JSON.parse(c[0]).message === 'AUDIT: rate_limit_exceeded')
+      const auditEntry = warnCalls.find((c) => JSON.parse(c[0]).message === 'AUDIT: rate_limit_exceeded')
       const parsed = JSON.parse(auditEntry![0])
       expect(parsed.eventType).toBe('rate_limit')
       expect(parsed.severity).toBe('medium')
@@ -230,7 +230,7 @@ describe('Logger', () => {
       const spy = vi.spyOn(console, 'warn')
       logRateLimitExceeded('1.2.3.4', { remaining: 0, path: '/api/search' })
       const warnCalls = spy.mock.calls
-      const auditEntry = warnCalls.find(c => JSON.parse(c[0]).message === 'AUDIT: rate_limit_exceeded')
+      const auditEntry = warnCalls.find((c) => JSON.parse(c[0]).message === 'AUDIT: rate_limit_exceeded')
       const parsed = JSON.parse(auditEntry![0])
       expect(parsed.remaining).toBe(0)
       expect(parsed.path).toBe('/api/search')
@@ -243,7 +243,7 @@ describe('Logger', () => {
       const spy = vi.spyOn(console, 'warn')
       logBackendError('bing', 'https://bing.com/search', new Error('Connection failed'))
       const warnCalls = spy.mock.calls
-      const auditEntry = warnCalls.find(c => JSON.parse(c[0]).message === 'AUDIT: backend_error')
+      const auditEntry = warnCalls.find((c) => JSON.parse(c[0]).message === 'AUDIT: backend_error')
       const parsed = JSON.parse(auditEntry![0])
       expect(parsed.eventType).toBe('backend_error')
       expect(parsed.resource).toBe('bing')
@@ -255,7 +255,7 @@ describe('Logger', () => {
       const spy = vi.spyOn(console, 'warn')
       logBackendError('naver', 'https://naver.com', 'string error message')
       const warnCalls = spy.mock.calls
-      const auditEntry = warnCalls.find(c => JSON.parse(c[0]).message === 'AUDIT: backend_error')
+      const auditEntry = warnCalls.find((c) => JSON.parse(c[0]).message === 'AUDIT: backend_error')
       const parsed = JSON.parse(auditEntry![0])
       expect(parsed.error).toBe('string error message')
       spy.mockRestore()
@@ -269,8 +269,8 @@ describe('Logger', () => {
       const buffer = getLogBuffer()
       expect(Array.isArray(buffer)).toBe(true)
       expect(buffer.length).toBeGreaterThanOrEqual(2)
-      expect(buffer.some(e => e.message === 'test1')).toBe(true)
-      expect(buffer.some(e => e.message === 'test2')).toBe(true)
+      expect(buffer.some((e) => e.message === 'test1')).toBe(true)
+      expect(buffer.some((e) => e.message === 'test2')).toBe(true)
     })
 
     it('clearLogBuffer empties the buffer', () => {
@@ -330,8 +330,8 @@ describe('Logger', () => {
       })
 
       expect(consoleSpy).toHaveBeenCalled()
-      const starts = consoleSpy.mock.calls.filter(c => JSON.parse(c[0]).message === 'Request started')
-      const completes = consoleSpy.mock.calls.filter(c => JSON.parse(c[0]).message === 'Request completed')
+      const starts = consoleSpy.mock.calls.filter((c) => JSON.parse(c[0]).message === 'Request started')
+      const completes = consoleSpy.mock.calls.filter((c) => JSON.parse(c[0]).message === 'Request completed')
       expect(starts.length).toBeGreaterThanOrEqual(1)
       expect(completes.length).toBeGreaterThanOrEqual(1)
       consoleSpy.mockRestore()
@@ -385,7 +385,7 @@ describe('Logger', () => {
         }),
       ).rejects.toThrow('Handler failed')
 
-      const auditLogs = warnSpy.mock.calls.filter(c => {
+      const auditLogs = warnSpy.mock.calls.filter((c) => {
         try {
           const parsed = JSON.parse(c[0])
           return parsed.message === 'AUDIT: request_failed'

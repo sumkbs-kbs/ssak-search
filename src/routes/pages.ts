@@ -8,10 +8,10 @@
  * DELETE /api/pages/:id      — Delete a page
  */
 
-import { Hono } from 'hono'
+import { Hono, type Context } from 'hono'
 import { logger, toError } from '../lib/logger'
 import { cors } from 'hono/cors'
-import type { AppBindings, ErrorResponse, CreatePageRequest, UpdatePageRequest, PageData } from '../types'
+import type { AppBindings, ErrorResponse, CreatePageRequest, UpdatePageRequest } from '../types'
 import { getPagesStub } from '../lib/pages-do'
 
 const pagesRoute = new Hono<{ Bindings: AppBindings }>()
@@ -19,7 +19,7 @@ const pagesRoute = new Hono<{ Bindings: AppBindings }>()
 pagesRoute.use('/*', cors({ origin: '*' }))
 
 // Binding check helper
-function checkBinding(c: any): boolean {
+function checkBinding(c: Context<{ Bindings: AppBindings }>): boolean {
   if (!c.env.PAGES_DO) {
     return false
   }
@@ -32,7 +32,10 @@ function checkBinding(c: any): boolean {
 pagesRoute.post('/', async (c) => {
   if (!checkBinding(c)) {
     return c.json<ErrorResponse>(
-      { detail: 'Pages requires PAGES_DO Durable Object binding. Configure via Cloudflare Dashboard.', code: 'binding_missing' },
+      {
+        detail: 'Pages requires PAGES_DO Durable Object binding. Configure via Cloudflare Dashboard.',
+        code: 'binding_missing',
+      },
       501,
     )
   }
@@ -40,7 +43,7 @@ pagesRoute.post('/', async (c) => {
   let body: Partial<CreatePageRequest>
   try {
     body = await c.req.json()
-  } catch (err) {
+  } catch (_err) {
     return c.json<ErrorResponse>({ detail: 'Invalid JSON body', code: 'invalid_body' }, 400)
   }
 
@@ -76,10 +79,7 @@ pagesRoute.post('/', async (c) => {
 // ============================================================
 pagesRoute.get('/', async (c) => {
   if (!checkBinding(c)) {
-    return c.json<ErrorResponse>(
-      { detail: 'Pages requires PAGES_DO binding', code: 'binding_missing' },
-      501,
-    )
+    return c.json<ErrorResponse>({ detail: 'Pages requires PAGES_DO binding', code: 'binding_missing' }, 501)
   }
 
   const limit = Math.min(Math.max(parseInt(c.req.query('limit') || '20', 10) || 20, 1), 50)
@@ -90,10 +90,7 @@ pagesRoute.get('/', async (c) => {
     return c.json(result)
   } catch (err) {
     logger.error('List pages error:', { error: toError(err) })
-    return c.json<ErrorResponse>(
-      { detail: 'Failed to list pages', code: 'list_error' },
-      500,
-    )
+    return c.json<ErrorResponse>({ detail: 'Failed to list pages', code: 'list_error' }, 500)
   }
 })
 
@@ -102,10 +99,7 @@ pagesRoute.get('/', async (c) => {
 // ============================================================
 pagesRoute.get('/:id', async (c) => {
   if (!checkBinding(c)) {
-    return c.json<ErrorResponse>(
-      { detail: 'Pages requires PAGES_DO binding', code: 'binding_missing' },
-      501,
-    )
+    return c.json<ErrorResponse>({ detail: 'Pages requires PAGES_DO binding', code: 'binding_missing' }, 501)
   }
 
   const { id } = c.req.param()
@@ -121,10 +115,7 @@ pagesRoute.get('/:id', async (c) => {
     return c.json(page)
   } catch (err) {
     logger.error('Get page error:', { error: toError(err) })
-    return c.json<ErrorResponse>(
-      { detail: 'Failed to get page', code: 'get_error' },
-      500,
-    )
+    return c.json<ErrorResponse>({ detail: 'Failed to get page', code: 'get_error' }, 500)
   }
 })
 
@@ -133,10 +124,7 @@ pagesRoute.get('/:id', async (c) => {
 // ============================================================
 pagesRoute.put('/:id', async (c) => {
   if (!checkBinding(c)) {
-    return c.json<ErrorResponse>(
-      { detail: 'Pages requires PAGES_DO binding', code: 'binding_missing' },
-      501,
-    )
+    return c.json<ErrorResponse>({ detail: 'Pages requires PAGES_DO binding', code: 'binding_missing' }, 501)
   }
 
   const { id } = c.req.param()
@@ -144,7 +132,7 @@ pagesRoute.put('/:id', async (c) => {
   let body: Record<string, unknown>
   try {
     body = await c.req.json()
-  } catch (err) {
+  } catch (_err) {
     return c.json<ErrorResponse>({ detail: 'Invalid JSON body', code: 'invalid_body' }, 400)
   }
 
@@ -171,10 +159,7 @@ pagesRoute.put('/:id', async (c) => {
     return c.json(page)
   } catch (err) {
     logger.error('Update page error:', { error: toError(err) })
-    return c.json<ErrorResponse>(
-      { detail: 'Failed to update page', code: 'update_error' },
-      500,
-    )
+    return c.json<ErrorResponse>({ detail: 'Failed to update page', code: 'update_error' }, 500)
   }
 })
 
@@ -183,10 +168,7 @@ pagesRoute.put('/:id', async (c) => {
 // ============================================================
 pagesRoute.delete('/:id', async (c) => {
   if (!checkBinding(c)) {
-    return c.json<ErrorResponse>(
-      { detail: 'Pages requires PAGES_DO binding', code: 'binding_missing' },
-      501,
-    )
+    return c.json<ErrorResponse>({ detail: 'Pages requires PAGES_DO binding', code: 'binding_missing' }, 501)
   }
 
   const { id } = c.req.param()
@@ -202,10 +184,7 @@ pagesRoute.delete('/:id', async (c) => {
     return c.json({ success: true, id })
   } catch (err) {
     logger.error('Delete page error:', { error: toError(err) })
-    return c.json<ErrorResponse>(
-      { detail: 'Failed to delete page', code: 'delete_error' },
-      500,
-    )
+    return c.json<ErrorResponse>({ detail: 'Failed to delete page', code: 'delete_error' }, 500)
   }
 })
 

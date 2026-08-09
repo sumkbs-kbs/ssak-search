@@ -98,18 +98,70 @@ describe('buildSignature', () => {
   })
 
   it('classifies text length correctly', () => {
-    const short = buildSignature({ tag: 'p', classes: [], id: '', attributes: {}, childIndex: 1, parentChildrenCount: 1, depth: 1, textContent: 'Hi', prevSiblingTag: '', nextSiblingTag: '', parentTag: 'body', sourceUrl: '' })
+    const short = buildSignature({
+      tag: 'p',
+      classes: [],
+      id: '',
+      attributes: {},
+      childIndex: 1,
+      parentChildrenCount: 1,
+      depth: 1,
+      textContent: 'Hi',
+      prevSiblingTag: '',
+      nextSiblingTag: '',
+      parentTag: 'body',
+      sourceUrl: '',
+    })
     expect(short.textLength).toBe('short')
 
-    const medium = buildSignature({ tag: 'p', classes: [], id: '', attributes: {}, childIndex: 1, parentChildrenCount: 1, depth: 1, textContent: 'Hello world, this is a medium length text content for testing.', prevSiblingTag: '', nextSiblingTag: '', parentTag: 'body', sourceUrl: '' })
+    const medium = buildSignature({
+      tag: 'p',
+      classes: [],
+      id: '',
+      attributes: {},
+      childIndex: 1,
+      parentChildrenCount: 1,
+      depth: 1,
+      textContent: 'Hello world, this is a medium length text content for testing.',
+      prevSiblingTag: '',
+      nextSiblingTag: '',
+      parentTag: 'body',
+      sourceUrl: '',
+    })
     expect(medium.textLength).toBe('medium')
 
-    const long = buildSignature({ tag: 'p', classes: [], id: '', attributes: {}, childIndex: 1, parentChildrenCount: 1, depth: 1, textContent: 'A'.repeat(150), prevSiblingTag: '', nextSiblingTag: '', parentTag: 'body', sourceUrl: '' })
+    const long = buildSignature({
+      tag: 'p',
+      classes: [],
+      id: '',
+      attributes: {},
+      childIndex: 1,
+      parentChildrenCount: 1,
+      depth: 1,
+      textContent: 'A'.repeat(150),
+      prevSiblingTag: '',
+      nextSiblingTag: '',
+      parentTag: 'body',
+      sourceUrl: '',
+    })
     expect(long.textLength).toBe('long')
   })
 
   it('handles empty classes and attributes', () => {
-    const sig = buildSignature({ tag: 'br', classes: [], id: '', attributes: {}, childIndex: 1, parentChildrenCount: 1, depth: 1, textContent: '', prevSiblingTag: '', nextSiblingTag: '', parentTag: 'body', sourceUrl: '' })
+    const sig = buildSignature({
+      tag: 'br',
+      classes: [],
+      id: '',
+      attributes: {},
+      childIndex: 1,
+      parentChildrenCount: 1,
+      depth: 1,
+      textContent: '',
+      prevSiblingTag: '',
+      nextSiblingTag: '',
+      parentTag: 'body',
+      sourceUrl: '',
+    })
     expect(sig.tag).toBe('br')
     expect(sig.classes).toEqual([])
     expect(sig.textLength).toBe('none')
@@ -166,7 +218,7 @@ describe('generateSelectors', () => {
 
   it('returns empty array for minimal signature', () => {
     const sig = makeSig({ tag: 'div', classes: [], prevSiblingTag: 'unknown', nextSiblingTag: 'unknown' })
-    // Should still have class-based selectors if classes exist... 
+    // Should still have class-based selectors if classes exist...
     // For truly minimal sig with no classes/id/attrs, only nth-path may exist
     // If parentTag is 'body' and childIndex > 0, nth-path is generated
     const selectors = generateSelectors(sig)
@@ -180,7 +232,13 @@ describe('generateSelectors', () => {
 
 describe('scoreSimilarity', () => {
   it('returns 1.0 for identical signatures', () => {
-    const sig = makeSig({ tag: 'div', id: 'test-id', classes: ['a', 'b'], textFingerprint: 'hello', attributes: { 'data-x': '1' } })
+    const sig = makeSig({
+      tag: 'div',
+      id: 'test-id',
+      classes: ['a', 'b'],
+      textFingerprint: 'hello',
+      attributes: { 'data-x': '1' },
+    })
     expect(scoreSimilarity(sig, sig)).toBe(1.0)
   })
 
@@ -223,8 +281,8 @@ describe('scoreSimilarity', () => {
 
   it('rewards ID match', () => {
     const a = makeSig({ tag: 'div', id: 'main-content', classes: ['a'] })
-    const b = makeSig({ tag: 'div', id: 'main-content', classes: ['a'] })  // Same everything
-    const c = makeSig({ tag: 'div', id: 'other', classes: ['a'] })          // Same class, diff ID
+    const b = makeSig({ tag: 'div', id: 'main-content', classes: ['a'] }) // Same everything
+    const c = makeSig({ tag: 'div', id: 'other', classes: ['a'] }) // Same class, diff ID
     // a vs b: identical → should score higher than a vs c (different IDs)
     expect(scoreSimilarity(a, b)).toBeGreaterThan(scoreSimilarity(a, c))
   })

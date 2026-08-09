@@ -28,19 +28,22 @@ const ARTICLES = [
     url: 'https://n.news.naver.com/article/003/0014108362?sid=100',
     headline: '삼성전자 뉴스 첫 번째 기사',
     snippet: '삼성전자가 반도체 투자 계획을 발표했다.',
-    media: '뉴시스', pressId: '003',
+    media: '뉴시스',
+    pressId: '003',
   },
   {
     url: 'https://n.news.naver.com/article/001/0001111111?sid=100',
     headline: '삼성전자 뉴스 두 번째 기사',
     snippet: '삼성전자의 HBM4 양산 계획이 공개됐다.',
-    media: '연합뉴스', pressId: '001',
+    media: '연합뉴스',
+    pressId: '001',
   },
   {
     url: 'https://n.news.naver.com/article/028/0002222222?sid=100',
     headline: '삼성전자 뉴스 세 번째 기사',
     snippet: '삼성전자가 신규 팹 부지 투자를 검토한다.',
-    media: '한겨레', pressId: '028',
+    media: '한겨레',
+    pressId: '028',
   },
 ]
 
@@ -62,7 +65,8 @@ function newsItem(a: (typeof ARTICLES)[number], time: string): string {
   `
 }
 
-const NAVER_SEARCH_HTML = `<ul class="list_news _infinite_list" id="news_result_list">` +
+const NAVER_SEARCH_HTML =
+  `<ul class="list_news _infinite_list" id="news_result_list">` +
   ARTICLES.map((a) => newsItem(a, '1시간 전')).join('') +
   `</ul>`
 

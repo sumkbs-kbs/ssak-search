@@ -47,21 +47,24 @@ export const SELF_INDEX_QUERIES: SelfIndexEvalQuery[] = [
     testDocs: [
       {
         title: 'Quantum Computing Explained',
-        content: 'Quantum computing uses qubits instead of classical bits. Quantum computers leverage superposition and entanglement to perform computations that would be infeasible for classical computers. This makes quantum computing a revolutionary approach to computing.',
+        content:
+          'Quantum computing uses qubits instead of classical bits. Quantum computers leverage superposition and entanglement to perform computations that would be infeasible for classical computers. This makes quantum computing a revolutionary approach to computing.',
         expectedMinBm25: 15.0,
         expectedMaxBm25: 80.0,
         expectedRank: 0,
       },
       {
         title: 'Classical Computing Basics',
-        content: 'Classical computing uses transistors and binary logic gates. Modern computers are based on the von Neumann architecture. CPUs process instructions sequentially.',
+        content:
+          'Classical computing uses transistors and binary logic gates. Modern computers are based on the von Neumann architecture. CPUs process instructions sequentially.',
         expectedMinBm25: 2.0,
         expectedMaxBm25: 30.0,
         expectedRank: 1,
       },
       {
         title: 'Introduction to Machine Learning',
-        content: 'Machine learning is a subset of artificial intelligence that enables systems to learn and improve from experience without being explicitly programmed.',
+        content:
+          'Machine learning is a subset of artificial intelligence that enables systems to learn and improve from experience without being explicitly programmed.',
         expectedMinBm25: 0,
         expectedMaxBm25: 10.0,
         expectedRank: 2,
@@ -84,21 +87,24 @@ export const SELF_INDEX_QUERIES: SelfIndexEvalQuery[] = [
     testDocs: [
       {
         title: 'React State Management Best Practices',
-        content: 'This article covers React concepts and modern frontend development approaches for building user interfaces with components and hooks.',
+        content:
+          'This article covers React concepts and modern frontend development approaches for building user interfaces with components and hooks.',
         expectedMinBm25: 5.0,
         expectedMaxBm25: 60.0,
         expectedRank: 0,
       },
       {
         title: 'Frontend Development Guide',
-        content: 'React is a popular library for building user interfaces. State management in React applications can be handled with hooks like useState and useReducer. Redux is another option for managing React application state.',
+        content:
+          'React is a popular library for building user interfaces. State management in React applications can be handled with hooks like useState and useReducer. Redux is another option for managing React application state.',
         expectedMinBm25: 5.0,
         expectedMaxBm25: 60.0,
         expectedRank: 1,
       },
       {
         title: 'Backend Architecture Patterns',
-        content: 'Microservices architecture and serverless computing are transforming how we build scalable backend systems.',
+        content:
+          'Microservices architecture and serverless computing are transforming how we build scalable backend systems.',
         expectedMinBm25: 0,
         expectedMaxBm25: 5.0,
         expectedRank: 2,
@@ -124,13 +130,15 @@ export const SELF_INDEX_QUERIES: SelfIndexEvalQuery[] = [
         // All Korean docs will get score 0, so ranks are implementation-dependent.
         // We only verify scores are 0, no rank assertion.
         title: '삼성전자 주가 전망 분석',
-        content: '삼성전자의 주가 전망에 대해 분석합니다. 반도체 시장 호황으로 삼성전자의 실적이 개선될 것으로 예상됩니다. 전문가들은 삼성전자 목표주가를 상향 조정하고 있습니다.',
+        content:
+          '삼성전자의 주가 전망에 대해 분석합니다. 반도체 시장 호황으로 삼성전자의 실적이 개선될 것으로 예상됩니다. 전문가들은 삼성전자 목표주가를 상향 조정하고 있습니다.',
         expectedMinBm25: 0,
         expectedMaxBm25: 0,
       },
       {
         title: '국내 증시 동향',
-        content: '코스피 지수가 상승세를 보이고 있습니다. 외국인 투자자들의 매수가 이어지고 있으며, 시장 전망은 긍정적입니다.',
+        content:
+          '코스피 지수가 상승세를 보이고 있습니다. 외국인 투자자들의 매수가 이어지고 있으며, 시장 전망은 긍정적입니다.',
         expectedMinBm25: 0,
         expectedMaxBm25: 0,
       },
@@ -160,14 +168,16 @@ export const SELF_INDEX_QUERIES: SelfIndexEvalQuery[] = [
       // Only meaningful terms: best, way, learn, programming, 2025
       {
         title: 'Programming Learning Guide 2025',
-        content: 'The best way to learn programming in 2025 is through hands-on projects. Programming tutorials and coding bootcamps provide structured learning paths for beginners.',
+        content:
+          'The best way to learn programming in 2025 is through hands-on projects. Programming tutorials and coding bootcamps provide structured learning paths for beginners.',
         expectedMinBm25: 15.0,
         expectedMaxBm25: 80.0,
         expectedRank: 0,
       },
       {
         title: 'A Brief History of Computing',
-        content: 'The history of computing spans centuries, from the abacus to modern quantum computers. The field of computer science has evolved dramatically.',
+        content:
+          'The history of computing spans centuries, from the abacus to modern quantum computers. The field of computer science has evolved dramatically.',
         expectedMinBm25: 0,
         expectedMaxBm25: 5.0,
         expectedRank: 1,
@@ -188,14 +198,16 @@ export const SELF_INDEX_QUERIES: SelfIndexEvalQuery[] = [
     testDocs: [
       {
         title: 'Serverless Deployment Guide',
-        content: 'Learn how to deploy serverless applications on AWS Lambda and Cloudflare Workers. Serverless deployment eliminates infrastructure management while providing automatic scaling.',
+        content:
+          'Learn how to deploy serverless applications on AWS Lambda and Cloudflare Workers. Serverless deployment eliminates infrastructure management while providing automatic scaling.',
         expectedMinBm25: 20.0,
         expectedMaxBm25: 80.0,
         expectedRank: 0,
       },
       {
         title: 'Docker Container Orchestration',
-        content: 'Docker containers and Kubernetes orchestration provide consistent deployment environments for microservices across development and production.',
+        content:
+          'Docker containers and Kubernetes orchestration provide consistent deployment environments for microservices across development and production.',
         expectedMinBm25: 2.0,
         expectedMaxBm25: 30.0,
         expectedRank: 1,
@@ -216,21 +228,24 @@ export const SELF_INDEX_QUERIES: SelfIndexEvalQuery[] = [
     testDocs: [
       {
         title: 'Rust vs Go Performance Benchmark',
-        content: 'Comparing Rust and Go performance benchmarks. Rust provides zero-cost abstractions and memory safety. Go offers goroutines for concurrency and fast compilation.',
+        content:
+          'Comparing Rust and Go performance benchmarks. Rust provides zero-cost abstractions and memory safety. Go offers goroutines for concurrency and fast compilation.',
         expectedMinBm25: 15.0,
         expectedMaxBm25: 80.0,
         expectedRank: 0,
       },
       {
         title: 'Go Programming Language Features',
-        content: 'Go is a statically typed language designed for simplicity and efficiency. Go performance is excellent for concurrent and network applications.',
+        content:
+          'Go is a statically typed language designed for simplicity and efficiency. Go performance is excellent for concurrent and network applications.',
         expectedMinBm25: 5.0,
         expectedMaxBm25: 50.0,
         expectedRank: 1,
       },
       {
         title: 'Rust Systems Programming',
-        content: 'Rust performance is comparable to C++ while providing memory safety guarantees. The Rust compiler optimizes aggressively for maximum performance.',
+        content:
+          'Rust performance is comparable to C++ while providing memory safety guarantees. The Rust compiler optimizes aggressively for maximum performance.',
         expectedMinBm25: 3.0,
         expectedMaxBm25: 40.0,
         expectedRank: 2,
@@ -252,7 +267,8 @@ export const SELF_INDEX_QUERIES: SelfIndexEvalQuery[] = [
     testDocs: [
       {
         title: 'Database Optimization: Advanced Query Tuning',
-        content: 'Database optimization requires understanding query plans and indexing strategies. Database optimization techniques include connection pooling and query optimization for database performance. Database optimization is critical for production systems. database optimization database optimization database optimization',
+        content:
+          'Database optimization requires understanding query plans and indexing strategies. Database optimization techniques include connection pooling and query optimization for database performance. Database optimization is critical for production systems. database optimization database optimization database optimization',
         // BM25 TF saturation limits very high TF. Actual: ~25 with given IDF/docLength
         expectedMinBm25: 20.0,
         expectedMaxBm25: 60.0,
@@ -260,7 +276,8 @@ export const SELF_INDEX_QUERIES: SelfIndexEvalQuery[] = [
       },
       {
         title: 'Web Application Caching Strategies',
-        content: 'Redis caching and CDN optimization can dramatically improve web application performance. Database optimization is one piece of the puzzle.',
+        content:
+          'Redis caching and CDN optimization can dramatically improve web application performance. Database optimization is one piece of the puzzle.',
         expectedMinBm25: 2.0,
         expectedMaxBm25: 30.0,
         expectedRank: 1,
@@ -303,14 +320,16 @@ export const SELF_INDEX_QUERIES: SelfIndexEvalQuery[] = [
     testDocs: [
       {
         title: 'Understanding Distributed Systems Consensus Algorithms',
-        content: 'Consensus in distributed systems is a fundamental problem that has been studied extensively. The Paxos algorithm, first described by Leslie Lamport, provides a way for distributed systems to reach consensus even in the presence of failures. Raft is a more understandable alternative to Paxos that achieves consensus through leader election. Both consensus algorithms ensure that distributed systems can maintain consistency across nodes. Distributed systems require consensus for fault tolerance and reliability.',
+        content:
+          'Consensus in distributed systems is a fundamental problem that has been studied extensively. The Paxos algorithm, first described by Leslie Lamport, provides a way for distributed systems to reach consensus even in the presence of failures. Raft is a more understandable alternative to Paxos that achieves consensus through leader election. Both consensus algorithms ensure that distributed systems can maintain consistency across nodes. Distributed systems require consensus for fault tolerance and reliability.',
         expectedMinBm25: 15.0,
         expectedMaxBm25: 80.0,
         expectedRank: 0,
       },
       {
         title: 'CAP Theorem Explained',
-        content: 'The CAP theorem states that distributed systems can only provide two of three guarantees: Consistency, Availability, and Partition Tolerance. This fundamental theorem guides the design of all distributed data systems.',
+        content:
+          'The CAP theorem states that distributed systems can only provide two of three guarantees: Consistency, Availability, and Partition Tolerance. This fundamental theorem guides the design of all distributed data systems.',
         expectedMinBm25: 3.0,
         expectedMaxBm25: 30.0,
         expectedRank: 1,

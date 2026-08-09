@@ -24,7 +24,9 @@ export function generateCspNonce(): string {
   const bytes = new Uint8Array(16)
   crypto.getRandomValues(bytes)
   return btoa(String.fromCharCode(...bytes))
-    .replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
+    .replace(/\+/g, '-')
+    .replace(/\//g, '_')
+    .replace(/=+$/, '')
 }
 
 /**
@@ -40,7 +42,10 @@ export function generateCspNonce(): string {
  * - base-uri: self (prevent base tag injection)
  * - form-action: self (prevent form hijacking)
  */
-export function buildCsp(nonce: string): string {
+// P18 audit: `_nonce` is deliberately unused — the script-src strategy is
+// 'unsafe-inline' (see the directive comment below); an HTMLRewriter middleware
+// still injects nonce attributes for defense-in-depth.
+export function buildCsp(_nonce: string): string {
   const directives = [
     // Base
     "default-src 'self'",

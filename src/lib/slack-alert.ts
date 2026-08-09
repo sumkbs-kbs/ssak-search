@@ -39,10 +39,7 @@ export interface SlackAlertOptions {
  * Send a structured alert to Slack via webhook.
  * No-op if SLACK_WEBHOOK is not configured.
  */
-export async function sendSlackAlert(
-  webhookUrl: string | undefined,
-  options: SlackAlertOptions,
-): Promise<boolean> {
+export async function sendSlackAlert(webhookUrl: string | undefined, options: SlackAlertOptions): Promise<boolean> {
   if (!webhookUrl) {
     logger.info('[Slack] No webhook configured, alert skipped', { title: options.title })
     return false
@@ -186,11 +183,7 @@ export async function alertEvalRegression(
 /**
  * Alert for general warning (subrequest quota high, etc.)
  */
-export async function alertWarning(
-  webhookUrl: string | undefined,
-  title: string,
-  message: string,
-): Promise<boolean> {
+export async function alertWarning(webhookUrl: string | undefined, title: string, message: string): Promise<boolean> {
   return sendSlackAlert(webhookUrl, {
     title: `⚠️ ${title}`,
     message,

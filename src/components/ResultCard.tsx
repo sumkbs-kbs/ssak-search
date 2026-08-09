@@ -67,10 +67,42 @@ export function ResultCard({ result, index = 0, t }: ResultCardProps) {
           </a>
           {/* Meta row */}
           <div style="display: flex; flex-wrap: wrap; gap: 10px; margin-top: 4px; font-size: 0.72rem; color: var(--text-tertiary);">
-            <span><svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="vertical-align:middle;"><path d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71"/></svg> {result.domain}</span>
+            <span>
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                width="12"
+                height="12"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                aria-hidden="true"
+                style="vertical-align:middle;"
+              >
+                <path d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71" />
+                <path d="M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71" />
+              </svg>{' '}
+              {result.domain}
+            </span>
             {result.published_date ? (
               <span>
-                <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true" style="vertical-align:middle;"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><path d="M3 10h18M8 2v4M16 2v4"/></svg>{' '}
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  width="12"
+                  height="12"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  aria-hidden="true"
+                  style="vertical-align:middle;"
+                >
+                  <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
+                  <path d="M3 10h18M8 2v4M16 2v4" />
+                </svg>{' '}
                 {result.published_date.split('T')[0]}
               </span>
             ) : null}
@@ -89,7 +121,21 @@ export function ResultCard({ result, index = 0, t }: ResultCardProps) {
                 x-bind:aria-expanded={`open${uniqueId}`}
                 aria-controls={`${uniqueId}-content`}
               >
-                <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  width="12"
+                  height="12"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2.5"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  aria-hidden="true"
+                >
+                  <polyline points="16 18 22 12 16 6" />
+                  <polyline points="8 6 2 12 8 18" />
+                </svg>
                 <span x-text={`open${uniqueId} ? '${_('search.hide_content')}' : '${_('search.show_content')}'`}>
                   {_('search.show_content')}
                 </span>
@@ -115,7 +161,10 @@ export function ResultCard({ result, index = 0, t }: ResultCardProps) {
           >
             {scorePct}
           </span>
-          <div style="width: 50px; height: 4px; background: var(--border); border-radius: 2px; overflow: hidden;" aria-hidden="true">
+          <div
+            style="width: 50px; height: 4px; background: var(--border); border-radius: 2px; overflow: hidden;"
+            aria-hidden="true"
+          >
             <div
               style={`height: 100%; border-radius: 2px; width: ${scorePct}%; background: linear-gradient(90deg, var(--error), var(--warning), var(--success));`}
             />

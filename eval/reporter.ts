@@ -54,7 +54,9 @@ export function formatReport(report: EvalReport, regressions: RegressionDiff[]):
   lines.push('  Backend coverage:')
   for (const [backend, count] of Object.entries(report.backendCoverage).sort()) {
     const pct = ((count / report.totalQueries) * 100).toFixed(0)
-    lines.push(`    ${backend.padEnd(20)} ${'█'.repeat(Math.round(Number(pct) / 10))} ${count}/${report.totalQueries} (${pct}%)`)
+    lines.push(
+      `    ${backend.padEnd(20)} ${'█'.repeat(Math.round(Number(pct) / 10))} ${count}/${report.totalQueries} (${pct}%)`,
+    )
   }
   lines.push('')
 
@@ -69,6 +71,11 @@ export function formatReport(report: EvalReport, regressions: RegressionDiff[]):
     }
     for (const f of r.failures) {
       lines.push(`     ⚠  ${f}`)
+    }
+    // S28: non-fatal backend-availability warnings (e.g. wikipedia 429
+    // missing from backends while the pool is otherwise adequate).
+    for (const w of r.warnings ?? []) {
+      lines.push(`     ℹ  ${w}`)
     }
   }
   lines.push('')
@@ -178,13 +185,18 @@ export function formatReportSummary(report: EvalReport, regressions: RegressionD
   // Per-query details
   lines.push('### Per-Query Results')
   lines.push('')
-  lines.push('| Query | Status | Results | Time | Backends | Failures |')
-  lines.push('|-------|--------|---------|------|----------|----------|')
+  lines.push('| Query | Status | Results | Time | Backends | Failures | Warnings |')
+  lines.push('|-------|--------|---------|------|----------|----------|----------|')
   for (const r of report.results) {
     const status = r.passed ? '✅' : '❌'
     const backends = r.backends.join(', ') || '—'
     const failures = r.failures.length > 0 ? r.failures.join('; ') : '—'
-    lines.push(`| ${r.query.id} | ${status} | ${r.resultCount} | ${r.responseTimeMs}ms | ${backends} | ${failures} |`)
+    // S28: availability warnings (missing required backends with an adequate
+    // pool) are non-fatal but must stay visible.
+    const warnings = (r.warnings ?? []).length > 0 ? r.warnings.join('; ') : '—'
+    lines.push(
+      `| ${r.query.id} | ${status} | ${r.resultCount} | ${r.responseTimeMs}ms | ${backends} | ${failures} | ${warnings} |`,
+    )
   }
   lines.push('')
 

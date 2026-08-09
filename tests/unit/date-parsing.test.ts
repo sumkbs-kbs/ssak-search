@@ -81,6 +81,24 @@ describe('parseFlexibleDate', () => {
     expect(iso!.startsWith('2026-07-25')).toBe(true)
   })
 
+  it('parses YYYY. M. D. with spaces (Bing "2026. 7. 24. —" form)', () => {
+    const iso = parseFlexibleDate('2026. 7. 24.', NOW)
+    expect(iso).toBeTruthy()
+    expect(iso!.startsWith('2026-07-2')).toBe(true)
+  })
+
+  it('parses English month names (Bing "Jul 24, 2026 ·" form)', () => {
+    const iso = parseFlexibleDate('Jul 24, 2026', NOW)
+    expect(iso).toBeTruthy()
+    expect(iso!.startsWith('2026-07-2')).toBe(true)
+  })
+
+  it('parses full English month names', () => {
+    const iso = parseFlexibleDate('January 5, 2026', NOW)
+    expect(iso).toBeTruthy()
+    expect(iso!.startsWith('2026-01-0')).toBe(true)
+  })
+
   it('delegates to parseRelativeTime for relative input', () => {
     expect(parseFlexibleDate('2시간 전', NOW)).toBe(new Date(NOW - 2 * HOUR).toISOString())
     expect(parseFlexibleDate('3 days ago', NOW)).toBe(new Date(NOW - 3 * DAY).toISOString())

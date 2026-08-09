@@ -13,7 +13,7 @@
  */
 
 import { DurableObject } from 'cloudflare:workers'
-import type { Env, PageData, CreatePageRequest, UpdatePageRequest, PageSource } from '../types'
+import type { Env, PageData, CreatePageRequest, UpdatePageRequest } from '../types'
 
 interface PagesStorage {
   pages: Record<string, PageData>
@@ -119,8 +119,7 @@ export class PagesDO extends DurableObject<Env> {
    * List all pages, newest first.
    */
   async list(limit = 20): Promise<{ pages: PageData[]; total: number }> {
-    const all = Array.from(this.pages.values())
-      .sort((a, b) => b.created_at - a.created_at)
+    const all = Array.from(this.pages.values()).sort((a, b) => b.created_at - a.created_at)
 
     return {
       pages: all.slice(0, Math.min(limit, 50)),
@@ -142,6 +141,7 @@ export interface PagesRPC {
 }
 
 export function getPagesStub(env: Env): PagesRPC {
-  const id = env.PAGES_DO!.idFromName('hub')
-  return env.PAGES_DO!.get(id) as unknown as PagesRPC
+  if (!env.PAGES_DO) throw new Error('PAGES_DO binding missing — configure the Durable Object binding first')
+  const id = env.PAGES_DO.idFromName('hub')
+  return env.PAGES_DO.get(id) as unknown as PagesRPC
 }

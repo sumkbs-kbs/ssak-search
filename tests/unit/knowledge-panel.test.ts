@@ -20,11 +20,7 @@ vi.mock('../../src/lib/specialized', async (importOriginal) => {
   return { ...actual, getKnowledgeGraph: (...args: unknown[]) => mockWikipediaKg(...args) }
 })
 
-import {
-  buildKnowledgePanel,
-  extractEntityFromResults,
-  matchImagesToResults,
-} from '../../src/lib/knowledge-panel'
+import { buildKnowledgePanel, extractEntityFromResults, matchImagesToResults } from '../../src/lib/knowledge-panel'
 import type { SearchResult } from '../../src/types'
 
 // ============================================================
@@ -46,7 +42,8 @@ const APPLE_RESULTS: SearchResult[] = [
   makeResult({
     title: 'Apple Inc. — Wikipedia',
     url: 'https://en.wikipedia.org/wiki/Apple_Inc.',
-    content: 'Apple Inc. is an American multinational corporation headquartered in Cupertino, California. Founded in 1976 by Steve Jobs, Steve Wozniak and Ronald Wayne.',
+    content:
+      'Apple Inc. is an American multinational corporation headquartered in Cupertino, California. Founded in 1976 by Steve Jobs, Steve Wozniak and Ronald Wayne.',
   }),
   makeResult({
     title: 'Apple Inc. (AAPL) Stock Price, News & Info',
@@ -56,7 +53,8 @@ const APPLE_RESULTS: SearchResult[] = [
   makeResult({
     title: 'Apple — Official Site',
     url: 'https://www.apple.com/',
-    content: 'Shop the latest iPhone, Mac, iPad and more. Apple Inc. designs consumer electronics, software and services.',
+    content:
+      'Shop the latest iPhone, Mac, iPad and more. Apple Inc. designs consumer electronics, software and services.',
   }),
 ]
 
@@ -93,7 +91,8 @@ describe('buildKnowledgePanel — search-results fallback (Phase 2)', () => {
       makeResult({
         title: 'Apple Inc. — Corporate Info',
         url: 'https://www.apple.com/company/',
-        content: 'Apple Inc. was founded in 1976 by Steve Jobs. The company has 161,000 employees and revenue of $391 billion.',
+        content:
+          'Apple Inc. was founded in 1976 by Steve Jobs. The company has 161,000 employees and revenue of $391 billion.',
       }),
     ]
     const panel = await buildKnowledgePanel('Apple Inc', results, { language: 'en' })
@@ -117,7 +116,8 @@ describe('buildKnowledgePanel — search-results fallback (Phase 2)', () => {
       makeResult({
         title: 'Sourdough baking guide — Beginner friendly',
         url: 'https://example.com/sourdough',
-        content: 'A simple step by step guide to baking sourdough bread with a starter, plus tips for maintaining a healthy culture.',
+        content:
+          'A simple step by step guide to baking sourdough bread with a starter, plus tips for maintaining a healthy culture.',
       }),
     ]
     const panel = await buildKnowledgePanel('Sourdough bread', results, { language: 'en' })
@@ -182,7 +182,13 @@ describe('buildKnowledgePanel — wikipedia precedence (Phase 1)', () => {
   it('does NOT call wikipedia for non-factual/general queries (e.g. news)', async () => {
     const panel = await buildKnowledgePanel(
       'breaking AI news today',
-      [makeResult({ title: 'AI Latest News — Breaking Updates', url: 'https://news.example.com/ai', content: 'Breaking AI news and updates from around the world today.' })],
+      [
+        makeResult({
+          title: 'AI Latest News — Breaking Updates',
+          url: 'https://news.example.com/ai',
+          content: 'Breaking AI news and updates from around the world today.',
+        }),
+      ],
       { language: 'en' },
     )
     expect(mockWikipediaKg).not.toHaveBeenCalled()
@@ -213,7 +219,10 @@ describe('extractEntityFromResults', () => {
 
   it('ignores the query itself when choosing an entity', () => {
     const results = [
-      makeResult({ title: 'Quantum computing explained — Wikipedia', url: 'https://en.wikipedia.org/wiki/Quantum_computing' }),
+      makeResult({
+        title: 'Quantum computing explained — Wikipedia',
+        url: 'https://en.wikipedia.org/wiki/Quantum_computing',
+      }),
       makeResult({ title: 'Quantum computing: a beginner guide', url: 'https://example.com/qc' }),
     ]
     const entity = extractEntityFromResults('quantum computing', results)

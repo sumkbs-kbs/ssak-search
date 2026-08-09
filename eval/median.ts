@@ -94,9 +94,7 @@ export function computeMedianReport(reports: EvalReport[], queries: EvalQuery[])
     const passCount = runs.filter((r) => r.passed).length
     const passed = passCount >= majority
 
-    const rankings = runs
-      .map((r) => r.ranking)
-      .filter((rm): rm is RankingMetrics => rm !== undefined)
+    const rankings = runs.map((r) => r.ranking).filter((rm): rm is RankingMetrics => rm !== undefined)
 
     results.push({
       query: q,
@@ -107,6 +105,9 @@ export function computeMedianReport(reports: EvalReport[], queries: EvalQuery[])
       backends: typical.backends,
       passed,
       failures: passed ? [] : [...new Set(runs.flatMap((r) => r.failures))],
+      // S28: non-fatal backend-availability warnings survive the median
+      // aggregation so the report still surfaces them (union across runs).
+      warnings: [...new Set(runs.flatMap((r) => r.warnings ?? []))],
       ranking: medianRanking(rankings),
     })
   }

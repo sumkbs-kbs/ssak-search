@@ -20,8 +20,19 @@
  *    result_model.article_info.link_url (external) or article_id
  *    (https://juejin.cn/post/<id>). Covers the juejin.cn gold (zh-tech gold).
  *
- * zhihu.com / csdn.net / segmentfault.com / cnblogs.com / zenn.dev have no
- * usable public keyless API — they rely on the existing bing path.
+ *  - CSDN search API — https://so.csdn.net/api/v3/search?q=... (S26,
+ *    2026-08-07). The site-search endpoint the so.csdn.net page drives from
+ *    the browser; keyless GET returns result_vos with blog.csdn.net article
+ *    URLs. Covers the csdn.net gold (10 zh gold queries) AND real Chinese
+ *    community content for zh-general queries that bing mkt=zh-CN from a US
+ *    IP cross-language-contaminates (zh-general-12: 4/10 EU-climate English
+ *    news items). Verified live HTTP 200.
+ *
+ * zhihu.com / segmentfault.com / cnblogs.com / zenn.dev have no usable
+ * public keyless API — they rely on the existing bing path (zhihu's own
+ * search API returns 400 anti-bot from non-CN IPs; a CN-located SearXNG
+ * instance with Baidu/Bing zh engines is the documented mitigation — see
+ * docs/13_SEARXNG_SETUP_GUIDE.md).
  *
  * robots.txt / ToS: both are the services' own public search endpoints
  * (Juejin's search page drives this API from the browser; Qiita's v2 API is
@@ -34,6 +45,35 @@ import { fetchWithTimeout, extractDomain, decodeEntities, computeScore, truncate
 
 const QIITA_ITEMS_URL = 'https://qiita.com/api/v2/items'
 const JUEJIN_SEARCH_URL = 'https://api.juejin.cn/search_api/v1/search'
+const CSDN_SEARCH_URL = 'https://so.csdn.net/api/v3/search'
+
+/**
+ * CSDN keyless quota guard (S26, review 2026-08-07). CSDN documents no
+ * explicit unauth rate limit, but the eval harness runs 500×3 queries with
+ * ~67 chinese queries per run (~200 calls over ~60 min). A generous soft
+ * floor protects against pathological hammering (a live spike or a
+ * misconfigured loop) while staying far above the eval budget; failed/empty
+ * responses return [] so the pool falls back to bing/searxng. Qiita has the
+ * same guard pattern with a tighter floor (documented hourly limit).
+ */
+const CSDN_HOURLY_SOFT_FLOOR = 250
+let csdnCallsInWindow = 0
+let csdnWindowStart = Date.now()
+
+function csdnQuotaAvailable(): boolean {
+  const now = Date.now()
+  if (now - csdnWindowStart > 3_600_000) {
+    csdnWindowStart = now
+    csdnCallsInWindow = 0
+  }
+  return csdnCallsInWindow < CSDN_HOURLY_SOFT_FLOOR
+}
+
+/** TEST HOOK: reset the sliding-hour CSDN quota window. */
+export function resetCsdnQuota(): void {
+  csdnCallsInWindow = 0
+  csdnWindowStart = Date.now()
+}
 
 /**
  * Qiita keyless quota guard. The public v2 API rate-limits unauthenticated
@@ -91,7 +131,13 @@ export function parseQiitaItems(data: unknown, query: string, maxResults: number
     if (!title || typeof title !== 'string' || title.trim().length < 5) continue
 
     const user = (item.user as { id?: string } | undefined)?.id
-    const tags = Array.isArray(item.tags) ? (item.tags as Array<{ name?: string }>).slice(0, 3).map((t) => t.name).filter(Boolean).join(', ') : ''
+    const tags = Array.isArray(item.tags)
+      ? (item.tags as Array<{ name?: string }>)
+          .slice(0, 3)
+          .map((t) => t.name)
+          .filter(Boolean)
+          .join(', ')
+      : ''
     const likes = typeof item.likes_count === 'number' && item.likes_count > 0 ? ` ♥${item.likes_count}` : ''
     const content = truncateToTokens(`${user ? `[${user}] ` : ''}${title}${likes}${tags ? ` [${tags}]` : ''}`, 500)
 
@@ -113,10 +159,7 @@ export function parseQiitaItems(data: unknown, query: string, maxResults: number
  * Search Qiita articles via the official public v2 API. Keyless.
  * Returns qiita.com URLs — the qiita.com gold domain for ja-tech eval.
  */
-export async function qiitaSearch(
-  query: string,
-  opts: CommunitySearchOptions = {},
-): Promise<SearchResult[]> {
+export async function qiitaSearch(query: string, opts: CommunitySearchOptions = {}): Promise<SearchResult[]> {
   const { maxResults = 5, timeoutMs = 8000, env } = opts
   if (!qiitaQuotaAvailable()) {
     logger.warn('Qiita API quota soft floor reached — skipping (fall back to bing/github)')
@@ -193,7 +236,13 @@ export function parseJuejinSearch(data: unknown, query: string, maxResults: numb
     if (!url) continue // off-domain link_url is dropped (gold-domain rule)
 
     const brief = typeof articleInfo.brief_content === 'string' ? articleInfo.brief_content : ''
-    const tags = Array.isArray(model.tags) ? (model.tags as Array<{ tag_name?: string }>).slice(0, 3).map((t) => t.tag_name).filter(Boolean).join(', ') : ''
+    const tags = Array.isArray(model.tags)
+      ? (model.tags as Array<{ tag_name?: string }>)
+          .slice(0, 3)
+          .map((t) => t.tag_name)
+          .filter(Boolean)
+          .join(', ')
+      : ''
     const content = truncateToTokens(`${title}${brief ? ` — ${brief}` : ''}${tags ? ` [${tags}]` : ''}`, 500)
 
     results.push({
@@ -212,10 +261,7 @@ export function parseJuejinSearch(data: unknown, query: string, maxResults: numb
  * Search Juejin (掘金) articles via the public search endpoint. Keyless.
  * Returns juejin.cn/post URLs — the juejin.cn gold domain for zh-tech eval.
  */
-export async function juejinSearch(
-  query: string,
-  opts: CommunitySearchOptions = {},
-): Promise<SearchResult[]> {
+export async function juejinSearch(query: string, opts: CommunitySearchOptions = {}): Promise<SearchResult[]> {
   const { maxResults = 5, timeoutMs = 8000, env } = opts
   try {
     const params = new URLSearchParams({
@@ -227,7 +273,12 @@ export async function juejinSearch(
     const response = await fetchWithTimeout(
       env,
       url,
-      { headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120.0.0.0 Safari/537.36', Accept: 'application/json' } },
+      {
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120.0.0.0 Safari/537.36',
+          Accept: 'application/json',
+        },
+      },
       timeoutMs,
     )
     if (!response.ok) {
@@ -244,6 +295,145 @@ export async function juejinSearch(
     return parseJuejinSearch(data, query, maxResults)
   } catch (err) {
     logger.warn('Juejin API search failed:', { error: toError(err) })
+    return []
+  }
+}
+
+// ============================================================
+// CSDN search API
+// ============================================================
+
+/** Strip HTML tags (CSDN wraps matched terms in <em>…</em>) and decode entities. */
+function cleanCsdnText(raw: unknown): string {
+  if (typeof raw !== 'string') return ''
+  return decodeEntities(
+    String(raw)
+      .replace(/<[^>]+>/g, '')
+      .trim(),
+  )
+}
+
+/**
+ * Parse a CSDN search API response.
+ * EXPORTED FOR TESTING.
+ * Response shape: { result_vos: [ { title, url, articleid, username, nickname,
+ *   digest, description, create_time_str } ] }
+ *
+ * GOLD-DOMAIN RULE: csdn.net is an eval gold domain (10 zh gold queries) and
+ * search hits are overwhelmingly blog.csdn.net articles. The transport URL
+ * carries heavy tracking query params (ops_request_misc / utm_*), so when
+ * articleid + username are present we build the canonical
+ * https://blog.csdn.net/<user>/article/details/<id> URL; otherwise the raw
+ * url is kept with its query string stripped. download.csdn.net hits are
+ * dropped (binary resources, not articles).
+ */
+export function parseCsdnSearch(data: unknown, query: string, maxResults: number): SearchResult[] {
+  const results: SearchResult[] = []
+  const d = data as { result_vos?: Array<Record<string, unknown>> } | undefined
+  const items = d?.result_vos
+  if (!Array.isArray(items)) return results
+
+  for (const it of items) {
+    if (results.length >= maxResults) break
+
+    // Drop non-blog hits (download.csdn.net resources etc.) BEFORE building
+    // the canonical URL so a download item never gets rewritten into a blog
+    // URL. The gold-domain guard below is the second, final backstop.
+    const rawUrl = typeof it.url === 'string' ? it.url : ''
+    const rawHost = rawUrl.match(/^https?:\/\/([^/]+)/)?.[1] ?? ''
+    if (rawHost && /(^|\.)download\.csdn\.net$/i.test(rawHost)) continue
+
+    const title = cleanCsdnText(it.title)
+    if (title.length < 5) continue
+
+    const articleId = it.articleid
+    const username = typeof it.username === 'string' && it.username ? it.username : ''
+    // Accept numeric strings too — the API may serialize ids either way.
+    const articleNum =
+      typeof articleId === 'number' ? articleId : typeof articleId === 'string' ? Number(articleId) : NaN
+    let url = ''
+    if (Number.isFinite(articleNum) && articleNum > 0 && username) {
+      url = `https://blog.csdn.net/${encodeURIComponent(username)}/article/details/${articleNum}`
+    } else if (rawUrl) {
+      url = rawUrl.split('?')[0]
+    }
+    if (!url || !/^https?:\/\/(www\.)?blog\.csdn\.net\//i.test(url)) continue
+
+    const digest = cleanCsdnText(it.digest || it.description)
+    const nickname = typeof it.nickname === 'string' && it.nickname ? it.nickname : username
+    const content = truncateToTokens(`${nickname ? `[${nickname}] ` : ''}${title}${digest ? ` — ${digest}` : ''}`, 500)
+
+    results.push({
+      title,
+      url,
+      content,
+      score: Math.min(computeScore(title, content, query) + 0.15, 0.99), // community authority boost (clamped)
+      domain: extractDomain(url),
+      author: nickname || undefined,
+      published_date: typeof it.create_time_str === 'string' ? it.create_time_str : undefined,
+    })
+  }
+
+  return results
+}
+
+/**
+ * Search CSDN (CSDN 博客) via the site's public search endpoint. Keyless —
+ * the same /api/v3/search call the so.csdn.net search page drives from the
+ * browser. Verified live 2026-08-07 (HTTP 200, 30 result_vos for a zh-general
+ * query; 28/30 blog.csdn.net). Returns blog.csdn.net article URLs — the
+ * csdn.net gold domain for zh eval (10 gold queries).
+ *
+ * S26 (2026-08-07): zh-general-12 (考研复习计划) pools were cross-language
+ * contaminated — bing mkt=zh-CN from a US IP returned 4/10 EU-climate English
+ * news items (consilium.europa.eu / gov.ie / linkedin). CSDN returns real
+ * Chinese community articles for exactly these queries.
+ */
+export async function csdnSearch(query: string, opts: CommunitySearchOptions = {}): Promise<SearchResult[]> {
+  const { maxResults = 5, timeoutMs = 8000, env } = opts
+  if (!csdnQuotaAvailable()) {
+    logger.warn('CSDN API quota soft floor reached — skipping (fall back to bing/searxng)')
+    return []
+  }
+  csdnCallsInWindow += 1
+  try {
+    const params = new URLSearchParams({
+      q: query,
+      t: 'all',
+      p: '1',
+      s: 'new',
+      tm: '0',
+      lv: '-1',
+      ft: '0',
+      l: '',
+      u: '',
+      ct: '-1',
+      pnt: '-1',
+      ry: '-1',
+      ss: '-1',
+      dct: '-1',
+      vip_article: 'undefined',
+    })
+    const url = `${CSDN_SEARCH_URL}?${params.toString()}`
+    const response = await fetchWithTimeout(
+      env,
+      url,
+      {
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120.0.0.0 Safari/537.36',
+          Accept: 'application/json',
+        },
+      },
+      timeoutMs,
+    )
+    if (!response.ok) {
+      logger.warn('CSDN search non-OK:', { status: response.status })
+      return []
+    }
+    const data = (await response.json()) as unknown
+    return parseCsdnSearch(data, query, maxResults)
+  } catch (err) {
+    logger.warn('CSDN search failed:', { error: toError(err) })
     return []
   }
 }

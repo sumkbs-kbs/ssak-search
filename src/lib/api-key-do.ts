@@ -111,10 +111,14 @@ async function sha256(msg: string): Promise<string> {
 function generateApiKey(): string {
   const bytes = new Uint8Array(32)
   crypto.getRandomValues(bytes)
-  return KEY_PREFIX + '-' + btoa(String.fromCharCode(...bytes))
-    .replace(/\+/g, '-')
-    .replace(/\//g, '_')
-    .replace(/=+$/, '')
+  return (
+    KEY_PREFIX +
+    '-' +
+    btoa(String.fromCharCode(...bytes))
+      .replace(/\+/g, '-')
+      .replace(/\//g, '_')
+      .replace(/=+$/, '')
+  )
 }
 
 // ============================================================
@@ -253,7 +257,7 @@ export class ApiKeyDO extends DurableObject<Env> {
     // on the singleton DO. The in-memory meta is still refreshed immediately,
     // so concurrent reads in the same isolate see the fresh timestamp.
     const now = Date.now()
-    const stale = !meta.lastUsedAt || (now - meta.lastUsedAt) >= LAST_USED_THROTTLE_MS
+    const stale = !meta.lastUsedAt || now - meta.lastUsedAt >= LAST_USED_THROTTLE_MS
     meta.lastUsedAt = now
     this.store.keys.set(keyId, meta)
     if (stale) {
@@ -351,8 +355,9 @@ export interface ApiKeyRPC {
  * ApiKeyDO 클라이언트 스텁 생성
  */
 export function getApiKeyStub(env: Env): ApiKeyRPC {
-  const id = env.API_KEY_DO!.idFromName('global')
-  return env.API_KEY_DO!.get(id) as unknown as ApiKeyRPC
+  if (!env.API_KEY_DO) throw new Error('API_KEY_DO binding missing — configure the Durable Object binding first')
+  const id = env.API_KEY_DO.idFromName('global')
+  return env.API_KEY_DO.get(id) as unknown as ApiKeyRPC
 }
 
 export {}

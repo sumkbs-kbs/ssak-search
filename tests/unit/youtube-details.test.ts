@@ -18,8 +18,8 @@ import {
   buildYouTubeEvidenceText,
   youtubeExtract,
   getTranscriptFromTimedtext,
+  type YouTubeVideoDetails,
 } from '../../src/lib/youtube-search'
-import type { YouTubeVideoDetails } from '../../src/lib/youtube-search'
 
 describe('extractYouTubeId', () => {
   const ID = 'dQw4w9WgXcQ'

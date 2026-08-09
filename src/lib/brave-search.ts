@@ -113,10 +113,7 @@ interface BraveSearchResponse {
  * Requires BRAVE_API_KEY env variable.
  * Returns SearchResult[] compatible with the orchestrator.
  */
-export async function braveSearch(
-  query: string,
-  opts: BraveSearchOptions,
-): Promise<SearchResult[]> {
+export async function braveSearch(query: string, opts: BraveSearchOptions): Promise<SearchResult[]> {
   const {
     maxResults = 10,
     timeoutMs = 10000,
@@ -170,7 +167,7 @@ export async function braveSearch(
     const response = await fetch(url.toString(), {
       method: 'GET',
       headers: {
-        'Accept': 'application/json',
+        Accept: 'application/json',
         'Accept-Encoding': 'gzip',
         'X-Subscription-Token': apiKey,
       },
@@ -192,7 +189,7 @@ export async function braveSearch(
       return []
     }
 
-    const data = await response.json() as BraveSearchResponse
+    const data = (await response.json()) as BraveSearchResponse
     return parseBraveResponse(data, query, maxResults)
   } catch (err) {
     logger.warn('[BraveSearch] Search failed:', { error: toError(err) })
@@ -203,11 +200,7 @@ export async function braveSearch(
 /**
  * Parse Brave Search API response into SearchResult[] format.
  */
-function parseBraveResponse(
-  data: BraveSearchResponse,
-  query: string,
-  maxResults: number,
-): SearchResult[] {
+function parseBraveResponse(data: BraveSearchResponse, query: string, maxResults: number): SearchResult[] {
   const results: SearchResult[] = []
 
   // Collect results from web, news, discussions (in priority order)
@@ -235,8 +228,8 @@ function parseBraveResponse(
   if (data.mixed && data.mixed.length > 0) {
     const mixedOrder = new Map(
       data.mixed
-        .filter(m => m.type === 'web' || m.type === 'news' || m.type === 'discussions')
-        .map(m => [m.type, m.index])
+        .filter((m) => m.type === 'web' || m.type === 'news' || m.type === 'discussions')
+        .map((m) => [m.type, m.index]),
     )
     allItems.sort((a, b) => {
       const aIdx = mixedOrder.get(a.source) ?? 999
@@ -260,9 +253,7 @@ function parseBraveResponse(
     if (!title || title.length < 2) continue
 
     const content = (r.description || '').trim()
-    const domain = r.meta_url?.host
-      ? r.meta_url.host.replace(/^www\./, '')
-      : extractDomain(url)
+    const domain = r.meta_url?.host ? r.meta_url.host.replace(/^www\./, '') : extractDomain(url)
 
     // Parse published date
     let publishedDate: string | undefined
@@ -272,15 +263,16 @@ function parseBraveResponse(
         if (!isNaN(parsed.getTime())) {
           publishedDate = parsed.toISOString()
         }
-      } catch (err) {
+      } catch (_err) {
         // Invalid date — skip
       }
     }
 
     // Use Brave's relevance_score if available, otherwise compute
-    const score = typeof r.relevance_score === 'number'
-      ? Math.min(1, Math.max(0, r.relevance_score + 0.15)) // Brave scores are conservative
-      : computeScore(title, content, query, publishedDate, url)
+    const score =
+      typeof r.relevance_score === 'number'
+        ? Math.min(1, Math.max(0, r.relevance_score + 0.15)) // Brave scores are conservative
+        : computeScore(title, content, query, publishedDate, url)
 
     results.push({
       title,
@@ -343,7 +335,7 @@ export async function braveLLMContextSearch(
     const response = await fetch(BRAVE_LLM_CONTEXT_URL, {
       method: 'POST',
       headers: {
-        'Accept': 'application/json',
+        Accept: 'application/json',
         'Content-Type': 'application/json',
         'Accept-Encoding': 'gzip',
         'X-Subscription-Token': apiKey,
@@ -366,7 +358,7 @@ export async function braveLLMContextSearch(
       return []
     }
 
-    const data = await response.json() as {
+    const data = (await response.json()) as {
       grounding?: {
         generic?: Array<{
           title: string
@@ -375,10 +367,13 @@ export async function braveLLMContextSearch(
           score: number
         }>
       }
-      sources?: Record<string, {
-        title: string
-        url: string
-      }>
+      sources?: Record<
+        string,
+        {
+          title: string
+          url: string
+        }
+      >
     }
 
     if (!data.grounding?.generic || data.grounding.generic.length === 0) {
@@ -394,9 +389,7 @@ export async function braveLLMContextSearch(
         title: item.title || '',
         url,
         content: (item.snippet || '').slice(0, 2000),
-        score: typeof item.score === 'number'
-          ? Math.min(1, Math.max(0.1, item.score))
-          : 0.5,
+        score: typeof item.score === 'number' ? Math.min(1, Math.max(0.1, item.score)) : 0.5,
         domain: extractDomain(url),
       })
     }
@@ -424,16 +417,13 @@ export async function braveHealthCheck(
     const controller = new AbortController()
     const timer = setTimeout(() => controller.abort(), 5000)
 
-    const response = await fetch(
-      `${BRAVE_WEB_SEARCH_URL}?q=health+check&count=1`,
-      {
-        headers: {
-          'Accept': 'application/json',
-          'X-Subscription-Token': apiKey,
-        },
-        signal: controller.signal,
+    const response = await fetch(`${BRAVE_WEB_SEARCH_URL}?q=health+check&count=1`, {
+      headers: {
+        Accept: 'application/json',
+        'X-Subscription-Token': apiKey,
       },
-    )
+      signal: controller.signal,
+    })
 
     clearTimeout(timer)
     const latency = Date.now() - start
@@ -445,7 +435,7 @@ export async function braveHealthCheck(
       return { status: 'degraded', latency_ms: latency }
     }
     return { status: 'degraded', latency_ms: latency }
-  } catch (err) {
+  } catch (_err) {
     return { status: 'down', latency_ms: Date.now() - start }
   }
 }

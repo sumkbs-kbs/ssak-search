@@ -19,7 +19,7 @@ import { logger, toError } from './logger'
 
 function cssEscape(value: string): string {
   if (!value) return ''
-  return value.replace(/[ !"#$%&'()*+,.\/:;<=>?@[\]^`{|}~]/g, '\\$&')
+  return value.replace(/[ !"#$%&'()*+,./:;<=>?@[\]^`{|}~]/g, '\\$&')
 }
 
 // ============================================================
@@ -198,7 +198,12 @@ export function generateSelectors(sig: ElementSignature): SelectorCandidate[] {
     })
   }
 
-  if (sig.prevSiblingTag && sig.prevSiblingTag !== 'unknown' && sig.nextSiblingTag && sig.nextSiblingTag !== 'unknown') {
+  if (
+    sig.prevSiblingTag &&
+    sig.prevSiblingTag !== 'unknown' &&
+    sig.nextSiblingTag &&
+    sig.nextSiblingTag !== 'unknown'
+  ) {
     candidates.push({
       selector: `${sig.prevSiblingTag} + ${sig.tag}`,
       specificity: 55,
@@ -439,13 +444,15 @@ export async function relocateElement(
 export async function createSnapshot(
   html: string,
   targets: Array<{ name: string; selector: string }>,
-): Promise<Array<{
-  targetName: string
-  selector: string
-  signatures: ElementSignature[]
-  elementCount: number
-  capturedAt: number
-}>> {
+): Promise<
+  Array<{
+    targetName: string
+    selector: string
+    signatures: ElementSignature[]
+    elementCount: number
+    capturedAt: number
+  }>
+> {
   const results: Array<{
     targetName: string
     selector: string
@@ -473,13 +480,15 @@ export async function createSnapshot(
 /**
  * Serialize signatures to JSON for storage (KV, D1, etc.).
  */
-export function serializeSnapshot(snapshot: Array<{
-  targetName: string
-  selector: string
-  signatures: ElementSignature[]
-  elementCount: number
-  capturedAt: number
-}>): string {
+export function serializeSnapshot(
+  snapshot: Array<{
+    targetName: string
+    selector: string
+    signatures: ElementSignature[]
+    elementCount: number
+    capturedAt: number
+  }>,
+): string {
   return JSON.stringify(snapshot)
 }
 

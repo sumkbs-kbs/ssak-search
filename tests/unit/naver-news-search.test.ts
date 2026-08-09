@@ -40,7 +40,14 @@ function htmlResponse(html: string) {
 }
 
 /** Minimal realistic fixture mirroring Naver m_news item layout. */
-function newsItem(media: string, pressId: string, time: string, url: string, headline: string, snippet: string): string {
+function newsItem(
+  media: string,
+  pressId: string,
+  time: string,
+  url: string,
+  headline: string,
+  snippet: string,
+): string {
   return `
     <li class="bx">
       <div class="profile">
@@ -63,9 +70,12 @@ function newsItem(media: string, pressId: string, time: string, url: string, hea
 
 describe('parseNaverNewsHtml', () => {
   it('collects n.news.naver.com articles with media + publish time', () => {
-    const html = `<ul class="list_news _infinite_list" id="news_result_list">` +
+    const html =
+      `<ul class="list_news _infinite_list" id="news_result_list">` +
       newsItem(
-        '뉴시스', '003', '1시간 전',
+        '뉴시스',
+        '003',
+        '1시간 전',
         'https://n.news.naver.com/article/003/0014108362?sid=100',
         '삼성·SK, 광주 군공항 부지 현장점검…800조 반도체 클러스터 구축 시동',
         '정부는 삼성전자와 SK하이닉스가 모두 800조원을 투자해 광주 군공항 부지에 최신 반도체 팹 4기를 조성하는 계획을 발표했습니다.',
@@ -90,9 +100,12 @@ describe('parseNaverNewsHtml', () => {
 
   it('dedupes headline + snippet anchors that share one URL', () => {
     // The same article URL appears twice (headline + summary) — must yield ONE result.
-    const html = `<ul>` +
+    const html =
+      `<ul>` +
       newsItem(
-        '연합뉴스', '001', '2시간 전',
+        '연합뉴스',
+        '001',
+        '2시간 전',
         'https://n.news.naver.com/article/001/0001234567?sid=101',
         '부동산 시장 동향',
         '올해 아파트 매매가가 상승세를 보이고 있습니다.',
@@ -106,10 +119,32 @@ describe('parseNaverNewsHtml', () => {
   })
 
   it('parses multiple articles and respects maxResults', () => {
-    const html = `<ul>` +
-      newsItem('뉴시스', '003', '1시간 전', 'https://n.news.naver.com/article/003/0000000001?sid=100', '기사 하나 제목', '첫 번째 기사 본문 요약입니다.') +
-      newsItem('연합뉴스', '001', '3시간 전', 'https://n.news.naver.com/article/001/0000000002?sid=100', '기사 둘 제목', '두 번째 기사 본문 요약입니다.') +
-      newsItem('한겨레', '028', '5시간 전', 'https://n.news.naver.com/article/028/0000000003?sid=100', '기사 셋 제목', '세 번째 기사 본문 요약입니다.') +
+    const html =
+      `<ul>` +
+      newsItem(
+        '뉴시스',
+        '003',
+        '1시간 전',
+        'https://n.news.naver.com/article/003/0000000001?sid=100',
+        '기사 하나 제목',
+        '첫 번째 기사 본문 요약입니다.',
+      ) +
+      newsItem(
+        '연합뉴스',
+        '001',
+        '3시간 전',
+        'https://n.news.naver.com/article/001/0000000002?sid=100',
+        '기사 둘 제목',
+        '두 번째 기사 본문 요약입니다.',
+      ) +
+      newsItem(
+        '한겨레',
+        '028',
+        '5시간 전',
+        'https://n.news.naver.com/article/028/0000000003?sid=100',
+        '기사 셋 제목',
+        '세 번째 기사 본문 요약입니다.',
+      ) +
       `</ul>`
 
     const all = parseNaverNewsHtml(html, '시장 동향', 10)
@@ -120,7 +155,8 @@ describe('parseNaverNewsHtml', () => {
   })
 
   it('skips non-news anchors and boilerplate titles', () => {
-    const html = `<ul class="list_news">` +
+    const html =
+      `<ul class="list_news">` +
       // Media profile / nav links must NOT be collected as articles
       `<a href="https://media.naver.com/press/003" class="fender-ui_1"><span>뉴시스</span></a>` +
       `<a href="https://www.naver.com/">더보기</a>` +
@@ -138,9 +174,12 @@ describe('parseNaverNewsHtml', () => {
   })
 
   it('handles absolute YYYY.MM.DD publish dates', () => {
-    const html = `<ul>` +
+    const html =
+      `<ul>` +
       newsItem(
-        '동아일보', '020', '2026.07.15.',
+        '동아일보',
+        '020',
+        '2026.07.15.',
         'https://n.news.naver.com/article/020/0000000044?sid=101',
         '과거 경제 기사',
         '지난달 발표된 경제 지표 분석입니다.',
@@ -178,7 +217,10 @@ describe('isRecencyNewsQuery — 최신 의도 감지', () => {
 describe('mergeNaverNewsPages — relevance + recency 병합', () => {
   function result(url: string, score: number, title = '기사'): ReturnType<typeof parseNaverNewsHtml>[number] {
     return {
-      title, url, content: title, score,
+      title,
+      url,
+      content: title,
+      score,
       domain: 'n.news.naver.com',
     } as ReturnType<typeof parseNaverNewsHtml>[number]
   }
@@ -211,7 +253,8 @@ describe('mergeNaverNewsPages — relevance + recency 병합', () => {
     // Relevance-first insertion would evict BOTH fresh ones — recency-first
     // must keep them so downstream recency ranking can surface them.
     const relevance = Array.from({ length: 8 }, (_, i) =>
-      result(`https://n.news.naver.com/article/001/r${i}`, 0.9, `옛 기사 ${i}`))
+      result(`https://n.news.naver.com/article/001/r${i}`, 0.9, `옛 기사 ${i}`),
+    )
     const recency = [
       result('https://n.news.naver.com/article/001/f1', 0.4, '방금 속보 1'),
       result('https://n.news.naver.com/article/001/f2', 0.4, '방금 속보 2'),
@@ -230,11 +273,27 @@ describe('naverNewsSearch — recency dual-fetch (sort=1)', () => {
   })
 
   it('fetches BOTH relevance and sort=1 pages in parallel when sortByRecency', async () => {
-    const relevanceHtml = `<ul>` +
-      newsItem('뉴시스', '003', '1시간 전', 'https://n.news.naver.com/article/003/1?sid=100', '관련도 기사', '관련도 우선 기사입니다.') +
+    const relevanceHtml =
+      `<ul>` +
+      newsItem(
+        '뉴시스',
+        '003',
+        '1시간 전',
+        'https://n.news.naver.com/article/003/1?sid=100',
+        '관련도 기사',
+        '관련도 우선 기사입니다.',
+      ) +
       `</ul>`
-    const recencyHtml = `<ul>` +
-      newsItem('연합뉴스', '001', '방금 전', 'https://n.news.naver.com/article/001/2?sid=100', '속보 기사', '방금 나온 속보입니다.') +
+    const recencyHtml =
+      `<ul>` +
+      newsItem(
+        '연합뉴스',
+        '001',
+        '방금 전',
+        'https://n.news.naver.com/article/001/2?sid=100',
+        '속보 기사',
+        '방금 나온 속보입니다.',
+      ) +
       `</ul>`
 
     mockFetchWithTimeout.mockImplementation(async (_env: unknown, url: string) => {
@@ -243,7 +302,9 @@ describe('naverNewsSearch — recency dual-fetch (sort=1)', () => {
     })
 
     const results = await naverNewsSearch('삼성전자 뉴스 최신', {
-      maxResults: 10, timeoutMs: 5000, sortByRecency: true,
+      maxResults: 10,
+      timeoutMs: 5000,
+      sortByRecency: true,
     })
 
     expect(mockFetchWithTimeout).toHaveBeenCalledTimes(2)
@@ -255,8 +316,16 @@ describe('naverNewsSearch — recency dual-fetch (sort=1)', () => {
   })
 
   it('fetches only the relevance page when sortByRecency is false', async () => {
-    const html = `<ul>` +
-      newsItem('뉴시스', '003', '1시간 전', 'https://n.news.naver.com/article/003/9?sid=100', '일반 기사', '일반 기사 내용입니다.') +
+    const html =
+      `<ul>` +
+      newsItem(
+        '뉴시스',
+        '003',
+        '1시간 전',
+        'https://n.news.naver.com/article/003/9?sid=100',
+        '일반 기사',
+        '일반 기사 내용입니다.',
+      ) +
       `</ul>`
     mockFetchWithTimeout.mockResolvedValue(htmlResponse(html))
 
@@ -272,12 +341,25 @@ describe('naverNewsSearch — recency dual-fetch (sort=1)', () => {
         // Simulate 403 Cloudflare challenge (non-retryable, returns empty)
         return { ok: false, status: 403, text: async () => '' } as unknown as Response
       }
-      return htmlResponse(`<ul>` +
-        newsItem('뉴시스', '003', '1시간 전', 'https://n.news.naver.com/article/003/5?sid=100', '커버리지 기사', '관련도 페이지가 제공한 기사.') +
-        `</ul>`)
+      return htmlResponse(
+        `<ul>` +
+          newsItem(
+            '뉴시스',
+            '003',
+            '1시간 전',
+            'https://n.news.naver.com/article/003/5?sid=100',
+            '커버리지 기사',
+            '관련도 페이지가 제공한 기사.',
+          ) +
+          `</ul>`,
+      )
     })
 
-    const results = await naverNewsSearch('최신 삼성전자 소식', { maxResults: 10, timeoutMs: 5000, sortByRecency: true })
+    const results = await naverNewsSearch('최신 삼성전자 소식', {
+      maxResults: 10,
+      timeoutMs: 5000,
+      sortByRecency: true,
+    })
     expect(results.length).toBe(1) // relevance page alone still provides coverage
     expect(results[0].title).toContain('커버리지')
   })
@@ -407,7 +489,8 @@ describe('parseNaverArticleDate — 발행시각 파싱', () => {
 
 describe('parseNaverArticleHtml — datePublished 추출', () => {
   it('extracts the publish date from the datestamp span (primary)', () => {
-    const html = `<html><body>` +
+    const html =
+      `<html><body>` +
       `<span class="media_end_head_info_datestamp_time _ARTICLE_DATE_TIME" data-date-time="2026-08-04 14:18:13">2026.08.04. 오후 2:18</span>` +
       `<article id="dic_area">본문입니다.</article>` +
       `</body></html>`
@@ -416,7 +499,8 @@ describe('parseNaverArticleHtml — datePublished 추출', () => {
   })
 
   it('falls back to the span display text when data-date-time is absent (Phase 6.8)', () => {
-    const html = `<html><body>` +
+    const html =
+      `<html><body>` +
       `<span class="media_end_head_info_datestamp_time _ARTICLE_DATE_TIME">2026.08.04. 오후 2:18</span>` +
       `<article id="dic_area">본문입니다.</article>` +
       `</body></html>`
@@ -425,14 +509,16 @@ describe('parseNaverArticleHtml — datePublished 추출', () => {
   })
 
   it('falls back to article:published_time meta when the span is missing', () => {
-    const html = `<html><head><meta property="article:published_time" content="2026-07-15T09:00:00+09:00"/></head>` +
+    const html =
+      `<html><head><meta property="article:published_time" content="2026-07-15T09:00:00+09:00"/></head>` +
       `<body><article id="dic_area">본문입니다.</article></body></html>`
     const parsed = parseNaverArticleHtml(html)
     expect(parsed.datePublished).toBe('2026-07-15T00:00:00.000Z')
   })
 
   it('falls back to og:regDate compact meta', () => {
-    const html = `<html><head><meta property="og:regDate" content="20260101091000"/></head>` +
+    const html =
+      `<html><head><meta property="og:regDate" content="20260101091000"/></head>` +
       `<body><article id="dic_area">본문입니다.</article></body></html>`
     const parsed = parseNaverArticleHtml(html)
     expect(parsed.datePublished).toBe('2026-01-01T00:10:00.000Z')
@@ -446,11 +532,14 @@ describe('parseNaverArticleHtml — datePublished 추출', () => {
 
 describe('buildNaverNewsEvidenceText', () => {
   it('builds a self-contained evidence block', () => {
-    const text = buildNaverNewsEvidenceText({
-      title: '제목',
-      summary: '리드',
-      body: '본문 내용입니다.',
-    }, { maxTokens: 1000 })
+    const text = buildNaverNewsEvidenceText(
+      {
+        title: '제목',
+        summary: '리드',
+        body: '본문 내용입니다.',
+      },
+      { maxTokens: 1000 },
+    )
     expect(text).toContain('Title: 제목')
     expect(text).toContain('Summary: 리드')
     expect(text).toContain('Article body:')
@@ -458,12 +547,15 @@ describe('buildNaverNewsEvidenceText', () => {
   })
 
   it('includes the publish date so the LLM can judge freshness', () => {
-    const text = buildNaverNewsEvidenceText({
-      title: '속보 기사',
-      summary: '리드',
-      body: '본문입니다.',
-      datePublished: '2026-08-04T05:18:13.000Z',
-    }, { maxTokens: 1000 })
+    const text = buildNaverNewsEvidenceText(
+      {
+        title: '속보 기사',
+        summary: '리드',
+        body: '본문입니다.',
+        datePublished: '2026-08-04T05:18:13.000Z',
+      },
+      { maxTokens: 1000 },
+    )
     expect(text).toContain('Published: 2026-08-04T05:18:13.000Z')
   })
 
@@ -479,14 +571,17 @@ describe('naverNewsExtract — ExtractedContent 통합', () => {
   })
 
   it('fetches the article and returns evidence content', async () => {
-    mockFetchWithTimeout.mockResolvedValue(htmlResponse(
-      `<html><head><meta property="og:title" content="테스트 기사"/></head><body>` +
-      `<article id="dic_area" class="go_trans">본문 문단입니다.<br><br>두 번째 문단입니다.</article>` +
-      `</body></html>`,
-    ))
+    mockFetchWithTimeout.mockResolvedValue(
+      htmlResponse(
+        `<html><head><meta property="og:title" content="테스트 기사"/></head><body>` +
+          `<article id="dic_area" class="go_trans">본문 문단입니다.<br><br>두 번째 문단입니다.</article>` +
+          `</body></html>`,
+      ),
+    )
 
     const result = await naverNewsExtract('https://n.news.naver.com/article/003/0014107422?sid=101', {
-      maxTokens: 1000, timeoutMs: 5000,
+      maxTokens: 1000,
+      timeoutMs: 5000,
     })
     expect(result.success).toBe(true)
     expect(result.title).toBe('테스트 기사')
@@ -502,39 +597,61 @@ describe('naverNewsExtract — ExtractedContent 통합', () => {
 
   it('returns failure when the body is missing', async () => {
     mockFetchWithTimeout.mockResolvedValue(htmlResponse('<html><body>빈 페이지</body></html>'))
-    const result = await naverNewsExtract('https://n.news.naver.com/article/003/0014107422?sid=101', { timeoutMs: 5000 })
+    const result = await naverNewsExtract('https://n.news.naver.com/article/003/0014107422?sid=101', {
+      timeoutMs: 5000,
+    })
     expect(result.success).toBe(false)
   })
 
   it('includes the publish date in the evidence content', async () => {
-    mockFetchWithTimeout.mockResolvedValue(htmlResponse(
-      `<html><body>` +
-      `<span class="media_end_head_info_datestamp_time _ARTICLE_DATE_TIME" data-date-time="2026-08-04 14:18:13">2026.08.04. 오후 2:18</span>` +
-      `<article id="dic_area">오늘 발표된 속보 본문입니다.</article>` +
-      `</body></html>`,
-    ))
-    const result = await naverNewsExtract('https://n.news.naver.com/article/003/0014107422?sid=101', { maxTokens: 1000, timeoutMs: 5000 })
+    mockFetchWithTimeout.mockResolvedValue(
+      htmlResponse(
+        `<html><body>` +
+          `<span class="media_end_head_info_datestamp_time _ARTICLE_DATE_TIME" data-date-time="2026-08-04 14:18:13">2026.08.04. 오후 2:18</span>` +
+          `<article id="dic_area">오늘 발표된 속보 본문입니다.</article>` +
+          `</body></html>`,
+      ),
+    )
+    const result = await naverNewsExtract('https://n.news.naver.com/article/003/0014107422?sid=101', {
+      maxTokens: 1000,
+      timeoutMs: 5000,
+    })
     expect(result.success).toBe(true)
     expect(result.raw_content).toContain('Published: 2026-08-04T05:18:13.000Z')
   })
 
   it('retries once on 429/5xx and succeeds on the second attempt', async () => {
     mockFetchWithTimeout
-      .mockResolvedValueOnce({ ok: false, status: 429, body: { cancel: async () => {} }, text: async () => '' } as unknown as Response)
-      .mockResolvedValueOnce(htmlResponse(
-        `<html><body><article id="dic_area">재시도 후 받은 본문입니다.</article></body></html>`,
-      ))
+      .mockResolvedValueOnce({
+        ok: false,
+        status: 429,
+        body: { cancel: async () => {} },
+        text: async () => '',
+      } as unknown as Response)
+      .mockResolvedValueOnce(
+        htmlResponse(`<html><body><article id="dic_area">재시도 후 받은 본문입니다.</article></body></html>`),
+      )
 
-    const result = await naverNewsExtract('https://n.news.naver.com/article/003/0014107422?sid=101', { maxTokens: 1000, timeoutMs: 5000 })
+    const result = await naverNewsExtract('https://n.news.naver.com/article/003/0014107422?sid=101', {
+      maxTokens: 1000,
+      timeoutMs: 5000,
+    })
     expect(result.success).toBe(true)
     expect(result.raw_content).toContain('재시도 후 받은 본문')
     expect(mockFetchWithTimeout).toHaveBeenCalledTimes(2)
   })
 
   it('gives up after exhausting retries on persistent 5xx', async () => {
-    mockFetchWithTimeout.mockResolvedValue({ ok: false, status: 503, body: { cancel: async () => {} }, text: async () => '' } as unknown as Response)
+    mockFetchWithTimeout.mockResolvedValue({
+      ok: false,
+      status: 503,
+      body: { cancel: async () => {} },
+      text: async () => '',
+    } as unknown as Response)
 
-    const result = await naverNewsExtract('https://n.news.naver.com/article/003/0014107422?sid=101', { timeoutMs: 5000 })
+    const result = await naverNewsExtract('https://n.news.naver.com/article/003/0014107422?sid=101', {
+      timeoutMs: 5000,
+    })
     expect(result.success).toBe(false)
     expect(result.error).toContain('503')
     // 1 initial + 2 retries = 3 attempts
@@ -544,7 +661,9 @@ describe('naverNewsExtract — ExtractedContent 통합', () => {
   it('fails fast on 404 without retrying', async () => {
     mockFetchWithTimeout.mockResolvedValue({ ok: false, status: 404, text: async () => '' } as unknown as Response)
 
-    const result = await naverNewsExtract('https://n.news.naver.com/article/003/0014107422?sid=101', { timeoutMs: 5000 })
+    const result = await naverNewsExtract('https://n.news.naver.com/article/003/0014107422?sid=101', {
+      timeoutMs: 5000,
+    })
     expect(result.success).toBe(false)
     expect(mockFetchWithTimeout).toHaveBeenCalledTimes(1)
   })
@@ -552,11 +671,14 @@ describe('naverNewsExtract — ExtractedContent 통합', () => {
   it('retries on network errors and succeeds on recovery', async () => {
     mockFetchWithTimeout
       .mockRejectedValueOnce(new Error('fetch failed: connection reset'))
-      .mockResolvedValueOnce(htmlResponse(
-        `<html><body><article id="dic_area">복구 후 본문입니다.</article></body></html>`,
-      ))
+      .mockResolvedValueOnce(
+        htmlResponse(`<html><body><article id="dic_area">복구 후 본문입니다.</article></body></html>`),
+      )
 
-    const result = await naverNewsExtract('https://n.news.naver.com/article/003/0014107422?sid=101', { maxTokens: 1000, timeoutMs: 5000 })
+    const result = await naverNewsExtract('https://n.news.naver.com/article/003/0014107422?sid=101', {
+      maxTokens: 1000,
+      timeoutMs: 5000,
+    })
     expect(result.success).toBe(true)
     expect(result.raw_content).toContain('복구 후 본문')
     expect(mockFetchWithTimeout).toHaveBeenCalledTimes(2)

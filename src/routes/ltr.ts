@@ -11,7 +11,7 @@
  * Events/train are state-changing/data-exposing → requireAuth.
  */
 
-import { Hono } from 'hono'
+import { Hono, type Context } from 'hono'
 import { cors } from 'hono/cors'
 import { logger, toError } from '../lib/logger'
 import type { AppBindings, ErrorResponse } from '../types'
@@ -22,7 +22,7 @@ import { requireAuth, checkClientRateLimit, getClientIp } from '../lib/auth'
 const ltrRoute = new Hono<{ Bindings: AppBindings }>()
 ltrRoute.use('/*', cors({ origin: '*' }))
 
-function checkBinding(c: any): boolean {
+function checkBinding(c: Context<{ Bindings: AppBindings }>): boolean {
   return !!c.env.CLICK_LOG_DO
 }
 
@@ -47,7 +47,11 @@ ltrRoute.post('/impression', async (c) => {
     user_id?: unknown
     results?: unknown
   }
-  try { body = await c.req.json() } catch { return c.json<ErrorResponse>({ detail: 'Invalid JSON body', code: 'invalid_body' }, 400) }
+  try {
+    body = await c.req.json()
+  } catch {
+    return c.json<ErrorResponse>({ detail: 'Invalid JSON body', code: 'invalid_body' }, 400)
+  }
 
   if (typeof body.query !== 'string' || body.query.trim().length === 0 || body.query.length > 2000) {
     return c.json<ErrorResponse>({ detail: 'query is required (string, max 2000 chars)', code: 'invalid_query' }, 400)
@@ -59,15 +63,17 @@ ltrRoute.post('/impression', async (c) => {
     return c.json<ErrorResponse>({ detail: 'results must be an array of 1-20 items', code: 'invalid_results' }, 400)
   }
 
-  const results = body.results.map((r: any, i: number) => {
-    const position = Number.isInteger(r?.position) ? r.position : i + 1
-    return {
-      url: typeof r?.url === 'string' ? r.url.slice(0, 2000) : '',
-      position: Math.min(99, Math.max(1, position)),
-      score: Number.isFinite(r?.score) ? Math.max(0, Math.min(1, r.score)) : 0,
-      features: Array.isArray(r?.features) ? r.features.slice(0, 32).map(Number) : [],
-    }
-  })
+  const results = body.results.map(
+    (r: { position?: number; url?: string; score?: number; features?: number[] }, i: number) => {
+      const position = Number.isInteger(r?.position) ? (r.position as number) : i + 1
+      return {
+        url: typeof r?.url === 'string' ? r.url.slice(0, 2000) : '',
+        position: Math.min(99, Math.max(1, position)),
+        score: Number.isFinite(r?.score) ? Math.max(0, Math.min(1, r.score as number)) : 0,
+        features: Array.isArray(r?.features) ? (r.features as number[]).slice(0, 32).map(Number) : [],
+      }
+    },
+  )
 
   try {
     const stub = getClickLogStub(c.env)
@@ -100,7 +106,11 @@ ltrRoute.post('/click', async (c) => {
   }
 
   let body: { query?: unknown; url?: unknown; position?: unknown; user_id?: unknown }
-  try { body = await c.req.json() } catch { return c.json<ErrorResponse>({ detail: 'Invalid JSON body', code: 'invalid_body' }, 400) }
+  try {
+    body = await c.req.json()
+  } catch {
+    return c.json<ErrorResponse>({ detail: 'Invalid JSON body', code: 'invalid_body' }, 400)
+  }
 
   if (typeof body.query !== 'string' || body.query.length === 0 || body.query.length > 2000) {
     return c.json<ErrorResponse>({ detail: 'query is required (string, max 2000 chars)', code: 'invalid_query' }, 400)
@@ -140,7 +150,7 @@ ltrRoute.post('/click', async (c) => {
 // ============================================================
 // GET /api/ltr/events — labeled training rows (auth required)
 // ============================================================
-ltrRoute.get('/events', requireAuth as any, async (c) => {
+ltrRoute.get('/events', requireAuth, async (c) => {
   if (!checkBinding(c)) {
     return c.json<ErrorResponse>({ detail: 'Requires CLICK_LOG_DO binding', code: 'binding_missing' }, 501)
   }
@@ -182,17 +192,24 @@ ltrRoute.get('/status', async (c) => {
 // ============================================================
 // POST /api/ltr/train — weekly retrain via sidecar (auth required)
 // ============================================================
-ltrRoute.post('/train', requireAuth as any, async (c) => {
+ltrRoute.post('/train', requireAuth, async (c) => {
   if (!checkBinding(c)) {
     return c.json<ErrorResponse>({ detail: 'Requires CLICK_LOG_DO binding', code: 'binding_missing' }, 501)
   }
   const sidecarUrl = c.env.SIDECAR_RERANK_URL
   if (!sidecarUrl) {
-    return c.json<ErrorResponse>({ detail: 'Requires SIDECAR_RERANK_URL (sidecar not configured)', code: 'binding_missing' }, 501)
+    return c.json<ErrorResponse>(
+      { detail: 'Requires SIDECAR_RERANK_URL (sidecar not configured)', code: 'binding_missing' },
+      501,
+    )
   }
 
   let body: { days?: number; limit?: number }
-  try { body = await c.req.json() } catch { return c.json<ErrorResponse>({ detail: 'Invalid JSON body', code: 'invalid_body' }, 400) }
+  try {
+    body = await c.req.json()
+  } catch {
+    return c.json<ErrorResponse>({ detail: 'Invalid JSON body', code: 'invalid_body' }, 400)
+  }
   const days = Math.min(30, Math.max(1, body.days ?? 7))
   const limit = Math.min(20000, Math.max(100, body.limit ?? 5000))
 
@@ -225,7 +242,10 @@ ltrRoute.post('/train', requireAuth as any, async (c) => {
     return c.json(await resp.json())
   } catch (err) {
     logger.error('Train error:', { error: toError(err) })
-    return c.json<ErrorResponse>({ detail: err instanceof Error ? err.message : 'Training failed', code: 'train_error' }, 500)
+    return c.json<ErrorResponse>(
+      { detail: err instanceof Error ? err.message : 'Training failed', code: 'train_error' },
+      500,
+    )
   }
 })
 

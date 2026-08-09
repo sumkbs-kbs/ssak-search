@@ -78,7 +78,7 @@ function record(backend: string, latencyMs: number, success: boolean): void {
         doubles: [latencyMs / 1000, success ? 1 : 0],
         indexes: [backend.slice(0, 32)], // Analytics Engine limits index to 32 bytes
       })
-    } catch (err) {
+    } catch (_err) {
       // Analytics write failure should not affect the request
     }
   }
@@ -111,7 +111,13 @@ export function recordCacheMiss(): void {
   cacheMisses++
 }
 
-export function getCacheMetrics(): { hits: number; misses: number; hitRatio: number; tier1Hits: number; tier2Hits: number } {
+export function getCacheMetrics(): {
+  hits: number
+  misses: number
+  hitRatio: number
+  tier1Hits: number
+  tier2Hits: number
+} {
   const total = cacheHits + cacheMisses
   return {
     hits: cacheHits,
@@ -184,14 +190,16 @@ export function getPrometheusMetrics(): string {
     lines.push(`${name}_latency_seconds_sum ${(bm.latencies.reduce((a, b) => a + b, 0) / 1000).toFixed(3)}`)
 
     // Error rate as ratio (recent window)
-    const errorRate = bm.requests > 0 ? (bm.errors / bm.requests) : 0
+    const errorRate = bm.requests > 0 ? bm.errors / bm.requests : 0
     lines.push(`# HELP ${name}_error_ratio ${name} error ratio (recent window)`)
     lines.push(`# TYPE ${name}_error_ratio gauge`)
     lines.push(`${name}_error_ratio ${errorRate.toFixed(4)}`)
   }
 
   lines.push('')
-  lines.push('# HELP search_metrics_persistence Whether metrics are persisted cross-isolate (1=Analytics Engine, 0=in-memory only)')
+  lines.push(
+    '# HELP search_metrics_persistence Whether metrics are persisted cross-isolate (1=Analytics Engine, 0=in-memory only)',
+  )
   lines.push('# TYPE search_metrics_persistence gauge')
   lines.push(`search_metrics_persistence ${hasAnalytics ? 1 : 0}`)
 
@@ -252,7 +260,7 @@ export function getPrometheusMetrics(): string {
 let agenticPlanSteps = 0
 let agenticQualityGatePassed = 0
 let agenticQualityGateFailed = 0
-let agenticSynthesisConfidences: number[] = []
+const agenticSynthesisConfidences: number[] = []
 const MAX_CONFIDENCE_SAMPLES = 100
 
 /**
@@ -285,9 +293,10 @@ export function getAgenticMetrics(): {
   avgSynthesisConfidence: number
 } {
   const total = agenticQualityGatePassed + agenticQualityGateFailed
-  const avgConf = agenticSynthesisConfidences.length > 0
-    ? agenticSynthesisConfidences.reduce((a, b) => a + b, 0) / agenticSynthesisConfidences.length
-    : 0
+  const avgConf =
+    agenticSynthesisConfidences.length > 0
+      ? agenticSynthesisConfidences.reduce((a, b) => a + b, 0) / agenticSynthesisConfidences.length
+      : 0
   return {
     totalPlanSteps: agenticPlanSteps,
     qualityGatePassed: agenticQualityGatePassed,
@@ -370,8 +379,10 @@ export function getUsageStats(): UsageStats {
     totalRequests,
     searchRequests: searchBackend.requests,
     extractRequests: extractBackend.requests,
-    avgSearchSubrequests: searchBackend.requests > 0 ? Math.round((searchSubrequests / searchBackend.requests) * 10) / 10 : 0,
-    avgExtractSubrequests: extractBackend.requests > 0 ? Math.round((extractSubrequests / extractBackend.requests) * 10) / 10 : 0,
+    avgSearchSubrequests:
+      searchBackend.requests > 0 ? Math.round((searchSubrequests / searchBackend.requests) * 10) / 10 : 0,
+    avgExtractSubrequests:
+      extractBackend.requests > 0 ? Math.round((extractSubrequests / extractBackend.requests) * 10) / 10 : 0,
     totalErrors: searchBackend.errors + extractBackend.errors,
     persistenceActive: !!currentEnv?.ANALYTICS,
     trackedSince: new Date(trackedSince).toISOString(),

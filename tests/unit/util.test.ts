@@ -1,9 +1,12 @@
 import { describe, it, expect, vi, afterEach } from 'vitest'
 import {
-  assertSafeFetchUrl, isPublicHostname, normalizeUrl, extractDomain,
-  domainMatches, truncateToTokens, parseDate, timeRangeToDays, simplifyQuery,
-  countryToBingMkt, countryToLanguageTag, computeScore, generateRelatedQueries,
-  stripHtml, decodeEntities, getDomainAuthority,
+  assertSafeFetchUrl,
+  isPublicHostname,
+  normalizeUrl,
+  simplifyQuery,
+  computeScore,
+  generateRelatedQueries,
+  getDomainAuthority,
 } from '../../src/lib/util'
 
 describe('normalizeUrl', () => {
@@ -134,9 +137,36 @@ describe('simplifyQuery', () => {
   })
 })
 
+describe('generateRelatedQueries — Korean comparison detection (byte-corruption regression)', () => {
+  it('detects Korean comparison queries ending in 비교/차이/대비', () => {
+    // Regression: the isComparison regex had a raw backspace byte (0x08) where
+    // the closing \b word boundary belonged, so Korean comparison queries were
+    // never detected and fell through to the default "정리/설명/최신" templates.
+    const ko = generateRelatedQueries('React vs Vue 비교', [])
+    expect(ko.some((q) => q.includes('장단점'))).toBe(true)
+    expect(ko.some((q) => q.includes('대안'))).toBe(true)
+
+    const ko2 = generateRelatedQueries('아이폰 vs 갤럭시 차이', [])
+    expect(ko2.some((q) => q.includes('장단점'))).toBe(true)
+
+    const ko3 = generateRelatedQueries('쿠팡과 네이버쇼핑 대비', [])
+    expect(ko3.some((q) => q.includes('장단점'))).toBe(true)
+  })
+
+  it('still detects English comparison queries (vs)', () => {
+    const en = generateRelatedQueries('Rust vs Go performance', [])
+    expect(en.some((q) => q.includes('comparison'))).toBe(true)
+    expect(en.some((q) => q.includes('pros and cons'))).toBe(true)
+  })
+
+  it('does not force comparison templates onto non-comparison Korean queries', () => {
+    const plain = generateRelatedQueries('삼성전자 주가', [])
+    expect(plain.some((q) => q.includes('장단점'))).toBe(false)
+  })
+})
 
 describe('assertSafeFetchUrl — SSRF DNS-rebinding guards (P0-6 hardening)', () => {
-  afterEach(() => vi.restoreAllMocks()) // eslint-disable-line no-undef
+  afterEach(() => vi.restoreAllMocks())
 
   const rcode3_body = Promise.resolve({ Status: 3, Answer: [] })
   const nxdomainStub = vi.fn().mockResolvedValue({ ok: true, json: () => rcode3_body })
@@ -144,9 +174,7 @@ describe('assertSafeFetchUrl — SSRF DNS-rebinding guards (P0-6 hardening)', ()
   it('blocks a hostname whose DoH authoritatively returns NXDOMAIN (RFC1035 RCODE=3)', async () => {
     vi.stubGlobal('fetch', nxdomainStub)
 
-    await expect(assertSafeFetchUrl('http://definitely-does-not-exist-98765.com')).rejects.toThrow(
-      /NXDOMAIN/,
-    )
+    await expect(assertSafeFetchUrl('http://definitely-does-not-exist-98765.com')).rejects.toThrow(/NXDOMAIN/)
   })
 
   it('allows transient NOERROR + empty-answer responses (fail-open by design)', async () => {

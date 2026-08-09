@@ -102,9 +102,7 @@ export class ThreadDO extends DurableObject<Env> {
       if (this.messages[i].role === 'assistant') {
         const answer = this.messages[i].content
         // Find the preceding user message
-        const query = i > 0 && this.messages[i - 1].role === 'user'
-          ? this.messages[i - 1].content
-          : ''
+        const query = i > 0 && this.messages[i - 1].role === 'user' ? this.messages[i - 1].content : ''
         pairs.unshift({ query, answer })
         i -= 2
       } else {
@@ -163,15 +161,17 @@ export interface ThreadRPC {
  * Get a ThreadDO stub by its hex ID.
  */
 export function getThreadStub(env: Env, threadId: string): ThreadRPC {
-  const id = env.THREAD_DO!.idFromString(threadId)
-  return env.THREAD_DO!.get(id) as unknown as ThreadRPC
+  if (!env.THREAD_DO) throw new Error('THREAD_DO binding missing — configure the Durable Object binding first')
+  const id = env.THREAD_DO.idFromString(threadId)
+  return env.THREAD_DO.get(id) as unknown as ThreadRPC
 }
 
 /**
  * Create a new ThreadDO stub with a unique ID.
  */
 export function createThreadStub(env: Env): { stub: ThreadRPC; id: string } {
-  const doId = env.THREAD_DO!.newUniqueId()
-  const stub = env.THREAD_DO!.get(doId) as unknown as ThreadRPC
+  if (!env.THREAD_DO) throw new Error('THREAD_DO binding missing — configure the Durable Object binding first')
+  const doId = env.THREAD_DO.newUniqueId()
+  const stub = env.THREAD_DO.get(doId) as unknown as ThreadRPC
   return { stub, id: doId.toString() }
 }

@@ -31,6 +31,15 @@ on:
         required: false
         default: 'false'
         type: boolean
+      runs:
+        description: 'Median runs (3 = median-of-3, ~60min). Emits the S37 wikipedia-429 loss gate warning. Empty = single run.'
+        required: false
+        default: ''
+      loss_threshold:
+        description: 'S37: warn (::warning::) when weighted wikipedia-429 NDCG loss exceeds this (default 5.0; 0 disables)'
+        required: false
+        default: '5.0'
+        type: number
 
 env:
   NODE_VERSION: '20'
@@ -40,7 +49,11 @@ jobs:
   eval:
     name: Search Quality Evaluation
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    # S37 (2026-08-08): must cover median runs — runs=3 with 500 queries takes
+    # ~60-75min (S31/S32 measured ~75min). The old 30min budget killed a
+    # median workflow_dispatch before the step finished. Single runs finish
+    # in ~15-20min, so 95min only binds for explicit median invocations.
+    timeout-minutes: 95
     steps:
       - uses: actions/checkout@v4
 
@@ -53,6 +66,15 @@ jobs:
       - name: Install dependencies
         run: npm ci
         timeout-minutes: 3
+
+      # S64 (2026-08-09): eval/ joined the prettier format gate (S62 잔여 ① —
+      # format/format:check now includes 'eval/**/*.ts'). ci.yml covers push/PR
+      # triggers, but this workflow also runs on a weekly schedule + manual
+      # dispatch — the format gate must fire there too so eval/ TS drift cannot
+      # slip through an untriggered ci.yml.
+      - name: Check formatting (Prettier)
+        run: npm run format:check
+        timeout-minutes: 2
 
       - name: Determine run mode
         id: config
@@ -74,6 +96,20 @@ jobs:
             CACHE_FLAG="--cache"
           fi
 
+          # S37 (2026-08-08): median runs via workflow_dispatch (runs=3) emit
+          # the wikipedia-429 loss gate — eval/index.ts computes the S34
+          # composition-controlled weighted loss AFTER the median run and
+          # prints a GitHub ::warning:: annotation when it exceeds the
+          # threshold (availability noise, NOT a failure).
+          RUNS_FLAG=""
+          if [ -n "${{ github.event.inputs.runs }}" ]; then
+            RUNS_FLAG="--runs ${{ github.event.inputs.runs }}"
+          fi
+          LOSS_FLAG=""
+          if [ -n "${{ github.event.inputs.runs }}" ] && [ -n "${{ github.event.inputs.loss_threshold }}" ]; then
+            LOSS_FLAG="--loss-threshold ${{ github.event.inputs.loss_threshold }}"
+          fi
+
           # Weekly/manual-cache runs use the full search-quality eval (direct mode):
           # it supports --cache, computes NDCG/MRR/Precision@10 from gold standards,
           # and writes eval/results/latest.json for the weekly README update.
@@ -86,6 +122,8 @@ jobs:
           echo "tag_flag=$TAG_FLAG" >> $GITHUB_OUTPUT
           echo "save_flag=$SAVE_FLAG" >> $GITHUB_OUTPUT
           echo "cache_flag=$CACHE_FLAG" >> $GITHUB_OUTPUT
+          echo "runs_flag=$RUNS_FLAG" >> $GITHUB_OUTPUT
+          echo "loss_flag=$LOSS_FLAG" >> $GITHUB_OUTPUT
           echo "run_mode=$RUN_MODE" >> $GITHUB_OUTPUT
 
           echo "=== Eval Configuration ==="
@@ -93,13 +131,16 @@ jobs:
           echo "Tag filter: ${TAG_FLAG:-all}"
           echo "Save baseline: ${SAVE_FLAG:+yes}${SAVE_FLAG:-no}"
           echo "Cache measurement: ${CACHE_FLAG:+yes}${CACHE_FLAG:-no}"
+          echo "Median runs: ${RUNS_FLAG:-none}"
+          echo "Loss gate threshold: ${LOSS_FLAG:-disabled}"
 
       - name: Run evaluation
         id: eval
         continue-on-error: true
-        timeout-minutes: 50
+        # S37: 50→90min — median-of-3 runs ~60-75min; step must outlive the run.
+        timeout-minutes: 90
         run: |
-          npm run ${{ steps.config.outputs.run_mode }} -- ${{ steps.config.outputs.tag_flag }} ${{ steps.config.outputs.save_flag }} ${{ steps.config.outputs.cache_flag }} 2>&1
+          npm run ${{ steps.config.outputs.run_mode }} -- ${{ steps.config.outputs.tag_flag }} ${{ steps.config.outputs.save_flag }} ${{ steps.config.outputs.cache_flag }} ${{ steps.config.outputs.runs_flag }} ${{ steps.config.outputs.loss_flag }} 2>&1
 
       - name: Upload eval results artifact
         if: always()

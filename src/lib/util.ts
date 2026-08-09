@@ -103,9 +103,9 @@ const DOMAIN_AUTHORITY: Record<string, number> = {
   'en.wikipedia.org': 0.12,
   'ko.wikipedia.org': 0.12,
   'zh.wikipedia.org': 0.12,
-  'github.com': 0.10,
-  'stackoverflow.com': 0.10,
-  'arxiv.org': 0.10,
+  'github.com': 0.1,
+  'stackoverflow.com': 0.1,
+  'arxiv.org': 0.1,
   'developer.mozilla.org': 0.09,
   'reddit.com': 0.05,
   'news.ycombinator.com': 0.06,
@@ -114,8 +114,8 @@ const DOMAIN_AUTHORITY: Record<string, number> = {
   'daum.net': 0.04,
   'namu.wiki': 0.05,
   'investing.com': 0.07,
-  'bloomberg.com': 0.10,
-  'reuters.com': 0.10,
+  'bloomberg.com': 0.1,
+  'reuters.com': 0.1,
   'nytimes.com': 0.09,
   'bbc.com': 0.08,
 }
@@ -232,7 +232,7 @@ const DNS_CACHE_TTL_MS = 30_000 // 30 seconds — short to limit rebinding windo
 /**
  * Resolve a hostname via DNS-over-HTTPS and validate all resolved IPs are public.
  * Uses Cloudflare's 1.1.1.1 DoH endpoint (https://1.1.1.1/dns-query).
- * 
+ *
  * FAIL-OPEN on network/DNS errors (Cloudflare Workers already blocks private egress).
  * FAIL-CLOSED only if resolution succeeds AND any resolved IP is private/internal.
  */
@@ -273,7 +273,7 @@ async function resolveAndValidateHostname(hostname: string): Promise<void> {
         continue
       }
 
-      const data = await resp.value.json() as { Answer?: { data: string; type: number }[]; Status?: number }
+      const data = (await resp.value.json()) as { Answer?: { data: string; type: number }[]; Status?: number }
       // A DNS NXDOMAIN is signaled by RCODE 3 in "Status", independent of the presence/absence of an "Answer" section.
       definitiveNxdomain = definitiveNxdomain && typeof data.Status === 'number' && data.Status === 3
 
@@ -320,14 +320,14 @@ async function resolveAndValidateHostname(hostname: string): Promise<void> {
  * Validate that a URL is safe to fetch server-side.
  * Rejects non-http(s) schemes, private/tracking IPs, and malformed URLs.
  * Throws on rejection — caller should treat as extract failure.
- * 
+ *
  * Now includes DNS-over-HTTPS resolution + IP validation to prevent DNS rebinding attacks.
  */
 export async function assertSafeFetchUrl(url: string): Promise<void> {
   let parsed: URL
   try {
     parsed = new URL(url)
-  } catch (err) {
+  } catch (_err) {
     throw new Error(`Invalid URL: ${url}`)
   }
   if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
@@ -365,9 +365,7 @@ export function stripHtml(html: string): string {
     .replace(/<header[\s\S]*?<\/header>/gi, ' ')
     .replace(/<!--[\s\S]*?-->/g, ' ')
   // Replace block tags with newlines for better readability
-  cleaned = cleaned
-    .replace(/<(?:p|div|br|li|h[1-6]|tr|section|article)[^>]*>/gi, '\n')
-    .replace(/<[^>]+>/g, ' ')
+  cleaned = cleaned.replace(/<(?:p|div|br|li|h[1-6]|tr|section|article)[^>]*>/gi, '\n').replace(/<[^>]+>/g, ' ')
   // Decode common HTML entities
   cleaned = decodeEntities(cleaned)
   // Collapse whitespace
@@ -409,11 +407,7 @@ export function truncateToTokens(text: string, maxTokens: number): string {
   if (text.length <= maxChars) return text
   const truncated = text.slice(0, maxChars)
   // Try to cut at a sentence/word boundary
-  const lastSentence = Math.max(
-    truncated.lastIndexOf('. '),
-    truncated.lastIndexOf('! '),
-    truncated.lastIndexOf('? '),
-  )
+  const lastSentence = Math.max(truncated.lastIndexOf('. '), truncated.lastIndexOf('! '), truncated.lastIndexOf('? '))
   if (lastSentence > maxChars * 0.5) {
     return truncated.slice(0, lastSentence + 1) + '…'
   }
@@ -427,11 +421,13 @@ export function truncateToTokens(text: string, maxTokens: number): string {
  * circular runtime import between answer.ts and fact-check.ts.)
  */
 export function splitIntoSentences(text: string): string[] {
-  const protected_ = text.replace(/(\b(?:Mr|Mrs|Dr|Prof|Inc|Ltd|Corp|vs|etc|e\.g|i\.e|U\.S|U\.K)\.)/g, '$1\x00')
+  // \uE000 (Private Use Area) is the abbreviation-protection placeholder —
+  // intentionally NOT a control character so no-control-regex stays quiet.
+  const protected_ = text.replace(/(\b(?:Mr|Mrs|Dr|Prof|Inc|Ltd|Corp|vs|etc|e\.g|i\.e|U\.S|U\.K)\.)/g, '$1\uE000')
   const sentences = protected_
     .split(/(?<=[.!?。！？])\s*(?=[A-Z\u00C0-\u017F\uAC00-\uD7A3\u4E00-\u9FFF])/)
     .flatMap((s) => s.split(/(?<=[。！？])/))
-    .map((s) => s.replace(/\x00/g, '.').trim())
+    .map((s) => s.replace(/\uE000/g, '.').trim())
     .filter((s) => s.length > 0)
   return sentences
 }
@@ -471,7 +467,13 @@ function cjkBigrams(text: string): string[] {
 }
 
 /** Compute a relevance score based on query term overlap + phrase matching + freshness + authority */
-export function computeScore(title: string, content: string, query: string, publishedDate?: string, url?: string): number {
+export function computeScore(
+  title: string,
+  content: string,
+  query: string,
+  publishedDate?: string,
+  url?: string,
+): number {
   // Tokenize the query preserving symbol-bearing terms. Naively stripping all
   // non-alphanumerics mangles financial/tech queries: "S&P 500" → "sp 500"
   // (drops the &, and "S" alone is a stopword-sized fragment), "C++" → "c",
@@ -497,7 +499,7 @@ export function computeScore(title: string, content: string, query: string, publ
           freshnessBoost = 0.05 * Math.exp(-daysOld / 90)
         }
       }
-    } catch (err) {
+    } catch (_err) {
       // Invalid date — no boost
     }
   }
@@ -543,7 +545,14 @@ export function computeScore(title: string, content: string, query: string, publ
         phraseBonusCJK = 0.12
       }
 
-      const rawScore = titleScoreCJK + contentScoreCJK + baseScoreCJK + phraseBonusCJK - crossLangPenalty + freshnessBoost + authorityBoost
+      const rawScore =
+        titleScoreCJK +
+        contentScoreCJK +
+        baseScoreCJK +
+        phraseBonusCJK -
+        crossLangPenalty +
+        freshnessBoost +
+        authorityBoost
       return Math.min(Math.max(Math.round(rawScore * 100) / 100, 0), 0.99)
     }
     // If CJK bigrams couldn't be formed (e.g. single char query), fall through
@@ -589,7 +598,10 @@ export function computeScore(title: string, content: string, query: string, publ
     }
   }
 
-  return Math.min(Math.round((titleScore + contentScore + baseScore + phraseBonus + freshnessBoost + authorityBoost) * 100) / 100, 0.99)
+  return Math.min(
+    Math.round((titleScore + contentScore + baseScore + phraseBonus + freshnessBoost + authorityBoost) * 100) / 100,
+    0.99,
+  )
 }
 
 // ============================================================
@@ -605,24 +617,120 @@ export function computeScore(title: string, content: string, query: string, publ
  */
 const QUERY_NOISE_WORDS = new Set([
   // English filler / intent words
-  'tutorial', 'tutorials', 'guide', 'guides', 'how', 'to', 'for', 'with',
-  'best', 'top', 'latest', 'new', 'newest', 'recent', 'updated', 'modern',
-  'simple', 'easy', 'beginner', 'advanced', 'complete', 'comprehensive',
-  'introduction', 'intro', 'overview', 'explained', 'examples', 'example',
-  'vs', 'versus', 'alternative', 'alternatives', 'comparison', 'compare',
-  'what', 'is', 'are', 'was', 'were', 'the', 'a', 'an', 'of', 'in', 'on',
-  'about', 'into', 'from', 'using', 'use', 'learn', 'learning',
-  'documentation', 'docs', 'reference', 'cheatsheet', 'cheat', 'sheet',
-  'deep', 'dive', 'deepdive', 'crash', 'course', 'step', 'by', 'stepbystep',
+  'tutorial',
+  'tutorials',
+  'guide',
+  'guides',
+  'how',
+  'to',
+  'for',
+  'with',
+  'best',
+  'top',
+  'latest',
+  'new',
+  'newest',
+  'recent',
+  'updated',
+  'modern',
+  'simple',
+  'easy',
+  'beginner',
+  'advanced',
+  'complete',
+  'comprehensive',
+  'introduction',
+  'intro',
+  'overview',
+  'explained',
+  'examples',
+  'example',
+  'vs',
+  'versus',
+  'alternative',
+  'alternatives',
+  'comparison',
+  'compare',
+  'what',
+  'is',
+  'are',
+  'was',
+  'were',
+  'the',
+  'a',
+  'an',
+  'of',
+  'in',
+  'on',
+  'about',
+  'into',
+  'from',
+  'using',
+  'use',
+  'learn',
+  'learning',
+  'documentation',
+  'docs',
+  'reference',
+  'cheatsheet',
+  'cheat',
+  'sheet',
+  'deep',
+  'dive',
+  'deepdive',
+  'crash',
+  'course',
+  'step',
+  'by',
+  'stepbystep',
   // Korean filler words (already in STOP_WORDS but duplicated here for clarity)
-  '튜토리얼', '가이드', '설명', '정리', '최신', '쉽게', '간단한', '완벽',
-  '소개', '개요', '예시', '예제', '비교', '대안', '사용법', '방법',
-  '하는', '하는법', '알아보기', '정리해', '모음', '추천',
+  '튜토리얼',
+  '가이드',
+  '설명',
+  '정리',
+  '최신',
+  '쉽게',
+  '간단한',
+  '완벽',
+  '소개',
+  '개요',
+  '예시',
+  '예제',
+  '비교',
+  '대안',
+  '사용법',
+  '방법',
+  '하는',
+  '하는법',
+  '알아보기',
+  '정리해',
+  '모음',
+  '추천',
   // Academic filler words — strip for API-based searches
-  'paper', 'papers', 'article', 'articles', 'survey', 'surveys',
-  'architecture', 'model', 'models', 'method', 'methods', 'approach',
-  'network', 'networks', 'algorithm', 'algorithms', 'system', 'systems',
-  'based', 'novel', 'new', 'proposed', 'towards', 'toward',
+  'paper',
+  'papers',
+  'article',
+  'articles',
+  'survey',
+  'surveys',
+  'architecture',
+  'model',
+  'models',
+  'method',
+  'methods',
+  'approach',
+  'network',
+  'networks',
+  'algorithm',
+  'algorithms',
+  'system',
+  'systems',
+  'based',
+  'novel',
+  'new',
+  'proposed',
+  'towards',
+  'toward',
 ])
 
 /**
@@ -666,12 +774,14 @@ export function simplifyQuery(query: string, maxTerms = 5): string {
   // If simplification removed everything, fall back to original query
   // (minus years) so we don't send an empty string to the API
   if (unique.length === 0) {
-    return query
-      .toLowerCase()
-      .split(/\s+/)
-      .filter((t) => t.length > 1 && !/^(19|20)\d{2}$/.test(t))
-      .join(' ')
-      .trim() || query.trim()
+    return (
+      query
+        .toLowerCase()
+        .split(/\s+/)
+        .filter((t) => t.length > 1 && !/^(19|20)\d{2}$/.test(t))
+        .join(' ')
+        .trim() || query.trim()
+    )
   }
 
   return unique.slice(0, maxTerms).join(' ')
@@ -728,7 +838,7 @@ export async function fetchWithTimeout(
   // fall back to a direct fetch — that would defeat the circuit breaker and
   // could trip an IP ban from the upstream. Surface a 503 upstream error
   // instead so callers can treat it as a backend failure.
-  if (!await canRequest(env ?? {}, url)) {
+  if (!(await canRequest(env ?? {}, url))) {
     throw new Error(`Upstream unavailable (circuit open or at capacity): ${url}`)
   }
 
@@ -748,12 +858,22 @@ export function generateRelatedQueries(query: string, resultTitles: string[]): s
   const isKorean = /[\uAC00-\uD7A3]/.test(baseQuery)
 
   // Detect query subtypes for specialized templates
-  const isFinancial = /주가|주식|증권|코스피|코스닥|kospi|kosdaq|stock|price|finance|dividend|\bper\b|\bpbr\b|시세|목표주가|투자의견|실적|배당/i.test(baseQuery)
+  const isFinancial =
+    /주가|주식|증권|코스피|코스닥|kospi|kosdaq|stock|price|finance|dividend|\bper\b|\bpbr\b|시세|목표주가|투자의견|실적|배당/i.test(
+      baseQuery,
+    )
   const isHowTo = /^(?:how|하는|사용|설치|방법)/i.test(baseQuery)
   const isWhatIs = /^(?:what|what is|what are|who|who is|whose|which)/i.test(baseQuery)
-  const isComparison = /\b(?:vs|vs\.|versus|대비|비교|차이)/i.test(baseQuery)
+  // NOTE: \b is ASCII-word-only, so the Korean comparison suffixes are
+  // matched with a trailing $ (end-of-query) instead — '아이폰 vs 갤럭시 차이'
+  // ends in 차이, and the \b alternative only works for the ASCII vs token.
+  const isComparison = /\b(?:vs|versus)\b|(?:대비|비교|차이)$/i.test(baseQuery)
+
   const isQuestion = /[?？]$|^(?:why|when|where|how|does|can|should|would|could)/i.test(baseQuery)
-  const isTech = /\b(?:api|sdk|framework|library|language|compiler|runtime|protocol|standard|typescript|rust|python|javascript|react|node|docker|kubernetes)\b/i.test(baseQuery)
+  const isTech =
+    /\b(?:api|sdk|framework|library|language|compiler|runtime|protocol|standard|typescript|rust|python|javascript|react|node|docker|kubernetes)\b/i.test(
+      baseQuery,
+    )
   const isNewsQuery = /^(?:news|latest|breaking|update|headlines)|(?:news|update)$/i.test(baseQuery)
 
   const currentYear = new Date().getFullYear().toString()
@@ -781,12 +901,7 @@ export function generateRelatedQueries(query: string, resultTitles: string[]): s
         `${baseQuery} 문제해결`,
       )
     } else if (isComparison) {
-      templates.push(
-        `${baseQuery} 장단점`,
-        `${baseQuery} 대안`,
-        `${baseQuery} 리뷰`,
-        `${baseQuery} 추천`,
-      )
+      templates.push(`${baseQuery} 장단점`, `${baseQuery} 대안`, `${baseQuery} 리뷰`, `${baseQuery} 추천`)
     } else {
       templates.push(
         `${baseQuery} 정리`,
@@ -915,25 +1030,152 @@ export function generateRelatedQueries(query: string, resultTitles: string[]): s
 
 const STOP_WORDS = new Set([
   // English stop words
-  'about', 'above', 'after', 'again', 'against', 'between', 'both',
-  'during', 'having', 'their', 'there', 'these', 'those', 'where',
-  'which', 'while', 'with', 'your', 'what', 'when', 'where', 'this',
-  'that', 'from', 'into', 'should', 'would', 'could', 'might', 'will',
-  'been', 'were', 'they', 'them', 'more', 'most', 'some', 'such',
-  'only', 'very', 'than', 'then', 'also', 'just', 'like', 'make',
-  'made', 'many', 'much', 'must', 'need', 'even', 'ever', 'every',
+  'about',
+  'above',
+  'after',
+  'again',
+  'against',
+  'between',
+  'both',
+  'during',
+  'having',
+  'their',
+  'there',
+  'these',
+  'those',
+  'where',
+  'which',
+  'while',
+  'with',
+  'your',
+  'what',
+  'when',
+  'where',
+  'this',
+  'that',
+  'from',
+  'into',
+  'should',
+  'would',
+  'could',
+  'might',
+  'will',
+  'been',
+  'were',
+  'they',
+  'them',
+  'more',
+  'most',
+  'some',
+  'such',
+  'only',
+  'very',
+  'than',
+  'then',
+  'also',
+  'just',
+  'like',
+  'make',
+  'made',
+  'many',
+  'much',
+  'must',
+  'need',
+  'even',
+  'ever',
+  'every',
   // Korean stop words — particles, common verbs, filler words
-  '그리고', '그래서', '그러나', '그런', '그렇게', '그것', '그게', '그',
-  '이런', '이것', '이게', '이', '저런', '저것', '저게',
-  '하는', '한다', '했다', '할', '한', '하다', '되는', '된다', '됐다',
-  '있는', '있다', '없는', '없다', '없는',
-  '이런', '저런', '그런', '어떤', '무엇', '누가', '언제', '어디',
-  '에서', '에게', '에게서', '한테', '한테서', '으로', '로', '로서',
-  '와', '과', '하고', '며', '며는', '이고', '이며', '거나', '든지',
-  '는', '은', '가', '이', '을', '를', '의', '에', '도', '만', '까지',
-  '부터', '조차', '마저', '든지', '이나', '나', '든', '인', '일',
-  '매우', '정말', '진짜', '너무', '좀', '조금', '다시', '또', '또한',
-  '더', '더욱', '특히', '바로', '미리', '이미', '아직', '벌써',
+  '그리고',
+  '그래서',
+  '그러나',
+  '그런',
+  '그렇게',
+  '그것',
+  '그게',
+  '그',
+  '이런',
+  '이것',
+  '이게',
+  '이',
+  '저런',
+  '저것',
+  '저게',
+  '하는',
+  '한다',
+  '했다',
+  '할',
+  '한',
+  '하다',
+  '되는',
+  '된다',
+  '됐다',
+  '있는',
+  '있다',
+  '없는',
+  '없다',
+  '없는',
+  '이런',
+  '저런',
+  '그런',
+  '어떤',
+  '무엇',
+  '누가',
+  '언제',
+  '어디',
+  '에서',
+  '에게',
+  '에게서',
+  '한테',
+  '한테서',
+  '으로',
+  '로',
+  '로서',
+  '와',
+  '과',
+  '하고',
+  '며',
+  '며는',
+  '이고',
+  '이며',
+  '거나',
+  '든지',
+  '는',
+  '은',
+  '가',
+  '이',
+  '을',
+  '를',
+  '의',
+  '에',
+  '도',
+  '만',
+  '까지',
+  '부터',
+  '조차',
+  '마저',
+  '든지',
+  '이나',
+  '나',
+  '든',
+  '인',
+  '일',
+  '매우',
+  '정말',
+  '진짜',
+  '너무',
+  '좀',
+  '조금',
+  '다시',
+  '또',
+  '또한',
+  '더',
+  '더욱',
+  '특히',
+  '바로',
+  '미리',
+  '이미',
+  '아직',
+  '벌써',
 ])
 
 function isStopWord(word: string): boolean {
@@ -1139,7 +1381,9 @@ export function parseRelativeTime(input: string | undefined | null, now: number 
   }
 
   // English relative: "<number> <unit> ago"
-  const en = s.match(/^(\d+)\s*(second|seconds|sec|s|minute|minutes|min|m|hour|hours|hr|h|day|days|d|week|weeks|w|month|months|mo|year|years|y)\s*ago$/)
+  const en = s.match(
+    /^(\d+)\s*(second|seconds|sec|s|minute|minutes|min|m|hour|hours|hr|h|day|days|d|week|weeks|w|month|months|mo|year|years|y)\s*ago$/,
+  )
   if (en) {
     const n = parseInt(en[1], 10)
     const unit = en[2]
@@ -1156,18 +1400,26 @@ function koreanUnitToMs(unit: string, n: number): number | null {
   const HOUR = 60 * MIN
   const DAY = 24 * HOUR
   switch (unit) {
-    case '초': return n * SEC
-    case '분': return n * MIN
+    case '초':
+      return n * SEC
+    case '분':
+      return n * MIN
     case '시간':
-    case '시': return n * HOUR
-    case '일': return n * DAY
+    case '시':
+      return n * HOUR
+    case '일':
+      return n * DAY
     case '주일':
-    case '주': return n * 7 * DAY
+    case '주':
+      return n * 7 * DAY
     case '개월':
-    case '달': return n * 30 * DAY
+    case '달':
+      return n * 30 * DAY
     case '년':
-    case '해': return n * 365 * DAY
-    default: return null
+    case '해':
+      return n * 365 * DAY
+    default:
+      return null
   }
 }
 
@@ -1177,14 +1429,39 @@ function englishUnitToMs(unit: string, n: number): number | null {
   const HOUR = 60 * MIN
   const DAY = 24 * HOUR
   switch (unit) {
-    case 'second': case 'seconds': case 'sec': case 's': return n * SEC
-    case 'minute': case 'minutes': case 'min': case 'm': return n * MIN
-    case 'hour': case 'hours': case 'hr': case 'h': return n * HOUR
-    case 'day': case 'days': case 'd': return n * DAY
-    case 'week': case 'weeks': case 'w': return n * 7 * DAY
-    case 'month': case 'months': case 'mo': return n * 30 * DAY
-    case 'year': case 'years': case 'y': return n * 365 * DAY
-    default: return null
+    case 'second':
+    case 'seconds':
+    case 'sec':
+    case 's':
+      return n * SEC
+    case 'minute':
+    case 'minutes':
+    case 'min':
+    case 'm':
+      return n * MIN
+    case 'hour':
+    case 'hours':
+    case 'hr':
+    case 'h':
+      return n * HOUR
+    case 'day':
+    case 'days':
+    case 'd':
+      return n * DAY
+    case 'week':
+    case 'weeks':
+    case 'w':
+      return n * 7 * DAY
+    case 'month':
+    case 'months':
+    case 'mo':
+      return n * 30 * DAY
+    case 'year':
+    case 'years':
+    case 'y':
+      return n * 365 * DAY
+    default:
+      return null
   }
 }
 
@@ -1207,12 +1484,42 @@ export function parseFlexibleDate(input: string | undefined | null, now: number 
     return isNaN(d.getTime()) ? null : d.toISOString()
   }
 
-  // YYYY.MM.DD / YYYY-MM-DD / YYYY/MM/DD (optionally with time)
-  const abs = s.match(/^(\d{4})[.\-/](\d{1,2})[.\-/](\d{1,2})(?:[ T](\d{1,2}):(\d{2}))?/)
+  // YYYY.MM.DD / YYYY-MM-DD / YYYY/MM/DD (optionally with time). Spaces
+  // after the separators are tolerated — Bing renders "2026. 7. 24. —" and
+  // the datePrefix in bing-search.ts matches that form, so this must too
+  // (verified 2026-08-07: sort_by=date was silently no-op'ing for those).
+  const abs = s.match(/^(\d{4})[.\-/]\s*(\d{1,2})[.\-/]\s*(\d{1,2})(?:[ T](\d{1,2}):(\d{2}))?/)
   if (abs) {
     const [, y, mo, d, h, mi] = abs
     const date = new Date(Number(y), Number(mo) - 1, Number(d), h ? Number(h) : 0, mi ? Number(mi) : 0)
     return isNaN(date.getTime()) ? null : date.toISOString()
+  }
+
+  // English month names — "Jul 24, 2026" / "July 24, 2026" (Bing web
+  // results prefix snippets with "Mon D, YYYY ·"). parseFlexibleDate
+  // previously returned null for these, so bing's datePrefix match never
+  // produced a published_date and date-sort silently no-op'ed (2026-08-07).
+  const MONTHS: Record<string, number> = {
+    jan: 0,
+    feb: 1,
+    mar: 2,
+    apr: 3,
+    may: 4,
+    jun: 5,
+    jul: 6,
+    aug: 7,
+    sep: 8,
+    oct: 9,
+    nov: 10,
+    dec: 11,
+  }
+  const en = s.match(/^([A-Za-z]{3,9})\s+(\d{1,2}),?\s+(\d{4})/)
+  if (en) {
+    const mo = MONTHS[en[1].toLowerCase().slice(0, 3)]
+    if (mo !== undefined) {
+      const date = new Date(Number(en[3]), mo, Number(en[2]))
+      return isNaN(date.getTime()) ? null : date.toISOString()
+    }
   }
 
   // Relative time fallback

@@ -44,10 +44,9 @@ describe('EmbeddingService — Ollama provider', () => {
     const fetchSpy = vi.fn().mockResolvedValue(fakeOllamaResponse(1))
     globalThis.fetch = fetchSpy as unknown as typeof fetch
 
-    const service = new EmbeddingService(
-      { preferredModel: 'nomic-embed-text' },
-      { OLLAMA_BASE_URL: 'http://localhost:11434' } as never,
-    )
+    const service = new EmbeddingService({ preferredModel: 'nomic-embed-text' }, {
+      OLLAMA_BASE_URL: 'http://localhost:11434',
+    } as never)
 
     const result = await service.embed({ texts: ['hello world'] })
 
@@ -69,10 +68,7 @@ describe('EmbeddingService — Ollama provider', () => {
     const fetchSpy = vi.fn().mockResolvedValue(fakeOllamaResponse(1))
     globalThis.fetch = fetchSpy as unknown as typeof fetch
 
-    const service = new EmbeddingService(
-      {},
-      { OLLAMA_BASE_URL: 'http://localhost:11434/v1' } as never,
-    )
+    const service = new EmbeddingService({}, { OLLAMA_BASE_URL: 'http://localhost:11434/v1' } as never)
     await service.embed({ texts: ['test'] })
 
     const [url] = fetchSpy.mock.calls[0]
@@ -91,10 +87,10 @@ describe('EmbeddingService — Ollama provider', () => {
       ),
     }
 
-    const service = new EmbeddingService(
-      { preferredModel: 'pplx-embed-v1-0.6b' },
-      { OLLAMA_BASE_URL: 'http://localhost:11434', AI: fakeAI } as never,
-    )
+    const service = new EmbeddingService({ preferredModel: 'pplx-embed-v1-0.6b' }, {
+      OLLAMA_BASE_URL: 'http://localhost:11434',
+      AI: fakeAI,
+    } as never)
 
     const result = await service.embed({ texts: ['hello'] })
 
@@ -113,10 +109,9 @@ describe('EmbeddingService — Ollama provider', () => {
     })
     globalThis.fetch = fetchSpy as unknown as typeof fetch
 
-    const service = new EmbeddingService(
-      { preferredModel: 'nomic-embed-text' },
-      { OLLAMA_BASE_URL: 'http://localhost:11434' } as never,
-    )
+    const service = new EmbeddingService({ preferredModel: 'nomic-embed-text' }, {
+      OLLAMA_BASE_URL: 'http://localhost:11434',
+    } as never)
 
     const result = await service.embed({ texts: ['hello'] })
 
@@ -143,10 +138,7 @@ describe('EmbeddingService — Ollama provider', () => {
     const fetchSpy = vi.fn().mockResolvedValue(fakeOllamaResponse(3))
     globalThis.fetch = fetchSpy as unknown as typeof fetch
 
-    const service = new EmbeddingService(
-      {},
-      { OLLAMA_BASE_URL: 'http://localhost:11434' } as never,
-    )
+    const service = new EmbeddingService({}, { OLLAMA_BASE_URL: 'http://localhost:11434' } as never)
     const result = await service.embed({ texts: ['one', 'two', 'three'] })
 
     expect(fetchSpy).toHaveBeenCalledTimes(1)

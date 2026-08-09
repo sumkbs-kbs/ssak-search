@@ -7,12 +7,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import {
-  djb2,
-  semanticVectorId,
-  semanticCacheLookup,
-  semanticCacheStore,
-} from '../../src/lib/semantic-cache'
+import { djb2, semanticVectorId, semanticCacheLookup, semanticCacheStore } from '../../src/lib/semantic-cache'
 import type { Env, SearchResponse } from '../../src/types'
 
 /** Fake Ollama /v1/embeddings response (768-dim, matching nomic-embed-text). */
@@ -62,13 +57,15 @@ function makeDb(handlers: Record<string, SqlHandler>) {
 
 const SAMPLE: SearchResponse = {
   query: 'react hooks',
-  results: [{
-    title: 'React Hooks Guide',
-    url: 'https://example.com/react-hooks',
-    content: 'A guide to React hooks',
-    score: 0.9,
-    domain: 'example.com',
-  }],
+  results: [
+    {
+      title: 'React Hooks Guide',
+      url: 'https://example.com/react-hooks',
+      content: 'A guide to React hooks',
+      score: 0.9,
+      domain: 'example.com',
+    },
+  ],
   response_time_ms: 1,
   backend: 'mock',
   fallback_used: false,
@@ -171,11 +168,13 @@ describe('semanticCacheLookup', () => {
     const storedKey = 'search:similar query|mr=10'
     const index = makeIndex()
     index.query.mockResolvedValue({
-      matches: [{
-        id: 'sc_x',
-        score: 0.95,
-        metadata: { cache_key: storedKey, params_sig: 'mr=10' },
-      }],
+      matches: [
+        {
+          id: 'sc_x',
+          score: 0.95,
+          metadata: { cache_key: storedKey, params_sig: 'mr=10' },
+        },
+      ],
     })
     const db = makeDb({
       'FROM semantic_cache WHERE cache_key': {

@@ -20,7 +20,8 @@ import type { SearchResult } from '../types'
 
 import { logger } from './logger'
 const SCHOLAR_BASE = 'https://scholar.google.com/scholar'
-const USER_AGENT = 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1'
+const USER_AGENT =
+  'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1'
 
 interface ScholarResult {
   title: string
@@ -128,7 +129,10 @@ function parseScholarResults(html: string, maxResults: number): ScholarResult[] 
         const yearMatch = venueYear.match(/(\d{4})(?!\d)/)
         if (yearMatch) {
           year = yearMatch[1]
-          venue = venueYear.replace(year, '').replace(/[,\-]\s*$/, '').trim()
+          venue = venueYear
+            .replace(year, '')
+            .replace(/[,-]\s*$/, '')
+            .trim()
         } else {
           venue = venueYear
         }

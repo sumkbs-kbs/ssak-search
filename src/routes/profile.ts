@@ -7,7 +7,7 @@
  * GET  /api/profile/:user_id/boosted      — Get boosted domains for personalization
  */
 
-import { Hono } from 'hono'
+import { Hono, type Context } from 'hono'
 import { logger, toError } from '../lib/logger'
 import { cors } from 'hono/cors'
 import type { AppBindings, ErrorResponse, UserPreferences } from '../types'
@@ -16,7 +16,7 @@ import { getProfileStub } from '../lib/user-profile-do'
 const profileRoute = new Hono<{ Bindings: AppBindings }>()
 profileRoute.use('/*', cors({ origin: '*' }))
 
-function checkBinding(c: any): boolean {
+function checkBinding(c: Context<{ Bindings: AppBindings }>): boolean {
   return !!c.env.USER_PROFILE_DO
 }
 
@@ -46,7 +46,11 @@ profileRoute.put('/:user_id/preferences', async (c) => {
 
   const { user_id } = c.req.param()
   let body: Partial<UserPreferences>
-  try { body = await c.req.json() } catch (err) { return c.json<ErrorResponse>({ detail: 'Invalid JSON', code: 'invalid_body' }, 400) }
+  try {
+    body = await c.req.json()
+  } catch (_err) {
+    return c.json<ErrorResponse>({ detail: 'Invalid JSON', code: 'invalid_body' }, 400)
+  }
 
   // Validate theme if provided
   if (body.theme && !['light', 'dark', 'system'].includes(body.theme)) {
@@ -71,7 +75,11 @@ profileRoute.post('/:user_id/visit', async (c) => {
 
   const { user_id } = c.req.param()
   let body: { domain?: string }
-  try { body = await c.req.json() } catch (err) { return c.json<ErrorResponse>({ detail: 'Invalid JSON', code: 'invalid_body' }, 400) }
+  try {
+    body = await c.req.json()
+  } catch (_err) {
+    return c.json<ErrorResponse>({ detail: 'Invalid JSON', code: 'invalid_body' }, 400)
+  }
 
   if (!body.domain || typeof body.domain !== 'string') {
     return c.json<ErrorResponse>({ detail: 'domain is required', code: 'missing_domain' }, 400)

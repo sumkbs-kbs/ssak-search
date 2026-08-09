@@ -5,10 +5,7 @@ const q = '西安旅游攻略'
 
 for (let i = 1; i <= 5; i++) {
   try {
-    const res = await executeSearch(
-      { query: q, topic: 'general', max_results: 10, include_answer: false },
-      {},
-    )
+    const res = await executeSearch({ query: q, topic: 'general', max_results: 10, include_answer: false }, {})
     const gold = ['ctrip.com', 'mafengwo.cn', 'zh.wikipedia.org']
     const goldHits = (res.results || []).map((r, idx) => {
       const d = r.domain || new URL(r.url).hostname.replace(/^www\./, '')

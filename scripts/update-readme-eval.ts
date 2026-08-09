@@ -42,7 +42,9 @@ function buildMetricsSection(r: NonNullable<LatestReport['report']>): string {
   rows.push('|--------|-----|')
   rows.push(`| **Pass Rate** | ${(r.passRate * 100).toFixed(1)}% (${r.passedQueries}/${r.totalQueries}) |`)
   rows.push(`| **평균 결과 수** | ${r.avgResultCount}건 |`)
-  rows.push(`| **p50 / p95 / p99 지연시간** | ${r.latencyPercentiles.p50}ms / ${r.latencyPercentiles.p95}ms / ${r.latencyPercentiles.p99}ms |`)
+  rows.push(
+    `| **p50 / p95 / p99 지연시간** | ${r.latencyPercentiles.p50}ms / ${r.latencyPercentiles.p95}ms / ${r.latencyPercentiles.p99}ms |`,
+  )
   rows.push(`| **평균 응답 시간** | ${r.avgTimeMs}ms |`)
   rows.push(`| **Avg QPS** | ${r.qps.avgQps} |`)
   if (r.ranking && r.ranking.queriesWithGoldStandard > 0) {
@@ -51,7 +53,9 @@ function buildMetricsSection(r: NonNullable<LatestReport['report']>): string {
     rows.push(`| **Precision@10** | ${r.ranking.avgPrecisionAt10.toFixed(4)} |`)
   }
   if (r.cache) {
-    rows.push(`| **Cache Hit Rate** | ${(r.cache.hitRate * 100).toFixed(1)}% (${r.cache.hits}/${r.cache.hits + r.cache.misses}) |`)
+    rows.push(
+      `| **Cache Hit Rate** | ${(r.cache.hitRate * 100).toFixed(1)}% (${r.cache.hits}/${r.cache.hits + r.cache.misses}) |`,
+    )
     rows.push(`| **Cache avg cold→warm** | ${r.cache.avgColdMs}ms → ${r.cache.avgWarmMs}ms |`)
   }
   rows.push('')
@@ -81,7 +85,8 @@ function main(): void {
   // Section ends at the next "## " heading (or EOF)
   const rest = readme.slice(sectionStart + '## 검색 품질 테스트 결과'.length)
   const sectionEnd = rest.indexOf('\n## ')
-  const nextHeadingAt = sectionEnd === -1 ? readme.length : sectionStart + '## 검색 품질 테스트 결과'.length + sectionEnd
+  const nextHeadingAt =
+    sectionEnd === -1 ? readme.length : sectionStart + '## 검색 품질 테스트 결과'.length + sectionEnd
 
   const updated = readme.slice(0, sectionStart) + buildMetricsSection(parsed.report) + readme.slice(nextHeadingAt)
   writeFileSync(README_PATH, updated, 'utf-8')

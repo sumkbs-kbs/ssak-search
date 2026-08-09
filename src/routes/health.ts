@@ -112,7 +112,10 @@ const BACKEND_PROBES: Record<string, { url: string; timeout: number }> = {
   duckduckgo: { url: 'https://html.duckduckgo.com/robots.txt', timeout: 3000 },
 }
 
-async function probeBackend(name: string, config: { url: string; timeout: number }): Promise<{
+async function probeBackend(
+  name: string,
+  config: { url: string; timeout: number },
+): Promise<{
   status: 'operational' | 'degraded' | 'down'
   latency_ms: number
 }> {
@@ -161,9 +164,7 @@ export async function probeIndexHealth(env: AppBindings): Promise<IndexHealthInf
 
   // Race the stats query against a timeout — getIndexStats() issues D1 SQL.
   const statsPromise = new IndexingPipeline(env).getIndexStats()
-  const timeoutPromise = new Promise<null>((resolve) =>
-    setTimeout(() => resolve(null), INDEX_STATS_TIMEOUT_MS),
-  )
+  const timeoutPromise = new Promise<null>((resolve) => setTimeout(() => resolve(null), INDEX_STATS_TIMEOUT_MS))
 
   try {
     const stats = await Promise.race([statsPromise, timeoutPromise])
@@ -187,8 +188,7 @@ export async function probeIndexHealth(env: AppBindings): Promise<IndexHealthInf
       d1_bound: true,
       total_documents: totalDocs,
       total_chunks: totalChunks,
-      index_health:
-        totalDocs === 0 ? 'empty' : stats.indexHealth === 'degraded' ? 'degraded' : 'healthy',
+      index_health: totalDocs === 0 ? 'empty' : stats.indexHealth === 'degraded' ? 'degraded' : 'healthy',
     }
   } catch (err) {
     logger.warn('[Health] Index stats query failed:', { error: toError(err) })

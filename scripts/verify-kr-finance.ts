@@ -5,6 +5,13 @@
  * Gold domains are loaded from the canonical eval/gold-standards.json (single
  * source of truth — no inline duplication).
  *
+ * S54 (2026-08-08): this script NEVER reads a stored ranking field — it runs
+ * a LIVE search and recomputes NDCG@10 on the fresh pool via
+ * computeRankingMetrics (→ computeNdcg with the CURRENT S49 label-suffix
+ * matcher + S50 DCG cap). The stored run-*.json `ranking` values are only
+ * valid for the gold+rules that were live when that run was saved; a live
+ * verify must not inherit their staleness.
+ *
  * Usage: npx tsx scripts/verify-kr-finance.ts
  */
 import { executeSearch } from '../src/lib/orchestrator'
@@ -12,9 +19,10 @@ import { computeRankingMetrics } from '../eval/metrics'
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 
-const gold = JSON.parse(
-  readFileSync(join(process.cwd(), 'eval', 'gold-standards.json'), 'utf-8'),
-) as Record<string, { relevantDomains?: string[] }>
+const gold = JSON.parse(readFileSync(join(process.cwd(), 'eval', 'gold-standards.json'), 'utf-8')) as Record<
+  string,
+  { relevantDomains?: string[] }
+>
 
 const QUERIES: Array<[string, string]> = [
   ['배당주 추천 2025', 'kr-stock-13'],

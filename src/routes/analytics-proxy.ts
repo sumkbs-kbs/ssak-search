@@ -64,7 +64,11 @@ interface GrafanaDatapoint {
 
 const AVAILABLE_METRICS = [
   { text: 'requests_total', value: 'requests_total', description: 'Total request count over time (all backends)' },
-  { text: 'requests_by_backend', value: 'requests_by_backend', description: 'Request count broken down by backend (search, extract)' },
+  {
+    text: 'requests_by_backend',
+    value: 'requests_by_backend',
+    description: 'Request count broken down by backend (search, extract)',
+  },
   { text: 'errors_total', value: 'errors_total', description: 'Total error count over time' },
   { text: 'errors_by_backend', value: 'errors_by_backend', description: 'Error count broken down by backend' },
   { text: 'latency_avg', value: 'latency_avg', description: 'Average latency in seconds by backend' },
@@ -72,7 +76,11 @@ const AVAILABLE_METRICS = [
   { text: 'latency_p99', value: 'latency_p99', description: 'P99 latency in seconds by backend' },
   { text: 'error_ratio', value: 'error_ratio', description: 'Error ratio (errors / total) by backend' },
   { text: 'requests_extract', value: 'requests_extract', description: 'Extract-only request count' },
-  { text: 'health_score', value: 'health_score', description: 'Health score derived from success rate (1.0 = all healthy)' },
+  {
+    text: 'health_score',
+    value: 'health_score',
+    description: 'Health score derived from success rate (1.0 = all healthy)',
+  },
 ]
 
 // ============================================================
@@ -106,10 +114,12 @@ function buildQuery(dataset: string, target: string, from: string, to: string, i
             FROM ${dataset}
             WHERE timestamp >= '${from}' AND timestamp <= '${to}'
             GROUP BY t ORDER BY t`,
-      transform: (rows) => [{
-        target: 'requests_total',
-        datapoints: rows.map(r => [Number(r.val), new Date(r.t as string).getTime()]),
-      }],
+      transform: (rows) => [
+        {
+          target: 'requests_total',
+          datapoints: rows.map((r) => [Number(r.val), new Date(r.t as string).getTime()]),
+        },
+      ],
     },
 
     requests_by_backend: {
@@ -121,8 +131,9 @@ function buildQuery(dataset: string, target: string, from: string, to: string, i
         const byBackend = new Map<string, Array<[number, number]>>()
         for (const r of rows) {
           const b = (r.backend as string) || 'unknown'
-          if (!byBackend.has(b)) byBackend.set(b, [])
-          byBackend.get(b)!.push([Number(r.val), new Date(r.t as string).getTime()])
+          const dps = byBackend.get(b) ?? []
+          dps.push([Number(r.val), new Date(r.t as string).getTime()])
+          byBackend.set(b, dps)
         }
         return Array.from(byBackend.entries()).map(([backend, dps]) => ({
           target: `requests [${backend}]`,
@@ -136,10 +147,12 @@ function buildQuery(dataset: string, target: string, from: string, to: string, i
             FROM ${dataset}
             WHERE blob2 = 'error' AND timestamp >= '${from}' AND timestamp <= '${to}'
             GROUP BY t ORDER BY t`,
-      transform: (rows) => [{
-        target: 'errors_total',
-        datapoints: rows.map(r => [Number(r.val), new Date(r.t as string).getTime()]),
-      }],
+      transform: (rows) => [
+        {
+          target: 'errors_total',
+          datapoints: rows.map((r) => [Number(r.val), new Date(r.t as string).getTime()]),
+        },
+      ],
     },
 
     errors_by_backend: {
@@ -151,8 +164,9 @@ function buildQuery(dataset: string, target: string, from: string, to: string, i
         const byBackend = new Map<string, Array<[number, number]>>()
         for (const r of rows) {
           const b = (r.backend as string) || 'unknown'
-          if (!byBackend.has(b)) byBackend.set(b, [])
-          byBackend.get(b)!.push([Number(r.val), new Date(r.t as string).getTime()])
+          const dps = byBackend.get(b) ?? []
+          dps.push([Number(r.val), new Date(r.t as string).getTime()])
+          byBackend.set(b, dps)
         }
         return Array.from(byBackend.entries()).map(([backend, dps]) => ({
           target: `errors [${backend}]`,
@@ -170,8 +184,9 @@ function buildQuery(dataset: string, target: string, from: string, to: string, i
         const byBackend = new Map<string, Array<[number, number]>>()
         for (const r of rows) {
           const b = (r.backend as string) || 'unknown'
-          if (!byBackend.has(b)) byBackend.set(b, [])
-          byBackend.get(b)!.push([Number(r.val), new Date(r.t as string).getTime()])
+          const dps = byBackend.get(b) ?? []
+          dps.push([Number(r.val), new Date(r.t as string).getTime()])
+          byBackend.set(b, dps)
         }
         return Array.from(byBackend.entries()).map(([backend, dps]) => ({
           target: `latency_avg [${backend}]`,
@@ -191,8 +206,9 @@ function buildQuery(dataset: string, target: string, from: string, to: string, i
         const byBackend = new Map<string, Array<[number, number]>>()
         for (const r of rows) {
           const b = (r.backend as string) || 'unknown'
-          if (!byBackend.has(b)) byBackend.set(b, [])
-          byBackend.get(b)!.push([Number(r.val), new Date(r.t as string).getTime()])
+          const dps = byBackend.get(b) ?? []
+          dps.push([Number(r.val), new Date(r.t as string).getTime()])
+          byBackend.set(b, dps)
         }
         return Array.from(byBackend.entries()).map(([backend, dps]) => ({
           target: `latency_p95 [${backend}]`,
@@ -211,8 +227,9 @@ function buildQuery(dataset: string, target: string, from: string, to: string, i
         const byBackend = new Map<string, Array<[number, number]>>()
         for (const r of rows) {
           const b = (r.backend as string) || 'unknown'
-          if (!byBackend.has(b)) byBackend.set(b, [])
-          byBackend.get(b)!.push([Number(r.val), new Date(r.t as string).getTime()])
+          const dps = byBackend.get(b) ?? []
+          dps.push([Number(r.val), new Date(r.t as string).getTime()])
+          byBackend.set(b, dps)
         }
         return Array.from(byBackend.entries()).map(([backend, dps]) => ({
           target: `latency_p99 [${backend}]`,
@@ -231,8 +248,9 @@ function buildQuery(dataset: string, target: string, from: string, to: string, i
         const byBackend = new Map<string, Array<[number, number]>>()
         for (const r of rows) {
           const b = (r.backend as string) || 'unknown'
-          if (!byBackend.has(b)) byBackend.set(b, [])
-          byBackend.get(b)!.push([Number(r.val), new Date(r.t as string).getTime()])
+          const dps = byBackend.get(b) ?? []
+          dps.push([Number(r.val), new Date(r.t as string).getTime()])
+          byBackend.set(b, dps)
         }
         return Array.from(byBackend.entries()).map(([backend, dps]) => ({
           target: `error_ratio [${backend}]`,
@@ -246,10 +264,12 @@ function buildQuery(dataset: string, target: string, from: string, to: string, i
             FROM ${dataset}
             WHERE blob1 = 'extract' AND timestamp >= '${from}' AND timestamp <= '${to}'
             GROUP BY t ORDER BY t`,
-      transform: (rows) => [{
-        target: 'requests_extract',
-        datapoints: rows.map(r => [Number(r.val), new Date(r.t as string).getTime()]),
-      }],
+      transform: (rows) => [
+        {
+          target: 'requests_extract',
+          datapoints: rows.map((r) => [Number(r.val), new Date(r.t as string).getTime()]),
+        },
+      ],
     },
 
     health_score: {
@@ -262,8 +282,9 @@ function buildQuery(dataset: string, target: string, from: string, to: string, i
         const byBackend = new Map<string, Array<[number, number]>>()
         for (const r of rows) {
           const b = (r.backend as string) || 'unknown'
-          if (!byBackend.has(b)) byBackend.set(b, [])
-          byBackend.get(b)!.push([Number(r.val), new Date(r.t as string).getTime()])
+          const dps = byBackend.get(b) ?? []
+          dps.push([Number(r.val), new Date(r.t as string).getTime()])
+          byBackend.set(b, dps)
         }
         return Array.from(byBackend.entries()).map(([backend, dps]) => ({
           target: `health_score [${backend}]`,
@@ -280,17 +301,13 @@ function buildQuery(dataset: string, target: string, from: string, to: string, i
 // Analytics Engine SQL API Client
 // ============================================================
 
-async function queryAnalyticsEngine(
-  accountId: string,
-  apiToken: string,
-  sql: string,
-): Promise<AeQueryResult> {
+async function queryAnalyticsEngine(accountId: string, apiToken: string, sql: string): Promise<AeQueryResult> {
   const url = `https://api.cloudflare.com/client/v4/accounts/${accountId}/analytics_engine/sql`
 
   const response = await fetch(url, {
     method: 'POST',
     headers: {
-      'Authorization': `Bearer ${apiToken}`,
+      Authorization: `Bearer ${apiToken}`,
       'Content-Type': 'text/plain',
     },
     body: sql,
@@ -371,10 +388,7 @@ analyticsProxyRoute.post('/query', async (c) => {
   const accountId = c.env.ACCOUNT_ID
   const apiToken = c.env.ANALYTICS_API_TOKEN
   if (!accountId || !apiToken) {
-    return c.json(
-      { error: 'ACCOUNT_ID and ANALYTICS_API_TOKEN must be configured in environment variables' },
-      503,
-    )
+    return c.json({ error: 'ACCOUNT_ID and ANALYTICS_API_TOKEN must be configured in environment variables' }, 503)
   }
 
   const dataset = c.env.ANALYTICS_DATASET || 'SEARCH_API_METRICS'
@@ -382,10 +396,11 @@ analyticsProxyRoute.post('/query', async (c) => {
   // Parse Grafana query request
   let body: GrafanaQueryRequest
   try {
-    body = await c.req.json()    } catch (err) {
-      logger.warn('[AnalyticsProxy] Invalid JSON body:', { error: toError(err) })
-      return c.json({ error: 'Invalid JSON body' }, 400)
-    }
+    body = await c.req.json()
+  } catch (err) {
+    logger.warn('[AnalyticsProxy] Invalid JSON body:', { error: toError(err) })
+    return c.json({ error: 'Invalid JSON body' }, 400)
+  }
 
   if (!body.targets || body.targets.length === 0) {
     return c.json([]) // No targets, no data
@@ -414,10 +429,12 @@ analyticsProxyRoute.post('/query', async (c) => {
     } catch (err) {
       const msg = toError(err)
       logger.error(`[ANALYTICS_PROXY] Query error for target "${target.target}":`, { error: msg })
-      return [{
-        target: `${target.target} [error]`,
-        datapoints: [],
-      }] as GrafanaDatapoint[]
+      return [
+        {
+          target: `${target.target} [error]`,
+          datapoints: [],
+        },
+      ] as GrafanaDatapoint[]
     }
   })
 

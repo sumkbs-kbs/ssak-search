@@ -1,17 +1,23 @@
 import type { Env } from '../../types'
 import { logger, toError } from '../../lib/logger'
-import type {
-  VectorizeChunk,
-  IndexQueueMessage,
-  IndexUrl,
-  IndexStats,
-  IndexSearchOptions,
-  IndexSearchResult,
+import {
+  EMBEDDING_DIMENSIONS,
+  type VectorizeChunk,
+  type IndexQueueMessage,
+  type IndexUrl,
+  type IndexStats,
+  type IndexSearchOptions,
+  type IndexSearchResult,
 } from './types'
-import { chunkDocument, hashString, MAX_CHUNK_TOKENS, MIN_CHUNK_TOKENS, extractDomain } from './chunker'
-import type { ChunkOptions } from './chunker'
+import {
+  chunkDocument,
+  hashString,
+  MAX_CHUNK_TOKENS,
+  MIN_CHUNK_TOKENS,
+  extractDomain,
+  type ChunkOptions,
+} from './chunker'
 import { EmbeddingService } from './embedding'
-import { EMBEDDING_DIMENSIONS } from './types'
 
 // ============================================================
 // Types
@@ -82,7 +88,7 @@ export class IndexingPipeline {
     url: string,
     title: string,
     html: string,
-    options: Record<string, unknown> = {}
+    options: Record<string, unknown> = {},
   ): Promise<IndexingJobResult> {
     const startTime = Date.now()
 
@@ -127,7 +133,7 @@ export class IndexingPipeline {
       }
 
       // 3. Generate embeddings for all chunks
-      const texts = chunkResult.chunks.map(c => c.content)
+      const texts = chunkResult.chunks.map((c) => c.content)
       const isQuery = false // these are passages
       const language = (options.language as string) ?? 'en'
 
@@ -173,7 +179,9 @@ export class IndexingPipeline {
         updatedAt: now,
       })
 
-      logger.info(`[IndexingPipeline] Indexed ${url}: ${chunkResult.chunks.length} chunks in ${Date.now() - startTime}ms`)
+      logger.info(
+        `[IndexingPipeline] Indexed ${url}: ${chunkResult.chunks.length} chunks in ${Date.now() - startTime}ms`,
+      )
 
       return {
         success: true,
@@ -219,9 +227,7 @@ export class IndexingPipeline {
   /**
    * Process multiple URLs in batch
    */
-  async processBatchIndexJob(
-    urls: Array<{ url: string; title: string; html: string }>
-  ): Promise<IndexingJobResult[]> {
+  async processBatchIndexJob(urls: Array<{ url: string; title: string; html: string }>): Promise<IndexingJobResult[]> {
     const results: IndexingJobResult[] = []
 
     // Process sequentially to avoid rate limits
@@ -248,13 +254,11 @@ export class IndexingPipeline {
 
     // Delete metadata row from D1
     if (this.env.SEARCH_INDEX_DB) {
-      await this.env.SEARCH_INDEX_DB.prepare(
-        `DELETE FROM documents WHERE id = ?`
-      ).bind(hashString(url)).run()
+      await this.env.SEARCH_INDEX_DB.prepare(`DELETE FROM documents WHERE id = ?`).bind(hashString(url)).run()
       // Also clean up refresh schedule entries for this document
-      await this.env.SEARCH_INDEX_DB.prepare(
-        `DELETE FROM refresh_schedule WHERE document_id = ?`
-      ).bind(hashString(url)).run()
+      await this.env.SEARCH_INDEX_DB.prepare(`DELETE FROM refresh_schedule WHERE document_id = ?`)
+        .bind(hashString(url))
+        .run()
     }
   }
 
@@ -277,7 +281,8 @@ export class IndexingPipeline {
       }
     }
 
-    const stats = await this.env.SEARCH_INDEX_DB.prepare(`
+    const stats = await this.env.SEARCH_INDEX_DB.prepare(
+      `
       SELECT
         COUNT(*) as totalUrls,
         SUM(total_chunks) as totalChunks,
@@ -287,7 +292,8 @@ export class IndexingPipeline {
         MAX(last_indexed) as lastIndexedAt
       FROM documents
       WHERE status != 'deleted'
-    `).first<{
+    `,
+    ).first<{
       totalUrls: number
       totalChunks: number
       indexedChunks: number
@@ -300,9 +306,11 @@ export class IndexingPipeline {
     // NOTE: column is total_chunks (snake_case) — the prior `totalChunks` alias
     // referenced a nonexistent column and threw "no such column: totalChunks",
     // which surfaced as empty stats in /api/health.
-    const vectorCount = await this.env.SEARCH_INDEX_DB.prepare(`
+    const vectorCount = await this.env.SEARCH_INDEX_DB.prepare(
+      `
       SELECT SUM(total_chunks) as count FROM documents WHERE status = 'indexed'
-    `).first<{ count: number }>()
+    `,
+    ).first<{ count: number }>()
     const storageBytes = (vectorCount?.count ?? 0) * EMBEDDING_DIMENSIONS * 4
 
     return {
@@ -329,24 +337,27 @@ export class IndexingPipeline {
     const batchSize = this.config.vectorizeBatchSize
     // Track which embedding provider produced these vectors so searches can
     // detect mixed embedding spaces (bge-base vs nomic-embed vs hash fallback).
-    const embeddingProvider = this.env?.AI ? 'workers-ai'
-      : this.env?.OLLAMA_BASE_URL ? 'ollama'
-      : this.env?.EMBEDDING_ENDPOINT ? 'custom'
-      : 'hash-fallback'
+    const embeddingProvider = this.env?.AI
+      ? 'workers-ai'
+      : this.env?.OLLAMA_BASE_URL
+        ? 'ollama'
+        : this.env?.EMBEDDING_ENDPOINT
+          ? 'custom'
+          : 'hash-fallback'
 
     for (let i = 0; i < chunks.length; i += batchSize) {
       const batch = chunks.slice(i, i + batchSize)
 
-      const vectors = batch.map(chunk => ({
+      const vectors = batch.map((chunk) => ({
         id: chunk.id,
-        values: chunk.embedding!,
+        values: chunk.embedding as number[],
         metadata: {
           url: chunk.url,
           title: chunk.title,
           content: chunk.content,
           section: chunk.section ?? '',
           headingPath: chunk.headingPath ?? '',
-        chunkIndex: chunk.chunkIndex ?? 0,
+          chunkIndex: chunk.chunkIndex ?? 0,
           totalChunks: chunk.totalChunks,
           domain: chunk.domain,
           language: chunk.language,
@@ -364,24 +375,26 @@ export class IndexingPipeline {
 
   private async getUrlMetadata(url: string): Promise<IndexUrl | null> {
     if (!this.env.SEARCH_INDEX_DB) return null
-    
+
     const urlId = hashString(url)
     const row = await this.env.SEARCH_INDEX_DB.prepare(
       `SELECT id, url, title, domain, language, content_hash as contentHash,
               total_chunks as totalChunks, importance, last_indexed as lastIndexed,
               next_index_at as nextIndexAt, update_frequency_days as updateFrequencyDays,
               status, last_error as lastError, created_at as createdAt, updated_at as updatedAt
-       FROM documents WHERE id = ?`
-    ).bind(urlId).first<IndexUrl>()
+       FROM documents WHERE id = ?`,
+    )
+      .bind(urlId)
+      .first<IndexUrl>()
 
     return row ?? null
   }
 
   private async updateUrlMetadata(metadata: Omit<IndexUrl, 'id'>): Promise<void> {
     if (!this.env.SEARCH_INDEX_DB) return
-    
-    const urlId = hashString(metadata.url)
-    await this.env.SEARCH_INDEX_DB.prepare(`
+
+    await this.env.SEARCH_INDEX_DB.prepare(
+      `
       INSERT INTO documents (id, url, title, domain, language, content_hash, total_chunks, importance, last_indexed, next_index_at, update_frequency_days, status, last_error, created_at, updated_at)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(id) DO UPDATE SET
@@ -398,23 +411,26 @@ export class IndexingPipeline {
         status = excluded.status,
         last_error = excluded.last_error,
         updated_at = CURRENT_TIMESTAMP
-    `).bind(
-      hashString(metadata.url),
-      metadata.url,
-      metadata.title,
-      metadata.domain,
-      metadata.language,
-      metadata.contentHash,
-      metadata.totalChunks,
-      metadata.importance,
-      metadata.lastIndexed,
-      metadata.nextIndexAt,
-      metadata.updateFrequencyDays,
-      metadata.status,
-      metadata.lastError ?? null,
-      metadata.createdAt ?? Date.now(),
-      metadata.updatedAt ?? Date.now()
-    ).run()
+    `,
+    )
+      .bind(
+        hashString(metadata.url),
+        metadata.url,
+        metadata.title,
+        metadata.domain,
+        metadata.language,
+        metadata.contentHash,
+        metadata.totalChunks,
+        metadata.importance,
+        metadata.lastIndexed,
+        metadata.nextIndexAt,
+        metadata.updateFrequencyDays,
+        metadata.status,
+        metadata.lastError ?? null,
+        metadata.createdAt ?? Date.now(),
+        metadata.updatedAt ?? Date.now(),
+      )
+      .run()
   }
 
   private calculateImportance(html: string, title: string): number {
@@ -452,7 +468,7 @@ export class IndexingPipeline {
   }
 
   private sleep(ms: number): Promise<void> {
-    return new Promise(resolve => setTimeout(resolve, ms))
+    return new Promise((resolve) => setTimeout(resolve, ms))
   }
 }
 
@@ -466,7 +482,7 @@ export class IndexingPipeline {
  */
 export async function indexQueueConsumer(
   batch: { queue: string; messages: Array<{ body: IndexQueueMessage }> },
-  env: Env
+  env: Env,
 ): Promise<void> {
   for (const message of batch.messages) {
     const msg = message.body
@@ -522,13 +538,35 @@ export function computeBm25Score(
   totalDocs: number,
   docFreq: number,
 ): number {
-  const k1 = 1.5  // Term frequency saturation
-  const b = 0.75  // Length normalization
+  const k1 = 1.5 // Term frequency saturation
+  const b = 0.75 // Length normalization
 
   // Tokenize query
-  const queryTerms = query.toLowerCase().split(/\s+/).filter(t => t.length > 1)
-  const stopWords = new Set(['the', 'a', 'an', 'is', 'are', 'was', 'were', 'be', 'in', 'on', 'at', 'to', 'for', 'of', 'and', 'or', 'but', 'not'])
-  const filteredTerms = queryTerms.filter(t => !stopWords.has(t))
+  const queryTerms = query
+    .toLowerCase()
+    .split(/\s+/)
+    .filter((t) => t.length > 1)
+  const stopWords = new Set([
+    'the',
+    'a',
+    'an',
+    'is',
+    'are',
+    'was',
+    'were',
+    'be',
+    'in',
+    'on',
+    'at',
+    'to',
+    'for',
+    'of',
+    'and',
+    'or',
+    'but',
+    'not',
+  ])
+  const filteredTerms = queryTerms.filter((t) => !stopWords.has(t))
 
   if (filteredTerms.length === 0) return 0
 
@@ -614,10 +652,7 @@ interface ScoredDoc {
  * - Pagination: page, pageSize, totalResults
  * - Filters: domain, language, date range, topic
  */
-export async function searchIndex(
-  env: Env,
-  options: IndexSearchOptions
-): Promise<IndexSearchResult[]> {
+export async function searchIndex(env: Env, options: IndexSearchOptions): Promise<IndexSearchResult[]> {
   const {
     query,
     topK = 10,
@@ -638,8 +673,6 @@ export async function searchIndex(
     logger.warn('[searchIndex] Vectorize or D1 not configured, returning empty results')
     return []
   }
-
-  const startTime = Date.now()
 
   // ============================================================
   // Step 1: Generate query embedding for vector search
@@ -670,7 +703,7 @@ export async function searchIndex(
     })
 
     if (vectorizeResults.matches?.length) {
-      vectorMatches = vectorizeResults.matches.map(m => ({
+      vectorMatches = vectorizeResults.matches.map((m) => ({
         id: m.id,
         score: m.score,
         metadata: m.metadata as Record<string, unknown> | undefined,
@@ -686,7 +719,7 @@ export async function searchIndex(
   // extract the document ID prefix from each chunk ID before querying D1 —
   // querying D1 with the full chunk ID always returns 0 rows, which silently
   // dropped every search result.
-  const chunkIds = vectorMatches.map(m => m.id)
+  const chunkIds = vectorMatches.map((m) => m.id)
   const docIds = new Set<string>()
   const chunkToDoc = new Map<string, string>() // chunkId → docId
   for (const cid of chunkIds) {
@@ -697,36 +730,43 @@ export async function searchIndex(
   const allDocIds = [...docIds]
 
   // Get D1 metadata
-  const metadataMap = new Map<string, {
-    id: string
-    url: string
-    title: string
-    domain: string
-    language: string
-    lastIndexed: number
-    importance: number
-    totalChunks: number
-  }>()
+  const metadataMap = new Map<
+    string,
+    {
+      id: string
+      url: string
+      title: string
+      domain: string
+      language: string
+      lastIndexed: number
+      importance: number
+      totalChunks: number
+    }
+  >()
 
   if (allDocIds.length > 0 && env.SEARCH_INDEX_DB) {
     const placeholders = allDocIds.map(() => '?').join(',')
     try {
-      const metadataRows = await env.SEARCH_INDEX_DB.prepare(`
+      const metadataRows = await env.SEARCH_INDEX_DB.prepare(
+        `
         SELECT id, url, title, domain, language,
                last_indexed as lastIndexed,
                importance, total_chunks as totalChunks
         FROM documents
         WHERE id IN (${placeholders}) AND status = 'indexed'
-      `).bind(...allDocIds).all<{
-        id: string
-        url: string
-        title: string
-        domain: string
-        language: string
-        lastIndexed: number
-        importance: number
-        totalChunks: number
-      }>()
+      `,
+      )
+        .bind(...allDocIds)
+        .all<{
+          id: string
+          url: string
+          title: string
+          domain: string
+          language: string
+          lastIndexed: number
+          importance: number
+          totalChunks: number
+        }>()
 
       for (const row of metadataRows.results || []) {
         metadataMap.set(row.id, row)
@@ -742,33 +782,37 @@ export async function searchIndex(
   let totalDocs = 1000
   let avgDocLength = 500
   try {
-    const stats = await env.SEARCH_INDEX_DB.prepare(`
+    const stats = await env.SEARCH_INDEX_DB.prepare(
+      `
       SELECT COUNT(*) as count,
              AVG(LENGTH(url) + LENGTH(title)) as avgLen
       FROM documents WHERE status = 'indexed'
-    `).first<{ count: number; avgLen: number }>()
+    `,
+    ).first<{ count: number; avgLen: number }>()
     if (stats) {
       totalDocs = Math.max(stats.count, 1)
       avgDocLength = Math.max(Math.round(stats.avgLen / 5), 50)
     }
   } catch (statsErr) {
-      logger.warn('[searchIndex] Stats query failed:', { error: toError(statsErr) })
-    }
+    logger.warn('[searchIndex] Stats query failed:', { error: toError(statsErr) })
+  }
 
   // ============================================================
   // Step 5: Build scored documents
   // ============================================================
   const scoredDocs = new Map<string, ScoredDoc>()
-  let bm25DocCount = 0
 
   // Process vector matches: assign vector rank and compute BM25 score
   // Detect mixed embedding spaces — if the indexed documents were embedded by
   // a different provider than the current query embedding, results may be
   // semantically mismatched even though dimensions are compatible.
-  const currentProvider = env?.AI ? 'workers-ai'
-    : env?.OLLAMA_BASE_URL ? 'ollama'
-    : env?.EMBEDDING_ENDPOINT ? 'custom'
-    : 'hash-fallback'
+  const currentProvider = env?.AI
+    ? 'workers-ai'
+    : env?.OLLAMA_BASE_URL
+      ? 'ollama'
+      : env?.EMBEDDING_ENDPOINT
+        ? 'custom'
+        : 'hash-fallback'
   let mixedProviderWarned = false
 
   for (let rank = 0; rank < vectorMatches.length; rank++) {
@@ -805,7 +849,9 @@ export async function searchIndex(
     // Warn once if the indexed embedding provider differs from the current one
     const indexedProvider = chunkMeta?.embeddingProvider as string | undefined
     if (!mixedProviderWarned && indexedProvider && indexedProvider !== currentProvider) {
-      logger.warn(`[searchIndex] Mixed embedding space detected: indexed by "${indexedProvider}", querying with "${currentProvider}". Results may be semantically mismatched. Re-seed the index with the current provider to fix.`)
+      logger.warn(
+        `[searchIndex] Mixed embedding space detected: indexed by "${indexedProvider}", querying with "${currentProvider}". Results may be semantically mismatched. Re-seed the index with the current provider to fix.`,
+      )
       mixedProviderWarned = true
     }
 
@@ -818,7 +864,7 @@ export async function searchIndex(
       vectorScore: match.score,
       vectorRank: rank,
       bm25Rank: 0, // Will be set after sorting
-      rrfScore: 0,  // Will be computed
+      rrfScore: 0, // Will be computed
       metadata: {
         url: metadata.url,
         title: metadata.title,
@@ -839,7 +885,6 @@ export async function searchIndex(
     const doc = scoredDocs.get(byBm25[i].id)
     if (doc) {
       doc.bm25Rank = i
-      bm25DocCount++
     }
   }
 
@@ -861,7 +906,7 @@ export async function searchIndex(
   // ============================================================
   // Step 7: Format results
   // ============================================================
-  const results: IndexSearchResult[] = pageDocs.map(doc => ({
+  const results: IndexSearchResult[] = pageDocs.map((doc) => ({
     id: doc.id,
     score: doc.rrfScore,
     chunk: {
@@ -898,7 +943,7 @@ export async function searchIndex(
  */
 export async function searchIndexPaginated(
   env: Env,
-  options: IndexSearchOptions
+  options: IndexSearchOptions,
 ): Promise<{
   results: IndexSearchResult[]
   total: number
@@ -925,13 +970,18 @@ export async function searchIndexPaginated(
     total: (firstMeta?.totalResults as number) || results.length,
     page: options.page || 1,
     pageSize: options.pageSize || 10,
-    totalPages: (firstMeta?.totalPages as number) || Math.ceil((firstMeta?.totalResults as number || results.length) / (options.pageSize || 10)),
+    totalPages:
+      (firstMeta?.totalPages as number) ||
+      Math.ceil(((firstMeta?.totalResults as number) || results.length) / (options.pageSize || 10)),
     query: options.query,
     latencyMs,
-    scoring: results.length > 0 ? {
-      bm25TopScore: (firstMeta?.bm25Score as number) || 0,
-      vectorTopScore: (firstMeta?.vectorScore as number) || 0,
-      rrfConstant: 60,
-    } : undefined,
+    scoring:
+      results.length > 0
+        ? {
+            bm25TopScore: (firstMeta?.bm25Score as number) || 0,
+            vectorTopScore: (firstMeta?.vectorScore as number) || 0,
+            rrfConstant: 60,
+          }
+        : undefined,
   }
 }

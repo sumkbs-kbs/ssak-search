@@ -83,7 +83,9 @@ function main() {
   const target = datasets.find((d) => d.binding === REQUIRED_BINDING)
 
   if (!target) {
-    console.error(`❌ FAIL: analytics_engine_datasets has ${datasets.length} entry(ies) but none with binding="${REQUIRED_BINDING}"`)
+    console.error(
+      `❌ FAIL: analytics_engine_datasets has ${datasets.length} entry(ies) but none with binding="${REQUIRED_BINDING}"`,
+    )
     console.error('Found bindings:', datasets.map((d) => d.binding).join(', ') || '(none)')
     console.error('')
     console.error(`Required: binding="${REQUIRED_BINDING}"`)
@@ -110,7 +112,9 @@ function main() {
   }
 
   if (isDeployableConfig && target.dataset !== EXPECTED_PRODUCTION_DATASET) {
-    console.warn(`⚠️  dataset name is "${target.dataset}" (expected production dataset "${EXPECTED_PRODUCTION_DATASET}")`)
+    console.warn(
+      `⚠️  dataset name is "${target.dataset}" (expected production dataset "${EXPECTED_PRODUCTION_DATASET}")`,
+    )
     console.warn('   Verify the Dashboard dataset matches the value declared here.')
   }
 
@@ -119,7 +123,9 @@ function main() {
   console.log(`   dataset: ${target.dataset}`)
   console.log('')
   console.log('Next step: runtime verification')
-  console.log(`  curl -s ${configPath.includes('dev') ? 'http://localhost:8788' : 'https://your-domain.pages.dev'}/api/metrics | grep search_metrics_persistence`)
+  console.log(
+    `  curl -s ${configPath.includes('dev') ? 'http://localhost:8788' : 'https://your-domain.pages.dev'}/api/metrics | grep search_metrics_persistence`,
+  )
   console.log('  Expected: search_metrics_persistence 1')
   console.log('')
   console.log('Historical queries: see scripts/analytics-queries.sql')

@@ -1,6 +1,6 @@
 /**
  * Index Layer — Public API
- * 
+ *
  * Re-exports all public types and functions from the index layer modules
  */
 
@@ -24,25 +24,14 @@ export type {
   CrawlQueueStats,
 } from './types'
 
-export {
-  EMBEDDING_MODELS,
-  EMBEDDING_DIMENSIONS,
-  DEFAULT_TOP_K,
-  DEFAULT_MIN_SCORE,
-} from './types'
+export { EMBEDDING_MODELS, EMBEDDING_DIMENSIONS, DEFAULT_TOP_K, DEFAULT_MIN_SCORE } from './types'
 
 // Embedding Service
 export { EmbeddingService } from './embedding'
 
 // Chunker
 export type { ChunkOptions } from './chunker'
-export { 
-  chunkDocument, 
-  chunkHtmlDocument, 
-  MAX_CHUNK_TOKENS, 
-  MIN_CHUNK_TOKENS,
-  hashString 
-} from './chunker'
+export { chunkDocument, chunkHtmlDocument, MAX_CHUNK_TOKENS, MIN_CHUNK_TOKENS, hashString } from './chunker'
 
 // Pipeline
 export { IndexingPipeline } from './pipeline'
@@ -292,4 +281,4 @@ FROM domain_blacklist
 WHERE expires_at IS NULL
    OR expires_at > (strftime('%s', 'now') * 1000)
 ORDER BY severity DESC, blocked_at DESC;
-`;
+`

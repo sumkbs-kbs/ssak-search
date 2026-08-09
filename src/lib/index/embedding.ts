@@ -123,12 +123,12 @@ export class EmbeddingService {
 
     // Prefer models supporting query/passage separation for queries
     if (isQuery && this.config.useQueryPassageSeparation) {
-      const withSep = models.filter(m => m.queryPassageSeparation && m.languages.includes(lang))
+      const withSep = models.filter((m) => m.queryPassageSeparation && m.languages.includes(lang))
       if (withSep.length > 0) return withSep[0].name
     }
 
     // Prefer models supporting the language
-    const withLang = models.filter(m => m.languages.includes(lang))
+    const withLang = models.filter((m) => m.languages.includes(lang))
     if (withLang.length > 0) return withLang[0].name
 
     // Fallback chain
@@ -158,7 +158,7 @@ export class EmbeddingService {
     modelName: string,
     _isQuery: boolean,
     _language?: string,
-    truncate = true
+    truncate = true,
   ): Promise<EmbeddingResponse> {
     const modelConfig = EMBEDDING_MODELS[modelName]
     if (!modelConfig) {
@@ -199,11 +199,11 @@ export class EmbeddingService {
 
   /**
    * Embed using Workers AI
-   */    private async embedWithWorkersAI(
+   */ private async embedWithWorkersAI(
     texts: string[],
     config: EmbeddingModelConfig,
     isQuery: boolean,
-    truncate: boolean
+    truncate: boolean,
   ): Promise<EmbeddingResponse> {
     if (!this.env?.AI) throw new Error('Workers AI not available')
 
@@ -244,7 +244,7 @@ export class EmbeddingService {
   private async embedWithCustomEndpoint(
     texts: string[],
     config: EmbeddingModelConfig,
-    truncate: boolean
+    truncate: boolean,
   ): Promise<EmbeddingResponse> {
     // This would call your fine-tuned model endpoint
     // Example: https://api.your-domain.com/embed
@@ -261,7 +261,7 @@ export class EmbeddingService {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${apiKey}`,
+        Authorization: `Bearer ${apiKey}`,
       },
       body: JSON.stringify({
         texts,
@@ -275,7 +275,7 @@ export class EmbeddingService {
       throw new Error(`Custom embedding endpoint returned ${response.status}`)
     }
 
-    const data = await response.json() as { embeddings: number[][]; model: string; dimensions: number }
+    const data = (await response.json()) as { embeddings: number[][]; model: string; dimensions: number }
 
     return {
       embeddings: data.embeddings,
@@ -301,7 +301,7 @@ export class EmbeddingService {
   private async embedWithOllama(
     texts: string[],
     config: EmbeddingModelConfig,
-    _truncate: boolean
+    _truncate: boolean,
   ): Promise<EmbeddingResponse> {
     const base = this.env?.OLLAMA_BASE_URL
     if (!base) throw new Error('OLLAMA_BASE_URL not configured')
@@ -333,7 +333,7 @@ export class EmbeddingService {
         throw new Error(`Ollama embeddings API ${response.status}: ${errText || response.statusText}`)
       }
 
-      const data = await response.json() as { data?: Array<{ embedding?: number[] }> }
+      const data = (await response.json()) as { data?: Array<{ embedding?: number[] }> }
       const embeddings = this.extractEmbeddings(data)
       if (embeddings.length !== batch.length) {
         throw new Error(`Ollama returned ${embeddings.length} embeddings for ${batch.length} inputs`)
@@ -368,12 +368,12 @@ export class EmbeddingService {
         // Use different parts of hash for each dimension
         const seed = (hash + i * 0x9e3779b9) >>> 0
         // Convert to [-1, 1] range
-        embedding[i] = ((seed % 10000) / 5000) - 1
+        embedding[i] = (seed % 10000) / 5000 - 1
       }
 
       // Normalize to unit length
       const norm = Math.sqrt(embedding.reduce((sum, v) => sum + v * v, 0))
-      embeddings.push(embedding.map(v => v / (norm || 1)))
+      embeddings.push(embedding.map((v) => v / (norm || 1)))
     }
 
     return {
@@ -388,7 +388,7 @@ export class EmbeddingService {
     let hash = 0
     for (let i = 0; i < str.length; i++) {
       const char = str.charCodeAt(i)
-      hash = ((hash << 5) - hash) + char
+      hash = (hash << 5) - hash + char
       hash = hash & hash // Convert to 32bit integer
     }
     return hash >>> 0
@@ -443,7 +443,7 @@ export async function createEmbeddings(
     isQuery?: boolean
     language?: string
     env?: Env
-  } = {}
+  } = {},
 ): Promise<number[][]> {
   const service = new EmbeddingService({}, options.env)
   const result = await service.embed({

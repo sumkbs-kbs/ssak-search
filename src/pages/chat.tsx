@@ -375,7 +375,7 @@ function escapeHtml(s) {
 
 function escapeAttr(s) {
   if (!s) return '';
-  return String(s).replace(/'/g, "&apos;").replace(/\"/g, "&quot;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  return String(s).replace(/'/g, "&apos;").replace(/"/g, "&quot;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
 
 function renderMarkdown(text) {
@@ -442,7 +442,9 @@ export function chatPage() {
               <i class="fas fa-robot" style="font-size: 0.8rem; color: var(--text-secondary);"></i>
             </div>
             <div class="dots">
-              <span></span><span></span><span></span>
+              <span></span>
+              <span></span>
+              <span></span>
             </div>
           </div>
         </div>
@@ -451,12 +453,7 @@ export function chatPage() {
       {/* Input area */}
       <div class="input-area">
         <div class="input-inner">
-          <textarea
-            id="chat-input"
-            rows={1}
-            placeholder="Ask a follow-up..."
-            autofocus
-          />
+          <textarea id="chat-input" rows={1} placeholder="Ask a follow-up..." autofocus />
           <button class="send-btn" id="send-btn" onclick="sendMessage()">
             <i class="fas fa-arrow-up"></i>
           </button>

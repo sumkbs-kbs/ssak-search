@@ -36,7 +36,10 @@ export function SourceCard({ source, index, t }: SourceCardProps) {
       aria-label={_(`a11y.source_link`, { number: index + 1, title: source.title })}
     >
       <div style="display: flex; gap: 6px;">
-        <span style="font-weight: 600; color: var(--accent); font-family: var(--mono); font-size: 0.7rem; min-width: 18px;" aria-hidden="true">
+        <span
+          style="font-weight: 600; color: var(--accent); font-family: var(--mono); font-size: 0.7rem; min-width: 18px;"
+          aria-hidden="true"
+        >
           {index + 1}.
         </span>
         <div>

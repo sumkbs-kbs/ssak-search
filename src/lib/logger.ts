@@ -14,6 +14,9 @@
  * See: https://developers.cloudflare.com/logs/logpush/
  */
 
+import type { Context } from 'hono'
+import type { AppBindings } from '../types'
+
 export type LogLevel = 'debug' | 'info' | 'warn' | 'error'
 
 export interface LogContext {
@@ -73,7 +76,10 @@ function formatLog(level: LogLevel, message: string, context: LogContext = {}): 
     // Datadog-compatible fields
     ddsource: 'cloudflare-workers',
     ddService: SERVICE_NAME,
-    ddEnv: context.ddEnv || (typeof globalThis !== 'undefined' && (globalThis as { ENV?: { ENVIRONMENT?: string } }).ENV?.ENVIRONMENT) || 'production',
+    ddEnv:
+      context.ddEnv ||
+      (typeof globalThis !== 'undefined' && (globalThis as { ENV?: { ENVIRONMENT?: string } }).ENV?.ENVIRONMENT) ||
+      'production',
     ddVersion: SERVICE_VERSION,
     // OpenTelemetry-compatible fields
     service: SERVICE_NAME,
@@ -92,7 +98,9 @@ function createLogger(baseContext: LogContext = {}): Logger {
   const log = (level: LogLevel, message: string, context: LogContext = {}) => {
     const mergedContext = { ...baseContext, ...context }
     const formatted = formatLog(level, message, mergedContext)
-    // Cloudflare Workers: console.log goes to Workers logs
+    // Cloudflare Workers: console.log goes to Workers logs. This is the
+    // intentional logging sink — the computed method access trips no-console.
+    // eslint-disable-next-line no-console
     console[level === 'debug' ? 'log' : level](formatted)
     pushBuffer(level, message, mergedContext)
   }
@@ -149,7 +157,10 @@ export interface LoggingOptions {
 
 export function createLoggingMiddleware(opts: LoggingOptions = {}) {
   const { logCached = false, ddEnv, baseContext = {} } = opts
-  return async (c: any, next: () => Promise<void>) => {
+  return async (
+    c: Context<{ Bindings: AppBindings; Variables: Record<string, unknown> }>,
+    next: () => Promise<void>,
+  ) => {
     const requestId = getRequestId(c.req.raw.headers)
     const startTime = Date.now()
 

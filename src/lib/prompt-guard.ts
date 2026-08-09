@@ -50,12 +50,14 @@ export const INJECTION_PATTERNS: InjectionPattern[] = [
   {
     label: 'en-ignore-previous',
     severity: 'high',
-    regex: /(?:ignore|disregard|forget|overlook|override)\s+(?:all\s+|any\s+)?(?:the\s+)?(?:previous|prior|above|earlier|preceding)\s+(?:instructions?|prompts?|messages?|context|rules?|directions?|guidelines?)/i,
+    regex:
+      /(?:ignore|disregard|forget|overlook|override)\s+(?:all\s+|any\s+)?(?:the\s+)?(?:previous|prior|above|earlier|preceding)\s+(?:instructions?|prompts?|messages?|context|rules?|directions?|guidelines?)/i,
   },
   {
     label: 'en-ignore-above',
     severity: 'high',
-    regex: /(?:ignore|disregard|forget)\s+(?:everything\s+)?(?:the\s+)?(?:above|what\s+is\s+above|all\s+of\s+the\s+above)\b/i,
+    regex:
+      /(?:ignore|disregard|forget)\s+(?:everything\s+)?(?:the\s+)?(?:above|what\s+is\s+above|all\s+of\s+the\s+above)\b/i,
   },
   {
     // Suffix REQUIRED — bare "forget everything" is common legit English
@@ -71,19 +73,22 @@ export const INJECTION_PATTERNS: InjectionPattern[] = [
   {
     label: 'en-reveal-prompt',
     severity: 'high',
-    regex: /(?:show|reveal|print|display|leak|output|give|tell|repeat|echo|copy|dump|paste|expose)\s+(?:back\s+)?(?:me\s+|us\s+)?(?:(?:your|the|this)\s+)?(?:(?:initial|full|system|original|entire|above)\s+)+(?:prompts?|system\s+messages?|instructions?|source\s+code)/i,
+    regex:
+      /(?:show|reveal|print|display|leak|output|give|tell|repeat|echo|copy|dump|paste|expose)\s+(?:back\s+)?(?:me\s+|us\s+)?(?:(?:your|the|this)\s+)?(?:(?:initial|full|system|original|entire|above)\s+)+(?:prompts?|system\s+messages?|instructions?|source\s+code)/i,
   },
   {
     label: 'en-repeat-given',
     severity: 'high',
-    regex: /(?:repeat|echo|copy|paste)\s+(?:back\s+)?(?:the\s+|your\s+)?(?:instructions?|prompts?|text|message)s?\s+(?:above|you\s+were\s+given|from\s+above)/i,
+    regex:
+      /(?:repeat|echo|copy|paste)\s+(?:back\s+)?(?:the\s+|your\s+)?(?:instructions?|prompts?|text|message)s?\s+(?:above|you\s+were\s+given|from\s+above)/i,
   },
   // Medium: bare show/print/copy + instructions/prompt — suspicious but common
   // in legit manuals/blogs; neutralize without quarantining.
   {
     label: 'en-show-instructions',
     severity: 'medium',
-    regex: /(?:show|reveal|print|display|give|tell|output|copy|paste)\s+(?:me\s+|us\s+)?(?:the\s+|your\s+)?(?:instructions?|prompts?)\b/i,
+    regex:
+      /(?:show|reveal|print|display|give|tell|output|copy|paste)\s+(?:me\s+|us\s+)?(?:the\s+|your\s+)?(?:instructions?|prompts?)\b/i,
   },
   // ── English: role hijack (HIGH when explicit "from now on you are") ──
   {
@@ -134,7 +139,8 @@ export const INJECTION_PATTERNS: InjectionPattern[] = [
   {
     label: 'ko-ignore',
     severity: 'high',
-    regex: /(?:이전|앞선|위의|모든)\s*(?:지시|명령|지침|내용|문맥|프롬프트)(?:를|을|에|의)?\s*(?:무시|따르지|잊|무시하고|따르지\s*말)/,
+    regex:
+      /(?:이전|앞선|위의|모든)\s*(?:지시|명령|지침|내용|문맥|프롬프트)(?:를|을|에|의)?\s*(?:무시|따르지|잊|무시하고|따르지\s*말)/,
   },
   {
     label: 'ko-reveal',
@@ -166,7 +172,8 @@ export const INJECTION_PATTERNS: InjectionPattern[] = [
   {
     label: 'ja-ignore',
     severity: 'high',
-    regex: /(?:これまで|今まで)(?:の)?\s*(?:指示|命令|プロンプト|内容)(?:を|は|に)?\s*(?:無視|従わ|忘れ)|(?:上記|以上|前の|すべての)\s*(?:指示|命令|プロンプト|内容)(?:を|は|に)?\s*(?:無視|従わ|忘れ)/,
+    regex:
+      /(?:これまで|今まで)(?:の)?\s*(?:指示|命令|プロンプト|内容)(?:を|は|に)?\s*(?:無視|従わ|忘れ)|(?:上記|以上|前の|すべての)\s*(?:指示|命令|プロンプト|内容)(?:を|は|に)?\s*(?:無視|従わ|忘れ)/,
   },
   {
     label: 'ja-reveal',

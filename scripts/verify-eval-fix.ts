@@ -21,7 +21,11 @@ async function main() {
   if (failed.length === 0) {
     console.error('✅ BOTH FIXED')
   } else {
-    failed.forEach((r) => console.error(`❌ ${r.query.id}: ${r.failures.join('; ')} (${r.resultCount} results, backends: ${r.backends.join(', ')})`))
+    failed.forEach((r) =>
+      console.error(
+        `❌ ${r.query.id}: ${r.failures.join('; ')} (${r.resultCount} results, backends: ${r.backends.join(', ')})`,
+      ),
+    )
     process.exit(1)
   }
 }

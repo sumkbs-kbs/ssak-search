@@ -22,14 +22,17 @@ globalThis.fetch = mockFetch
 // ============================================================
 
 function makeProductHuntHtml(productCount = 3): string {
-  const products = Array.from({ length: productCount }, (_, i) => `
+  const products = Array.from(
+    { length: productCount },
+    (_, i) => `
     <div class="product-card">
       <a href="/posts/product-${i}" class="product-link">
         <h3>Test Product ${i}</h3>
         <p>Description for test product ${i} with features and benefits</p>
       </a>
     </div>
-  `).join('\n')
+  `,
+  ).join('\n')
 
   return `<!DOCTYPE html>
 <html><body>${products}</body></html>`
@@ -65,12 +68,15 @@ function makeG2HtmlWithJsonLd(productCount = 2): string {
 }
 
 function makeG2HtmlFallback(productCount = 2): string {
-  const products = Array.from({ length: productCount }, (_, i) => `
+  const products = Array.from(
+    { length: productCount },
+    (_, i) => `
     <a href="/products/product-${i}" class="product-listing">
       <h2>G2 Product ${i}</h2>
       <span>${4.0 - i * 0.5} out of 5 stars</span>
     </a>
-  `).join('\n')
+  `,
+  ).join('\n')
 
   return `<!DOCTYPE html>
 <html><body>${products}</body></html>`
@@ -313,26 +319,38 @@ describe('searchProducts', () => {
     const results = await searchProducts('test query', 10, mockEnv)
 
     expect(results.length).toBeGreaterThanOrEqual(2)
-    expect(results.filter(r => r.source === 'producthunt').length).toBeGreaterThan(0)
-    expect(results.filter(r => r.source === 'g2').length).toBeGreaterThan(0)
+    expect(results.filter((r) => r.source === 'producthunt').length).toBeGreaterThan(0)
+    expect(results.filter((r) => r.source === 'g2').length).toBeGreaterThan(0)
   })
 
   it('deduplicates products by name (case-insensitive)', async () => {
     const { searchProducts } = await import('../../src/lib/product-search')
 
     setupUrlMock([
-      { match: 'producthunt.com', response: () => `<html><body><a href="/posts/same-product"><h3>Same Product</h3></a></body></html>` },
-      { match: 'g2.com', response: () => `<html><head><script type="application/ld+json">${JSON.stringify({
-        '@context': 'https://schema.org',
-        '@type': 'ItemList',
-        itemListElement: [{
-          '@type': 'Product', name: 'Same Product', url: 'https://g2.com/same-product', description: '',
-        }],
-      })}</script></head><body></body></html>` },
+      {
+        match: 'producthunt.com',
+        response: () => `<html><body><a href="/posts/same-product"><h3>Same Product</h3></a></body></html>`,
+      },
+      {
+        match: 'g2.com',
+        response: () =>
+          `<html><head><script type="application/ld+json">${JSON.stringify({
+            '@context': 'https://schema.org',
+            '@type': 'ItemList',
+            itemListElement: [
+              {
+                '@type': 'Product',
+                name: 'Same Product',
+                url: 'https://g2.com/same-product',
+                description: '',
+              },
+            ],
+          })}</script></head><body></body></html>`,
+      },
     ])
 
     const results = await searchProducts('same', 10, mockEnv)
-    const names = results.map(r => r.name.toLowerCase())
+    const names = results.map((r) => r.name.toLowerCase())
     const uniqueNames = new Set(names)
     expect(uniqueNames.size).toBe(names.length)
   })
@@ -372,7 +390,7 @@ describe('searchProducts', () => {
 
     const results = await searchProducts('test query', 10, mockEnv)
     expect(results.length).toBeGreaterThan(0)
-    expect(results.every(r => r.source === 'g2')).toBe(true)
+    expect(results.every((r) => r.source === 'g2')).toBe(true)
   })
 
   it('returns all results with correct source labels', async () => {
@@ -385,8 +403,8 @@ describe('searchProducts', () => {
 
     const results = await searchProducts('test query', 10, mockEnv)
 
-    const phProduct = results.find(r => r.source === 'producthunt')
-    const g2Product = results.find(r => r.source === 'g2')
+    const phProduct = results.find((r) => r.source === 'producthunt')
+    const g2Product = results.find((r) => r.source === 'g2')
     expect(phProduct).toBeDefined()
     expect(g2Product).toBeDefined()
     expect(phProduct!.name).toBeDefined()

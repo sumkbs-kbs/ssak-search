@@ -13,31 +13,56 @@
 
 import type { SearchResult, KnowledgeGraph, Env } from '../types'
 import { logger, toError } from './logger'
-import { getKnowledgeGraph as wikipediaKnowledgeGraph } from './specialized'
-import { detectQueryType } from './specialized'
+import { getKnowledgeGraph as wikipediaKnowledgeGraph, detectQueryType } from './specialized'
 import { extractDomain } from './util'
 
 // ============================================================
 // Entity Extraction from Search Results
 // ============================================================
 
-/** Common entity indicators in titles (patterns that suggest a named entity) */
-const ENTITY_PATTERNS = [
-  // Company/organization indicators
-  /\b(?:Corp|Inc|Ltd|LLC|GmbH|Co\.|Group|Holdings|Technologies|Systems|Enterprises|Ventures|Solutions|Industries|Labs)\b/i,
-  // Person indicators
-  /\b(?:Dr\.|Prof\.|CEO|Founder|President|Chairman|Author|Creator)\b/i,
-  // Product indicators
-  /\b(?:v\d+\.\d+|Version|Edition|Platform|Framework|Library|Kit|SDK|API|Engine|Toolkit)\b/i,
-  // Technology indicators
-  /\b(?:Language|Protocol|Standard|Specification|Runtime|Compiler|Interpreter)\b/i,
-]
-
 /** Known entity type prefixes in Wikipedia descriptions */
 const TYPE_KEYWORDS: Record<string, string[]> = {
-  person: ['person', 'author', 'scientist', 'engineer', 'programmer', 'entrepreneur', 'founder', 'ceo', 'inventor', 'artist', 'musician', 'actor', 'politician'],
-  organization: ['company', 'corporation', 'organization', 'foundation', 'institute', 'university', 'agency', 'startup', 'enterprise', 'nonprofit'],
-  technology: ['language', 'framework', 'library', 'platform', 'protocol', 'standard', 'specification', 'runtime', 'engine', 'toolkit', 'technology', 'programming'],
+  person: [
+    'person',
+    'author',
+    'scientist',
+    'engineer',
+    'programmer',
+    'entrepreneur',
+    'founder',
+    'ceo',
+    'inventor',
+    'artist',
+    'musician',
+    'actor',
+    'politician',
+  ],
+  organization: [
+    'company',
+    'corporation',
+    'organization',
+    'foundation',
+    'institute',
+    'university',
+    'agency',
+    'startup',
+    'enterprise',
+    'nonprofit',
+  ],
+  technology: [
+    'language',
+    'framework',
+    'library',
+    'platform',
+    'protocol',
+    'standard',
+    'specification',
+    'runtime',
+    'engine',
+    'toolkit',
+    'technology',
+    'programming',
+  ],
   product: ['product', 'service', 'application', 'software', 'tool', 'device', 'system'],
   place: ['city', 'country', 'state', 'region', 'mountain', 'river', 'lake', 'island', 'continent'],
   concept: ['concept', 'theory', 'idea', 'movement', 'philosophy', 'methodology', 'discipline'],
@@ -73,11 +98,10 @@ export function extractEntityFromResults(query: string, results: SearchResult[])
   }
 
   // Sort by frequency, then by length (longer = more specific)
-  const sorted = [...phraseCounts.entries()]
-    .sort((a, b) => {
-      if (b[1] !== a[1]) return b[1] - a[1]
-      return b[0].length - a[0].length
-    })
+  const sorted = [...phraseCounts.entries()].sort((a, b) => {
+    if (b[1] !== a[1]) return b[1] - a[1]
+    return b[0].length - a[0].length
+  })
 
   // Find the first capitalized phrase that appears in multiple results
   // OR matches the query
@@ -90,7 +114,7 @@ export function extractEntityFromResults(query: string, results: SearchResult[])
     if (lower === query.toLowerCase()) continue
 
     // Check if phrase appears in the query or vice versa
-    const inQuery = queryTerms.some(t => lower.includes(t) || t.includes(lower))
+    const inQuery = queryTerms.some((t) => lower.includes(t) || t.includes(lower))
 
     // High frequency = strong entity signal
     if (count >= 3 && phrase.length > 3 && inQuery) {
@@ -106,7 +130,7 @@ export function extractEntityFromResults(query: string, results: SearchResult[])
       // Return the longest capitalized phrase that overlaps with the query
       const queryLower = query.toLowerCase()
       const best = match
-        .filter(m => m.length > 3 && queryLower.includes(m.toLowerCase().split(' ')[0]))
+        .filter((m) => m.length > 3 && queryLower.includes(m.toLowerCase().split(' ')[0]))
         .sort((a, b) => b.length - a.length)
       if (best.length > 0) return best[0]
     }
@@ -155,21 +179,21 @@ function buildDescriptionFromResults(query: string, results: SearchResult[]): st
 function detectEntityType(query: string, results: SearchResult[]): string | undefined {
   const allContent = results
     .slice(0, 5)
-    .map(r => `${r.title} ${r.content}`)
+    .map((r) => `${r.title} ${r.content}`)
     .join(' ')
     .toLowerCase()
 
   // Check TYPE_KEYWORDS
   for (const [type, keywords] of Object.entries(TYPE_KEYWORDS)) {
-    if (keywords.some(kw => allContent.includes(kw))) {
+    if (keywords.some((kw) => allContent.includes(kw))) {
       return type
     }
   }
 
   // Domain-based heuristics
-  const domains = results.map(r => extractDomain(r.url))
-  if (domains.some(d => d.includes('github.com'))) return 'technology'
-  if (domains.some(d => d.includes('wikipedia.org'))) return 'concept'
+  const domains = results.map((r) => extractDomain(r.url))
+  if (domains.some((d) => d.includes('github.com'))) return 'technology'
+  if (domains.some((d) => d.includes('wikipedia.org'))) return 'concept'
 
   // Default based on query patterns
   if (query.match(/^(?:who|whom)\s+/i)) return 'person'
@@ -192,10 +216,16 @@ function extractFactsFromResults(results: SearchResult[]): Record<string, string
     { key: 'CEO', regex: /\bCEO\s+(?:is\s+)?([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)\b/i },
     { key: 'Headquarters', regex: /\b(?:headquarters|HQ|based)\s+(?:in\s+|at\s+)?([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)\b/i },
     { key: 'Employees', regex: /\b(\d[\d,]*)\s*(?:employees|people|staff|workers)\b/i },
-    { key: 'Revenue', regex: /\b(?:revenue|turnover|sales)\s+(?:of\s+)?([$€£¥]?\d[\d.,]*\s*(?:billion|million|trillion)?)\b/i },
+    {
+      key: 'Revenue',
+      regex: /\b(?:revenue|turnover|sales)\s+(?:of\s+)?([$€£¥]?\d[\d.,]*\s*(?:billion|million|trillion)?)\b/i,
+    },
     { key: 'Website', regex: /\b(?:website|site|homepage|url)\s*(?::|is)\s*(https?:\/\/[^\s,]+)\b/i },
     { key: 'Latest Version', regex: /\b(?:latest|current|version|release)\s+(?:version\s+)?(v?\d+\.\d+(?:\.\d+)?)\b/i },
-    { key: 'Repository', regex: /\b(?:repo|repository|source code|source code)\s*(?::|at)\s*(https?:\/\/github\.com\/[^\s,]+)\b/i },
+    {
+      key: 'Repository',
+      regex: /\b(?:repo|repository|source code|source code)\s*(?::|at)\s*(https?:\/\/github\.com\/[^\s,]+)\b/i,
+    },
     { key: 'Platform', regex: /\b(?:platform|environment)\s*(?::|is)\s*([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)\b/i },
   ]
 
@@ -299,7 +329,9 @@ export async function buildKnowledgePanel(
         }
       }
     } catch (err) {
-      logger.warn('[KnowledgePanel] Wikipedia fetch failed, falling back to result extraction:', { error: toError(err) })
+      logger.warn('[KnowledgePanel] Wikipedia fetch failed, falling back to result extraction:', {
+        error: toError(err),
+      })
     }
   }
 
@@ -381,14 +413,15 @@ export function matchImagesToResults(
   for (const img of imageResults) {
     try {
       const domain = new URL(img.url).hostname.replace('www.', '')
-      if (!imageMap.has(domain)) imageMap.set(domain, [])
-      imageMap.get(domain)!.push({ thumbnail: img.thumbnail || img.url, url: img.url, title: img.title })
+      const group = imageMap.get(domain) ?? []
+      group.push({ thumbnail: img.thumbnail || img.url, url: img.url, title: img.title })
+      imageMap.set(domain, group)
     } catch (err) {
       logger.warn('[KnowledgePanel] Skip invalid image URL:', { error: toError(err) })
     }
   }
 
-  return results.map(result => {
+  return results.map((result) => {
     const domain = extractDomain(result.url)
 
     // Try to find a matching image by domain
@@ -396,7 +429,7 @@ export function matchImagesToResults(
     if (domainImages && domainImages.length > 0) {
       return {
         ...result,
-        images: domainImages.slice(0, 3).map(i => i.thumbnail || i.url),
+        images: domainImages.slice(0, 3).map((i) => i.thumbnail || i.url),
       }
     }
 
@@ -405,7 +438,7 @@ export function matchImagesToResults(
     for (const [, images] of imageMap) {
       for (const img of images) {
         const imgWords = img.title.toLowerCase().split(/\s+/)
-        const overlap = [...resultWords].filter(w => imgWords.includes(w) && w.length > 2).length
+        const overlap = [...resultWords].filter((w) => imgWords.includes(w) && w.length > 2).length
         if (overlap >= 2) {
           return {
             ...result,

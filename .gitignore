@@ -39,3 +39,6 @@ lerna-debug.log*
 # SearXNG configuration (contains secret_key)
 searxng/
 .zcode/
+
+# Freebuff desktop local DB (dev artifact, not project content)
+.freebuff/

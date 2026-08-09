@@ -144,7 +144,7 @@ export async function getCached<T>(key: string, env?: AppBindings): Promise<T | 
       recordCacheHit(1)
       return (await cached.json()) as T
     }
-  } catch (err) {
+  } catch (_err) {
     // Cache API not available (e.g., local dev) — silently skip
   }
 
@@ -181,12 +181,7 @@ export async function getCached<T>(key: string, env?: AppBindings): Promise<T | 
  * Tier 2: KV namespace (fire-and-forget, when CACHE_KV binding exists)
  * No-op if Cache API is unavailable.
  */
-export async function setCached<T>(
-  key: string,
-  data: T,
-  topic?: string,
-  env?: AppBindings,
-): Promise<void> {
+export async function setCached<T>(key: string, data: T, topic?: string, env?: AppBindings): Promise<void> {
   const ttl = resolveTtl(env, topic)
 
   // Tier 1: Cloudflare Cache API
@@ -199,11 +194,8 @@ export async function setCached<T>(
         'CF-Cache-Status': 'HIT',
       },
     })
-    await cache.put(
-      new Request(`https://cache.local/${encodeURIComponent(key)}`),
-      response,
-    )
-  } catch (err) {
+    await cache.put(new Request(`https://cache.local/${encodeURIComponent(key)}`), response)
+  } catch (_err) {
     // Cache API not available — silently skip
   }
 
@@ -211,10 +203,10 @@ export async function setCached<T>(
   if (env?.CACHE_KV) {
     // Only persist general queries (not news/finance — freshness matters)
     if (topic !== 'news' && topic !== 'finance') {
-    env.CACHE_KV.put(key, JSON.stringify(data), { expirationTtl: ttl }).catch((err) => {
-      // KV persist failure — log for observability (cache-miss rate + free-tier overage risk).
-      logger.warn('KV cache write failed:', { key_preview: String(key).slice(0, 36), error: toError(err) })
-    })
+      env.CACHE_KV.put(key, JSON.stringify(data), { expirationTtl: ttl }).catch((err) => {
+        // KV persist failure — log for observability (cache-miss rate + free-tier overage risk).
+        logger.warn('KV cache write failed:', { key_preview: String(key).slice(0, 36), error: toError(err) })
+      })
     }
   }
 }
@@ -226,7 +218,7 @@ export async function invalidateCache(key: string): Promise<void> {
   try {
     const cache = caches.default
     await cache.delete(new Request(`https://cache.local/${encodeURIComponent(key)}`))
-  } catch (err) {
+  } catch (_err) {
     // Silently skip
   }
 }

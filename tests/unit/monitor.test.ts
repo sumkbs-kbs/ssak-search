@@ -40,7 +40,9 @@ const { getBackendHealth, metrics, sendPagerDutyEvent, getClickLogStub, getExper
 import { monitorRoute } from '../../src/routes/monitor'
 
 const stubExecutionCtx = {
-  waitUntil: (promise: Promise<unknown>) => { promise.catch(() => {}) },
+  waitUntil: (promise: Promise<unknown>) => {
+    promise.catch(() => {})
+  },
   passThroughOnException: () => {},
   cf: {} as Record<string, unknown>,
   props: {} as Record<string, unknown>,
@@ -92,7 +94,7 @@ describe('/api/monitor (D.4)', () => {
 
   it('returns ok with qps, latency percentiles and quality sections', async () => {
     const res = await fetchMonitor()
-    const body = await res.json() as any
+    const body = (await res.json()) as any
 
     expect(res.status).toBe(200)
     expect(body.status).toBe('ok')
@@ -110,7 +112,7 @@ describe('/api/monitor (D.4)', () => {
       extract: { p50: 100, p95: 200, p99: 300, count: 50 },
     })
     const res = await fetchMonitor()
-    const body = await res.json() as any
+    const body = (await res.json()) as any
 
     expect(body.alerts.some((a: any) => a.rule === 'LatencyP95High')).toBe(true)
     const alert = body.alerts.find((a: any) => a.rule === 'LatencyP95High')
@@ -119,21 +121,28 @@ describe('/api/monitor (D.4)', () => {
 
   it('does not fire LatencyP95High when p95 is under threshold', async () => {
     const res = await fetchMonitor()
-    const body = await res.json() as any
+    const body = (await res.json()) as any
     expect(body.alerts?.some((a: any) => a.rule === 'LatencyP95High')).toBe(false)
   })
 
   it('fires BackendSuccessRateLow and sends PagerDuty when success < 90%', async () => {
     getBackendHealth.mockResolvedValue({
       'www.bing.com': {
-        status: 'healthy', failures: 40, inflight: 0, tripped: false,
-        totalRequests: 100, totalFailures: 40, rateLimitedCount: 0,
-        tripCount: 0, probeInFlight: false, backoffMs: 30000,
+        status: 'healthy',
+        failures: 40,
+        inflight: 0,
+        tripped: false,
+        totalRequests: 100,
+        totalFailures: 40,
+        rateLimitedCount: 0,
+        tripCount: 0,
+        probeInFlight: false,
+        backoffMs: 30000,
       },
     })
     const env = { PAGERDUTY_ROUTING_KEY: 'pd-key' }
     const res = await fetchMonitor(env)
-    const body = await res.json() as any
+    const body = (await res.json()) as any
 
     expect(body.status).toBe('degraded')
     expect(body.alerts.some((a: any) => a.rule === 'BackendSuccessRateLow')).toBe(true)
@@ -146,9 +155,16 @@ describe('/api/monitor (D.4)', () => {
   it('does not send PagerDuty when routing key is missing', async () => {
     getBackendHealth.mockResolvedValue({
       'www.bing.com': {
-        status: 'degraded', failures: 40, inflight: 0, tripped: false,
-        totalRequests: 100, totalFailures: 40, rateLimitedCount: 0,
-        tripCount: 0, probeInFlight: false, backoffMs: 30000,
+        status: 'degraded',
+        failures: 40,
+        inflight: 0,
+        tripped: false,
+        totalRequests: 100,
+        totalFailures: 40,
+        rateLimitedCount: 0,
+        tripCount: 0,
+        probeInFlight: false,
+        backoffMs: 30000,
       },
     })
     await fetchMonitor({})
@@ -158,7 +174,7 @@ describe('/api/monitor (D.4)', () => {
   it('fires SubrequestQuotaHigh when avg subrequests exceed 80% of quota', async () => {
     metrics.getUsageStats.mockReturnValue(baseUsageStats({ avgSearchSubrequests: 45 }))
     const res = await fetchMonitor()
-    const body = await res.json() as any
+    const body = (await res.json()) as any
 
     expect(body.alerts.some((a: any) => a.rule === 'SubrequestQuotaHigh')).toBe(true)
   })
@@ -167,7 +183,7 @@ describe('/api/monitor (D.4)', () => {
     // quota 1000 (paid) → 45 subrequests is under 80% → no alert
     metrics.getUsageStats.mockReturnValue(baseUsageStats({ avgSearchSubrequests: 45 }))
     const res = await fetchMonitor({ SUBREQUEST_QUOTA_PER_REQUEST: '1000' })
-    const body = await res.json() as any
+    const body = (await res.json()) as any
     expect(body.alerts?.some((a: any) => a.rule === 'SubrequestQuotaHigh')).toBe(false)
   })
 
@@ -176,15 +192,13 @@ describe('/api/monitor (D.4)', () => {
       getStats: vi.fn().mockResolvedValue({ impressions: 200, clicks: 40, oldest_ts: 0, newest_ts: 0 }),
     })
     getExperimentStub.mockReturnValue({
-      list: vi.fn().mockResolvedValue([
-        { name: 'ltr-ranking', status: 'running' },
-      ]),
+      list: vi.fn().mockResolvedValue([{ name: 'ltr-ranking', status: 'running' }]),
       getStats: vi.fn().mockResolvedValue({ impressions: 100, clicks: 10, latencies: 0, errors: 0 }),
     })
 
     const env = { CLICK_LOG_DO: {}, EXPERIMENT_DO: {} }
     const res = await fetchMonitor(env)
-    const body = await res.json() as any
+    const body = (await res.json()) as any
 
     expect(body.quality.ltr.available).toBe(true)
     expect(body.quality.ltr.impressions).toBe(200)

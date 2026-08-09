@@ -47,8 +47,8 @@ export interface QualityGateResult {
  * Quality gate thresholds (matching Perplexity's L3 reranker behavior)
  */
 export const DEFAULT_QUALITY_CONFIG: QualityGateConfig = {
-  minScore: 0.08,      // Minimum individual evidence score to keep
-  maxRetries: 1,       // Maximum re-query attempts
+  minScore: 0.08, // Minimum individual evidence score to keep
+  maxRetries: 1, // Maximum re-query attempts
   reQueryThreshold: 0.7, // If avg evidence score < 0.7, trigger re-query
 }
 
@@ -71,13 +71,13 @@ export interface EvidenceItem {
  */
 export function evaluateStepEvidence(
   stepResults: StepResult[],
-  minScore: number = DEFAULT_QUALITY_CONFIG.minScore
+  minScore: number = DEFAULT_QUALITY_CONFIG.minScore,
 ): { passed: boolean; avgScore: number; count: number; kept: EvidenceItem[] } {
   const allEvidence: EvidenceItem[] = []
-  
+
   for (const result of stepResults) {
     if (!result.success || !result.evidence) continue
-    
+
     const evidence = result.evidence as Array<{
       title: string
       url: string
@@ -85,7 +85,7 @@ export function evaluateStepEvidence(
       score: number
       domain: string
     }>
-    
+
     for (let i = 0; i < evidence.length; i++) {
       const item = evidence[i]
       if ((item.score ?? 0) >= minScore) {
@@ -101,13 +101,13 @@ export function evaluateStepEvidence(
       }
     }
   }
-  
+
   if (allEvidence.length === 0) {
     return { passed: false, avgScore: 0, count: 0, kept: [] }
   }
-  
+
   const avgScore = allEvidence.reduce((sum, e) => sum + e.score, 0) / allEvidence.length
-  
+
   return {
     passed: avgScore >= DEFAULT_QUALITY_CONFIG.reQueryThreshold,
     avgScore,
@@ -121,18 +121,18 @@ export function evaluateStepEvidence(
  */
 export function evaluatePlanQuality(
   stepResults: StepResult[],
-  config: QualityGateConfig = DEFAULT_QUALITY_CONFIG
+  config: QualityGateConfig = DEFAULT_QUALITY_CONFIG,
 ): QualityGateResult {
   const allEvidence: EvidenceItem[] = []
   const warnings: string[] = []
-  
+
   // Collect all evidence from successful steps
   for (const result of stepResults) {
     if (!result.success || !result.evidence) {
       warnings.push(`Step ${result.stepId} (${result.tool}) failed: ${result.error}`)
       continue
     }
-    
+
     const evidence = result.evidence as Array<{
       title: string
       url: string
@@ -140,7 +140,7 @@ export function evaluatePlanQuality(
       score: number
       domain: string
     }>
-    
+
     for (let i = 0; i < evidence.length; i++) {
       const item = evidence[i]
       if ((item.score ?? 0) >= config.minScore) {
@@ -156,7 +156,7 @@ export function evaluatePlanQuality(
       }
     }
   }
-  
+
   if (allEvidence.length === 0) {
     return {
       passed: false,
@@ -167,26 +167,28 @@ export function evaluatePlanQuality(
       warnings: ['No evidence passed minimum score threshold'],
     }
   }
-  
+
   const avgScore = allEvidence.reduce((sum, e) => sum + e.score, 0) / allEvidence.length
   const passed = avgScore >= config.reQueryThreshold
-  
+
   if (!passed) {
-    warnings.push(`Average evidence score (${avgScore.toFixed(2)}) below quality threshold (${config.reQueryThreshold})`)
+    warnings.push(
+      `Average evidence score (${avgScore.toFixed(2)}) below quality threshold (${config.reQueryThreshold})`,
+    )
   }
-  
+
   // Check for domain diversity
-  const uniqueDomains = new Set(allEvidence.map(e => e.domain))
+  const uniqueDomains = new Set(allEvidence.map((e) => e.domain))
   if (uniqueDomains.size < 2 && allEvidence.length > 3) {
     warnings.push(`Low domain diversity: only ${uniqueDomains.size} unique domains`)
   }
-  
+
   // Check for recency (if dates available)
-  const datedEvidence = allEvidence.filter(e => e.content.includes('2024') || e.content.includes('2025'))
+  const datedEvidence = allEvidence.filter((e) => e.content.includes('2024') || e.content.includes('2025'))
   if (datedEvidence.length === 0 && allEvidence.length > 2) {
     warnings.push('No recent evidence found (no 2024/2025 dates)')
   }
-  
+
   return {
     passed,
     avgScore,
@@ -204,7 +206,7 @@ export function evaluatePlanQuality(
 export async function reformulateQuery(
   originalQuery: string,
   failedResults: StepResult[],
-  ai?: unknown
+  ai?: unknown,
 ): Promise<string> {
   // If AI available, use it for intelligent reformulation
   if (ai) {
@@ -236,7 +238,11 @@ Reply with ONLY the reformulated query, nothing else.`
 
       const text = extractText(response)
       if (text) {
-        const cleaned = text.trim().replace(/^["']|["']$/g, '').split('\n')[0].trim()
+        const cleaned = text
+          .trim()
+          .replace(/^["']|["']$/g, '')
+          .split('\n')[0]
+          .trim()
         if (cleaned.length > 5 && cleaned.length < 200 && cleaned !== originalQuery) {
           logger.info(`[QualityGate] AI reformulated query: "${originalQuery}" -> "${cleaned}"`)
           return cleaned
@@ -250,13 +256,19 @@ Reply with ONLY the reformulated query, nothing else.`
   // Heuristic reformulation strategies (fallback when AI unavailable or failed)
   const strategies = [
     // Add "official" / "documentation" for technical queries
-    (q: string) => q.includes('api') || q.includes('sdk') ? `${q} official documentation` : null,
+    (q: string) => (q.includes('api') || q.includes('sdk') ? `${q} official documentation` : null),
     // Add "latest" / "2025" for time-sensitive queries
-    (q: string) => !/20[0-9][0-9]/.test(q) ? `${q} 2025` : null,
+    (q: string) => (!/20[0-9][0-9]/.test(q) ? `${q} 2025` : null),
     // Add "comparison" / "vs" for evaluation queries
-    (q: string) => /best|better|worst|compare/.test(q.toLowerCase()) ? `${q} comparison review` : null,
+    (q: string) => (/best|better|worst|compare/.test(q.toLowerCase()) ? `${q} comparison review` : null),
     // Simplify - remove filler words
-    (q: string) => q.split(' ').length > 8 ? q.split(' ').filter(w => w.length > 3).join(' ') : null,
+    (q: string) =>
+      q.split(' ').length > 8
+        ? q
+            .split(' ')
+            .filter((w) => w.length > 3)
+            .join(' ')
+        : null,
   ]
 
   for (const strategy of strategies) {
@@ -292,11 +304,11 @@ export async function runQualityGate(
   originalQuery: string,
   stepResults: StepResult[],
   config: QualityGateConfig = DEFAULT_QUALITY_CONFIG,
-  ai?: unknown
+  ai?: unknown,
 ): Promise<QualityGateResult & { reQueryPlan?: SubQueryPlan }> {
   const evaluation = evaluatePlanQuality(stepResults, config)
   evaluation.originalQuery = originalQuery
-  
+
   if (!evaluation.passed && config.maxRetries > 0) {
     // Try to reformulate and re-query
     const reformulated = await reformulateQuery(originalQuery, stepResults, ai)
@@ -338,7 +350,7 @@ export async function runQualityGate(
  */
 export function filterByQuality(
   results: Array<{ score: number; [key: string]: unknown }>,
-  threshold: number = DEFAULT_QUALITY_CONFIG.minScore
+  threshold: number = DEFAULT_QUALITY_CONFIG.minScore,
 ): typeof results {
-  return results.filter(r => (r.score ?? 0) >= threshold)
+  return results.filter((r) => (r.score ?? 0) >= threshold)
 }

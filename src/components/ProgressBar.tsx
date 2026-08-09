@@ -67,7 +67,9 @@ export function StreamStatus({ t }: { t?: (key: string, params?: Record<string, 
         style="width: 8px; height: 8px; border-radius: 50%; background: var(--success); animation: pulse-dot 1.5s ease-in-out infinite; display: inline-block;"
         aria-hidden="true"
       />
-      <span id="stream-msg" class="stream-msg">{_('common.loading')}</span>
+      <span id="stream-msg" class="stream-msg">
+        {_('common.loading')}
+      </span>
     </div>
   )
 }

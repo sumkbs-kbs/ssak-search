@@ -35,17 +35,15 @@ import {
   duckDuckGoInstantAnswer,
   detectQueryType,
   getSourcesForQueryType,
+  dbpediaSearch,
+  wikidataWikiSearch,
+  dbpediaLangSearch,
 } from './specialized'
 import { extractContent } from './extractor'
 import { generateAnswer, attachFactCheckToAnswer } from './answer'
 import { buildKnowledgePanel, matchImagesToResults } from './knowledge-panel'
 import { hybridSearch } from './retrieval'
-import {
-  generateRelatedQueries,
-  truncateToTokens,
-  countryToBingMkt,
-  countryToLanguageTag,
-} from './util'
+import { generateRelatedQueries, truncateToTokens, countryToBingMkt, countryToLanguageTag } from './util'
 import { type AgenticSearchOptions, executeAgenticSearch } from './agentic'
 import { recordAgenticPipeline } from './metrics'
 import { cacheKey, cacheParamsSignature } from './cache'
@@ -55,7 +53,7 @@ import type { SearchContext, BackendTask } from './search/context'
 import { buildBackendTasks } from './search/strategies'
 import { fanoutBackends } from './search/fanout'
 import { emergencyFallback } from './search/fallback'
-import { applyRankingPipeline } from './search/ranking'
+import { applyRankingPipeline, capSourceResults } from './search/ranking'
 
 // ============================================================
 // Phase 2.4: Isolate-level in-memory result cache
@@ -68,8 +66,8 @@ interface CacheEntry {
   expiresAt: number
 }
 const MEMORY_CACHE = new Map<string, CacheEntry>()
-const MEMORY_CACHE_TTL_GENERAL = 120_000  // 2 minutes
-const MEMORY_CACHE_TTL_NEWS = 30_000      // 30 seconds
+const MEMORY_CACHE_TTL_GENERAL = 120_000 // 2 minutes
+const MEMORY_CACHE_TTL_NEWS = 30_000 // 30 seconds
 
 /**
  * Single-flight map: in-flight executeSearch promises keyed by memory cache
@@ -239,7 +237,8 @@ function isJapaneseQuery(query: string): boolean {
   // words that Chinese never uses. 日本 alone is excluded (it appears in
   // traditional-Chinese travel copy like 日本旅遊攻略), so the place words
   // are the reliable markers.
-  if (/(京都|紅葉|東京|大阪|北海道|沖縄|名古屋|福岡|神戸|広島|仙台|札幌|横浜|長野|半導体|任天堂)/.test(query)) return true
+  if (/(京都|紅葉|東京|大阪|北海道|沖縄|名古屋|福岡|神戸|広島|仙台|札幌|横浜|長野|半導体|任天堂)/.test(query))
+    return true
   // Kana-less Japanese TECH/tutorial compounds (Phase 6.12 / ja coverage fix):
   // queries like '機械学習入門' / 'TypeScript 入門' / 'Web API 設計' / 'AI規制 最新'
   // contain ZERO kana and ZERO shinjitai glyphs, so they fell into the zh-CN
@@ -267,16 +266,18 @@ function detectWikiLanguage(query: string): string {
 /** Strip question particles from Chinese queries for better Wikipedia/API matching */
 function cleanChineseQuery(query: string): string {
   // 什么是 → what is, 什么是量子计算 → 量子计算
-  return query
-    .replace(/^什么是/, '')
-    .replace(/^什么/, '')
-    .replace(/^什么是/, '')
-    .replace(/^什麼是/, '')
-    .replace(/^什麼/, '')
-    .replace(/^怎么/, '')
-    .replace(/^如何/, '')
-    .replace(/^为什么/, '')
-    .trim() || query
+  return (
+    query
+      .replace(/^什么是/, '')
+      .replace(/^什么/, '')
+      .replace(/^什么是/, '')
+      .replace(/^什麼是/, '')
+      .replace(/^什麼/, '')
+      .replace(/^怎么/, '')
+      .replace(/^如何/, '')
+      .replace(/^为什么/, '')
+      .trim() || query
+  )
 }
 
 /** Normalize a URL for deduplication (strip protocol, trailing slash, fragments, tracking params) */
@@ -284,35 +285,50 @@ function normalizeUrlForDedup(url: string): string {
   try {
     const u = new URL(url)
     // Remove common tracking params
-    const trackingParams = ['utm_source', 'utm_medium', 'utm_campaign', 'utm_term', 'utm_content', 'gclid', 'fbclid', 'ref', 'ref_src']
+    const trackingParams = [
+      'utm_source',
+      'utm_medium',
+      'utm_campaign',
+      'utm_term',
+      'utm_content',
+      'gclid',
+      'fbclid',
+      'ref',
+      'ref_src',
+    ]
     trackingParams.forEach((p) => u.searchParams.delete(p))
     const path = u.pathname.replace(/\/+$/, '') // strip trailing slashes
     const search = u.search ? u.search : ''
     return `${u.hostname.toLowerCase()}${path}${search}`.toLowerCase()
   } catch (err) {
     logger.warn('URL normalization failed:', { error: toError(err) })
-    return url.toLowerCase().replace(/^https?:\/\//, '').replace(/\/+$/, '')
+    return url
+      .toLowerCase()
+      .replace(/^https?:\/\//, '')
+      .replace(/\/+$/, '')
   }
 }
 
 /** Normalize a title for deduplication (lowercase, strip punctuation, collapse spaces) */
 function normalizeTitleForDedup(title: string): string {
-  return title
-    .toLowerCase()
-    // Use Unicode property escapes so CJK/Hangul characters are PRESERVED.
-    // The old [^\w\s] regex stripped ALL non-ASCII letters (\w = [A-Za-z0-9_]),
-    // turning every Chinese title into an empty string — causing ALL CJK results
-    // to dedup to the same titleKey and wiping out 90% of Chinese query results.
-    .replace(/[^\p{L}\p{N}\s]/gu, ' ')  // strip punctuation, keep all letters+digits
-    .replace(/\s+/g, ' ')
-    .trim()
-    .slice(0, 80)  // only compare first 80 chars
+  return (
+    title
+      .toLowerCase()
+      // Use Unicode property escapes so CJK/Hangul characters are PRESERVED.
+      // The old [^\w\s] regex stripped ALL non-ASCII letters (\w = [A-Za-z0-9_]),
+      // turning every Chinese title into an empty string — causing ALL CJK results
+      // to dedup to the same titleKey and wiping out 90% of Chinese query results.
+      .replace(/[^\p{L}\p{N}\s]/gu, ' ') // strip punctuation, keep all letters+digits
+      .replace(/\s+/g, ' ')
+      .trim()
+      .slice(0, 80)
+  ) // only compare first 80 chars
 }
 
 /** Merge multiple result sets, deduplicating by URL and title, keeping the highest score */
 function mergeAndDeduplicate(resultSets: SearchResult[][]): SearchResult[] {
   const seenUrl = new Map<string, SearchResult>()
-  const seenTitle = new Map<string, string>()  // normalizedTitle → urlKey
+  const seenTitle = new Map<string, string>() // normalizedTitle → urlKey
 
   for (const set of resultSets) {
     for (const r of set) {
@@ -370,15 +386,15 @@ function toBingTimeRange(range: string | undefined): 'day' | 'week' | 'month' | 
  */
 /** News/finance queries must never be served from the semantic cache — freshness wins. */
 function isSemanticCacheEligible(request: SearchRequest): boolean {
-  return request.topic !== 'news' && request.topic !== 'finance'
-    && detectQueryType(request.query) !== 'news'
-    && detectQueryType(request.query) !== 'financial'
+  return (
+    request.topic !== 'news' &&
+    request.topic !== 'finance' &&
+    detectQueryType(request.query) !== 'news' &&
+    detectQueryType(request.query) !== 'financial'
+  )
 }
 
-export async function executeSearch(
-  request: SearchRequest,
-  config: OrchestratorConfig,
-): Promise<SearchResponse> {
+export async function executeSearch(request: SearchRequest, config: OrchestratorConfig): Promise<SearchResponse> {
   const startTime = Date.now()
   const { env } = config
 
@@ -386,9 +402,7 @@ export async function executeSearch(
   // (sourced from x-request-id / cf-ray), every orchestrator log line carries
   // it — making a single request's fan-out/fallback/answer traceable end-to-end
   // in Logpush instead of requiring time-window grepping.
-  const log = config.requestId
-    ? logger.child({ requestId: config.requestId, query: request.query })
-    : logger
+  const log = config.requestId ? logger.child({ requestId: config.requestId, query: request.query }) : logger
 
   // ── 1. Cache check ──
   const memCacheKey = getMemoryCacheKey(request, config.experimentVariant)
@@ -414,356 +428,474 @@ export async function executeSearch(
   // whether we return normally or throw — otherwise a single failure would
   // permanently wedge that query.
   const execution = (async (): Promise<SearchResponse> => {
+    const {
+      query,
+      search_depth = 'basic',
+      topic = 'general',
+      max_results = 10,
+      include_answer = false,
+      include_raw_content = false,
+      include_fact_check = false,
+      include_domains,
+      exclude_domains,
+      time_range,
+      sort_by = 'relevance',
+      max_tokens = 4000,
+      page = 1,
+    } = request
 
-  const {
-    query,
-    search_depth = 'basic',
-    topic = 'general',
-    max_results = 10,
-    include_answer = false,
-    include_raw_content = false,
-    include_fact_check = false,
-    include_domains,
-    exclude_domains,
-    time_range,
-    sort_by = 'relevance',
-    max_tokens = 4000,
-    page = 1,
-  } = request
+    // ── 2. Build SearchContext ──
+    const ctx = await buildSearchContext(request, config)
+    const { isNews, isFinance, effectiveWikiLang, entityHints } = ctx
 
-  // ── 2. Build SearchContext ──
-  const ctx = await buildSearchContext(request, config)
-  const { isNews, isFinance, effectiveWikiLang, entityHints } = ctx
+    // ── 3. Start image search (fire-and-forget, parallel with text backends) ──
+    let imageResults: ImageResult[] = []
+    let knowledgeGraph: KnowledgeGraph | null = null
+    const imagePromise = searchAllFreeImageSources(query, { maxResults: 8, env })
+      .then((res) => {
+        imageResults = res
+      })
+      .catch((err) => {
+        log.warn('Image search failed (non-critical):', { error: err.message || String(err) })
+      })
 
-  // ── 3. Start image search (fire-and-forget, parallel with text backends) ──
-  let imageResults: ImageResult[] = []
-  let knowledgeGraph: KnowledgeGraph | null = null
-  const imagePromise = searchAllFreeImageSources(query, { maxResults: 8, env })
-    .then((res) => { imageResults = res })
-    .catch((err) => { log.warn('Image search failed (non-critical):', { error: err.message || String(err) }) })
+    // ── 4. Build backend tasks: self-index + strategy-selected backends ──
+    const tasks: BackendTask[] = []
 
-  // ── 4. Build backend tasks: self-index + strategy-selected backends ──
-  const tasks: BackendTask[] = []
-
-  // Self-index hybrid search (always runs when available, non-news/finance)
-  if (env?.VECTORIZE_INDEX && env?.SEARCH_INDEX_DB && !isNews && !isFinance) {
-    tasks.push({
-      name: 'self-index',
-      run: async () => {
-        try {
-          const idxResults = await hybridSearch(env, query, {
-            maxResults: max_results * 2,
-            language: ctx.bingLang || effectiveWikiLang,
-          })
-          return idxResults.map((r) => ({
-            title: r.title,
-            url: r.url,
-            content: r.content,
-            score: Math.min(r.score, 0.95),
-            domain: r.domain,
-            published_date: r.publishedDate,
-            raw_content: r.content,
-          } as SearchResult))
-        } catch (err) {
-          log.warn('[Orchestrator] Self-index search failed:', { error: toError(err) })
-          return []
-        }
-      },
-    })
-  }
-
-  // Strategy-selected backends
-  tasks.push(...buildBackendTasks(ctx))
-
-  // ── 5. Fan-out with progressive timeout collection ──
-  // waitFor=['wikipedia']: wikipedia's 429-retry chain often settles just
-  // after phase 1's 800ms early-exit. Awaiting it (bounded by its 4500ms
-  // ceiling) recovers authoritative results for factual/academic queries.
-  // waitFor=['yahoo-finance']: the quote backend (v1 search + v8 chart with
-  // transient retries) frequently lands just after the early-exit too — a
-  // dropped quote is what produced the en-stock-06 0.000 availability noise.
-  // waitFor=['naver-news']: Naver's m_news page renders a large HTML payload
-  // (~350KB) that often settles just after phase 1's 800ms early-exit. It's
-  // the only backend that guarantees n.news.naver.com articles (kr-news eval
-  // gold domain), so awaiting it (bounded by its 2500ms ceiling) prevents
-  // Korean news queries from falling back to blogs/cafes.
-  // waitFor=['bing-news-rss','google-news-rss']: the EN news RSS feeds are the
-  // fix for en-news NDCG 0.000 (they surface reuters/bbc/bloomberg/cnbc) and
-  // usually settle in ~500ms, but awaiting them (bounded by their 2500ms
-  // ceilings) keeps the gold domains from being dropped on a slow feed.
-  // waitFor=['arxiv']: Phase 6.7 — arxiv's XML endpoint (parse + retry) often
-  // settles just after phase 1's 800ms early-exit. en-acad-04/05 eval showed
-  // backends 'bing+github' — the arxiv task WAS wired (queryType=academic) but
-  // its results were dropped by the early-exit, leaving gold arxiv.org absent
-  // and NDCG 0.000. Awaiting it (bounded by its 2500ms ceiling) recovers the
-  // paper results for academic queries.
-  // waitFor=['qiita','juejin']: S16 — the community backends for zh/ja tech
-  // queries are single-fetch APIs that usually land within phase 1, but the
-  // same 800ms early-exit race that dropped arxiv results could drop them on a
-  // slow network, leaving the qiita.com/juejin.cn gold absent. Bounded by
-  // their 2500ms ceilings like the other waitFor entries.
-  const { resultSets, usedBackends } = await fanoutBackends(tasks, max_results, {
-    waitFor: ['wikipedia', 'yahoo-finance', 'naver-news', 'bing-news-rss', 'google-news-rss', 'arxiv', 'qiita', 'juejin'],
-  })
-  const backendCount = usedBackends.length
-
-  // ── 6. Merge & deduplicate ──
-  let results = mergeAndDeduplicate(resultSets)
-
-  // ── 7. Emergency fallback (self-index → SearXNG → DDG) ──
-  const fallback = await emergencyFallback(ctx, results, usedBackends)
-  results = fallback.results
-  const usedBackendsWithFallback = fallback.usedBackends
-  const fallbackUsed = fallback.fallbackUsed
-  const backend = usedBackendsWithFallback.length > 0 ? usedBacksWithFallback(usedBackendsWithFallback) : 'failed'
-
-  // ── 8. Ranking pipeline (filter → recompute → boost → sort → threshold) ──
-  results = await applyRankingPipeline(results, ctx)
-
-  // ── 9. Enrichment (advanced depth) ──
-  // Skipped when the subrequest budget is exhausted — enrichment can issue
-  // up to 9 extra fetches (3 URLs × Jina/sidecar/direct chain), and pushing
-  // past the 50-subrequest cap turns a slow result into a 500.
-  if (search_depth === 'advanced' && results.length > 0 && !config.subrequestTracker?.budgetExhausted()) {
-    for (const r of results.slice(0, 3)) {
-      if (r.content.length < 200 && r.raw_content) {
-        r.content = truncateToTokens(r.raw_content, 800)
-      }
+    // Self-index hybrid search (always runs when available, non-news/finance)
+    if (env?.VECTORIZE_INDEX && env?.SEARCH_INDEX_DB && !isNews && !isFinance) {
+      tasks.push({
+        name: 'self-index',
+        run: async () => {
+          try {
+            const idxResults = await hybridSearch(env, query, {
+              maxResults: max_results * 2,
+              language: ctx.bingLang || effectiveWikiLang,
+            })
+            return idxResults.map(
+              (r) =>
+                ({
+                  title: r.title,
+                  url: r.url,
+                  content: r.content,
+                  score: Math.min(r.score, 0.95),
+                  domain: r.domain,
+                  published_date: r.publishedDate,
+                  raw_content: r.content,
+                }) as SearchResult,
+            )
+          } catch (err) {
+            log.warn('[Orchestrator] Self-index search failed:', { error: toError(err) })
+            return []
+          }
+        },
+      })
     }
-    const needExtraction = results.slice(0, 3).filter((r) => !r.raw_content).map((r) => r.url)
-    if (needExtraction.length > 0) {
+
+    // Strategy-selected backends
+    tasks.push(...buildBackendTasks(ctx))
+
+    // ── 5. Fan-out with progressive timeout collection ──
+    // waitFor=['wikipedia']: wikipedia's 429-retry chain often settles just
+    // after phase 1's 800ms early-exit. Awaiting it (bounded by its 4500ms
+    // ceiling) recovers authoritative results for factual/academic queries.
+    // waitFor=['yahoo-finance']: the quote backend (v1 search + v8 chart with
+    // transient retries) frequently lands just after the early-exit too — a
+    // dropped quote is what produced the en-stock-06 0.000 availability noise.
+    // waitFor=['naver-news']: Naver's m_news page renders a large HTML payload
+    // (~350KB) that often settles just after phase 1's 800ms early-exit. It's
+    // the only backend that guarantees n.news.naver.com articles (kr-news eval
+    // gold domain), so awaiting it (bounded by its 2500ms ceiling) prevents
+    // Korean news queries from falling back to blogs/cafes.
+    // waitFor=['bing-news-rss','google-news-rss']: the EN news RSS feeds are the
+    // fix for en-news NDCG 0.000 (they surface reuters/bbc/bloomberg/cnbc) and
+    // usually settle in ~500ms, but awaiting them (bounded by their 2500ms
+    // ceilings) keeps the gold domains from being dropped on a slow feed.
+    // waitFor=['arxiv']: Phase 6.7 — arxiv's XML endpoint (parse + retry) often
+    // settles just after phase 1's 800ms early-exit. en-acad-04/05 eval showed
+    // backends 'bing+github' — the arxiv task WAS wired (queryType=academic) but
+    // its results were dropped by the early-exit, leaving gold arxiv.org absent
+    // and NDCG 0.000. Awaiting it (bounded by its 2500ms ceiling) recovers the
+    // paper results for academic queries.
+    // waitFor=['qiita','juejin']: S16 — the community backends for zh/ja tech
+    // queries are single-fetch APIs that usually land within phase 1, but the
+    // same 800ms early-exit race that dropped arxiv results could drop them on a
+    // slow network, leaving the qiita.com/juejin.cn gold absent. Bounded by
+    // their 2500ms ceilings like the other waitFor entries.
+    const { resultSets, usedBackends } = await fanoutBackends(tasks, max_results, {
+      waitFor: [
+        'wikipedia',
+        'yahoo-finance',
+        'naver-news',
+        'bing-news-rss',
+        'google-news-rss',
+        'arxiv',
+        'qiita',
+        'juejin',
+      ],
+    })
+
+    // ── 5b. Cross-infrastructure wikipedia mirror fallback (S35 EN / S36 non-EN / S38 ja) ──
+    // wikipedia was expected but produced nothing — a 429-exhausted or failed
+    // run drops the wikipedia backend entirely (S31/S34: en-fact queries lost
+    // 0.4–1.3 NDCG@10 this way; S34 measured 13 still-vulnerable non-EN
+    // queries whose gold is ja/zh.wikipedia.org). The mirror lives on DIFFERENT
+    // infrastructure, immune to the shared wikimedia.org 429 window:
+    //   - EN:  DBpedia Lookup (English index, keyless) → en.wikipedia.org URLs
+    //   - non-EN (ja/zh/ko): Wikidata label search + sitelink fetch (S36) →
+    //     canonical <lang>.wikipedia.org URLs matching the eval gold.
+    //   - ja (2nd tier, S38): ja.dbpedia.org SPARQL — when Wikidata ALSO failed
+    //     (it rate-limits under eval bursts), the language endpoint is a THIRD
+    //     infrastructure: rdfs:label match → ja.wikipedia.org URL. zh/ko
+    //     endpoints are down (HTTP 000), so the 2nd tier is ja-only.
+    //
+    // S35 design: promoted OUT of wikipediaSearch to HERE — the old placement
+    // ran inside fanout's 4500ms wikipedia ceiling AFTER the REST 429-retry
+    // chain + Action fallback had already burned the budget, aborting 27/27
+    // eval attempts (S34, "This operation was aborted"). Here it fires after
+    // the fanout with its own timeout and NO fanout ceiling, and ONLY when
+    // wikipedia is missing (a healthy wikipedia run adds ZERO latency).
+    if (ctx.sources.useWikipedia && !usedBackends.includes('wikipedia')) {
       try {
-        const extracted = await extractContent(needExtraction, {
-          maxTokens: 800, timeoutMs: 12000, jinaApiKey: config.jinaApiKey,
-        })
-        for (const ex of extracted) {
-          const matchIdx = results.findIndex((r) => r.url === ex.url)
-          if (matchIdx >= 0 && ex.success && ex.raw_content) {
-            if (results[matchIdx].content.length < 200) {
-              results[matchIdx].content = truncateToTokens(ex.raw_content, 800)
-            }
-            if (include_raw_content) results[matchIdx].raw_content = ex.raw_content
+        // timeoutMs 5000 (not 8000): this runs SEQUENTIALLY after the fanout
+        // already waited up to 4500ms for wikipedia, so an 8s budget would add
+        // a worst-case +8s tail to exactly the slowest (429'd) queries. Live
+        // mirror latency is ~1.4s; 5s bounds the added p95 tail (review S35).
+        // NOTE: mirrors receive the RAW query — wikipediaSearch uses
+        // wikiQuery(ctx) (Chinese cleaning), but dbpediaSearch is EN-only and
+        // wikidataWikiSearch/dbpediaLangSearch apply their own CJK cleaning.
+        let mirrorResults: SearchResult[] = []
+        let mirrorBackend = ''
+        if (effectiveWikiLang === 'en') {
+          mirrorResults = await dbpediaSearch(query, { maxResults: 5, timeoutMs: 5000, language: 'en', env })
+          mirrorBackend = 'dbpedia'
+        } else {
+          mirrorResults = await wikidataWikiSearch(query, {
+            maxResults: 5,
+            timeoutMs: 5000,
+            language: effectiveWikiLang,
+            env,
+          })
+          mirrorBackend = 'wikidata'
+          // S38 2nd tier: ja only, fires ONLY when Wikidata produced nothing.
+          if (mirrorResults.length === 0 && effectiveWikiLang === 'ja') {
+            mirrorResults = await dbpediaLangSearch(query, { maxResults: 5, timeoutMs: 5000, language: 'ja', env })
+            if (mirrorResults.length > 0) mirrorBackend = 'dbpedia-lang'
           }
         }
+        if (mirrorResults.length > 0) {
+          resultSets.push(mirrorResults)
+          usedBackends.push(mirrorBackend)
+          log.warn('[Orchestrator] Wikipedia mirror fallback recovered wikipedia gold (wikipedia backend missing):', {
+            query,
+            language: effectiveWikiLang,
+            backend: mirrorBackend,
+            count: mirrorResults.length,
+          })
+        }
       } catch (err) {
-        log.warn('Content enrichment failed:', { error: toError(err) })
+        log.warn('[Orchestrator] Wikipedia mirror fallback failed (non-critical):', { error: toError(err) })
       }
     }
-  }
 
-  // ── 9b. Include raw content for remaining results (if requested) ──
-  if (include_raw_content && results.length > 0) {
-    const urlsNeedingContent = results.filter((r) => !r.raw_content).map((r) => r.url)
-    if (urlsNeedingContent.length > 0) {
+    // backendCount feeds subrequest_estimate — counted AFTER 5b so a DBpedia
+    // fallback subrequest is included (review S35).
+    const backendCount = usedBackends.length
+
+    // ── 6. Merge & deduplicate ──
+    let results = mergeAndDeduplicate(resultSets)
+    results = capSourceResults(results, 'ycombinator.com', 2)
+
+    // S20: Hacker News diversity cap — HN Algolia over-saturates general
+    // query pools (eval: en-general-03 top5 all-HN, adv-03 4/10 HN). Keep at
+    // most 2 HN results per query; zero NDCG regression across the 9 affected
+    // eval queries (sim 2026-08-07).
+
+    // ── 7. Emergency fallback (self-index → SearXNG → DDG) ──
+    const fallback = await emergencyFallback(ctx, results, usedBackends)
+    results = fallback.results
+    const usedBackendsWithFallback = fallback.usedBackends
+    const fallbackUsed = fallback.fallbackUsed
+    const backend = usedBackendsWithFallback.length > 0 ? usedBacksWithFallback(usedBackendsWithFallback) : 'failed'
+
+    // ── 8. Ranking pipeline (filter → recompute → boost → sort → threshold) ──
+    results = await applyRankingPipeline(results, ctx)
+
+    // ── 9. Enrichment (advanced depth) ──
+    // Skipped when the subrequest budget is exhausted — enrichment can issue
+    // up to 9 extra fetches (3 URLs × Jina/sidecar/direct chain), and pushing
+    // past the 50-subrequest cap turns a slow result into a 500.
+    if (search_depth === 'advanced' && results.length > 0 && !config.subrequestTracker?.budgetExhausted()) {
+      for (const r of results.slice(0, 3)) {
+        if (r.content.length < 200 && r.raw_content) {
+          r.content = truncateToTokens(r.raw_content, 800)
+        }
+      }
+      const needExtraction = results
+        .slice(0, 3)
+        .filter((r) => !r.raw_content)
+        .map((r) => r.url)
+      if (needExtraction.length > 0) {
+        try {
+          const extracted = await extractContent(needExtraction, {
+            maxTokens: 800,
+            timeoutMs: 12000,
+            jinaApiKey: config.jinaApiKey,
+          })
+          for (const ex of extracted) {
+            const matchIdx = results.findIndex((r) => r.url === ex.url)
+            if (matchIdx >= 0 && ex.success && ex.raw_content) {
+              if (results[matchIdx].content.length < 200) {
+                results[matchIdx].content = truncateToTokens(ex.raw_content, 800)
+              }
+              if (include_raw_content) results[matchIdx].raw_content = ex.raw_content
+            }
+          }
+        } catch (err) {
+          log.warn('Content enrichment failed:', { error: toError(err) })
+        }
+      }
+    }
+
+    // ── 9b. Include raw content for remaining results (if requested) ──
+    if (include_raw_content && results.length > 0) {
+      const urlsNeedingContent = results.filter((r) => !r.raw_content).map((r) => r.url)
+      if (urlsNeedingContent.length > 0) {
+        try {
+          const extracted = await extractContent(urlsNeedingContent, {
+            maxTokens: max_tokens,
+            timeoutMs: 15000,
+            jinaApiKey: config.jinaApiKey,
+          })
+          for (const ex of extracted) {
+            const matchIdx = results.findIndex((r) => r.url === ex.url)
+            if (matchIdx >= 0 && ex.success) results[matchIdx].raw_content = ex.raw_content
+          }
+        } catch (err) {
+          log.warn('Raw content extraction failed:', { error: toError(err) })
+        }
+      }
+    }
+
+    // ── 10-14. Answer + Knowledge Panel + Images (PARALLEL) ──
+    // These three are independent: answer gen doesn't need the knowledge panel,
+    // and neither needs image results. Running them in parallel cuts latency
+    // from sum(answer+panel+images) to max(answer, panel, images).
+    // For basic depth, reranking (step 11) and enrichment (step 9) are skipped.
+
+    // 10a. Agentic Pipeline (Pro mode) — only for advanced depth.
+    // Hard-skip when the subrequest budget is already exhausted: the agentic
+    // pipeline alone can issue 20–30 subrequests (planner + executePlan across
+    // up to 10 steps × 3 backends + quality-gate + synthesizer). Entering it
+    // with the budget already near the cap guarantees a 500 from Cloudflare.
+    let answer: SearchAnswer | undefined
+    if (
+      search_depth === 'advanced' &&
+      include_answer &&
+      config.ai &&
+      results.length >= 3 &&
+      !config.subrequestTracker?.budgetExhausted()
+    ) {
       try {
-        const extracted = await extractContent(urlsNeedingContent, {
-          maxTokens: max_tokens, timeoutMs: 15000, jinaApiKey: config.jinaApiKey,
+        log.info('[Orchestrator] Running Agentic Pipeline (Pro mode)', { query, resultCount: results.length })
+        const agenticOptions: AgenticSearchOptions = {
+          query,
+          mode: 'pro',
+          maxResults: max_results,
+          includeAnswer: true,
+          searchDepth: 'advanced',
+          topic,
+          timeRange: time_range,
+          sortBy: sort_by,
+          page,
+          includeDomains: include_domains,
+          excludeDomains: exclude_domains,
+          classifierConfig: { autoThreshold: 0.6, useAI: true },
+        }
+        const agentic = await executeAgenticSearch(agenticOptions, {
+          ai: config.ai,
+          env: config.env,
+          jinaApiKey: config.jinaApiKey,
         })
-        for (const ex of extracted) {
-          const matchIdx = results.findIndex((r) => r.url === ex.url)
-          if (matchIdx >= 0 && ex.success) results[matchIdx].raw_content = ex.raw_content
+        if (agentic) {
+          if (agentic.results && agentic.results.length > results.length) {
+            results = agentic.results
+          }
+          if (agentic.answer) answer = agentic.answer
+          recordAgenticPipeline({
+            planSteps: agentic.plan?.steps?.length ?? 0,
+            qualityGatePassed: agentic.qualityGate?.passed ?? false,
+            synthesisConfidence: agentic.answer?.confidence,
+          })
         }
       } catch (err) {
-        log.warn('Raw content extraction failed:', { error: toError(err) })
+        log.warn('[Orchestrator] Agentic pipeline failed, falling back to standard search:', { error: toError(err) })
       }
     }
-  }
 
-  // ── 10-14. Answer + Knowledge Panel + Images (PARALLEL) ──
-  // These three are independent: answer gen doesn't need the knowledge panel,
-  // and neither needs image results. Running them in parallel cuts latency
-  // from sum(answer+panel+images) to max(answer, panel, images).
-  // For basic depth, reranking (step 11) and enrichment (step 9) are skipped.
+    // 10b/13/14. Standard answer + knowledge panel + images — ALL IN PARALLEL
+    // Answer generation, knowledge panel build, and image matching have no data
+    // dependency on each other. Previously they ran sequentially (~5s + ~3s + ~2s
+    // = ~10s). Now they run concurrently: max(~5s, ~3s, ~2s) ≈ ~5s.
+    const parallelTasks: Promise<void>[] = []
 
-  // 10a. Agentic Pipeline (Pro mode) — only for advanced depth.
-  // Hard-skip when the subrequest budget is already exhausted: the agentic
-  // pipeline alone can issue 20–30 subrequests (planner + executePlan across
-  // up to 10 steps × 3 backends + quality-gate + synthesizer). Entering it
-  // with the budget already near the cap guarantees a 500 from Cloudflare.
-  let answer: SearchAnswer | undefined
-  if (search_depth === 'advanced' && include_answer && config.ai && results.length >= 3
-      && !config.subrequestTracker?.budgetExhausted()) {
-    try {
-      log.info('[Orchestrator] Running Agentic Pipeline (Pro mode)', { query, resultCount: results.length })
-      const agenticOptions: AgenticSearchOptions = {
-        query, mode: 'pro', maxResults: max_results, includeAnswer: true,
-        searchDepth: 'advanced', topic, timeRange: time_range, sortBy: sort_by,
-        page, includeDomains: include_domains, excludeDomains: exclude_domains,
-        classifierConfig: { autoThreshold: 0.6, useAI: true },
-      }
-      const agentic = await executeAgenticSearch(agenticOptions, {
-        ai: config.ai, env: config.env, jinaApiKey: config.jinaApiKey,
-      })
-      if (agentic) {
-        if (agentic.results && agentic.results.length > results.length) {
-          results = agentic.results
-        }
-        if (agentic.answer) answer = agentic.answer
-        recordAgenticPipeline({
-          planSteps: agentic.plan?.steps?.length ?? 0,
-          qualityGatePassed: agentic.qualityGate?.passed ?? false,
-          synthesisConfidence: agentic.answer?.confidence,
+    // Task A: Standard answer generation (if not already set by agentic)
+    if (include_answer && !answer) {
+      parallelTasks.push(
+        (async () => {
+          const answerQueryType = detectQueryType(query, entityHints)
+          if (answerQueryType === 'factual' || answerQueryType === 'general') {
+            const instantAnswer = await duckDuckGoInstantAnswer(query)
+            if (instantAnswer && instantAnswer.abstract.length > 50) {
+              answer = { text: instantAnswer.abstract, confidence: 0.6, sources: [] }
+              return
+            }
+          }
+          if (!answer && results.length > 0) {
+            answer = await generateAnswer(
+              query,
+              results,
+              config.ai,
+              config.env,
+              ctx.spaceFileContext,
+              // include_fact_check → cross-source fact-check section attached to the
+              // answer text + full FactCheckReport on SearchAnswer.factCheck.
+              include_fact_check ? { includeFactCheck: true } : undefined,
+            )
+          }
+          if (!answer) {
+            const instantAnswer = await duckDuckGoInstantAnswer(query)
+            if (instantAnswer) {
+              answer = { text: instantAnswer.abstract, confidence: 0.5, sources: [] }
+            }
+          }
+        })().catch((err) => {
+          log.warn('[Orchestrator] Answer generation failed (non-critical):', { error: toError(err) })
+        }),
+      )
+    }
+
+    // Task B: Knowledge panel build
+    // SKIPPED in EVAL_MODE: the panel is a response decoration (knowledge_graph
+    // field) with zero effect on the results array the eval measures, but it
+    // issues 2-4 extra wikipedia requests per query (summary + infobox + wikidata).
+    // In a 88×3 eval that multiplies into sustained wikipedia load that trips
+    // upstream 429s and drops the wikipedia backend from otherwise-fine queries
+    // (en-fact-01 requiredBackends regression). The eval measures search quality;
+    // the panel is tested implicitly by every non-eval request.
+    if (!knowledgeGraph && results.length >= 3 && !isEvalMode(env)) {
+      parallelTasks.push(
+        (async () => {
+          const kg = await buildKnowledgePanel(query, results.slice(0, 10), { language: effectiveWikiLang, env })
+          if (kg) knowledgeGraph = kg
+        })().catch((err) => {
+          log.warn('[Orchestrator] Knowledge panel build failed (non-critical):', { error: toError(err) })
+        }),
+      )
+    }
+
+    // Task C: Image search await (already started at step 3)
+    parallelTasks.push(
+      imagePromise.catch((err) => {
+        log.warn('Image search failed (non-critical):', { error: err.message || String(err) })
+      }),
+    )
+
+    // Wait for all independent tasks to complete
+    await Promise.all(parallelTasks)
+
+    // include_fact_check: the agentic (Pro) path produces its answer via the
+    // synthesizer, which bypasses generateAnswer's includeFactCheck option — so
+    // attach the cross-source fact-check post-hoc for WHICHEVER path produced
+    // the answer. The !answer.factCheck guard prevents double-attaching the
+    // standard path (which already attached it inside generateAnswer).
+    if (include_fact_check && answer && results.length > 0 && !answer.factCheck) {
+      answer = attachFactCheckToAnswer(answer, results)
+    }
+
+    // ── 11. Reranking (advanced depth only, after answer is set) ──
+    if (config.ai && !isNews && !isFinance && results.length >= 3 && search_depth === 'advanced') {
+      try {
+        const { rerankSearchResultsRaw } = await import('./retrieval/reranker')
+        const rerankResult = await rerankSearchResultsRaw(query, results.slice(0, 15), config.env, {
+          maxInputs: 10,
         })
+        if (rerankResult.applied) results = rerankResult.results
+      } catch (err) {
+        log.warn('[Orchestrator] Reranking failed (non-critical):', { error: toError(err) })
       }
-    } catch (err) {
-      log.warn('[Orchestrator] Agentic pipeline failed, falling back to standard search:', { error: toError(err) })
     }
-  }
 
-  // 10b/13/14. Standard answer + knowledge panel + images — ALL IN PARALLEL
-  // Answer generation, knowledge panel build, and image matching have no data
-  // dependency on each other. Previously they ran sequentially (~5s + ~3s + ~2s
-  // = ~10s). Now they run concurrently: max(~5s, ~3s, ~2s) ≈ ~5s.
-  const parallelTasks: Promise<void>[] = []
-
-  // Task A: Standard answer generation (if not already set by agentic)
-  if (include_answer && !answer) {
-    parallelTasks.push((async () => {
-      const answerQueryType = detectQueryType(query, entityHints)
-      if (answerQueryType === 'factual' || answerQueryType === 'general') {
-        const instantAnswer = await duckDuckGoInstantAnswer(query)
-        if (instantAnswer && instantAnswer.abstract.length > 50) {
-          answer = { text: instantAnswer.abstract, confidence: 0.6, sources: [] }
-          return
-        }
+    // ── 12. MMR Diversity Filter ──
+    if (results.length > max_results * 1.5) {
+      try {
+        const { applyDiversityFilter } = await import('./retrieval/diversity')
+        results = applyDiversityFilter(results, query, max_results * 2)
+      } catch (err) {
+        log.warn('[Orchestrator] MMR failed (non-critical):', { error: toError(err) })
       }
-      if (!answer && results.length > 0) {
-        answer = await generateAnswer(
-          query,
-          results,
-          config.ai,
-          config.env,
-          ctx.spaceFileContext,
-          // include_fact_check → cross-source fact-check section attached to the
-          // answer text + full FactCheckReport on SearchAnswer.factCheck.
-          include_fact_check ? { includeFactCheck: true } : undefined,
-        )
+    }
+
+    // ── 14b. Match images to results (after parallel await) ──
+    if (imageResults.length > 0 && results.length > 0) {
+      try {
+        results = matchImagesToResults(results, imageResults)
+      } catch (err) {
+        log.warn('[Orchestrator] Image matching failed (non-critical):', { error: toError(err) })
       }
-      if (!answer) {
-        const instantAnswer = await duckDuckGoInstantAnswer(query)
-        if (instantAnswer) {
-          answer = { text: instantAnswer.abstract, confidence: 0.5, sources: [] }
-        }
-      }
-    })().catch((err) => {
-      log.warn('[Orchestrator] Answer generation failed (non-critical):', { error: toError(err) })
-    }))
-  }
+    }
 
-  // Task B: Knowledge panel build
-  // SKIPPED in EVAL_MODE: the panel is a response decoration (knowledge_graph
-  // field) with zero effect on the results array the eval measures, but it
-  // issues 2-4 extra wikipedia requests per query (summary + infobox + wikidata).
-  // In a 88×3 eval that multiplies into sustained wikipedia load that trips
-  // upstream 429s and drops the wikipedia backend from otherwise-fine queries
-  // (en-fact-01 requiredBackends regression). The eval measures search quality;
-  // the panel is tested implicitly by every non-eval request.
-  if (!knowledgeGraph && results.length >= 3 && !isEvalMode(env)) {
-    parallelTasks.push((async () => {
-      const kg = await buildKnowledgePanel(query, results.slice(0, 10), { language: effectiveWikiLang, env })
-      if (kg) knowledgeGraph = kg
-    })().catch((err) => {
-      log.warn('[Orchestrator] Knowledge panel build failed (non-critical):', { error: toError(err) })
-    }))
-  }
+    // ── 15. Related queries ──
+    const relatedQueries = generateRelatedQueries(
+      query,
+      results.map((r) => r.title),
+    )
 
-  // Task C: Image search await (already started at step 3)
-  parallelTasks.push(imagePromise.catch((err) => {
-    log.warn('Image search failed (non-critical):', { error: err.message || String(err) })
-  }))
+    // ── 16. Pagination + response ──
+    const responseTimeMs = Date.now() - startTime
+    const totalResults = results.length
+    const pageNum = Math.max(1, page)
+    const pageSize = max_results
+    const startIndex = (pageNum - 1) * pageSize
+    const paginatedResults = results.slice(startIndex, startIndex + pageSize)
+    const totalPages = Math.ceil(totalResults / pageSize)
 
-  // Wait for all independent tasks to complete
-  await Promise.all(parallelTasks)
+    const searchResponse: SearchResponse = {
+      query,
+      answer,
+      results: paginatedResults,
+      response_time_ms: responseTimeMs,
+      backend,
+      fallback_used: fallbackUsed,
+      related_queries: relatedQueries,
+      page: pageNum,
+      page_size: pageSize,
+      total_results: totalResults,
+      total_pages: totalPages,
+      images: imageResults.length > 0 ? imageResults : undefined,
+      knowledge_graph: knowledgeGraph || undefined,
+      subrequest_estimate: backendCount * 2,
+      // Explicit empty marker — lets agents distinguish "no results found"
+      // from "server error / empty body" without inspecting backend strings.
+      no_results: paginatedResults.length === 0,
+    }
 
-  // include_fact_check: the agentic (Pro) path produces its answer via the
-  // synthesizer, which bypasses generateAnswer's includeFactCheck option — so
-  // attach the cross-source fact-check post-hoc for WHICHEVER path produced
-  // the answer. The !answer.factCheck guard prevents double-attaching the
-  // standard path (which already attached it inside generateAnswer).
-  if (include_fact_check && answer && results.length > 0 && !answer.factCheck) {
-    answer = attachFactCheckToAnswer(answer, results)
-  }
+    setInMemoryCache(memCacheKey, searchResponse, isNews || isFinance)
 
-  // ── 11. Reranking (advanced depth only, after answer is set) ──
-  if (config.ai && !isNews && !isFinance && results.length >= 3 && search_depth === 'advanced') {
-    try {
-      const { rerankSearchResultsRaw } = await import('./retrieval/reranker')
-      const rerankResult = await rerankSearchResultsRaw(query, results.slice(0, 15), config.env, {
-        maxInputs: 10,
+    // ── 17. Semantic cache store (C.3) — fire-and-forget, never blocks the
+    // response. Skipped for news/finance (freshness) and when the caller opted
+    // out. Stored under the SAME key as the exact-match tiers so a later
+    // semantic hit is promoted into them by the route's setCached().
+    if (env && config.semanticCache && !isNews && !isFinance) {
+      const store = semanticCacheStore(env, cacheKey(request, config.experimentVariant), query, searchResponse, {
+        language: request.language,
+        paramsSig: cacheParamsSignature(request, config.experimentVariant),
       })
-      if (rerankResult.applied) results = rerankResult.results
-    } catch (err) {
-      log.warn('[Orchestrator] Reranking failed (non-critical):', { error: toError(err) })
+      if (config.waitUntil) config.waitUntil(store)
+      else void store
     }
-  }
 
-  // ── 12. MMR Diversity Filter ──
-  if (results.length > max_results * 1.5) {
-    try {
-      const { applyDiversityFilter } = await import('./retrieval/diversity')
-      results = applyDiversityFilter(results, query, max_results * 2)
-    } catch (err) {
-      log.warn('[Orchestrator] MMR failed (non-critical):', { error: toError(err) })
-    }
-  }
-
-  // ── 14b. Match images to results (after parallel await) ──
-  if (imageResults.length > 0 && results.length > 0) {
-    try {
-      results = matchImagesToResults(results, imageResults)
-    } catch (err) {
-      log.warn('[Orchestrator] Image matching failed (non-critical):', { error: toError(err) })
-    }
-  }
-
-  // ── 15. Related queries ──
-  const relatedQueries = generateRelatedQueries(query, results.map((r) => r.title))
-
-  // ── 16. Pagination + response ──
-  const responseTimeMs = Date.now() - startTime
-  const totalResults = results.length
-  const pageNum = Math.max(1, page)
-  const pageSize = max_results
-  const startIndex = (pageNum - 1) * pageSize
-  const paginatedResults = results.slice(startIndex, startIndex + pageSize)
-  const totalPages = Math.ceil(totalResults / pageSize)
-
-  const searchResponse: SearchResponse = {
-    query,
-    answer,
-    results: paginatedResults,
-    response_time_ms: responseTimeMs,
-    backend,
-    fallback_used: fallbackUsed,
-    related_queries: relatedQueries,
-    page: pageNum,
-    page_size: pageSize,
-    total_results: totalResults,
-    total_pages: totalPages,
-    images: imageResults.length > 0 ? imageResults : undefined,
-    knowledge_graph: knowledgeGraph || undefined,
-    subrequest_estimate: backendCount * 2,
-    // Explicit empty marker — lets agents distinguish "no results found"
-    // from "server error / empty body" without inspecting backend strings.
-    no_results: paginatedResults.length === 0,
-  }
-
-  setInMemoryCache(memCacheKey, searchResponse, isNews || isFinance)
-
-  // ── 17. Semantic cache store (C.3) — fire-and-forget, never blocks the
-  // response. Skipped for news/finance (freshness) and when the caller opted
-  // out. Stored under the SAME key as the exact-match tiers so a later
-  // semantic hit is promoted into them by the route's setCached().
-  if (env && config.semanticCache && !isNews && !isFinance) {
-    const store = semanticCacheStore(env, cacheKey(request, config.experimentVariant), query, searchResponse, {
-      language: request.language,
-      paramsSig: cacheParamsSignature(request, config.experimentVariant),
-    })
-    if (config.waitUntil) config.waitUntil(store)
-    else void store
-  }
-
-  return searchResponse
+    return searchResponse
   })()
 
   // Register and await. The .finally clears the slot regardless of outcome.
@@ -780,9 +912,11 @@ export async function executeSearch(
     const key = cacheKey(request, config.experimentVariant)
     const paramsSig = cacheParamsSignature(request, config.experimentVariant)
     const semantic = await Promise.race([
-      semanticCacheLookup(env, key, request.query, { language: request.language, paramsSig })
-        .catch(() => undefined),
-      execution.then(() => undefined, () => undefined),
+      semanticCacheLookup(env, key, request.query, { language: request.language, paramsSig }).catch(() => undefined),
+      execution.then(
+        () => undefined,
+        () => undefined,
+      ),
     ])
     if (semantic) {
       log.info('[SemanticCache] Hit', { matchedQuery: semantic.matchedQuery, score: semantic.score })
@@ -800,10 +934,7 @@ export async function executeSearch(
 // SearchContext builder — normalizes request params into ctx
 // ============================================================
 
-async function buildSearchContext(
-  request: SearchRequest,
-  config: OrchestratorConfig,
-): Promise<SearchContext> {
+async function buildSearchContext(request: SearchRequest, config: OrchestratorConfig): Promise<SearchContext> {
   const { env } = config
   const query = request.query
 
@@ -851,10 +982,15 @@ async function buildSearchContext(
   // ja-fact-01 NDCG 0.000 root cause. isJapaneseQuery now wins before the
   // chinese check, routing bing region + wiki language to ja-JP/ja.
   const { country, language } = request
-  const bingRegion = language ? language
-    : country ? countryToBingMkt(country)
-    : japanese ? 'ja-JP'
-    : chinese ? 'zh-CN' : undefined
+  const bingRegion = language
+    ? language
+    : country
+      ? countryToBingMkt(country)
+      : japanese
+        ? 'ja-JP'
+        : chinese
+          ? 'zh-CN'
+          : undefined
   const bingLang = language || (country ? countryToLanguageTag(country) : undefined)
   const wikiOverrideLang = language || (country ? countryToLanguageTag(country) : undefined)
   const effectiveWikiLang = wikiOverrideLang || wikiLang
@@ -870,10 +1006,25 @@ async function buildSearchContext(
   const overFetch = Math.max(maxResults * 3, 30)
 
   return {
-    query, request, env,
-    korean, chinese, japanese, queryType, sources, entityHints,
-    isNews, isFinance, focus, hasExplicitFocus, overFetch, maxResults,
-    bingLang, bingRegion, bingTimeRange, effectiveWikiLang,
+    query,
+    request,
+    env,
+    korean,
+    chinese,
+    japanese,
+    queryType,
+    sources,
+    entityHints,
+    isNews,
+    isFinance,
+    focus,
+    hasExplicitFocus,
+    overFetch,
+    maxResults,
+    bingLang,
+    bingRegion,
+    bingTimeRange,
+    effectiveWikiLang,
     spaceFileContext,
     experimentVariant: config.experimentVariant,
   }
@@ -898,4 +1049,20 @@ export {
   mergeAndDeduplicate,
   toBingTimeRange,
   isEvalMode,
+}
+
+/**
+ * TEST HOOK: clear the in-process memory cache. Integration tests run in one
+ * isolate — a previous test's cached SearchResponse would otherwise leak into
+ * the next for the same query (e.g. the S35 DBpedia fallback test caches a
+ * 'bing+dbpedia' response that must not satisfy the 'wikipedia succeeds'
+ * test with a stale hit).
+ */
+export function __clearMemoryCacheForTests(): void {
+  MEMORY_CACHE.clear()
+  for (const key of INFLIGHT_SEARCHES.keys()) {
+    const p = INFLIGHT_SEARCHES.get(key)
+    if (p) void p.catch(() => {})
+    INFLIGHT_SEARCHES.delete(key)
+  }
 }

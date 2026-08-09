@@ -152,12 +152,7 @@ export class ClickLogDO extends DurableObject<Env> {
     for (const imp of imps) {
       const clicked = new Set<string>()
       for (const c of clicks) {
-        if (
-          c.query === imp.query &&
-          c.user_id === imp.user_id &&
-          c.ts >= imp.ts &&
-          c.ts <= imp.ts + CLICK_WINDOW_MS
-        ) {
+        if (c.query === imp.query && c.user_id === imp.user_id && c.ts >= imp.ts && c.ts <= imp.ts + CLICK_WINDOW_MS) {
           clicked.add(c.url)
         }
       }
@@ -251,8 +246,9 @@ export interface ClickLogRPC {
 }
 
 export function getClickLogStub(env: Env): ClickLogRPC {
-  const id = env.CLICK_LOG_DO!.idFromName('hub')
-  return env.CLICK_LOG_DO!.get(id) as unknown as ClickLogRPC
+  if (!env.CLICK_LOG_DO) throw new Error('CLICK_LOG_DO binding missing — configure the Durable Object binding first')
+  const id = env.CLICK_LOG_DO.idFromName('hub')
+  return env.CLICK_LOG_DO.get(id) as unknown as ClickLogRPC
 }
 
 // ============================================================

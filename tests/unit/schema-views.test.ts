@@ -74,7 +74,15 @@ describe('INDEX_SCHEMA — Phase 2.3 new columns', () => {
 
 describe('INDEX_SCHEMA — new tables (Phase 2.3)', () => {
   it('domain_blacklist table has all required columns', () => {
-    const requiredCols = ['domain TEXT PRIMARY KEY', 'reason TEXT', 'severity TEXT', 'source TEXT', 'blocked_at', 'expires_at', 'blocked_count']
+    const requiredCols = [
+      'domain TEXT PRIMARY KEY',
+      'reason TEXT',
+      'severity TEXT',
+      'source TEXT',
+      'blocked_at',
+      'expires_at',
+      'blocked_count',
+    ]
     const tableSection = extractTableSection(INDEX_SCHEMA, 'domain_blacklist')
     for (const col of requiredCols) {
       expect(tableSection).toContain(col)
@@ -92,7 +100,18 @@ describe('INDEX_SCHEMA — new tables (Phase 2.3)', () => {
   })
 
   it('crawl_queue table has all required columns', () => {
-    const requiredCols = ['id TEXT PRIMARY KEY', 'url TEXT NOT NULL UNIQUE', 'domain TEXT', 'priority REAL', 'depth INTEGER', 'source TEXT', 'added_at', 'due_at', 'claim_at', 'status TEXT']
+    const requiredCols = [
+      'id TEXT PRIMARY KEY',
+      'url TEXT NOT NULL UNIQUE',
+      'domain TEXT',
+      'priority REAL',
+      'depth INTEGER',
+      'source TEXT',
+      'added_at',
+      'due_at',
+      'claim_at',
+      'status TEXT',
+    ]
     const tableSection = extractTableSection(INDEX_SCHEMA, 'crawl_queue')
     for (const col of requiredCols) {
       expect(tableSection).toContain(col)
@@ -105,7 +124,16 @@ describe('INDEX_SCHEMA — new tables (Phase 2.3)', () => {
   })
 
   it('domain_reputation table has all required columns', () => {
-    const requiredCols = ['domain TEXT PRIMARY KEY', 'authority REAL', 'freshness REAL', 'content_quality REAL', 'crawability REAL', 'doc_count INTEGER', 'avg_importance REAL', 'success_rate REAL']
+    const requiredCols = [
+      'domain TEXT PRIMARY KEY',
+      'authority REAL',
+      'freshness REAL',
+      'content_quality REAL',
+      'crawability REAL',
+      'doc_count INTEGER',
+      'avg_importance REAL',
+      'success_rate REAL',
+    ]
     const tableSection = extractTableSection(INDEX_SCHEMA, 'domain_reputation')
     for (const col of requiredCols) {
       expect(tableSection).toContain(col)
@@ -220,10 +248,7 @@ describe('INDEX_SCHEMA — basic SQL syntax', () => {
  * Extract the SQL section for a specific CREATE TABLE statement.
  */
 function extractTableSection(schema: string, tableName: string): string {
-  const regex = new RegExp(
-    `CREATE TABLE IF NOT EXISTS ${tableName}\\s*\\(([\\s\\S]*?)\\);`,
-    'i',
-  )
+  const regex = new RegExp(`CREATE TABLE IF NOT EXISTS ${tableName}\\s*\\(([\\s\\S]*?)\\);`, 'i')
   const match = schema.match(regex)
   return match ? match[1] : ''
 }

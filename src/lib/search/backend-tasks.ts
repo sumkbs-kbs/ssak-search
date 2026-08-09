@@ -7,7 +7,7 @@
  * boilerplate that appeared ~30 times in the original orchestrator.
  */
 
-import type { SearchResult, Env, TimeRange } from '../../types'
+import type { Env } from '../../types'
 import type { BackendTask, SearchContext } from './context'
 import { bingSearch, bingNewsSearch } from '../bing-search'
 import { bingNewsRssSearch, googleNewsRssSearch } from '../en-news-search'
@@ -16,6 +16,7 @@ import { naverNewsSearch, isRecencyNewsQuery } from '../naver-news-search'
 import {
   wikipediaSearch,
   githubSearch,
+  githubIssuesSearch,
   hackerNewsSearch,
   redditSearch,
   arxivSearch,
@@ -26,7 +27,7 @@ import { searxngSearch } from '../searxng-search'
 import { yahooFinanceSearch } from '../yahoo-finance-search'
 import { searchKoreanStock } from '../stock-finance'
 import { stackExchangeSearch } from '../stack-exchange'
-import { qiitaSearch, juejinSearch } from '../community-search'
+import { qiitaSearch, juejinSearch, csdnSearch } from '../community-search'
 import { braveSearch, isBraveAvailable } from '../brave-search'
 import { youtubeSearch } from '../youtube-search'
 import { isChineseQuery, cleanChineseQuery } from '../orchestrator'
@@ -41,24 +42,26 @@ function wikiQuery(ctx: SearchContext): string {
 export function buildBingTask(ctx: SearchContext, queryOverride?: string): BackendTask {
   return {
     name: 'bing',
-    run: () => bingSearch(queryOverride ?? ctx.query, {
-      maxResults: ctx.overFetch,
-      timeRange: ctx.bingTimeRange,
-      region: ctx.bingRegion,
-      env: ctx.env,
-    }),
+    run: () =>
+      bingSearch(queryOverride ?? ctx.query, {
+        maxResults: ctx.overFetch,
+        timeRange: ctx.bingTimeRange,
+        region: ctx.bingRegion,
+        env: ctx.env,
+      }),
   }
 }
 
 export function buildBingNewsTask(ctx: SearchContext): BackendTask {
   return {
     name: 'bing-news',
-    run: () => bingNewsSearch(ctx.query, {
-      maxResults: ctx.overFetch,
-      timeRange: ctx.bingTimeRange,
-      region: ctx.bingRegion,
-      env: ctx.env,
-    }),
+    run: () =>
+      bingNewsSearch(ctx.query, {
+        maxResults: ctx.overFetch,
+        timeRange: ctx.bingTimeRange,
+        region: ctx.bingRegion,
+        env: ctx.env,
+      }),
   }
 }
 
@@ -87,11 +90,12 @@ function newsRssLocale(ctx: SearchContext): string {
 export function buildBingNewsRssTask(ctx: SearchContext, maxResults?: number): BackendTask {
   return {
     name: 'bing-news-rss',
-    run: () => bingNewsRssSearch(ctx.query, {
-      maxResults: maxResults ?? ctx.overFetch,
-      env: ctx.env,
-      locale: newsRssLocale(ctx),
-    }),
+    run: () =>
+      bingNewsRssSearch(ctx.query, {
+        maxResults: maxResults ?? ctx.overFetch,
+        env: ctx.env,
+        locale: newsRssLocale(ctx),
+      }),
   }
 }
 
@@ -104,23 +108,25 @@ export function buildBingNewsRssTask(ctx: SearchContext, maxResults?: number): B
 export function buildGoogleNewsRssTask(ctx: SearchContext, maxResults?: number): BackendTask {
   return {
     name: 'google-news-rss',
-    run: () => googleNewsRssSearch(ctx.query, {
-      maxResults: maxResults ?? ctx.overFetch,
-      env: ctx.env,
-      locale: newsRssLocale(ctx),
-    }),
+    run: () =>
+      googleNewsRssSearch(ctx.query, {
+        maxResults: maxResults ?? ctx.overFetch,
+        env: ctx.env,
+        locale: newsRssLocale(ctx),
+      }),
   }
 }
 
 export function buildBingYouTubeTask(ctx: SearchContext): BackendTask {
   return {
     name: 'bing-youtube',
-    run: () => bingSearch(`site:youtube.com ${ctx.query}`, {
-      maxResults: 10,
-      timeRange: ctx.bingTimeRange,
-      region: ctx.bingRegion,
-      env: ctx.env,
-    }),
+    run: () =>
+      bingSearch(`site:youtube.com ${ctx.query}`, {
+        maxResults: 10,
+        timeRange: ctx.bingTimeRange,
+        region: ctx.bingRegion,
+        env: ctx.env,
+      }),
   }
 }
 
@@ -136,12 +142,13 @@ export function buildYoutubeTask(ctx: SearchContext, maxResults = 8): BackendTas
 export function buildBingModifiedTask(ctx: SearchContext, suffix: string, name: string): BackendTask {
   return {
     name,
-    run: () => bingSearch(`${ctx.query} ${suffix}`, {
-      maxResults: ctx.overFetch,
-      timeRange: ctx.bingTimeRange,
-      region: ctx.bingRegion,
-      env: ctx.env,
-    }),
+    run: () =>
+      bingSearch(`${ctx.query} ${suffix}`, {
+        maxResults: ctx.overFetch,
+        timeRange: ctx.bingTimeRange,
+        region: ctx.bingRegion,
+        env: ctx.env,
+      }),
   }
 }
 
@@ -149,12 +156,13 @@ export function buildBingModifiedTask(ctx: SearchContext, suffix: string, name: 
 export function buildBingFinanceTask(ctx: SearchContext): BackendTask {
   return {
     name: 'bing-finance',
-    run: () => bingSearch(`${ctx.query} stock price market cap`, {
-      maxResults: ctx.overFetch,
-      timeRange: ctx.bingTimeRange,
-      region: ctx.bingRegion,
-      env: ctx.env,
-    }),
+    run: () =>
+      bingSearch(`${ctx.query} stock price market cap`, {
+        maxResults: ctx.overFetch,
+        timeRange: ctx.bingTimeRange,
+        region: ctx.bingRegion,
+        env: ctx.env,
+      }),
   }
 }
 
@@ -162,30 +170,28 @@ export function buildBingFinanceTask(ctx: SearchContext): BackendTask {
 export function buildBingFinanceDetailedTask(ctx: SearchContext): BackendTask {
   return {
     name: 'bing-finance',
-    run: () => bingSearch(`${ctx.query} stock price market cap earnings`, {
-      maxResults: ctx.overFetch,
-      timeRange: ctx.bingTimeRange,
-      region: ctx.bingRegion,
-      env: ctx.env,
-    }),
+    run: () =>
+      bingSearch(`${ctx.query} stock price market cap earnings`, {
+        maxResults: ctx.overFetch,
+        timeRange: ctx.bingTimeRange,
+        region: ctx.bingRegion,
+        env: ctx.env,
+      }),
   }
 }
 
 // ── Wikipedia ──
 
-export function buildWikipediaTask(
-  ctx: SearchContext,
-  maxResults = 5,
-  timeoutMs = 8000,
-): BackendTask {
+export function buildWikipediaTask(ctx: SearchContext, maxResults = 5, timeoutMs = 8000): BackendTask {
   return {
     name: 'wikipedia',
-    run: () => wikipediaSearch(wikiQuery(ctx), {
-      maxResults,
-      language: ctx.effectiveWikiLang,
-      timeoutMs,
-      env: ctx.env,
-    }),
+    run: () =>
+      wikipediaSearch(wikiQuery(ctx), {
+        maxResults,
+        language: ctx.effectiveWikiLang,
+        timeoutMs,
+        env: ctx.env,
+      }),
   }
 }
 
@@ -206,7 +212,7 @@ export function buildArxivTask(ctx: SearchContext, maxResults = 8): BackendTask 
  * API. See stack-exchange.ts. Quota-guarded (300/day/IP, logs + skips at
  * the floor) so the 500×3 eval run cannot burn the daily budget.
  */
-export function buildStackExchangeTask(ctx: SearchContext, maxResults = 5): BackendTask {
+export function buildStackExchangeTask(ctx: SearchContext, maxResults = 8): BackendTask {
   return {
     name: 'stack-exchange',
     run: () => stackExchangeSearch(ctx.query, { maxResults, env: ctx.env }),
@@ -238,6 +244,20 @@ export function buildJuejinTask(ctx: SearchContext, maxResults = 5): BackendTask
   }
 }
 
+/**
+ * CSDN search API — public keyless Chinese community backend (S26).
+ * so.csdn.net/api/v3/search returns real blog.csdn.net articles for zh-tech
+ * (csdn.net is gold in 10 zh queries) AND zh-general queries where bing
+ * mkt=zh-CN from a US IP cross-language-contaminates the pool (zh-general-12
+ * returned 4/10 EU-climate English news items). See community-search.ts.
+ */
+export function buildCsdnTask(ctx: SearchContext, maxResults = 5): BackendTask {
+  return {
+    name: 'csdn',
+    run: () => csdnSearch(ctx.query, { maxResults, env: ctx.env }),
+  }
+}
+
 export function buildHackerNewsTask(ctx: SearchContext, maxResults = 8): BackendTask {
   return {
     name: 'hackernews',
@@ -256,6 +276,21 @@ export function buildGithubTask(ctx: SearchContext, maxResults = 8): BackendTask
   return {
     name: 'github',
     run: () => githubSearch(ctx.query, { maxResults, env: ctx.env }),
+  }
+}
+
+/**
+ * GitHub Issues API — problem/learning-intent backend (S19). The repo search
+ * alone missed 46/127 github-gold technical queries; issues surface real
+ * github.com/owner/repo/issues/N threads (fixes, errors, A-vs-B) — the same
+ * github.com gold domain the eval matcher needs. all.ts gates this on
+ * isGithubIssuesIntent + technical routing (EN/KR; zh/ja gold is community
+ * sites — same gate rule as Stack Exchange). See specialized.ts.
+ */
+export function buildGithubIssuesTask(ctx: SearchContext, maxResults = 5): BackendTask {
+  return {
+    name: 'github-issues',
+    run: () => githubIssuesSearch(ctx.query, { maxResults, env: ctx.env }),
   }
 }
 
@@ -303,47 +338,50 @@ export function buildNaverTask(ctx: SearchContext, maxResults?: number): Backend
  */
 export function buildNaverNewsTask(ctx: SearchContext, maxResults?: number): BackendTask {
   const recencyIntent =
-    ctx.request.time_range === 'day' ||
-    ctx.request.sort_by === 'date' ||
-    isRecencyNewsQuery(ctx.query)
+    ctx.request.time_range === 'day' || ctx.request.sort_by === 'date' || isRecencyNewsQuery(ctx.query)
   return {
     name: 'naver-news',
-    run: () => naverNewsSearch(ctx.query, {
-      maxResults: maxResults ?? ctx.overFetch,
-      env: ctx.env,
-      sortByRecency: recencyIntent,
-    }),
+    run: () =>
+      naverNewsSearch(ctx.query, {
+        maxResults: maxResults ?? ctx.overFetch,
+        env: ctx.env,
+        sortByRecency: recencyIntent,
+      }),
   }
 }
 
 // ── SearXNG / DuckDuckGo ──
 
 export function buildSearXNGTask(ctx: SearchContext): BackendTask {
-  const category: 'general' | 'news' | 'science' | 'it' =
-    ctx.isNews ? 'news'
-    : ctx.queryType === 'academic' || ctx.queryType === 'factual' ? 'science'
-    : ctx.queryType === 'technical' ? 'it'
-    : 'general'
+  const category: 'general' | 'news' | 'science' | 'it' = ctx.isNews
+    ? 'news'
+    : ctx.queryType === 'academic' || ctx.queryType === 'factual'
+      ? 'science'
+      : ctx.queryType === 'technical'
+        ? 'it'
+        : 'general'
   return {
     name: 'searxng',
-    run: () => searxngSearch(ctx.query, {
-      maxResults: ctx.overFetch,
-      timeoutMs: 10000,
-      category,
-      language: ctx.bingLang,
-      env: ctx.env,
-    }),
+    run: () =>
+      searxngSearch(ctx.query, {
+        maxResults: ctx.overFetch,
+        timeoutMs: 10000,
+        category,
+        language: ctx.bingLang,
+        env: ctx.env,
+      }),
   }
 }
 
 export function buildDuckDuckGoTask(ctx: SearchContext, maxResults?: number): BackendTask {
   return {
     name: 'duckduckgo',
-    run: () => duckDuckGoSearch(ctx.query, {
-      maxResults: maxResults ?? Math.max(ctx.maxResults, 10),
-      timeoutMs: 5000,
-      env: ctx.env,
-    }),
+    run: () =>
+      duckDuckGoSearch(ctx.query, {
+        maxResults: maxResults ?? Math.max(ctx.maxResults, 10),
+        timeoutMs: 5000,
+        env: ctx.env,
+      }),
   }
 }
 
@@ -355,18 +393,22 @@ export function buildBraveTask(ctx: SearchContext): BackendTask | null {
   const timeRange = ctx.request.time_range
   return {
     name: 'brave',
-    run: () => braveSearch(ctx.query, {
-      maxResults: ctx.overFetch,
-      freshness: ctx.bingTimeRange
-        ? timeRange === 'day' ? 'pd'
-        : timeRange === 'week' ? 'pw'
-        : timeRange === 'month' ? 'pm'
-        : 'py'
-        : undefined,
-      country: ctx.request.country,
-      searchLang: ctx.bingLang,
-      apiKey: env.BRAVE_API_KEY,
-      env: ctx.env,
-    }),
+    run: () =>
+      braveSearch(ctx.query, {
+        maxResults: ctx.overFetch,
+        freshness: ctx.bingTimeRange
+          ? timeRange === 'day'
+            ? 'pd'
+            : timeRange === 'week'
+              ? 'pw'
+              : timeRange === 'month'
+                ? 'pm'
+                : 'py'
+          : undefined,
+        country: ctx.request.country,
+        searchLang: ctx.bingLang,
+        apiKey: env.BRAVE_API_KEY,
+        env: ctx.env,
+      }),
   }
 }

@@ -8,7 +8,7 @@
  */
 
 import { describe, it, expect } from 'vitest'
-import { recomputeScores, sortResults } from '../../src/lib/search/ranking'
+import { recomputeScores, sortResults, capSourceResults } from '../../src/lib/search/ranking'
 import type { SearchResult } from '../../src/types'
 import type { SearchContext } from '../../src/lib/search/context'
 
@@ -72,7 +72,7 @@ describe('ranking — query-context-aware domain authority (S2/S3)', () => {
     // hybridScore's [0,1] cap, which truncates the bonus to ~0.15 visible
     // swing). The ordering guarantee is what matters for NDCG.
     expect(newsRanked.score).toBeGreaterThan(blogRanked.score)
-    expect(newsRanked.score - blogRanked.score).toBeGreaterThan(0.10)
+    expect(newsRanked.score - blogRanked.score).toBeGreaterThan(0.1)
     expect(newsRanked.score).toBeGreaterThan(0.9)
     expect(blogRanked.score).toBeLessThan(0.9)
   })
@@ -189,9 +189,9 @@ describe('ranking — query-context-aware domain authority (S2/S3)', () => {
         name: 'Apple Inc.',
         ticker: 'AAPL',
         exchange: 'NMS',
-        price: 220.10,
+        price: 220.1,
         currency: 'USD',
-        change: 1.60,
+        change: 1.6,
         change_percent: 0.73,
         direction: 'up',
         source: 'yahoo',
@@ -224,11 +224,19 @@ describe('ranking — query-context-aware domain authority (S2/S3)', () => {
     const ctx = makeCtx({ korean: false, chinese: false, isNews: true, query: 'EU AI regulation' })
     const yesterday = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()
     const reuters: SearchResult = {
-      ...makeResult('https://www.reuters.com/eu-ai-act', 'EU AI regulation coverage', 'EU AI regulation: agreement reached.'),
+      ...makeResult(
+        'https://www.reuters.com/eu-ai-act',
+        'EU AI regulation coverage',
+        'EU AI regulation: agreement reached.',
+      ),
       published_date: yesterday,
     }
     const msn: SearchResult = {
-      ...makeResult('https://www.msn.com/eu-ai-act', 'EU AI regulation EU AI regulation details', 'EU AI regulation EU AI regulation EU AI regulation details summary.'),
+      ...makeResult(
+        'https://www.msn.com/eu-ai-act',
+        'EU AI regulation EU AI regulation details',
+        'EU AI regulation EU AI regulation EU AI regulation details summary.',
+      ),
       published_date: yesterday,
     }
 
@@ -274,6 +282,253 @@ describe('ranking — query-context-aware domain authority (S2/S3)', () => {
     expect(ranked.score).toBeGreaterThan(otherRanked.score)
   })
 
+  it('S18: unresolved news.google.com redirects are demoted below real articles', () => {
+    // zh-general-03 returned 5/5 unresolved google redirects at the top; the
+    // eval pools held 140 redirect slots in the en-news family alone. These
+    // items keep the transport URL as their domain (parseGoogleNewsRss source
+    // map miss) — the link is unfollowable and the gold matcher sees a
+    // redirect. LOW_QUALITY_DOMAINS now demotes them so real-domain articles
+    // surface. The penalty must be applied by recomputeScores (which
+    // overwrites parser scores), NOT in the parser.
+    const ctx = makeCtx({ korean: false, chinese: false, isNews: true, query: 'electric vehicle market growth' })
+    const redirect = makeResult(
+      'https://news.google.com/rss/articles/CBMabc',
+      'Electric vehicle market growth report 2030 — MarketsandMarkets',
+      '[MarketsandMarkets] Electric vehicle market growth report 2030 forecast.',
+    )
+    const real = makeResult(
+      'https://www.iea.org/reports/global-ev-outlook',
+      'Global EV Outlook 2025 — IEA',
+      'Electric vehicle market growth projections from the IEA.',
+    )
+
+    const both = recomputeScores([redirect, real], ctx)
+    const redirectRanked = both.find((r) => r.url === redirect.url)
+    const realRanked = both.find((r) => r.url === real.url)
+    if (!redirectRanked || !realRanked) throw new Error('ranked redirect/real missing')
+
+    // -0.35 LOW_QUALITY demotion on the redirect vs. the real article's
+    // authority — even with near-identical saturated base scores the ordering
+    // must flip, and the redirect must fall well below its 0.99 base.
+    expect(realRanked.score).toBeGreaterThan(redirectRanked.score)
+    expect(redirectRanked.score).toBeLessThan(0.9)
+  })
+
+  it('S18: RESOLVED google items keep their gold-domain authority (no penalty)', () => {
+    // A google-redirect URL with a MAPPED domain (reuters.com from the title
+    // suffix) must NOT be hit by the news.google.com penalty — the penalty
+    // keys on the transport URL host, and getDomainAuthorityBonus returns the
+    // first non-zero result (URL host penalty would win and eat the bonus).
+    // The domain-field fallback only fires when the URL yields ZERO, so this
+    // guards the Phase 6.6 contract from the S18 demotion.
+    const ctx = makeCtx({ korean: false, chinese: false, isNews: true, query: 'EU AI regulation' })
+    const resolved: SearchResult = {
+      title: 'EU AI regulation agreement',
+      url: 'https://news.google.com/rss/articles/CBMabc',
+      content: '[Reuters] EU AI regulation agreement reached.',
+      score: 0.5,
+      domain: 'reuters.com',
+    }
+    const both = recomputeScores([resolved], ctx)
+    const ranked = both.find((r) => r.url === resolved.url)
+    if (!ranked) throw new Error('ranked resolved item missing')
+    // +0.13 ENGLISH_NEWS_AUTHORITY (reuters) minus NO penalty → near 1.0
+    expect(ranked.score).toBeGreaterThan(0.9)
+  })
+
+  it('S19: Korean tech query applies the github.com gold bonus (kr-tech-06 threshold fix)', () => {
+    // kr-tech-06 (React Query 사용법): TanStack/query ★50k was RETURNED by
+    // the github backend but scored ~0.10 against the CJK query and got
+    // filtered by the 0.10 quality threshold. KOREAN_TECH_AUTHORITY must lift
+    // github.com gold repos above the threshold.
+    const ctx = makeCtx({ korean: true, isNews: false, queryType: 'technical' as never, query: 'React Query 사용법' })
+    const repo = makeResult(
+      'https://github.com/TanStack/query',
+      'TanStack Query — React data fetching library',
+      'Powerful asynchronous state management for React Query.',
+    )
+    const plain = makeResult(
+      'https://example.com/tanstack-query',
+      'TanStack Query — React data fetching library',
+      'Powerful asynchronous state management for React Query.',
+    )
+    const both = recomputeScores([repo, plain], ctx)
+    const repoRanked = both.find((r) => r.url === repo.url)
+    const plainRanked = both.find((r) => r.url === plain.url)
+    if (!repoRanked || !plainRanked) throw new Error('ranked repo/plain missing')
+    // Identical text — the only difference is the +0.15 github.com bonus.
+    expect(repoRanked.score - plainRanked.score).toBeGreaterThan(0.1)
+    // And the bonus keeps the repo above the 0.10 quality threshold.
+    expect(repoRanked.score).toBeGreaterThan(0.1)
+  })
+
+  it('S19: Japanese tech query also boosts github.com (ja-tech gold)', () => {
+    const ctx = makeCtx({ japanese: true, isNews: false, queryType: 'technical' as never, query: 'Rust 入門' })
+    const repo = makeResult(
+      'https://github.com/rust-lang/rust',
+      'rust-lang/rust — Rust programming language',
+      'Empowering everyone to build reliable and efficient software.',
+    )
+    const plain = makeResult(
+      'https://example.com/rust-lang',
+      'rust-lang/rust — Rust programming language',
+      'Empowering everyone to build reliable and efficient software.',
+    )
+    const both = recomputeScores([repo, plain], ctx)
+    const repoRanked = both.find((r) => r.url === repo.url)
+    const plainRanked = both.find((r) => r.url === plain.url)
+    if (!repoRanked || !plainRanked) throw new Error('ranked repo/plain missing')
+    expect(repoRanked.score - plainRanked.score).toBeGreaterThan(0.1)
+  })
+
+  it('S20: Korean tech query demotes naver blogs below velog (identical text)', () => {
+    // kr-tech-13/17/19/20: m.blog.naver.com floods KR tech pools (4/5 in
+    // kr-tech-13) while velog.io is an explicit kr-tech gold domain — the
+    // penalty must be naver-only (blog/cafe/kin), never velog/tistory.
+    const ctx = makeCtx({ korean: true, isNews: false, queryType: 'technical' as never, query: '자바스크립트 클로저' })
+    const naver = makeResult(
+      'https://m.blog.naver.com/post/123',
+      '자바스크립트 클로저 정리',
+      '자바스크립트 클로저 개념과 사용법 정리.',
+    )
+    const velog = makeResult(
+      'https://velog.io/@user/closure',
+      '자바스크립트 클로저 정리',
+      '자바스크립트 클로저 개념과 사용법 정리.',
+    )
+    const both = recomputeScores([naver, velog], ctx)
+    const naverRanked = both.find((r) => r.url === naver.url)
+    const velogRanked = both.find((r) => r.url === velog.url)
+    if (!naverRanked || !velogRanked) throw new Error('ranked naver/velog missing')
+    // Identical text — the only difference is the -0.20 naver penalty.
+    expect(velogRanked.score - naverRanked.score).toBeGreaterThan(0.1)
+  })
+
+  it('S20: naver penalty is gated to korean+technical (no english/general bleed)', () => {
+    // english tech: identical naver vs plain text → no penalty, equal scores
+    const enCtx = makeCtx({
+      korean: false,
+      chinese: false,
+      queryType: 'technical' as never,
+      query: 'javascript closures',
+    })
+    const enNaver = makeResult('https://m.blog.naver.com/post/123', 'javascript closures', 'closures explained')
+    const enPlain = makeResult('https://example.com/js-closure', 'javascript closures', 'closures explained')
+    const enBoth = recomputeScores([enNaver, enPlain], enCtx)
+    const enN = enBoth.find((r) => r.url === enNaver.url)
+    const enP = enBoth.find((r) => r.url === enPlain.url)
+    if (!enN || !enP) throw new Error('ranked en items missing')
+    // No penalty: naver must NOT be demoted below the plain domain. (The
+    // 'blog'/'naver' URL tokens give naver a tiny BM25 edge ~0.02 — a
+    // penalty would flip this to a >0.10 gap, so >= is the right guard.)
+    expect(enN.score).toBeGreaterThanOrEqual(enP.score)
+
+    // korean general: identical text → no penalty (tech-gate only)
+    const krCtx = makeCtx({ korean: true, isNews: false, queryType: 'general' as never, query: '맛집 추천' })
+    const krNaver = makeResult('https://m.blog.naver.com/post/123', '맛집 추천', '맛집 추천 정리')
+    const krPlain = makeResult('https://example.com/food', '맛집 추천', '맛집 추천 정리')
+    const krBoth = recomputeScores([krNaver, krPlain], krCtx)
+    const krN = krBoth.find((r) => r.url === krNaver.url)
+    const krP = krBoth.find((r) => r.url === krPlain.url)
+    if (!krN || !krP) throw new Error('ranked kr items missing')
+    expect(krN.score).toBeGreaterThanOrEqual(krP.score)
+  })
+
+  it('S20: cafe/kin get stronger penalties than blog (SEO-spam tiering)', () => {
+    const ctx = makeCtx({ korean: true, isNews: false, queryType: 'technical' as never, query: '데이터베이스 인덱스' })
+    const blog = makeResult('https://m.blog.naver.com/post/1', '데이터베이스 인덱스', '인덱스 동작 원리')
+    const cafe = makeResult('https://m.cafe.naver.com/x/1', '데이터베이스 인덱스', '인덱스 동작 원리')
+    const kin = makeResult('https://kin.naver.com/qna/1', '데이터베이스 인덱스', '인덱스 동작 원리')
+    const both = recomputeScores([kin, cafe, blog], ctx)
+    const b = both.find((r) => r.url === blog.url)
+    const c = both.find((r) => r.url === cafe.url)
+    const k = both.find((r) => r.url === kin.url)
+    if (!b || !c || !k) throw new Error('ranked blog/cafe/kin missing')
+    expect(b.score).toBeGreaterThan(c.score)
+    expect(c.score).toBeGreaterThan(k.score)
+  })
+
+  it('S43: Korean FINANCIAL query demotes naver blogs (gate extends to financial)', () => {
+    // kr-stock-14 (ETF 투자 방법 초보, NDCG 0.14): m.blog.naver.com floods the
+    // pool because the S20 gate (technical|academic|factual) excluded financial.
+    // Identical text — the only difference is the -0.20 penalty, so the plain
+    // domain must outrank naver in korean+financial just like in
+    // korean+technical (mirrors the S20 technical test).
+    // isFinance (not queryType) gates the penalty — same flag as the EN
+    // finance block, so topic='finance' requests are covered too (review S43).
+    const ctx = makeCtx({
+      korean: true,
+      isNews: false,
+      isFinance: true,
+      queryType: 'financial' as never,
+      query: 'ETF 투자 방법 초보',
+    })
+    const naver = makeResult(
+      'https://m.blog.naver.com/post/123',
+      'ETF 투자 방법 초보 정리',
+      'ETF 투자 방법 초보 개념 정리.',
+    )
+    const plain = makeResult('https://example.com/x', 'ETF 투자 방법 초보 정리', 'ETF 투자 방법 초보 개념 정리.')
+    const both = recomputeScores([naver, plain], ctx)
+    const n = both.find((r) => r.url === naver.url)
+    const p = both.find((r) => r.url === plain.url)
+    if (!n || !p) throw new Error('ranked naver/plain missing')
+    expect(p.score - n.score).toBeGreaterThan(0.1)
+  })
+
+  it('S43: finance.naver.com outranks naver blog spam in korean financial context (kr-stock-14)', () => {
+    // The real kr-stock-14 pool is m.blog.naver.com/m.cafe.naver.com/tistory
+    // (S42). finance.naver.com earns +0.15 DOMAIN_AUTHORITY_BONUS (all
+    // contexts) but a keyword-saturated blog's BM25 lead (~0.12 margin pre-fix)
+    // eroded it — the S43 penalty widens the finance lead well past 0.25 while
+    // preserving the cafe (-0.25) > blog (-0.20) SEO-spam tiering.
+    const ctx = makeCtx({
+      korean: true,
+      isNews: false,
+      isFinance: true,
+      queryType: 'financial' as never,
+      query: 'ETF 투자 방법 초보',
+    })
+    const finance = makeResult(
+      'https://finance.naver.com/etf/main',
+      'ETF 투자 방법 초보 (KODEX 200)',
+      'ETF 투자 방법 초보 가이드 — NAV, 운용보수, 구성종목, 시세 정보',
+    )
+    const blog = makeResult(
+      'https://m.blog.naver.com/post/123',
+      'ETF 투자 방법 초보자 가이드 총정리',
+      'ETF 투자 방법 초보자 가이드! 초보자가 알아야 할 ETF 투자 방법, 추천 종목, 수익률, 세금까지 총정리',
+    )
+    const cafe = makeResult(
+      'https://m.cafe.naver.com/x/1',
+      'ETF 투자 방법 초보 모임',
+      'ETF 투자 방법 초보자들이 모여 ETF 투자 방법 공유',
+    )
+    const out = recomputeScores([blog, cafe, finance], ctx)
+    const f = out.find((r) => r.domain === 'finance.naver.com')
+    const b = out.find((r) => r.domain === 'm.blog.naver.com')
+    const c = out.find((r) => r.domain === 'm.cafe.naver.com')
+    if (!f || !b || !c) throw new Error('ranked finance/blog/cafe missing')
+    expect(f.score).toBeGreaterThan(b.score)
+    expect(f.score - b.score).toBeGreaterThan(0.25)
+    expect(b.score).toBeGreaterThan(c.score)
+  })
+
+  it('S20: capSourceResults keeps at most max results from one source', () => {
+    const hn1 = makeResult('https://news.ycombinator.com/item?id=1', 'story 1', 'x')
+    const hn2 = makeResult('https://news.ycombinator.com/item?id=2', 'story 2', 'x')
+    const hn3 = makeResult('https://news.ycombinator.com/item?id=3', 'story 3', 'x')
+    const other = makeResult('https://example.com/a', 'a', 'x')
+    const out = capSourceResults([hn1, hn2, other, hn3], 'ycombinator.com', 2)
+    expect(out.map((r) => r.url)).toEqual([hn1.url, hn2.url, other.url])
+  })
+
+  it('S20: capSourceResults leaves pools under the limit untouched', () => {
+    const a = makeResult('https://news.ycombinator.com/item?id=1', 'story 1', 'x')
+    const b = makeResult('https://example.com/b', 'b', 'x')
+    expect(capSourceResults([a, b], 'ycombinator.com', 2)).toHaveLength(2)
+  })
+
   it('Korean finance query keeps the original Korean finance authority (no English map interference)', () => {
     const ctx = makeCtx({ korean: true, isFinance: true, query: '삼성전자 주가 행사' })
     const naver = makeResult(
@@ -295,7 +550,7 @@ describe('ranking — query-context-aware domain authority (S2/S3)', () => {
     // +0 from ENGLISH_FINANCE_AUTHORITY because the gate is isEnglishQuery
     // (korean must be false). naver wins.
     expect(naverRanked.score).toBeGreaterThan(yahooRanked.score)
-    expect(naverRanked.score).toBeGreaterThan(0.10)
+    expect(naverRanked.score).toBeGreaterThan(0.1)
   })
 
   it('Chinese general query boosts ctrip.com/mafengwo.cn above keyword-saturated aggregators (zh-general-04)', () => {
@@ -412,7 +667,13 @@ describe('ranking — query-context-aware domain authority (S2/S3)', () => {
     // no lift while saturated variants saturated to 0.99. The reference gold
     // domains had NO authority map at all. The new ENGLISH_REFERENCE_AUTHORITY
     // must lift britannica/howstuffworks for factual queries.
-    const ctx = makeCtx({ korean: false, chinese: false, isNews: false, queryType: 'factual' as never, query: 'what is the metaverse' })
+    const ctx = makeCtx({
+      korean: false,
+      chinese: false,
+      isNews: false,
+      queryType: 'factual' as never,
+      query: 'what is the metaverse',
+    })
     const britannica = makeResult(
       'https://www.britannica.com/topic/metaverse',
       'Metaverse | Definition, History, & Facts | Britannica',
@@ -439,7 +700,13 @@ describe('ranking — query-context-aware domain authority (S2/S3)', () => {
   })
 
   it('English NON-factual general query does NOT apply the reference authority', () => {
-    const ctx = makeCtx({ korean: false, chinese: false, isNews: false, queryType: 'general' as never, query: 'best laptops 2025' })
+    const ctx = makeCtx({
+      korean: false,
+      chinese: false,
+      isNews: false,
+      queryType: 'general' as never,
+      query: 'best laptops 2025',
+    })
     // Mid-range base scores (partial query overlap) so a leaked +0.12 bonus
     // would be OBSERVABLE — unlike saturated ~0.99 bases that clamp to the
     // same cap whether or not the bonus leaked (code-review catch: the weak

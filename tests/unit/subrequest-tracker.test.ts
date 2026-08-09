@@ -5,7 +5,7 @@
  * reports exhaustion correctly. This is the unit-level guard for P0-5; the
  * live HTTP behavior (X-Subrequests-Used header) is verified separately.
  */
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi } from 'vitest'
 
 // Mock rate-limiter so fetchWithTimeout doesn't hit the network.
 vi.mock('../../src/lib/rate-limiter', () => ({
@@ -13,11 +13,7 @@ vi.mock('../../src/lib/rate-limiter', () => ({
   rateLimitedFetch: async () => new Response('ok', { status: 200 }),
 }))
 
-import {
-  SubrequestTracker,
-  installSubrequestTracker,
-  fetchWithTimeout,
-} from '../../src/lib/util'
+import { SubrequestTracker, installSubrequestTracker, fetchWithTimeout } from '../../src/lib/util'
 
 describe('SubrequestTracker', () => {
   it('counts fetches routed through fetchWithTimeout', async () => {

@@ -31,10 +31,7 @@ const BROWSER_UA =
  * Search using DuckDuckGo HTML endpoint.
  * Falls back to Lite endpoint if HTML returns no results.
  */
-export async function duckDuckGoSearch(
-  query: string,
-  opts: DuckDuckGoOptions = {},
-): Promise<SearchResult[]> {
+export async function duckDuckGoSearch(query: string, opts: DuckDuckGoOptions = {}): Promise<SearchResult[]> {
   const { maxResults = 10, timeoutMs = 15000, region = 'wt-wt', env } = opts
 
   // Build form data - URLSearchParams handles UTF-8 encoding
@@ -95,10 +92,7 @@ export async function duckDuckGoSearch(
 }
 
 /** DuckDuckGo Lite endpoint (simpler HTML, better for non-English) */
-async function duckDuckGoLiteSearch(
-  query: string,
-  opts: DuckDuckGoOptions = {},
-): Promise<SearchResult[]> {
+async function duckDuckGoLiteSearch(query: string, opts: DuckDuckGoOptions = {}): Promise<SearchResult[]> {
   const { maxResults = 10, timeoutMs = 15000, region = 'wt-wt', env } = opts
 
   const params = new URLSearchParams()
@@ -106,31 +100,31 @@ async function duckDuckGoLiteSearch(
   params.append('kl', region)
   params.append('df', '')
 
-const response = await fetchWithTimeout(
-      env,
-      `${DDG_LITE_URL}?${params.toString()}`,
-      {
-        method: 'GET',
-        headers: {
-          'User-Agent': BROWSER_UA,
-          Accept: 'text/html,application/xhtml+xml',
-          'Accept-Language': 'en-US,en;q=0.9,ko;q=0.8',
-          Referer: 'https://lite.duckduckgo.com/',
-        },
+  const response = await fetchWithTimeout(
+    env,
+    `${DDG_LITE_URL}?${params.toString()}`,
+    {
+      method: 'GET',
+      headers: {
+        'User-Agent': BROWSER_UA,
+        Accept: 'text/html,application/xhtml+xml',
+        'Accept-Language': 'en-US,en;q=0.9,ko;q=0.8',
+        Referer: 'https://lite.duckduckgo.com/',
       },
-      timeoutMs,
-    )
-
-    // 202 = anti-bot challenge (response.ok is true for 2xx, but no results inside)
-    if (response.status !== 200) {
-      throw new Error(`DuckDuckGo lite search failed: ${response.status}`)
-    }
-
-const html = await response.text()
-    return parseDuckDuckGoLiteHtml(html, query, maxResults)
-  }
+    },
+    timeoutMs,
+  )
 
   // 202 = anti-bot challenge (response.ok is true for 2xx, but no results inside)
+  if (response.status !== 200) {
+    throw new Error(`DuckDuckGo lite search failed: ${response.status}`)
+  }
+
+  const html = await response.text()
+  return parseDuckDuckGoLiteHtml(html, query, maxResults)
+}
+
+// 202 = anti-bot challenge (response.ok is true for 2xx, but no results inside)
 
 /**
  * Parse DuckDuckGo HTML results page.
@@ -182,7 +176,7 @@ export function parseDuckDuckGoLiteHtml(html: string, query: string, maxResults:
   const results: SearchResult[] = []
 
   // Lite format: results in <a class="result-link" href="..."> tags
-  const linkRegex = /class="[^"]*result-link[^"]*"[^>]*href="([^"]+)\"[^>]*>([\s\S]*?)<\/a>/gi
+  const linkRegex = /class="[^"]*result-link[^"]*"[^>]*href="([^"]+)"[^>]*>([\s\S]*?)<\/a>/gi
   const links: { url: string; title: string }[] = []
   let match: RegExpExecArray | null
   while ((match = linkRegex.exec(html)) !== null) {
@@ -336,7 +330,8 @@ export async function duckDuckGoImageSearch(
 
     // Parse DDG image results - look for image tiles
     // Pattern: <a class="result-image" href="...">
-    const imgRegex = /<a[^>]*class="result-image"[^>]*href="([^"]+)"[^>]*>\s*<img[^>]*src="([^"]+)"[^>]*alt="([^"]*)"[^>]*>/gi
+    const imgRegex =
+      /<a[^>]*class="result-image"[^>]*href="([^"]+)"[^>]*>\s*<img[^>]*src="([^"]+)"[^>]*alt="([^"]*)"[^>]*>/gi
     let match: RegExpExecArray | null
     while ((match = imgRegex.exec(html)) !== null && results.length < maxResults) {
       const url = match[1]
@@ -358,7 +353,8 @@ export async function duckDuckGoImageSearch(
 
     // Fallback: look for image tiles in the v2 layout
     if (results.length === 0) {
-      const tileRegex = /<div[^>]*class="[^"]*tile[^"]*"[^>]*>\s*<a[^>]*href="([^"]+)"[^>]*>\s*<img[^>]*src="([^"]+)"[^>]*alt="([^"]*)"[^>]*>/gi
+      const tileRegex =
+        /<div[^>]*class="[^"]*tile[^"]*"[^>]*>\s*<a[^>]*href="([^"]+)"[^>]*>\s*<img[^>]*src="([^"]+)"[^>]*alt="([^"]*)"[^>]*>/gi
       let tileMatch: RegExpExecArray | null
       while ((tileMatch = tileRegex.exec(html)) !== null && results.length < maxResults) {
         const url = tileMatch[1]

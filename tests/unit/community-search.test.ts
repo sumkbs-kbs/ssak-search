@@ -1,11 +1,12 @@
 /**
  * Unit tests for the Chinese/Japanese tech community backends (S16 — lever 3
- * remainder, zh/ja technical gold routing).
+ * remainder, zh/ja technical gold routing; S26 — CSDN).
  *
- * qiitaSearch (Qiita v2 API) and juejinSearch (Juejin search API) surface the
- * qiita.com / juejin.cn gold domains that bing zh/ja tech queries never
- * return (zh-tech-08/09/13 were all-wikipedia pools, NDCG 0.000). These tests
- * cover the parsers and the fetch path with a mocked fetchWithTimeout.
+ * qiitaSearch (Qiita v2 API), juejinSearch (Juejin search API) and
+ * csdnSearch (CSDN search API) surface the qiita.com / juejin.cn / csdn.net
+ * gold domains that bing zh/ja tech queries never return (zh-tech-08/09/13
+ * were all-wikipedia pools, NDCG 0.000). These tests cover the parsers and
+ * the fetch path with a mocked fetchWithTimeout.
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest'
@@ -21,7 +22,10 @@ import {
   qiitaSearch,
   parseJuejinSearch,
   juejinSearch,
+  parseCsdnSearch,
+  csdnSearch,
   resetQiitaQuota,
+  resetCsdnQuota,
 } from '../../src/lib/community-search'
 
 const QIITA_ITEMS = [
@@ -86,6 +90,42 @@ const JUEJIN_RESPONSE = {
   ],
 }
 
+/** CSDN /api/v3/search response — matches the live 2026-08-07 probe shape. */
+const CSDN_RESPONSE = {
+  result_vos: [
+    {
+      title: '25计算机<em>考研</em>408专业课<em>复习计划</em>',
+      url: 'https://blog.csdn.net/weixin_55922953/article/details/135721100?ops_request_misc=elastic_search_misc&utm_term=%E8%80%83%E7%A0%94',
+      articleid: 135721100,
+      username: 'weixin_55922953',
+      nickname: '考研小助手',
+      digest: '本文整理25计算机<em>考研</em>408的<em>复习计划</em>安排',
+      create_time_str: '2025-03-01',
+    },
+    {
+      title: 'LangFlow<em>考研</em>专业课<em>复习计划</em>制定助手',
+      url: 'https://blog.csdn.net/weixin_36019375/article/details/156171705?ops_request_misc=x',
+      articleid: 156171705,
+      username: 'weixin_36019375',
+      digest: '',
+    },
+    {
+      title: 'bad',
+      url: 'https://blog.csdn.net/weixin_x/article/details/1',
+      articleid: 1,
+      username: 'weixin_x',
+      digest: '',
+    },
+    {
+      title: 'download 资源文件不应进入池子',
+      url: 'https://download.csdn.net/download/abc/123456',
+      articleid: 0,
+      username: 'abc',
+      digest: '',
+    },
+  ],
+}
+
 /** An external article Juejin aggregated — link_url points OFF-site. */
 const JUEJIN_OFF_DOMAIN = {
   err_no: 0,
@@ -130,7 +170,10 @@ describe('parseQiitaItems', () => {
   })
 
   it('skips items without a valid http(s) url or a too-short title', () => {
-    const bad = [{ url: 'javascript:void(0)', title: 'xss' }, { url: 'https://qiita.com/a/items/b', title: ' ' }]
+    const bad = [
+      { url: 'javascript:void(0)', title: 'xss' },
+      { url: 'https://qiita.com/a/items/b', title: ' ' },
+    ]
     expect(parseQiitaItems(bad, 'q', 5)).toEqual([])
   })
 
@@ -195,7 +238,70 @@ describe('parseJuejinSearch', () => {
   })
 })
 
-describe('qiitaSearch / juejinSearch — fetch path', () => {
+describe('parseCsdnSearch', () => {
+  it('builds canonical blog.csdn.net URLs from articleid + username (tracking query stripped)', () => {
+    const results = parseCsdnSearch(CSDN_RESPONSE, '考研复习计划', 5)
+    expect(results.length).toBe(2)
+
+    const first = results[0]
+    expect(first.domain).toBe('blog.csdn.net')
+    expect(first.url).toBe('https://blog.csdn.net/weixin_55922953/article/details/135721100')
+    // <em> highlight tags stripped from title + digest
+    expect(first.title).toBe('25计算机考研408专业课复习计划')
+    expect(first.title).not.toContain('<em>')
+    expect(first.content).not.toContain('<em>')
+    expect(first.content).toContain('考研小助手')
+    expect(first.author).toBe('考研小助手')
+    expect(first.published_date).toBe('2025-03-01')
+  })
+
+  it('skips too-short titles and drops download.csdn.net hits (gold-domain rule)', () => {
+    const results = parseCsdnSearch(CSDN_RESPONSE, 'q', 5)
+    expect(results.length).toBe(2)
+    expect(results.every((r) => r.domain === 'blog.csdn.net')).toBe(true)
+  })
+
+  it('falls back to the query-stripped transport URL when articleid is missing', () => {
+    const bare = {
+      result_vos: [
+        {
+          title: '没有 articleid 的文章标题内容足够长',
+          url: 'https://blog.csdn.net/u1/article/details/99?utm_term=abc',
+          username: 'u1',
+          digest: '',
+        },
+      ],
+    }
+    const results = parseCsdnSearch(bare, 'q', 5)
+    expect(results.length).toBe(1)
+    expect(results[0].url).toBe('https://blog.csdn.net/u1/article/details/99')
+  })
+
+  it('accepts numeric-string articleids (robustness — API may serialize either way)', () => {
+    const str = {
+      result_vos: [
+        {
+          title: '字符串 articleid 的文章标题内容足够长',
+          url: 'https://blog.csdn.net/u2/article/details/77?utm_term=x',
+          articleid: '77',
+          username: 'u2',
+          digest: '',
+        },
+      ],
+    }
+    const results = parseCsdnSearch(str, 'q', 5)
+    expect(results.length).toBe(1)
+    expect(results[0].url).toBe('https://blog.csdn.net/u2/article/details/77')
+  })
+
+  it('returns empty when result_vos is missing/malformed', () => {
+    expect(parseCsdnSearch({}, 'q', 5)).toEqual([])
+    expect(parseCsdnSearch(null, 'q', 5)).toEqual([])
+    expect(parseCsdnSearch({ result_vos: 'nope' }, 'q', 5)).toEqual([])
+  })
+})
+
+describe('qiitaSearch / juejinSearch / csdnSearch — fetch path', () => {
   beforeEach(() => {
     mockFetchWithTimeout.mockReset()
   })
@@ -236,6 +342,51 @@ describe('qiitaSearch / juejinSearch — fetch path', () => {
       json: async () => ({ err_no: 2, data: [] }),
     } as unknown as Response)
     expect(await juejinSearch('q', { maxResults: 5, timeoutMs: 4000 })).toEqual([])
+  })
+
+  it('fetches the CSDN search endpoint with the query and parses result_vos (S26)', async () => {
+    mockFetchWithTimeout.mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      json: async () => CSDN_RESPONSE,
+    } as unknown as Response)
+
+    const results = await csdnSearch('考研复习计划', { maxResults: 5, timeoutMs: 4000 })
+    expect(results.length).toBe(2)
+    const url = String(mockFetchWithTimeout.mock.calls[0][1])
+    expect(url).toContain('so.csdn.net/api/v3/search')
+    expect(url).toContain('q=')
+    expect(results[0].domain).toBe('blog.csdn.net')
+  })
+
+  it('csdnSearch returns empty on non-OK response and on fetch throw', async () => {
+    mockFetchWithTimeout.mockResolvedValueOnce({ ok: false, status: 403 } as unknown as Response)
+    expect(await csdnSearch('q', { maxResults: 5, timeoutMs: 4000 })).toEqual([])
+    mockFetchWithTimeout.mockRejectedValueOnce(new Error('network down'))
+    expect(await csdnSearch('q', { maxResults: 5, timeoutMs: 4000 })).toEqual([])
+  })
+
+  it('enforces the CSDN hourly soft-floor quota guard (review 2026-08-07)', async () => {
+    resetCsdnQuota()
+    mockFetchWithTimeout.mockReset()
+    mockFetchWithTimeout.mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => CSDN_RESPONSE,
+    } as unknown as Response)
+
+    // 250 = soft floor. All 250 calls fetch; the 251st short-circuits.
+    for (let i = 0; i < 250; i += 1) {
+      await csdnSearch('q', { maxResults: 2, timeoutMs: 1000 })
+    }
+    expect(mockFetchWithTimeout).toHaveBeenCalledTimes(250)
+    await csdnSearch('q', { maxResults: 2, timeoutMs: 1000 })
+    expect(mockFetchWithTimeout).toHaveBeenCalledTimes(250)
+
+    // Window reset restores availability.
+    resetCsdnQuota()
+    await csdnSearch('q', { maxResults: 2, timeoutMs: 1000 })
+    expect(mockFetchWithTimeout).toHaveBeenCalledTimes(251)
   })
 
   it('enforces the Qiita hourly soft-floor quota guard (skip once exhausted, window resets via hook)', async () => {

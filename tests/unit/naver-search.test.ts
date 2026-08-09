@@ -4,7 +4,7 @@
  * Tests parseStockCard and parseLinks — exported for regression detection.
  */
 
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+import { describe, it, expect, vi } from 'vitest'
 
 const mockFetchWithTimeout = vi.fn()
 vi.mock('../../src/lib/util', async (importOriginal) => {

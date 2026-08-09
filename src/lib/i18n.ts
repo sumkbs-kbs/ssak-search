@@ -109,10 +109,7 @@ export function resolveLocale(config: I18nConfig = {}): SupportedLocale {
  * @param fallbackLocale 폴백 언어 (기본: ko)
  * @returns 번역 함수 (key: string, params?: Record<string, string | number>) => string
  */
-export function createTranslator(
-  locale: SupportedLocale = 'ko',
-  fallbackLocale: SupportedLocale = 'ko',
-) {
+export function createTranslator(locale: SupportedLocale = 'ko', fallbackLocale: SupportedLocale = 'ko') {
   const localeTranslations = translations[locale] || {}
   const fallbackTranslations = translations[fallbackLocale] || {}
 
@@ -128,10 +125,10 @@ export function createTranslator(
     let value: string | undefined
 
     const keys = key.split('.')
-    let current: any = localeTranslations
+    let current: unknown = localeTranslations
     for (const k of keys) {
-      if (current && typeof current === 'object' && k in current) {
-        current = current[k]
+      if (typeof current === 'object' && current !== null && k in current) {
+        current = (current as Record<string, unknown>)[k]
       } else {
         current = undefined
         break
@@ -143,8 +140,8 @@ export function createTranslator(
     if (!value) {
       current = fallbackTranslations
       for (const k of keys) {
-        if (current && typeof current === 'object' && k in current) {
-          current = current[k]
+        if (typeof current === 'object' && current !== null && k in current) {
+          current = (current as Record<string, unknown>)[k]
         } else {
           current = undefined
           break
@@ -198,10 +195,7 @@ export function formatDate(date: Date | string | number, locale: SupportedLocale
 /**
  * 상대 시간 포맷 ("3분 전", "2 hours ago", "1日前")
  */
-export function formatRelativeTime(
-  date: Date | string | number,
-  locale: SupportedLocale = 'ko',
-): string {
+export function formatRelativeTime(date: Date | string | number, locale: SupportedLocale = 'ko'): string {
   try {
     const d = typeof date === 'string' || typeof date === 'number' ? new Date(date) : date
     const now = Date.now()

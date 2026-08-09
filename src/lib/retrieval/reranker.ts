@@ -101,12 +101,12 @@ export const DEFAULT_RERANK_CONFIG: RerankConfig = {
 
 const DOMAIN_AUTHORITY: Record<string, number> = {
   'wikipedia.org': 0.12,
-  'github.com': 0.10,
-  'stackoverflow.com': 0.10,
-  'arxiv.org': 0.10,
+  'github.com': 0.1,
+  'stackoverflow.com': 0.1,
+  'arxiv.org': 0.1,
   'developer.mozilla.org': 0.09,
-  'reuters.com': 0.10,
-  'bloomberg.com': 0.10,
+  'reuters.com': 0.1,
+  'bloomberg.com': 0.1,
   'nytimes.com': 0.09,
   'bbc.com': 0.08,
   'nature.com': 0.09,
@@ -121,15 +121,11 @@ function getDomainAuthority(domain: string): number {
   return 0
 }
 
-function heuristicRerank(
-  query: string,
-  documents: RerankDocument[],
-  topK: number,
-): RerankResult[] {
+function heuristicRerank(query: string, documents: RerankDocument[], topK: number): RerankResult[] {
   const queryTerms = query
     .toLowerCase()
     .split(/[\s,.;:!?]+/)
-    .filter(t => t.length > 1)
+    .filter((t) => t.length > 1)
 
   const scored = documents.map((doc, i) => {
     const content = `${doc.title} ${doc.content}`.toLowerCase()
@@ -145,17 +141,13 @@ function heuristicRerank(
     let recencyBoost = 0
     if (doc.publishedDate) {
       const daysOld = (Date.now() - new Date(doc.publishedDate).getTime()) / (1000 * 60 * 60 * 24)
-      if (daysOld < 7) recencyBoost = 0.10
+      if (daysOld < 7) recencyBoost = 0.1
       else if (daysOld < 30) recencyBoost = 0.07
       else if (daysOld < 90) recencyBoost = 0.04
       else if (daysOld < 365) recencyBoost = 0.02
     }
 
-    const rerankScore =
-      0.45 * doc.score +
-      0.30 * termOverlap +
-      0.15 * domainAuth +
-      0.10 * recencyBoost
+    const rerankScore = 0.45 * doc.score + 0.3 * termOverlap + 0.15 * domainAuth + 0.1 * recencyBoost
 
     return {
       id: doc.id,
@@ -171,7 +163,9 @@ function heuristicRerank(
   })
 
   scored.sort((a, b) => b.rerankScore - a.rerankScore)
-  scored.forEach((r, i) => { r.newRank = i })
+  scored.forEach((r, i) => {
+    r.newRank = i
+  })
   return scored.slice(0, topK)
 }
 
@@ -193,19 +187,19 @@ async function workersAIRerank(
   const timeout = setTimeout(() => controller.abort(), timeoutMs)
 
   try {
-    const docTexts = documents.map(doc => `${doc.title}\n\n${doc.content}`)
+    const docTexts = documents.map((doc) => `${doc.title}\n\n${doc.content}`)
     // workers-types omits the `query` field from the reranker input type;
     // cast to the declared type to satisfy the compiler while sending the
     // field the actual API requires.
-    const output = await ai.run(
+    const output = (await ai.run(
       '@cf/baai/bge-reranker-base',
       {
         query,
-        contexts: docTexts.map(text => ({ text })),
+        contexts: docTexts.map((text) => ({ text })),
         top_k: documents.length,
       } as unknown as Ai_Cf_Baai_Bge_Reranker_Base_Input,
       { signal: controller.signal },
-    ) as WorkersAIRerankOutput
+    )) as WorkersAIRerankOutput
 
     const scoreMap = new Map<string, number>()
     for (const r of output.response ?? []) {
@@ -247,7 +241,7 @@ async function sidecarRerank(
       headers,
       body: JSON.stringify({
         query,
-        documents: documents.map(doc => ({
+        documents: documents.map((doc) => ({
           title: doc.title,
           content: doc.content,
         })),
@@ -261,7 +255,7 @@ async function sidecarRerank(
       throw new Error(`Sidecar rerank ${response.status}: ${await response.text().catch(() => 'unknown error')}`)
     }
 
-    const data = await response.json() as SidecarRerankOutput
+    const data = (await response.json()) as SidecarRerankOutput
     const scoreMap = new Map<string, number>()
     for (const r of data.results ?? []) {
       const doc = documents[r.index]
@@ -296,27 +290,23 @@ export class CrossEncoderReranker {
 
     if (documents.length === 0) return []
     if (documents.length === 1) {
-      return [{
-        ...documents[0],
-        originalScore: documents[0].score,
-        rerankScore: documents[0].score,
-        originalRank: 0,
-        newRank: 0,
-      }]
+      return [
+        {
+          ...documents[0],
+          originalScore: documents[0].score,
+          rerankScore: documents[0].score,
+          originalRank: 0,
+          newRank: 0,
+        },
+      ]
     }
 
     const docsToRerank = documents.slice(0, maxDocs)
 
     const useWorkersAI = options.enableWorkersAI ?? this.config.enableWorkersAI
     const useSidecar = options.enableSidecar ?? this.config.enableSidecar
-    const sidecarUrl = options.sidecarUrl
-      ?? this.config.sidecarUrl
-      ?? env?.SIDECAR_RERANK_URL
-      ?? undefined
-    const sidecarToken = options.sidecarToken
-      ?? this.config.sidecarToken
-      ?? env?.SIDECAR_RERANK_TOKEN
-      ?? undefined
+    const sidecarUrl = options.sidecarUrl ?? this.config.sidecarUrl ?? env?.SIDECAR_RERANK_URL ?? undefined
+    const sidecarToken = options.sidecarToken ?? this.config.sidecarToken ?? env?.SIDECAR_RERANK_TOKEN ?? undefined
 
     // ── Stage 1: Workers AI (1st pass) ──
     let workersScores: Map<string, number> | null = null
@@ -393,7 +383,9 @@ export class CrossEncoderReranker {
     })
 
     scored.sort((a, b) => b.rerankScore - a.rerankScore)
-    scored.forEach((r, i) => { r.newRank = i })
+    scored.forEach((r, i) => {
+      r.newRank = i
+    })
     return scored.slice(0, topK)
   }
 }

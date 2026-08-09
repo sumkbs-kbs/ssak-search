@@ -38,7 +38,7 @@ function makeDocs(count: number): RerankDocument[] {
       url: `https://example${i}.com/page`,
       domain: `example${i}.com`,
       score: 0.3 + (i % 3) * 0.2,
-    })
+    }),
   )
 }
 
@@ -64,8 +64,8 @@ describe('CrossEncoderReranker', () => {
       const results = await reranker.rerank(query, docs, undefined, { topK: 3 })
 
       expect(results).toHaveLength(3)
-      const doc0Rank = results.findIndex(r => r.id === 'doc_0')
-      const doc1Rank = results.findIndex(r => r.id === 'doc_1')
+      const doc0Rank = results.findIndex((r) => r.id === 'doc_0')
+      const doc1Rank = results.findIndex((r) => r.id === 'doc_1')
       expect(doc0Rank).toBeLessThan(doc1Rank)
     })
 
@@ -83,7 +83,7 @@ describe('CrossEncoderReranker', () => {
       docs[1].score = 0.5
 
       const results = await reranker.rerank(query, docs)
-      const wikiRank = results.findIndex(r => r.domain === 'wikipedia.org')
+      const wikiRank = results.findIndex((r) => r.domain === 'wikipedia.org')
       expect(wikiRank).toBe(0)
     })
 
@@ -99,8 +99,8 @@ describe('CrossEncoderReranker', () => {
       docs[1].score = 0.5
 
       const results = await reranker.rerank(query, docs)
-      const recentRank = results.findIndex(r => r.id === 'doc_0')
-      const oldRank = results.findIndex(r => r.id === 'doc_1')
+      const recentRank = results.findIndex((r) => r.id === 'doc_0')
+      const oldRank = results.findIndex((r) => r.id === 'doc_1')
       expect(recentRank).toBeLessThan(oldRank)
     })
   })
@@ -155,7 +155,7 @@ describe('CrossEncoderReranker', () => {
       const docs = makeDocs(5)
       const results = await reranker.rerank('query', docs)
 
-      const ranks = results.map(r => r.newRank).sort((a, b) => a - b)
+      const ranks = results.map((r) => r.newRank).sort((a, b) => a - b)
       expect(ranks).toEqual([0, 1, 2, 3, 4])
     })
 
@@ -165,7 +165,7 @@ describe('CrossEncoderReranker', () => {
       const results = await reranker.rerank('query', docs)
 
       for (const r of results) {
-        const origIdx = docs.findIndex(d => d.id === r.id)
+        const origIdx = docs.findIndex((d) => d.id === r.id)
         expect(r.originalRank).toBe(origIdx)
       }
     })

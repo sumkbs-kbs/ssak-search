@@ -9,17 +9,43 @@
  * computed against gold-standard relevant domains.
  */
 
+import { readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
 import type { SearchResult } from '../src/types'
 import type { EvalResult, RankingMetrics, AggregateRankingMetrics, CacheHitMetrics } from './types'
+
+/**
+ * Load gold-standard relevant domains from eval/gold-standards.json.
+ * Returns a map of queryId → relevantDomains[].
+ *
+ * S58 (2026-08-09): moved here from runner.ts so the lightweight baseline
+ * module (eval/baseline.ts) can import it WITHOUT pulling the heavy
+ * orchestrator/specialized stack through runner.ts — the regression gate
+ * recomputes NDCG against the CURRENT gold and must load it in isolation.
+ */
+export function loadGoldStandards(): Record<string, string[]> {
+  try {
+    const path = resolve(process.cwd(), 'eval', 'gold-standards.json')
+    const raw = readFileSync(path, 'utf-8')
+    const data = JSON.parse(raw) as Record<string, { relevantDomains?: string[] }>
+    const result: Record<string, string[]> = {}
+    for (const [key, val] of Object.entries(data)) {
+      if (!key.startsWith('_') && val.relevantDomains) {
+        result[key] = val.relevantDomains
+      }
+    }
+    return result
+  } catch {
+    // Gold standards not available — ranking metrics will be skipped
+    return {}
+  }
+}
 
 /**
  * Compute a BLEU-inspired score (0–1) measuring how many of the
  * expected terms appear in the result titles and content.
  */
-export function termCoverageScore(
-  results: Array<{ title: string; content: string }>,
-  expectedTerms: string[],
-): number {
+export function termCoverageScore(results: Array<{ title: string; content: string }>, expectedTerms: string[]): number {
   if (expectedTerms.length === 0) return 1
 
   const allText = results
@@ -42,16 +68,11 @@ export function termCoverageScore(
  * Simple unigram overlap: what fraction of query-derived terms
  * appear in the aggregated result text?
  */
-export function bleu1Score(
-  results: Array<{ title: string; content: string }>,
-  reference: string[],
-): number {
+export function bleu1Score(results: Array<{ title: string; content: string }>, reference: string[]): number {
   if (reference.length === 0 || results.length === 0) return 0
 
   const candidateTokens = new Set(
-    results
-      .flatMap((r) => `${r.title} ${r.content}`.toLowerCase().split(/\s+/))
-      .filter((t) => t.length > 1),
+    results.flatMap((r) => `${r.title} ${r.content}`.toLowerCase().split(/\s+/)).filter((t) => t.length > 1),
   )
 
   const refSet = new Set(reference.map((t) => t.toLowerCase()))
@@ -84,14 +105,50 @@ export function latencyScore(ms: number, maxMs: number): number {
 /**
  * Backend diversity score — 1.0 if all required backends present.
  */
-export function backendCoverageScore(
-  actual: string[],
-  required: string[],
-): number {
+export function backendCoverageScore(actual: string[], required: string[]): number {
   if (required.length === 0) return 1
   const actualSet = new Set(actual.map((b) => b.split('-')[0])) // normalize "bing-news" → "bing"
   const hits = required.filter((r) => actualSet.has(r)).length
   return hits / required.length
+}
+
+/**
+ * S28: per-query pass/fail evaluation.
+ *
+ * Backend coverage is an AVAILABILITY signal, NOT a quality gate. A missing
+ * required backend (e.g. wikipedia 429 under the eval's own pacing) must not
+ * fail a query whose pool is otherwise adequate — en-fact-01 produced a
+ * 10-result high-quality pool (nasa.gov/ibm.com/iso.org) yet failed solely
+ * because wikipedia 429'd out of its backends. The resultCount check already
+ * guards thin pools, and NDCG measures gold matching. Missing required
+ * backends surface as `warnings` (visible in the report) instead.
+ */
+export function evaluateQueryRun(params: {
+  resultCount: number
+  minResults: number
+  responseTimeMs: number
+  maxTimeMs: number
+  backends: string[]
+  requiredBackends: string[]
+}): { passed: boolean; failures: string[]; warnings: string[] } {
+  const failures: string[] = []
+  const warnings: string[] = []
+
+  if (params.resultCount < params.minResults) {
+    failures.push(`resultCount: got ${params.resultCount}, expected >= ${params.minResults}`)
+  }
+  if (params.responseTimeMs > params.maxTimeMs) {
+    failures.push(`responseTime: ${params.responseTimeMs}ms, expected <= ${params.maxTimeMs}ms`)
+  }
+
+  const normalizedBackends = new Set(params.backends.map((b) => b.split('-')[0]))
+  const missing = params.requiredBackends.filter((req) => !normalizedBackends.has(req))
+  if (missing.length > 0) {
+    const got = params.backends.length > 0 ? params.backends.join(', ') : 'none'
+    warnings.push(`backend: missing "${missing.join('", "')}" (got: ${got})`)
+  }
+
+  return { passed: failures.length === 0, failures, warnings }
 }
 
 /**
@@ -126,9 +183,7 @@ export function compositeScore(params: {
  *
  * Uses linear interpolation between sorted values for precise p50/p95/p99.
  */
-export function calculateLatencyPercentiles(
-  responseTimesMs: number[],
-): {
+export function calculateLatencyPercentiles(responseTimesMs: number[]): {
   p50: number
   p75: number
   p90: number
@@ -214,7 +269,7 @@ export function calculateQPS(
   // This gives us an estimate of max throughput at any given moment
   const sorted = [...responseTimesMs].sort((a, b) => a - b)
   const slidingWindowMs = Math.max(sorted[0] || 100, 100) // use fastest query as window
-  const concurrentQueries = sorted.filter(t => t <= slidingWindowMs).length
+  const concurrentQueries = sorted.filter((t) => t <= slidingWindowMs).length
   const peakQps = Math.round((concurrentQueries / Math.max(slidingWindowMs, 1)) * 1000 * 100) / 100
 
   return {
@@ -248,9 +303,10 @@ export function buildSlackPayload(params: {
   const color = isPassing ? '#36a64f' : regressions.length > 0 ? '#ffa500' : '#ff0000'
   const status = isPassing ? '✅ Passed' : '⚠️ Regressions detected'
 
-  const regressionText = regressions.slice(0, 5).map(d =>
-    `• *${d.queryId}*: ${d.metric} (was ${d.baseline}, now ${d.current})`,
-  ).join('\n')
+  const regressionText = regressions
+    .slice(0, 5)
+    .map((d) => `• *${d.queryId}*: ${d.metric} (was ${d.baseline}, now ${d.current})`)
+    .join('\n')
 
   const payload = {
     text: `[Eval] Search Quality — ${status}`,
@@ -278,16 +334,15 @@ export function buildSlackPayload(params: {
           },
           ...(regressionText.length > 0
             ? [
-              {
-                type: 'section',
-                text: {
-                  type: 'mrkdwn',
-                  text: `*Top Regressions:*\n${regressionText}`,
+                {
+                  type: 'section',
+                  text: {
+                    type: 'mrkdwn',
+                    text: `*Top Regressions:*\n${regressionText}`,
+                  },
                 },
-              },
-            ]
-            : []
-          ),
+              ]
+            : []),
           {
             type: 'context',
             elements: [
@@ -316,12 +371,27 @@ function extractDomain(url: string): string {
   try {
     return new URL(url).hostname.replace(/^www\./, '').toLowerCase()
   } catch {
-    return url.toLowerCase().replace(/^https?:\/\//, '').split('/')[0]
+    return url
+      .toLowerCase()
+      .replace(/^https?:\/\//, '')
+      .split('/')[0]
   }
 }
 
 /**
- * Check if a result matches any of the relevant domains (substring match).
+ * Check if a result matches any of the relevant domains (label-suffix match).
+ *
+ * S49 (2026-08-08): the previous PURE SUBSTRING match (`d.includes(g)`) let a
+ * gold domain match UNRELATED registrable domains that merely contain the
+ * string — gold 'trip.com' matched pool 'xinjiangtrip.com'/'eastchinatrip.com'
+ * (verified on the stored 500-query pool: zh-travel-04's 0.131 was 100% fake
+ * relevance from that artifact, zh-general-06 lost 0.108 to it). The
+ * label-suffix rule (D === G || D.endsWith('.' + G)) is registrable-domain-
+ * aware: it still matches PROPER subdomains (en.wikipedia.org ← wikipedia.org,
+ * news.google.com ← google.com, m.blog.naver.com ← naver.com) — required by
+ * the 31 bare 'wikipedia.org' golds (ja/zh/ko language wikis) — while
+ * rejecting cross-registrable containment. Same-domain decisions are
+ * unchanged; only the 2 false-positive pairs are dropped (S49 sim).
  *
  * Matches on BOTH the URL host AND the backend-set domain field. Most
  * backends set domain = extractDomain(url), so this is a no-op change for
@@ -330,11 +400,11 @@ function extractDomain(url: string): string {
  * is the semantically correct one for those (Phase 6.6).
  */
 function isRelevant(r: { url: string; domain?: string }, relevantDomains: string[]): boolean {
-  const candidates = [
-    extractDomain(r.url),
-    r.domain ? r.domain.toLowerCase().replace(/^www\./, '') : '',
-  ]
-  return relevantDomains.some((rd) => candidates.some((d) => d.includes(rd.toLowerCase())))
+  const candidates = [extractDomain(r.url), r.domain ? r.domain.toLowerCase().replace(/^www\./, '') : '']
+  return relevantDomains.some((rd) => {
+    const g = rd.toLowerCase()
+    return candidates.some((d) => d === g || d.endsWith('.' + g))
+  })
 }
 
 /**
@@ -347,34 +417,67 @@ function isRelevant(r: { url: string; domain?: string }, relevantDomains: string
  * DCG@K = Σ(i=1..K) rel_i / log2(i+1)
  * IDCG@K = DCG@K when all relevant docs are ranked first
  *
+ * S50 (2026-08-08): DCG is now CAPPED at one contribution PER GOLD DOMAIN —
+ * each gold domain is counted only at its FIRST (highest-ranked) matching
+ * result. Previously EVERY pool slot matching any gold contributed, so a
+ * single over-broad gold (github.com, wikipedia.org, n.news.naver.com)
+ * matching many slots drove DCG past IDCG and NDCG past 1.0 — 99/500 eval
+ * queries were affected (en-tech-07 2.231, kr-stock-03 1.783, kr-news-02
+ * 1.497; verified on the stored run-1..3 pools). With the cap, DCG ≤ IDCG
+ * always (a greedy rank-order assignment of results to distinct gold
+ * domains), so NDCG ∈ [0,1]. SEMANTICS: NDCG now measures "how high each
+ * gold domain surfaces" (distinct-gold recall weighted by rank), NOT "how
+ * many slots matched gold". P@10/MRR are untouched — they had no >1
+ * distortion. This is a METRIC REDEFINITION: all historical NDCG baselines
+ * are incomparable until the eval:median rerun + baseline snapshot refresh.
+ *
+ * GOLD-AUTHORING WARNING (S50 review): the greedy assignment is gold-list-
+ * ORDER-dependent when one gold subsumes another under label-suffix matching
+ * (e.g. 'naver.com' ⊃ 'finance.naver.com' — a finance.naver.com result would
+ * satisfy whichever is listed first). Do NOT add subsumption pairs to the
+ * same query's relevantDomains; the corpus currently has none (the only
+ * near-pair 'trip.com'/'ctrip.com' is cross-registrable and never subsumes
+ * under label-suffix).
+ *
  * @param results   Ordered search results
- * @param relevantDomains  Domains considered relevant (substring match)
+ * @param relevantDomains  Domains considered relevant (label-suffix match)
  * @param k         Cutoff rank (default 10)
  * @returns NDCG@K in [0, 1]
  */
-export function computeNdcg(
-  results: SearchResult[],
-  relevantDomains: string[],
-  k = 10,
-): number {
+export function computeNdcg(results: SearchResult[], relevantDomains: string[], k = 10): number {
   if (relevantDomains.length === 0) return 0
   const topK = results.slice(0, k)
+  const golds = relevantDomains.map((d) => d.toLowerCase())
 
-  // DCG: sum of rel_i / log2(rank_i + 1), where rank is 1-based
+  // DCG: per-gold-domain cap. Greedy rank-order assignment — for each result
+  // (highest rank first), assign it to the FIRST gold it matches that has not
+  // been counted yet. A result already matched by a seen gold contributes
+  // nothing (the gold was surfaced higher). `golds.some` short-circuits on the
+  // first assignment, so each result still contributes at most one term and
+  // each gold exactly once → DCG ≤ IDCG.
+  const seen = new Set<string>()
   let dcg = 0
   for (let i = 0; i < topK.length; i++) {
-    const rel = isRelevant(topK[i], relevantDomains) ? 1 : 0
-    if (rel > 0) {
-      dcg += rel / Math.log2(i + 2) // +2 because rank is 1-based and log2(1+1)=1
+    // Greedy assignment: this result satisfies the FIRST gold (in list order)
+    // it matches that has not been surfaced by a higher-ranked result yet.
+    let assigned = false
+    for (const g of golds) {
+      if (seen.has(g)) continue
+      if (isRelevant(topK[i], [g])) {
+        seen.add(g)
+        assigned = true
+        break
+      }
+    }
+    if (assigned) {
+      dcg += 1 / Math.log2(i + 2) // +2 because rank is 1-based and log2(1+1)=1
     }
   }
 
-  // IDCG: ideal DCG — all relevant docs ranked first
-  // With binary relevance, IDCG = Σ(i=1..R) 1/log2(i+1) where R = min(relCount, k)
-  const relCount = Math.min(
-    relevantDomains.length, // approximate: assume each domain appears once
-    k,
-  )
+  // IDCG: ideal DCG — all gold domains ranked first. S50: the "assume each
+  // domain appears once" approximation is now EXACT (DCG caps at one per
+  // gold), so IDCG = Σ(i=1..R) 1/log2(i+1) with R = min(goldCount, k).
+  const relCount = Math.min(relevantDomains.length, k)
   let idcg = 0
   for (let i = 0; i < relCount; i++) {
     idcg += 1 / Math.log2(i + 2)
@@ -394,10 +497,7 @@ export function computeNdcg(
  * @param relevantDomains  Domains considered relevant
  * @returns Reciprocal rank in [0, 1]
  */
-export function computeMrr(
-  results: SearchResult[],
-  relevantDomains: string[],
-): number {
+export function computeMrr(results: SearchResult[], relevantDomains: string[]): number {
   for (let i = 0; i < results.length; i++) {
     if (isRelevant(results[i], relevantDomains)) {
       return 1 / (i + 1)
@@ -414,11 +514,7 @@ export function computeMrr(
  * @param k         Cutoff rank (default 10)
  * @returns Precision in [0, 1]
  */
-export function computePrecisionAtK(
-  results: SearchResult[],
-  relevantDomains: string[],
-  k = 10,
-): number {
+export function computePrecisionAtK(results: SearchResult[], relevantDomains: string[], k = 10): number {
   if (relevantDomains.length === 0) return 0
   const topK = results.slice(0, k)
   if (topK.length === 0) return 0
@@ -448,17 +544,51 @@ export function computeRankingMetrics(
 }
 
 /**
+ * S58: recompute NDCG@10 from the saved result pool + CURRENT gold standard.
+ *
+ * The stored `ranking` field on an eval result is a snapshot: it was computed
+ * under the gold set and scoring rules in effect when the run was saved. When
+ * gold is later edited (S49 kr-stock-03 naver.com→m.stock.naver.com, S52
+ * subsumption dedup) or scoring rules change (S50 DCG cap), the stored value
+ * is stale relative to the current codebase, and gate comparisons against it
+ * report metric-change artifacts as regressions (S53: the 410-regression
+ * warning after the baseline rule reset). Recomputation from the run's own
+ * pool — the actual search-quality artifact — under current gold/rules is
+ * exact, and only falls back to the stored field for legacy artifacts that
+ * lack a serialized pool. Mirrors the S54 principle applied to
+ * scripts/analyze-429-loss.ts.
+ *
+ * @param result       An eval result (response pool + stored ranking)
+ * @param goldDomains  CURRENT gold domains for the query (label-suffix match)
+ * @returns NDCG@10 recomputed under current gold, or undefined when neither
+ *          a pool nor a stored ranking exists (caller skips the comparison).
+ */
+export function recomputeNdcgAt10(
+  result: Pick<EvalResult, 'response' | 'ranking'>,
+  goldDomains: string[] | undefined,
+): number | undefined {
+  const pool = Array.isArray(result.response?.results) ? result.response.results : undefined
+  if (pool && pool.length > 0) {
+    // computeNdcg returns 0 for an empty gold set — correct when a gold edit
+    // deleted the query's domains (do NOT trust the stale stored value there).
+    return computeNdcg(pool, goldDomains ?? [], 10)
+  }
+  const stored = result.ranking?.ndcgAt10
+  return typeof stored === 'number' && Number.isFinite(stored) ? stored : undefined
+}
+
+/**
  * Aggregate ranking metrics across all eval results that have gold standards.
  */
 export function aggregateRankingMetrics(results: EvalResult[]): AggregateRankingMetrics {
-  const withGold = results.filter((r) => r.ranking !== undefined)
+  const withGold = results.filter((r): r is EvalResult & { ranking: RankingMetrics } => r.ranking !== undefined)
   if (withGold.length === 0) {
     return { queriesWithGoldStandard: 0, avgNdcgAt10: 0, avgMrr: 0, avgPrecisionAt10: 0 }
   }
 
   const sum = withGold.reduce(
     (acc, r) => {
-      const rm = r.ranking!
+      const rm = r.ranking
       return {
         ndcg: acc.ndcg + rm.ndcgAt10,
         mrr: acc.mrr + rm.mrr,
@@ -495,8 +625,7 @@ export function computeCacheHitRate(
   warmTimesMs: number[],
   hitThresholdMs = 200,
 ): CacheHitMetrics {
-  const avg = (arr: number[]): number =>
-    arr.length > 0 ? arr.reduce((s, t) => s + t, 0) / arr.length : 0
+  const avg = (arr: number[]): number => (arr.length > 0 ? arr.reduce((s, t) => s + t, 0) / arr.length : 0)
 
   let hits = 0
   for (let i = 0; i < warmTimesMs.length; i++) {

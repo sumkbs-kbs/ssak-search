@@ -17,8 +17,6 @@
  * Exit codes: 0 = OK, 1 = error, 2 = usage error
  */
 
-import { readFileSync } from 'fs'
-
 interface Args {
   apiUrl: string
   limit: number
@@ -31,11 +29,20 @@ function parseArgs(argv: string[]): Args {
   for (const arg of argv.slice(2)) {
     const [key, value] = arg.startsWith('--') ? arg.slice(2).split('=', 2) : [arg, '']
     switch (key) {
-      case 'api-url': args.apiUrl = value; break
-      case 'limit': args.limit = parseInt(value, 10) || 0; break
-      case 'delay': args.delay = parseInt(value, 10) || 8; break
-      case 'dry-run': args.dryRun = true; break
-      default: break
+      case 'api-url':
+        args.apiUrl = value
+        break
+      case 'limit':
+        args.limit = parseInt(value, 10) || 0
+        break
+      case 'delay':
+        args.delay = parseInt(value, 10) || 8
+        break
+      case 'dry-run':
+        args.dryRun = true
+        break
+      default:
+        break
     }
   }
   if (!args.apiUrl && !args.dryRun) {
@@ -67,11 +74,7 @@ const CATEGORIES: Array<{ category: string; lang: 'en' | 'ko'; limit: number }> 
  * Fetch page titles from a Wikipedia category via the MediaWiki API.
  * Returns an array of article titles.
  */
-async function fetchCategoryTitles(
-  category: string,
-  lang: 'en' | 'ko',
-  limit: number,
-): Promise<string[]> {
+async function fetchCategoryTitles(category: string, lang: 'en' | 'ko', limit: number): Promise<string[]> {
   const apiBase = lang === 'ko' ? 'https://ko.wikipedia.org' : 'https://en.wikipedia.org'
   const titles: string[] = []
   let cmcontinue: string | undefined
@@ -122,7 +125,7 @@ async function fetchCategoryTitles(
       break
     }
 
-    const data = await resp.json() as {
+    const data = (await resp.json()) as {
       query?: { categorymembers?: Array<{ title: string; type: string }> }
       continue?: { cmcontinue: string }
     }
@@ -145,14 +148,11 @@ async function fetchCategoryTitles(
 /**
  * Index a single Wikipedia article via POST /api/index?max_chunks=1.
  */
-async function indexArticle(
-  apiUrl: string,
-  title: string,
-  lang: 'en' | 'ko',
-): Promise<boolean> {
-  const wikiUrl = lang === 'ko'
-    ? `https://ko.wikipedia.org/wiki/${encodeURIComponent(title)}`
-    : `https://en.wikipedia.org/wiki/${encodeURIComponent(title)}`
+async function indexArticle(apiUrl: string, title: string, lang: 'en' | 'ko'): Promise<boolean> {
+  const wikiUrl =
+    lang === 'ko'
+      ? `https://ko.wikipedia.org/wiki/${encodeURIComponent(title)}`
+      : `https://en.wikipedia.org/wiki/${encodeURIComponent(title)}`
 
   try {
     const resp = await fetch(`${apiUrl}/api/index?max_chunks=1`, {
@@ -162,7 +162,7 @@ async function indexArticle(
       signal: AbortSignal.timeout(15_000),
     })
     if (!resp.ok) return false
-    const data = await resp.json() as { stats?: { succeeded?: number } }
+    const data = (await resp.json()) as { stats?: { succeeded?: number } }
     return (data.stats?.succeeded ?? 0) > 0
   } catch {
     return false
@@ -226,7 +226,7 @@ async function main() {
   if (!args.dryRun) {
     try {
       const health = await fetch(`${args.apiUrl}/api/health`)
-      const data = await health.json() as { index?: { total_documents?: number } }
+      const data = (await health.json()) as { index?: { total_documents?: number } }
       console.log(`  Index: ${data.index?.total_documents ?? '?'} documents`)
     } catch {
       // non-critical

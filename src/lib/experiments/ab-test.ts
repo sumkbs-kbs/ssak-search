@@ -182,7 +182,9 @@ function erf(x: number): number {
   const sign = x < 0 ? -1 : 1
   const ax = Math.abs(x)
   const t = 1 / (1 + 0.3275911 * ax)
-  const y = 1 - (((((1.061405429 * t - 1.453152027) * t + 1.421413741) * t - 0.284496736) * t + 0.254829592) * t) * Math.exp(-ax * ax)
+  const y =
+    1 -
+    ((((1.061405429 * t - 1.453152027) * t + 1.421413741) * t - 0.284496736) * t + 0.254829592) * t * Math.exp(-ax * ax)
   return sign * y
 }
 
@@ -282,7 +284,9 @@ export class ExperimentDO extends DurableObject<Env> {
     }
     this.meta.experiments[name] = exp
     await this.saveMeta()
-    logger.info(`[ExperimentDO] Registered experiment '${name}' with variants ${variants.map((v) => `${v.key}:${v.weight}%`).join(', ')}`)
+    logger.info(
+      `[ExperimentDO] Registered experiment '${name}' with variants ${variants.map((v) => `${v.key}:${v.weight}%`).join(', ')}`,
+    )
     return { ok: true, experiment: exp }
   }
 
@@ -466,9 +470,8 @@ export class ExperimentDO extends DurableObject<Env> {
         clicks: variantClks.length,
         ctr: variantImps.length > 0 ? variantClks.length / variantImps.length : 0,
         ndcg: ndcgCount > 0 ? ndcgSum / ndcgCount : 0,
-        latency_mean_ms: variantLats.length > 0
-          ? variantLats.reduce((a, l) => a + l.latency_ms, 0) / variantLats.length
-          : 0,
+        latency_mean_ms:
+          variantLats.length > 0 ? variantLats.reduce((a, l) => a + l.latency_ms, 0) / variantLats.length : 0,
         latency_samples: variantLats.length,
         error_rate: variantImps.length > 0 ? variantErrs.length / variantImps.length : 0,
       }
@@ -568,15 +571,18 @@ export class ExperimentDO extends DurableObject<Env> {
       if (entries.size < 1000) break
       // Advance start past the last returned key for the next page. The list
       // `start` is inclusive, so bump the final key's last char by one.
-      const last = [...entries.keys()].pop()!
-      const nextStart = last.slice(0, -1) + String.fromCharCode(last.charCodeAt(last.length - 1) + 1)
+      const lastKey = [...entries.keys()].pop()
+      if (lastKey === undefined) break // entries.size > 0 guaranteed above; defensive
+      const nextStart = lastKey.slice(0, -1) + String.fromCharCode(lastKey.charCodeAt(lastKey.length - 1) + 1)
       if (nextStart <= start) break
       start = nextStart
     }
     return out
   }
 
-  async getStats(name: string): Promise<{ impressions: number; clicks: number; latencies: number; errors: number } | null> {
+  async getStats(
+    name: string,
+  ): Promise<{ impressions: number; clicks: number; latencies: number; errors: number } | null> {
     const exp = this.meta.experiments[name]
     if (!exp) return null
     return this.meta.counts[name] ?? { impressions: 0, clicks: 0, latencies: 0, errors: 0 }
@@ -642,8 +648,9 @@ export interface ExperimentRPC {
 }
 
 export function getExperimentStub(env: Env): ExperimentRPC {
-  const id = env.EXPERIMENT_DO!.idFromName('hub')
-  return env.EXPERIMENT_DO!.get(id) as unknown as ExperimentRPC
+  if (!env.EXPERIMENT_DO) throw new Error('EXPERIMENT_DO binding missing — configure the Durable Object binding first')
+  const id = env.EXPERIMENT_DO.idFromName('hub')
+  return env.EXPERIMENT_DO.get(id) as unknown as ExperimentRPC
 }
 
 // ============================================================
@@ -701,7 +708,11 @@ export async function logExperimentImpression(
 }
 
 /** Fire-and-forget latency event. */
-export async function logExperimentLatency(env: Env, assignment: ExperimentAssignment, latencyMs: number): Promise<void> {
+export async function logExperimentLatency(
+  env: Env,
+  assignment: ExperimentAssignment,
+  latencyMs: number,
+): Promise<void> {
   if (!env?.EXPERIMENT_DO) return
   try {
     const stub = getExperimentStub(env)

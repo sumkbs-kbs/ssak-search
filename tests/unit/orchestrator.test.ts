@@ -129,20 +129,20 @@ describe('isJapaneseQuery', () => {
   })
 
   it('catches Japanese via shinjitai glyphs AND place-word composites', () => {
-    expect(isJapaneseQuery('日本経済新聞')).toBe(true)   // 済 shinjitai
-    expect(isJapaneseQuery('京都紅葉時期')).toBe(true)    // 京都/紅葉 place words
+    expect(isJapaneseQuery('日本経済新聞')).toBe(true) // 済 shinjitai
+    expect(isJapaneseQuery('京都紅葉時期')).toBe(true) // 京都/紅葉 place words
   })
 
   it('catches kana-less Japanese tech compounds that were misrouted to zh (Phase 6.12)', () => {
     // ja-tech-10/ja-news-05/ja-tech-03/ja-tech-06/ja-tech-12/ja-tech-05/ja-tech-02
     // have NO kana and NO shinjitai glyphs, so they previously fell into the
     // zh-CN bucket and bing served Chinese results (NDCG 0.000 root cause).
-    expect(isJapaneseQuery('機械学習入門')).toBe(true)          // 機械学習 compound
+    expect(isJapaneseQuery('機械学習入門')).toBe(true) // 機械学習 compound
     expect(isJapaneseQuery('Python機械学習入門')).toBe(true)
-    expect(isJapaneseQuery('TypeScript 入門')).toBe(true)      // 入門 compound
+    expect(isJapaneseQuery('TypeScript 入門')).toBe(true) // 入門 compound
     expect(isJapaneseQuery('Docker 入門')).toBe(true)
-    expect(isJapaneseQuery('Web API 設計')).toBe(true)         // 設計 compound
-    expect(isJapaneseQuery('AI規制 最新')).toBe(true)          // 規制 compound
+    expect(isJapaneseQuery('Web API 設計')).toBe(true) // 設計 compound
+    expect(isJapaneseQuery('AI規制 最新')).toBe(true) // 規制 compound
   })
 
   it('keeps genuinely-ambiguous shared-glyph queries (Kubernetes 基本) out of the zh bucket', () => {
@@ -167,9 +167,9 @@ describe('isJapaneseQuery', () => {
     // compound markers accept this rare ambiguity to fix the eval 0.000 cases
     // (TypeScript 入門 / Web API 設計 / AI規制 最新). These protection cases
     // pin the KNOWN behavior so a future change must consciously widen it.
-    expect(isJapaneseQuery('網頁設計')).toBe(true)      // shared glyph — documented ambiguity
-    expect(isJapaneseQuery('Python入門')).toBe(true)    // shared glyph — documented ambiguity
-    expect(isJapaneseQuery('台灣銀行匯率')).toBe(false)  // no compound marker → protected
+    expect(isJapaneseQuery('網頁設計')).toBe(true) // shared glyph — documented ambiguity
+    expect(isJapaneseQuery('Python入門')).toBe(true) // shared glyph — documented ambiguity
+    expect(isJapaneseQuery('台灣銀行匯率')).toBe(false) // no compound marker → protected
     expect(isJapaneseQuery('香港經濟新聞')).toBe(false)
   })
 
@@ -321,7 +321,7 @@ describe('normalizeTitleForDedup', () => {
 
   it('normalizes whitespace', () => {
     const result = normalizeTitleForDedup('hello   world')
-    expect(result).not.toMatch(/  /)
+    expect(result).not.toMatch(/ {2}/)
   })
 
   it('truncates to 80 characters', () => {

@@ -5,7 +5,8 @@
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { executeSearch } from '../../src/lib/orchestrator'
-import type { SearchRequest, SearchDepth, Topic, Env } from '../../src/types'
+import { __resetRateLimiterStateForTests } from '../../src/lib/rate-limiter'
+import type { SearchRequest, SearchDepth, Topic } from '../../src/types'
 
 // Test fixtures
 const BING_HTML = `
@@ -13,81 +14,36 @@ const BING_HTML = `
 <html><body>
   <ol id="b_results">
     <li class="b_algo">
-      <h2><a href="https://example.com/1">Test Result 1</a></h2>
-      <p>This is a test snippet about the query topic.</p>
+      <div class="b_algoheader">
+        <a href="https://example.com/1">Test Result 1</a>
+      </div>
+      <div class="b_caption"><p class="b_lineclamp3">This is a test snippet about the query topic.</p></div>
     </li>
     <li class="b_algo">
-      <h2><a href="https://example.com/2">Test Result 2</a></h2>
-      <p>Another relevant snippet for the search query.</p>
+      <div class="b_algoheader">
+        <a href="https://example.com/2">Test Result 2</a>
+      </div>
+      <div class="b_caption"><p class="b_lineclamp3">Another relevant snippet for the search query.</p></div>
     </li>
   </ol>
 </body></html>
 `
 
-const NAVER_HTML = `
-<!DOCTYPE html>
-<html><body>
-  <ul class="lst_total">
-    <li>
-      <div class="total_tit"><a href="https://naver-result.com/1">네이버 결과 1</a></div>
-      <div class="api_txt_lines dsc">네이버 검색 결과 요약입니다.</div>
-    </li>
-  </ul>
-</body></html>
-`
+// wikipediaSearch parses the REST API JSON ({pages: [{title, key, excerpt}]})
+const WIKIPEDIA_JSON = JSON.stringify({
+  pages: [
+    {
+      title: 'Quantum computing',
+      key: 'Quantum_computing',
+      excerpt: 'Quantum computing is a type of computation...',
+      description: 'Field of computing',
+    },
+  ],
+})
 
-const WIKIPEDIA_HTML = `
-<!DOCTYPE html>
-<html><body>
-  <div class="mw-search-result-heading"><a href="/wiki/Quantum_computing">Quantum computing</a></div>
-  <div class="searchresult">Quantum computing is a type of computation...</div>
-</body></html>
-`
-
-const GITHUB_HTML = `
-<!DOCTYPE html>
-<html><body>
-  <div class="repo-list">
-    <div class="repo-list-item">
-      <h3><a href="/user/repo1">user/repo1</a></h3>
-      <p>Description of repo 1</p>
-    </div>
-  </div>
-</body></html>
-`
-
-const HN_HTML = `
-<!DOCTYPE html>
-<html><body>
-  <table class="itemlist">
-    <tr class="athing">
-      <td class="title"><span class="rank">1.</span><a href="https://news.ycombinator.com/item?id=1">HN Story 1</a></td>
-    </tr>
-  </table>
-</body></html>
-`
-
-const REDDIT_HTML = `
-<!DOCTYPE html>
-<html><body>
-  <div class="Post">
-    <h3><a href="https://reddit.com/r/test/comments/1">Reddit Post 1</a></h3>
-    <div class="post-content">Content of post 1</div>
-  </div>
-</body></html>
-`
-
-const ARXIV_XML = `
-<?xml version="1.0" encoding="UTF-8"?>
-<feed xmlns="http://www.w3.org/2005/Atom">
-  <entry>
-    <title>arXiv Paper 1: Quantum Computing Advances</title>
-    <summary>Abstract of paper 1 about quantum computing...</summary>
-    <link href="https://arxiv.org/abs/1234.5678" />
-    <published>2024-01-15T00:00:00Z</published>
-  </entry>
-</feed>
-`
+function wikiResponse() {
+  return new Response(WIKIPEDIA_JSON, { status: 200, headers: { 'content-type': 'application/json' } })
+}
 
 function createMockEnv(): any {
   return {
@@ -129,20 +85,20 @@ function createSearchRequest(overrides: Partial<SearchRequest> = {}): SearchRequ
 let fetchMock: any = null
 
 function setupFetchMock(responses: Map<string, Response>) {
-  fetchMock = vi.fn(async (url: string | URL, init?: RequestInit) => {
+  fetchMock = vi.fn(async (url: string | URL, _init?: RequestInit) => {
     const urlStr = url.toString()
-    
+
     // Match by URL pattern
     for (const [pattern, response] of responses.entries()) {
       if (urlStr.includes(pattern)) {
         return response.clone()
       }
     }
-    
+
     // Default: return 404 for unmocked URLs
     return new Response('', { status: 404 })
   })
-  
+
   // Replace global fetch
   globalThis.fetch = fetchMock
 }
@@ -158,6 +114,11 @@ describe('Orchestrator executeSearch() Integration (mocked)', () => {
   let env: any
 
   beforeEach(() => {
+    // The workerd pool runs all tests in ONE isolate; the module-level
+    // circuit breaker / rate windows would otherwise leak failures from one
+    // test into the next (e.g. bing circuit opens in a 5xx test and the
+    // images test then gets "Upstream unavailable (circuit open)").
+    __resetRateLimiterStateForTests()
     env = createMockEnv()
   })
 
@@ -168,31 +129,33 @@ describe('Orchestrator executeSearch() Integration (mocked)', () => {
 
   it('returns results for general query with multiple backends', async () => {
     const responses = new Map([
-      ['bing.com', new Response(`
+      [
+        'bing.com',
+        new Response(
+          `
         <!DOCTYPE html>
         <html><body>
           <ol id="b_results">
             <li class="b_algo">
-              <h2><a href="https://example.com/1">Test Result 1</a></h2>
-              <p>This is a test snippet about the query topic.</p>
+              <div class="b_algoheader">
+                <a href="https://example.com/1">Test Result 1</a>
+              </div>
+              <div class="b_caption"><p class="b_lineclamp3">This is a test snippet about the query topic.</p></div>
             </li>
           </ol>
         </body></html>
-      `, { status: 200, headers: { 'content-type': 'text/html' } })],
-      ['wikipedia.org', new Response(`
-        <!DOCTYPE html>
-        <html><body>
-          <div class="mw-search-result-heading"><a href="/wiki/Quantum_computing">Quantum computing</a></div>
-          <div class="searchresult">Quantum computing is a type of computation...</div>
-        </body></html>
-      `, { status: 200, headers: { 'content-type': 'text/html' } })],
+      `,
+          { status: 200, headers: { 'content-type': 'text/html' } },
+        ),
+      ],
+      ['wikipedia.org', wikiResponse()],
     ])
-    
+
     setupFetchMock(responses)
-    
+
     const request = createSearchRequest({ query: 'quantum computing tutorial' })
     const result = await executeSearch(request, { env })
-    
+
     expect(result).toHaveProperty('query', 'quantum computing tutorial')
     expect(result).toHaveProperty('results')
     expect(Array.isArray(result.results)).toBe(true)
@@ -210,51 +173,63 @@ describe('Orchestrator executeSearch() Integration (mocked)', () => {
 
   it('handles Korean query with Naver as primary', async () => {
     const responses = new Map([
-      ['naver.com', new Response(`
+      [
+        'naver.com',
+        new Response(
+          `
         <!DOCTYPE html>
         <html><body>
           <ul class="lst_total">
             <li>
-              <div class="total_tit"><a href="https://m.search.naver.com/link?u=https%3A%2F%2Fexample.com%2Fkr">네이버 결과</a></div>
+              <div class="total_tit"><a href="https://n.news.naver.com/mnews/article/001/0000001">네이버 결과</a></div>
               <div class="api_txt_lines dsc">네이버 검색 결과입니다.</div>
             </li>
           </ul>
         </body></html>
-      `, { status: 200, headers: { 'content-type': 'text/html' } })],
+      `,
+          { status: 200, headers: { 'content-type': 'text/html' } },
+        ),
+      ],
       ['bing.com', new Response(BING_HTML, { status: 200, headers: { 'content-type': 'text/html' } })],
     ])
-    
+
     setupFetchMock(responses)
-    
+
     const request = createSearchRequest({ query: '삼성전자 주가' })
     const result = await executeSearch(request, { env })
-    
+
     expect(result.results.length).toBeGreaterThan(0)
     expect(result.backend).toContain('naver')
   })
 
   it('handles Chinese query with Bing mkt=zh-CN', async () => {
-    let bingCalledWithZhCN = false
-    
     const responses = new Map([
-      ['bing.com', new Response(`
+      [
+        'bing.com',
+        new Response(
+          `
         <!DOCTYPE html>
         <html><body>
           <ol id="b_results">
             <li class="b_algo">
-              <h2><a href="https://baike.baidu.com/item/test">百度百科测试</a></h2>
-              <p>中文测试内容</p>
+              <div class="b_algoheader">
+                <a href="https://baike.baidu.com/item/test">百度百科测试</a>
+              </div>
+              <div class="b_caption"><p class="b_lineclamp3">中文测试内容</p></div>
             </li>
           </ol>
         </body></html>
-      `, { status: 200, headers: { 'content-type': 'text/html' } })],
+      `,
+          { status: 200, headers: { 'content-type': 'text/html' } },
+        ),
+      ],
     ])
-    
+
     setupFetchMock(responses)
-    
+
     const request = createSearchRequest({ query: '什么是量子计算' })
     const result = await executeSearch(request, { env })
-    
+
     expect(result.results.length).toBeGreaterThan(0)
   })
 
@@ -262,12 +237,12 @@ describe('Orchestrator executeSearch() Integration (mocked)', () => {
     const responses = new Map([
       ['bing.com', new Response(BING_HTML, { status: 200, headers: { 'content-type': 'text/html' } })],
     ])
-    
+
     setupFetchMock(responses)
-    
+
     const request = createSearchRequest({ query: 'test', max_results: 3 })
     const result = await executeSearch(request, { env })
-    
+
     expect(result.results.length).toBeLessThanOrEqual(3)
   })
 
@@ -275,12 +250,12 @@ describe('Orchestrator executeSearch() Integration (mocked)', () => {
     const responses = new Map([
       ['bing.com', new Response(BING_HTML, { status: 200, headers: { 'content-type': 'text/html' } })],
     ])
-    
+
     setupFetchMock(responses)
-    
+
     const request = createSearchRequest({ query: 'test', page: 2, max_results: 5 })
     const result = await executeSearch(request, { env })
-    
+
     expect(result).toHaveProperty('page', 2)
     expect(result).toHaveProperty('page_size', 5)
     expect(result).toHaveProperty('total_results')
@@ -291,28 +266,38 @@ describe('Orchestrator executeSearch() Integration (mocked)', () => {
 
   it('sorts by date when requested', async () => {
     const responses = new Map([
-      ['bing.com', new Response(`
+      [
+        'bing.com',
+        new Response(
+          `
         <!DOCTYPE html>
         <html><body>
           <ol id="b_results">
             <li class="b_algo">
-              <h2><a href="https://example.com/new">New Article</a></h2>
-              <p><cite>https://example.com/new</cite> <span>2 hours ago</span></p>
+              <div class="b_algoheader">
+                <a href="https://example.com/new">New Article</a>
+              </div>
+              <div class="b_caption"><p class="b_lineclamp2">Jul 24, 2026 · New article content.</p></div>
             </li>
             <li class="b_algo">
-              <h2><a href="https://example.com/old">Old Article</a></h2>
-              <p><cite>https://example.com/old</cite> <span>2 years ago</span></p>
+              <div class="b_algoheader">
+                <a href="https://example.com/old">Old Article</a>
+              </div>
+              <div class="b_caption"><p class="b_lineclamp2">Jul 24, 2025 · Old article content.</p></div>
             </li>
           </ol>
         </body></html>
-      `, { status: 200, headers: { 'content-type': 'text/html' } })],
+      `,
+          { status: 200, headers: { 'content-type': 'text/html' } },
+        ),
+      ],
     ])
-    
+
     setupFetchMock(responses)
-    
+
     const request = createSearchRequest({ query: 'test', sort_by: 'date' })
     const result = await executeSearch(request, { env })
-    
+
     if (result.results.length >= 2) {
       // Newer results should rank higher when sort_by=date
       expect(result.results[0].url).toContain('/new')
@@ -323,31 +308,30 @@ describe('Orchestrator executeSearch() Integration (mocked)', () => {
     const responses = new Map([
       ['bing.com', new Response(BING_HTML, { status: 200, headers: { 'content-type': 'text/html' } })],
     ])
-    
+
     setupFetchMock(responses)
-    
+
     const request = createSearchRequest({ query: 'machine learning' })
     const result = await executeSearch(request, { env })
-    
+
     expect(result.related_queries).toBeDefined()
     const rq = result.related_queries!
     expect(Array.isArray(rq)).toBe(true)
     expect(rq.length).toBeGreaterThan(0)
-    expect(rq.every(q => typeof q === 'string')).toBe(true)
+    expect(rq.every((q) => typeof q === 'string')).toBe(true)
   })
 
   it('handles backend failures gracefully', async () => {
-    let bingCalls = 0
     const responses = new Map([
       ['bing.com', new Response('', { status: 500 })],
-      ['wikipedia.org', new Response(WIKIPEDIA_HTML, { status: 200, headers: { 'content-type': 'text/html' } })],
+      ['wikipedia.org', wikiResponse()],
     ])
-    
+
     setupFetchMock(responses)
-    
+
     const request = createSearchRequest({ query: 'resilient test' })
     const result = await executeSearch(request, { env })
-    
+
     // Should still return results from working backends
     expect(result.results.length).toBeGreaterThan(0)
     expect(result.fallback_used).toBe(false) // Not full fallback, just partial failure
@@ -360,7 +344,7 @@ describe('Orchestrator executeSearch() Integration (mocked)', () => {
         <a class="result__snippet" href="https://ddg-result.com/1">DDG snippet</a>
       </body></html>
     `
-    
+
     const responses = new Map([
       ['bing.com', new Response('', { status: 503 })],
       ['naver.com', new Response('', { status: 503 })],
@@ -371,58 +355,71 @@ describe('Orchestrator executeSearch() Integration (mocked)', () => {
       ['arxiv.org', new Response('', { status: 503 })],
       ['duckduckgo.com', new Response(DDG_HTML, { status: 200, headers: { 'content-type': 'text/html' } })],
     ])
-    
+
     setupFetchMock(responses)
-    
+
     const request = createSearchRequest({ query: 'fallback test' })
     const result = await executeSearch(request, { env })
-    
+
+    // Since S15, DDG is a PRIMARY general backend (all.ts pushes
+    // buildDuckDuckGoTask when SearXNG is unconfigured) — it produces results
+    // directly, so fallback_used=false is correct.
     expect(result.results.length).toBeGreaterThan(0)
-    expect(result.fallback_used).toBe(true)
-    expect(result.backend).toContain('ddg')
+    expect(result.backend).toContain('duckduckgo')
+    expect(result.fallback_used).toBe(false)
   })
 
   it('respects include_domains filter', async () => {
     const responses = new Map([
-      ['bing.com', new Response(`
+      [
+        'bing.com',
+        new Response(
+          `
         <!DOCTYPE html>
         <html><body>
           <ol id="b_results">
             <li class="b_algo">
-              <h2><a href="https://allowed.com/1">Allowed Result</a></h2>
-              <p>Content</p>
+              <div class="b_algoheader">
+                <a href="https://allowed.com/1">Allowed Result</a>
+              </div>
+              <div class="b_caption"><p class="b_lineclamp3">Content</p></div>
             </li>
             <li class="b_algo">
-              <h2><a href="https://blocked.com/1">Blocked Result</a></h2>
-              <p>Content</p>
+              <div class="b_algoheader">
+                <a href="https://blocked.com/1">Blocked Result</a>
+              </div>
+              <div class="b_caption"><p class="b_lineclamp3">Content</p></div>
             </li>
           </ol>
         </body></html>
-      `, { status: 200, headers: { 'content-type': 'text/html' } })],
+      `,
+          { status: 200, headers: { 'content-type': 'text/html' } },
+        ),
+      ],
     ])
-    
+
     setupFetchMock(responses)
-    
-    const request = createSearchRequest({ 
-      query: 'test', 
-      include_domains: ['allowed.com'] 
+
+    const request = createSearchRequest({
+      query: 'test',
+      include_domains: ['allowed.com'],
     })
     const result = await executeSearch(request, { env })
-    
-    const domains = result.results.map(r => r.domain)
-    expect(domains.every(d => d === 'allowed.com')).toBe(true)
+
+    const domains = result.results.map((r) => r.domain)
+    expect(domains.every((d) => d === 'allowed.com')).toBe(true)
   })
 
   it('measures response time', async () => {
     const responses = new Map([
       ['bing.com', new Response(BING_HTML, { status: 200, headers: { 'content-type': 'text/html' } })],
     ])
-    
+
     setupFetchMock(responses)
-    
+
     const request = createSearchRequest({ query: 'timing test' })
     const result = await executeSearch(request, { env })
-    
+
     expect(result).toHaveProperty('response_time_ms')
     expect(typeof result.response_time_ms).toBe('number')
     expect(result.response_time_ms).toBeGreaterThan(0)
@@ -430,19 +427,38 @@ describe('Orchestrator executeSearch() Integration (mocked)', () => {
   })
 
   it('includes images in response when available', async () => {
-    const BING_WITH_IMAGES = BING_HTML + `
-      <div class="img_c"><a href="https://example.com/img.jpg"><img src="https://example.com/thumb.jpg" /></a></div>
+    // bingImageSearch parses <a class="iusc" m="{json}"> image cards, and
+    // skips responses shorter than 1000 chars as bot-detection pages — pad
+    // the fixture past that threshold.
+    const BING_IMAGES_HTML = `
+      <html><head><title>Bing Image Search</title></head><body>
+        <div id="b_content">
+          <div class="dgControl">
+            <div class="imgpt">
+              <a class="iusc" m="{&quot;murl&quot;:&quot;https://example.com/img.jpg&quot;,&quot;t&quot;:&quot;Example Image&quot;,&quot;turl&quot;:&quot;https://example.com/thumb.jpg&quot;,&quot;mw&quot;:200,&quot;mh&quot;:150}"></a>
+              <a class="iusc" m="{&quot;murl&quot;:&quot;https://example.org/img2.png&quot;,&quot;t&quot;:&quot;Second Image&quot;,&quot;turl&quot;:&quot;https://example.org/thumb2.png&quot;,&quot;mw&quot;:300,&quot;mh&quot;:200}"></a>
+              ${'<div class="grid" style="display:none">padding padding padding padding padding padding padding padding padding padding</div>'.repeat(20)}
+            </div>
+          </div>
+        </div>
+      </body></html>
     `
-    
+
+    // Note: bingImageSearch hits BING_SEARCH_URL + '/images/search' =
+    // https://www.bing.com/search/images/search (NOT bing.com/images).
     const responses = new Map([
-      ['bing.com', new Response(BING_WITH_IMAGES, { status: 200, headers: { 'content-type': 'text/html' } })],
+      [
+        'bing.com/search/images/search',
+        new Response(BING_IMAGES_HTML, { status: 200, headers: { 'content-type': 'text/html' } }),
+      ],
+      ['bing.com', new Response(BING_HTML, { status: 200, headers: { 'content-type': 'text/html' } })],
     ])
-    
+
     setupFetchMock(responses)
-    
+
     const request = createSearchRequest({ query: 'test images' })
     const result = await executeSearch(request, { env })
-    
+
     expect(result).toHaveProperty('images')
     expect(Array.isArray(result.images)).toBe(true)
   })

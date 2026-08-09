@@ -6,9 +6,8 @@
 import { Hono } from 'hono'
 import type { AppBindings, ErrorResponse } from '../types'
 import { getUsageStats } from '../lib/metrics'
-import { validateApiKeyWithTenant } from '../lib/auth'
+import { validateApiKeyWithTenant, getClientIp } from '../lib/auth'
 import { auditAuthFailure } from '../lib/audit'
-import { getClientIp } from '../lib/auth'
 
 const usageRoute = new Hono<{ Bindings: AppBindings }>()
 
@@ -23,10 +22,7 @@ usageRoute.use('/*', async (c, next) => {
       resource: c.req.path,
       attempt: c.req.raw.headers.get('Authorization')?.startsWith('Bearer ') ? 'bearer' : 'none',
     })
-    return c.json<ErrorResponse>(
-      { detail: authResult.reason || 'Unauthorized', code: 'unauthorized' },
-      401,
-    )
+    return c.json<ErrorResponse>({ detail: authResult.reason || 'Unauthorized', code: 'unauthorized' }, 401)
   }
   await next()
 })

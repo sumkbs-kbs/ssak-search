@@ -48,7 +48,9 @@ export function StatsBar({ items, reportLink, reportLabel, t }: StatsBarProps) {
           <span>
             {item.value}
             {item.secondary ? (
-              <span style="color: var(--warning); margin-left: 4px;" role="alert">{item.secondary}</span>
+              <span style="color: var(--warning); margin-left: 4px;" role="alert">
+                {item.secondary}
+              </span>
             ) : null}
           </span>
         </span>
@@ -62,7 +64,24 @@ export function StatsBar({ items, reportLink, reportLabel, t }: StatsBarProps) {
             style="color: var(--accent); text-decoration: none; font-weight: 500; font-size: 0.78rem;"
             aria-label={`${label} — Opens in new tab`}
           >
-            <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="vertical-align:middle;"><path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg> {label}
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              width="12"
+              height="12"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2.5"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              aria-hidden="true"
+              style="vertical-align:middle;"
+            >
+              <path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6" />
+              <polyline points="15 3 21 3 21 9" />
+              <line x1="10" y1="14" x2="21" y2="3" />
+            </svg>{' '}
+            {label}
           </a>
         </span>
       ) : null}

@@ -27,11 +27,17 @@ function renderSimpleMarkdown(text: string): string {
   // Bold **text**
   html = html.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
   // Inline citations [N]
-  html = html.replace(/\[(\d+)\]/g, '<sup class="citation" style="font-size:0.7rem;font-weight:600;color:var(--accent);vertical-align:super;line-height:1;" aria-label="Citation $1">[$1]</sup>')
+  html = html.replace(
+    /\[(\d+)\]/g,
+    '<sup class="citation" style="font-size:0.7rem;font-weight:600;color:var(--accent);vertical-align:super;line-height:1;" aria-label="Citation $1">[$1]</sup>',
+  )
   // Italic *text*
   html = html.replace(/\*(.+?)\*/g, '<em>$1</em>')
   // Code inline `text`
-  html = html.replace(/`(.+?)`/g, '<code style="background:var(--surface-hover);padding:1px 4px;border-radius:3px;font-size:0.85em;">$1</code>')
+  html = html.replace(
+    /`(.+?)`/g,
+    '<code style="background:var(--surface-hover);padding:1px 4px;border-radius:3px;font-size:0.85em;">$1</code>',
+  )
   // Newlines to <br>
   html = html.replace(/\n/g, '<br>')
   return html
@@ -52,13 +58,7 @@ function defaultT(key: string, _params?: Record<string, string | number>): strin
   return key
 }
 
-export function AnswerCard({
-  text,
-  title: titleProp,
-  icon: _icon = 'fa-robot',
-  confidence,
-  t,
-}: AnswerCardProps) {
+export function AnswerCard({ text, title: titleProp, icon: _icon = 'fa-robot', confidence, t }: AnswerCardProps) {
   const answerHtml = renderSimpleMarkdown(text)
   const _ = t || defaultT
   const title = titleProp || _('search.answer_title')
@@ -72,7 +72,24 @@ export function AnswerCard({
       aria-label={title}
     >
       <h3 style="font-size: 0.85rem; font-weight: 600; color: var(--accent-dark); margin-bottom: 8px; display: flex; align-items: center; gap: 6px;">
-        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex-shrink:0;"><rect x="3" y="11" width="18" height="10" rx="2"/><circle cx="9" cy="14" r="1" fill="currentColor"/><circle cx="15" cy="14" r="1" fill="currentColor"/><path d="M9 3l2 3h2l2-3M9 11v-3a3 3 0 016 0v3M12 21v-2"/></svg>
+        <svg
+          xmlns="http://www.w3.org/2000/svg"
+          width="16"
+          height="16"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          aria-hidden="true"
+          style="flex-shrink:0;"
+        >
+          <rect x="3" y="11" width="18" height="10" rx="2" />
+          <circle cx="9" cy="14" r="1" fill="currentColor" />
+          <circle cx="15" cy="14" r="1" fill="currentColor" />
+          <path d="M9 3l2 3h2l2-3M9 11v-3a3 3 0 016 0v3M12 21v-2" />
+        </svg>
         {title}
         {confidence !== undefined ? (
           <span style="font-size:0.7rem;font-weight:400;color:var(--text-tertiary);margin-left:4px;">

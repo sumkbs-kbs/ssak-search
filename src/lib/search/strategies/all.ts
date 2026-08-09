@@ -11,12 +11,14 @@
 import type { SearchStrategy } from './types'
 import type { BackendTask, SearchContext } from '../context'
 import { isChineseQuery, cleanChineseQuery } from '../../orchestrator'
+import { isGithubIssuesIntent } from '../../specialized'
 import {
   buildBingTask,
   buildBingNewsTask,
   buildBingFinanceTask,
   buildWikipediaTask,
   buildGithubTask,
+  buildGithubIssuesTask,
   buildHackerNewsTask,
   buildRedditTask,
   buildArxivTask,
@@ -33,6 +35,7 @@ import {
   buildStackExchangeTask,
   buildQiitaTask,
   buildJuejinTask,
+  buildCsdnTask,
 } from '../backend-tasks'
 import { bingSearch } from '../../bing-search'
 import { duckDuckGoSearch } from '../../duckduckgo'
@@ -101,14 +104,26 @@ export class AllStrategy implements SearchStrategy {
         if (cleanedQuery !== ctx.query && cleanedQuery.length > 0) {
           tasks.push({
             name: 'bing-cleaned',
-            run: () => bingSearch(cleanedQuery, {
-              maxResults: ctx.overFetch,
-              timeRange: ctx.bingTimeRange,
-              region: ctx.bingRegion,
-              env: ctx.env,
-            }),
+            run: () =>
+              bingSearch(cleanedQuery, {
+                maxResults: ctx.overFetch,
+                timeRange: ctx.bingTimeRange,
+                region: ctx.bingRegion,
+                env: ctx.env,
+              }),
           })
         }
+
+        // S26: CSDN for zh GENERAL queries — real Chinese community articles
+        // for exactly the queries bing mkt=zh-CN from a US IP contaminates
+        // with cross-language junk (zh-general-12 考研复习计划: 4/10 results
+        // were EU-climate English news — consilium.europa.eu/gov.ie/linkedin).
+        // Additive keyless backend; the cross-language penalty + quality
+        // threshold sort it against bing in ranking. maxResults 3 (vs 5 for
+        // zh-tech): CSDN is SEO-content-farm-prone on non-tech queries, so a
+        // smaller cap keeps the 10-slot pool from being 5/10 CSDN (review
+        // 2026-08-07).
+        tasks.push(buildCsdnTask(ctx, 3))
       }
     }
 
@@ -128,6 +143,17 @@ export class AllStrategy implements SearchStrategy {
       // saturated repos when the docs reach the pool, so keep 8 and let
       // ranking sort it out.
       tasks.push(buildGithubTask(ctx, 8))
+
+      // S19: GitHub Issues for problem/learning-intent queries. github.com is
+      // the #1 technical gold domain (127/158 eval queries) and repos alone
+      // missed 46/127 — issues surface real github.com problem-solving
+      // threads ("how to fix / why error / A vs B"). Gate: technical + EN/KR
+      // (zh/ja technical gold is community sites — zhihu/juejin/qiita/zenn —
+      // same gate rule as Stack Exchange below, so issues don't crowd them
+      // out of the 10-slot pool) + problem-intent regex.
+      if (ctx.queryType === 'technical' && !ctx.chinese && !ctx.japanese && isGithubIssuesIntent(ctx.query)) {
+        tasks.push(buildGithubIssuesTask(ctx, 5))
+      }
 
       // Phase 3a (lever 3): official-doc routing for ENGLISH technical queries
       // only. bing ignores site: operators entirely and DDG site: trips the 202
@@ -153,10 +179,14 @@ export class AllStrategy implements SearchStrategy {
       }
       if (ctx.queryType === 'technical' && ctx.chinese) {
         tasks.push(buildJuejinTask(ctx, 5))
+        // S26: CSDN complements Juejin with the csdn.net gold (10 zh gold
+        // queries — zh-tech-03/04 etc. list csdn.net alongside juejin.cn).
+        // Juejin is dev/tech focused; CSDN adds blog tutorials + community Q&A.
+        tasks.push(buildCsdnTask(ctx, 5))
       }
 
       if (ctx.queryType === 'technical' && !ctx.korean && !ctx.chinese && !ctx.japanese) {
-        tasks.push(buildStackExchangeTask(ctx, 5))
+        tasks.push(buildStackExchangeTask(ctx, 8))
 
         // MDN official-doc routing. MDN's /api/v1/search is disallowed by
         // robots.txt (Disallow: /api/) so it is deliberately NOT used. DDG
@@ -166,14 +196,19 @@ export class AllStrategy implements SearchStrategy {
         // back to other backends. Restricted to doc/reference-style queries to
         // limit shared-DDG budget pressure (the main duckduckgo backend uses
         // the same endpoint/IP).
-        if (/\b(docs?|documentation|reference|guide|tutorial|example|examples|api|how\s+to|explain(ed)?|what\s+is)\b/i.test(ctx.query)) {
+        if (
+          /\b(docs?|documentation|reference|guide|tutorial|example|examples|api|how\s+to|explain(ed)?|what\s+is)\b/i.test(
+            ctx.query,
+          )
+        ) {
           tasks.push({
             name: 'ddg-site-mdn',
-            run: () => duckDuckGoSearch(`site:developer.mozilla.org ${ctx.query}`, {
-              maxResults: 5,
-              timeoutMs: 6000,
-              env: ctx.env,
-            }),
+            run: () =>
+              duckDuckGoSearch(`site:developer.mozilla.org ${ctx.query}`, {
+                maxResults: 5,
+                timeoutMs: 6000,
+                env: ctx.env,
+              }),
           })
         }
       }

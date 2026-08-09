@@ -72,16 +72,10 @@ spaces.post('/', async (c) => {
     return c.json({ success: true, space }, 201)
   } catch (err) {
     if (err instanceof z.ZodError) {
-      return c.json<ErrorResponse>(
-        { detail: 'Validation error', code: 'validation_error' },
-        400,
-      )
+      return c.json<ErrorResponse>({ detail: 'Validation error', code: 'validation_error' }, 400)
     }
     logger.error('Create space error:', { error: toError(err) })
-    return c.json<ErrorResponse>(
-      { detail: 'Failed to create space', code: 'internal_error' },
-      500,
-    )
+    return c.json<ErrorResponse>({ detail: 'Failed to create space', code: 'internal_error' }, 500)
   }
 })
 
@@ -111,16 +105,10 @@ spaces.put('/:id', async (c) => {
     return c.json({ success: true, space })
   } catch (err) {
     if (err instanceof z.ZodError) {
-      return c.json<ErrorResponse>(
-        { detail: 'Validation error', code: 'validation_error' },
-        400,
-      )
+      return c.json<ErrorResponse>({ detail: 'Validation error', code: 'validation_error' }, 400)
     }
     logger.error('Update space error:', { error: toError(err) })
-    return c.json<ErrorResponse>(
-      { detail: 'Failed to update space', code: 'internal_error' },
-      500,
-    )
+    return c.json<ErrorResponse>({ detail: 'Failed to update space', code: 'internal_error' }, 500)
   }
 })
 
@@ -156,16 +144,10 @@ spaces.post('/:id/files', async (c) => {
     return c.json({ success: true, space })
   } catch (err) {
     if (err instanceof z.ZodError) {
-      return c.json<ErrorResponse>(
-        { detail: 'Validation error', code: 'validation_error' },
-        400,
-      )
+      return c.json<ErrorResponse>({ detail: 'Validation error', code: 'validation_error' }, 400)
     }
     logger.error('Add file error:', { error: toError(err) })
-    return c.json<ErrorResponse>(
-      { detail: 'Failed to add file', code: 'internal_error' },
-      500,
-    )
+    return c.json<ErrorResponse>({ detail: 'Failed to add file', code: 'internal_error' }, 500)
   }
 })
 

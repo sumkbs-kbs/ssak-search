@@ -15,8 +15,11 @@
 
 import type { Ai } from '@cloudflare/workers-types'
 import { logger, toError } from '../../lib/logger'
-import { classifyUnderstanding, classifyUnderstandingWithAI } from '../../lib/understanding/classifier'
-import type { SearchIntent } from '../../lib/understanding/classifier'
+import {
+  classifyUnderstanding,
+  classifyUnderstandingWithAI,
+  type SearchIntent,
+} from '../../lib/understanding/classifier'
 import { extractEntityHints } from '../../lib/understanding/entity-extractor'
 
 export type SearchMode = 'fast' | 'pro' | 'auto'
@@ -58,20 +61,28 @@ export interface ClassificationResult {
  */
 export function classifyQuery(
   query: string,
-  config: ClassifierConfig = DEFAULT_CLASSIFIER_CONFIG
+  config: ClassifierConfig = DEFAULT_CLASSIFIER_CONFIG,
 ): ClassificationResult {
   if (config.mode === 'fast') {
     return {
-      mode: 'fast', confidence: 1.0, reasoning: 'Explicit fast mode',
-      complexityScore: 0, detectedPatterns: [],
-      isKorean: /[\uAC00-\uD7A3]/.test(query), isChinese: /[\u4E00-\u9FFF]/.test(query),
+      mode: 'fast',
+      confidence: 1.0,
+      reasoning: 'Explicit fast mode',
+      complexityScore: 0,
+      detectedPatterns: [],
+      isKorean: /[\uAC00-\uD7A3]/.test(query),
+      isChinese: /[\u4E00-\u9FFF]/.test(query),
     }
   }
   if (config.mode === 'pro') {
     return {
-      mode: 'pro', confidence: 1.0, reasoning: 'Explicit pro mode',
-      complexityScore: 1, detectedPatterns: ['explicit'],
-      isKorean: /[\uAC00-\uD7A3]/.test(query), isChinese: /[\u4E00-\u9FFF]/.test(query),
+      mode: 'pro',
+      confidence: 1.0,
+      reasoning: 'Explicit pro mode',
+      complexityScore: 1,
+      detectedPatterns: ['explicit'],
+      isKorean: /[\uAC00-\uD7A3]/.test(query),
+      isChinese: /[\u4E00-\u9FFF]/.test(query),
     }
   }
 
@@ -111,7 +122,7 @@ export function classifyQuery(
 export async function classifyWithAI(
   query: string,
   ai: unknown,
-  config: ClassifierConfig = DEFAULT_CLASSIFIER_CONFIG
+  config: ClassifierConfig = DEFAULT_CLASSIFIER_CONFIG,
 ): Promise<ClassificationResult> {
   if (!ai) {
     return classifyQuery(query, config)
@@ -148,10 +159,7 @@ export async function classifyWithAI(
 /**
  * Determine if a query should use Pro Search based on classification
  */
-export function shouldUseProSearch(
-  query: string,
-  config: ClassifierConfig = DEFAULT_CLASSIFIER_CONFIG
-): boolean {
+export function shouldUseProSearch(query: string, config: ClassifierConfig = DEFAULT_CLASSIFIER_CONFIG): boolean {
   const result = classifyQuery(query, config)
   return result.mode === 'pro'
 }

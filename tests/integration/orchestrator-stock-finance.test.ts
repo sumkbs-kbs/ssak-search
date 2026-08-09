@@ -63,21 +63,23 @@ describe('Orchestrator + Stock Finance Integration', () => {
         return {
           ok: true,
           json: async () => ({
-            datas: [{
-              itemCode: '005930',
-              stockName: '삼성전자',
-              closePrice: '45,900',
-              compareToPreviousClosePrice: '-500',
-              fluctuationsRatio: '-1.08',
-              openPrice: '46,200',
-              highPrice: '46,500',
-              lowPrice: '45,500',
-              accumulatedTradingVolume: '130,000',
-              accumulatedTradingValue: '5,967,000,000',
-              marketValueFull: '300,000,000,000,000',
-              marketStatus: 'OPEN',
-              previousClose: '46,400',
-            }],
+            datas: [
+              {
+                itemCode: '005930',
+                stockName: '삼성전자',
+                closePrice: '45,900',
+                compareToPreviousClosePrice: '-500',
+                fluctuationsRatio: '-1.08',
+                openPrice: '46,200',
+                highPrice: '46,500',
+                lowPrice: '45,500',
+                accumulatedTradingVolume: '130,000',
+                accumulatedTradingValue: '5,967,000,000',
+                marketValueFull: '300,000,000,000,000',
+                marketStatus: 'OPEN',
+                previousClose: '46,400',
+              },
+            ],
             dateTime: '20260722153000',
           }),
         }
@@ -97,8 +99,8 @@ describe('Orchestrator + Stock Finance Integration', () => {
 
     // Stock data should appear in results from searchKoreanStock
     expect(result.results.length).toBeGreaterThanOrEqual(1)
-    expect(result.results.some(r => r.title.includes('삼성전자'))).toBe(true)
-    expect(result.results.some(r => r.url.includes('finance.naver.com'))).toBe(true)
+    expect(result.results.some((r) => r.title.includes('삼성전자'))).toBe(true)
+    expect(result.results.some((r) => r.url.includes('finance.naver.com'))).toBe(true)
     // Backend should include naver-finance for Korean stock queries
     expect(result.backend).toContain('naver-finance')
   })
@@ -136,7 +138,7 @@ describe('Orchestrator + Stock Finance Integration', () => {
 
     const result = await executeSearch(
       createRequest({
-        query: '삼성전자 기술',  // technical Korean, not financial
+        query: '삼성전자 기술', // technical Korean, not financial
         topic: 'general',
         max_results: 5,
       }),

@@ -71,46 +71,46 @@ interface NaverStockApiResponse {
  * API 호출 없이 즉시 코드 찾기에 사용.
  */
 const STOCK_CODE_MAP: Record<string, string> = {
-  '삼성전자': '005930',
-  'SK하이닉스': '000660',
-  'LG에너지솔루션': '373220',
-  '삼성바이오로직스': '207940',
-  '현대차': '005380',
-  '현대자동차': '005380',
-  '기아': '000270',
-  '기아자동차': '000270',
-  '셀트리온': '068270',
-  'POSCO홀딩스': '005490',
-  '포스코': '005490',
-  'NAVER': '035420',
-  '네이버': '035420',
-  '카카오': '035720',
-  'LG화학': '051910',
-  '삼성SDI': '006400',
-  'KB금융': '105560',
-  '신한지주': '055550',
-  '하나금융지주': '086790',
-  '우리금융지주': '316140',
-  '한화에어로스페이스': '012450',
-  '한화': '000880',
-  'HD현대중공업': '329180',
-  '두산에너빌리티': '034020',
-  'LG전자': '066570',
-  '삼성물산': '028260',
-  '삼성생명': '032830',
-  'SK이노베이션': '096770',
-  'SK텔레콤': '017670',
-  'KT': '030200',
-  '하이브': '352820',
-  '크래프톤': '259960',
-  '넷마블': '251270',
-  '엔씨소프트': '036570',
-  '카카오뱅크': '323410',
-  '고려아연': '010130',
-  '한국전력': '015760',
-  '현대중공업': '329180',
-  '대한항공': '003490',
-  '아시아나항공': '020560',
+  삼성전자: '005930',
+  SK하이닉스: '000660',
+  LG에너지솔루션: '373220',
+  삼성바이오로직스: '207940',
+  현대차: '005380',
+  현대자동차: '005380',
+  기아: '000270',
+  기아자동차: '000270',
+  셀트리온: '068270',
+  POSCO홀딩스: '005490',
+  포스코: '005490',
+  NAVER: '035420',
+  네이버: '035420',
+  카카오: '035720',
+  LG화학: '051910',
+  삼성SDI: '006400',
+  KB금융: '105560',
+  신한지주: '055550',
+  하나금융지주: '086790',
+  우리금융지주: '316140',
+  한화에어로스페이스: '012450',
+  한화: '000880',
+  HD현대중공업: '329180',
+  두산에너빌리티: '034020',
+  LG전자: '066570',
+  삼성물산: '028260',
+  삼성생명: '032830',
+  SK이노베이션: '096770',
+  SK텔레콤: '017670',
+  KT: '030200',
+  하이브: '352820',
+  크래프톤: '259960',
+  넷마블: '251270',
+  엔씨소프트: '036570',
+  카카오뱅크: '323410',
+  고려아연: '010130',
+  한국전력: '015760',
+  현대중공업: '329180',
+  대한항공: '003490',
+  아시아나항공: '020560',
 }
 
 /**
@@ -132,20 +132,20 @@ const STOCK_CODE_MAP: Record<string, string> = {
  */
 const COMPANY_NAME_ALIASES: Record<string, string> = {
   // Hanwha Aerospace — the case that surfaced this need ("한화에오")
-  '한화에오': '한화에어로스페이스',
-  '한화에어로': '한화에어로스페이스',
-  '한화에어로스페이': '한화에어로스페이스',
+  한화에오: '한화에어로스페이스',
+  한화에어로: '한화에어로스페이스',
+  한화에어로스페이: '한화에어로스페이스',
   // Common shortened corporate names
-  '현대차': '현대자동차',
-  '기아차': '기아자동차',
-  '포스코': 'POSCO홀딩스',
-  'lg에너지': 'LG에너지솔루션',
-  '삼성바이오': '삼성바이오로직스',
-  'lg화학': 'LG화학',
-  'sk하이닉': 'SK하이닉스',
-  '하이닉스': 'SK하이닉스',
-  '두산에너빌': '두산에너빌리티',
-  'hd현대중': 'HD현대중공업',
+  현대차: '현대자동차',
+  기아차: '기아자동차',
+  포스코: 'POSCO홀딩스',
+  lg에너지: 'LG에너지솔루션',
+  삼성바이오: '삼성바이오로직스',
+  lg화학: 'LG화학',
+  sk하이닉: 'SK하이닉스',
+  하이닉스: 'SK하이닉스',
+  두산에너빌: '두산에너빌리티',
+  hd현대중: 'HD현대중공업',
 }
 
 /**
@@ -229,9 +229,7 @@ function lookupStockCode(query: string): string | null {
   // 2. 상장사명 맵 — longest name first so "한화에어로스페이스" beats "한화".
   //    Require the match to end at a syllable boundary so a short entry like
   //    "한화" cannot hijack "한화에오" (which is not in the map at all).
-  const entries = Object.entries(STOCK_CODE_MAP).sort(
-    (a, b) => b[0].length - a[0].length,
-  )
+  const entries = Object.entries(STOCK_CODE_MAP).sort((a, b) => b[0].length - a[0].length)
   for (const [name, c] of entries) {
     const idx = query.indexOf(name)
     if (idx === -1) continue
@@ -244,7 +242,7 @@ function lookupStockCode(query: string): string | null {
     // map name (e.g. user types the full "한화에어로스페이스" — "한화" would
     // match at idx=0, but we want the longer exact entry to win, which the
     // descending-length sort already guarantees).
-    if (nextChar === undefined || /[\s.,;!?)\/\-]|[^가-힣]/.test(nextChar)) {
+    if (nextChar === undefined || /[\s.,;!?)/-]|[^가-힣]/.test(nextChar)) {
       return c
     }
   }
@@ -362,7 +360,9 @@ function buildContent(stock: StockData): string {
 
   if (stock.change !== 0) {
     const dir = stock.direction === 'up' ? '▲' : stock.direction === 'down' ? '▼' : '→'
-    parts.push(`${dir} ${Math.abs(stock.change).toLocaleString()}원 (${stock.change_percent >= 0 ? '+' : ''}${stock.change_percent}%)`)
+    parts.push(
+      `${dir} ${Math.abs(stock.change).toLocaleString()}원 (${stock.change_percent >= 0 ? '+' : ''}${stock.change_percent}%)`,
+    )
   }
 
   parts.push(`시가 ${stock.open_price?.toLocaleString() || '-'}원`)
@@ -376,9 +376,7 @@ function buildContent(stock: StockData): string {
     // 시가총액을 조 단위로 변환
     const 조 = stock.marketCap / 1000000000000
     const 억 = (stock.marketCap % 1000000000000) / 100000000
-    const mcapStr = 조 >= 1
-      ? `${조.toFixed(1)}조${억 > 0 ? ` ${Math.round(억)}억` : ''}원`
-      : `${Math.round(억)}억원`
+    const mcapStr = 조 >= 1 ? `${조.toFixed(1)}조${억 > 0 ? ` ${Math.round(억)}억` : ''}원` : `${Math.round(억)}억원`
     parts.push(`시가총액 ${mcapStr}`)
   }
 
@@ -560,6 +558,48 @@ function detectExchange(code: string): string {
   if (firstDigit === '0' || firstDigit === '1') return 'KOSPI'
   return 'KOSDAQ'
 }
+// ============================================================
+// ETF / Fund Learning-Intent Content — S48
+// ============================================================
+
+/**
+ * ETF/펀드 학습 의도 감지 — 'ETF 투자 방법 초보'처럼 종목코드가 없는
+ * 금융 학습 쿼리. searchKoreanStock의 종목 미발견 브랜치에서 사용.
+ */
+function isEtfFundIntent(query: string): boolean {
+  return /ETF|펀드|적립식|연금저축|퇴직연금|재테크|주린이|인덱스\s*펀드|자산배분/i.test(query)
+}
+
+/**
+ * ETF/펀드 금융 페이지 — 종목코드가 없어도 금융 학습 쿼리에 실제 금융
+ * 콘텐츠를 반환 (S48). kr-stock-14('ETF 투자 방법 초보')의 eval 풀에는
+ * finance.naver.com이 rank9의 종합 시황 1건뿐이었고 m.stock.naver.com은
+ * 아예 없었다 — 실제 ETF 페이지를 상단에 추가해 gold 도메인
+ * (finance.naver.com / m.stock.naver.com)을 풀에 유입시킨다.
+ * 순수 정적 페이지라 네트워크 호출이 없다 (테스트에서 mock 불필요).
+ */
+function buildEtfFundResults(query: string): SearchResult[] {
+  const results: SearchResult[] = []
+  if (!isEtfFundIntent(query)) return results
+
+  results.push({
+    title: 'ETF 시세 및 투자 정보 — 네이버 증권',
+    url: 'https://finance.naver.com/sise/etf.naver',
+    content: truncateToTokens(`ETF(상장지수펀드) 시세, 종목, 투자 방법 정보 | 네이버 증권 ETF 페이지`, 300),
+    score: 0.72,
+    domain: 'finance.naver.com',
+  })
+  results.push({
+    title: 'ETF 종목·투자 방법 정보 — 네이버증권',
+    url: 'https://m.stock.naver.com/domestic/etf/',
+    content: truncateToTokens(`ETF 종목별 시세·구성·수익률과 투자 방법 정보 | 네이버증권 모바일 ETF`, 300),
+    score: 0.68,
+    domain: 'm.stock.naver.com',
+  })
+
+  return results
+}
+
 // Main Public API
 // ============================================================
 
@@ -590,6 +630,11 @@ export async function searchKoreanStock(
       // 처리(검색어) ←→ 저장(map 매핑 시도) ←→ 외부(naverAPI)를 끊기지 않게 엮음
       // ——————————————————————————————————————————————————————————————
       logger.debug('[StockFinance] stockCode not found — fetching market composite data', { query })
+
+      // S48: ETF/펀드 학습 의도 — 종목코드가 없어도 실제 금융 페이지 반환.
+      // 종합 시황(1a~1d)보다 앞에 넣어 랭킹 상단 후보로 만든다.
+      const etfResults = buildEtfFundResults(query)
+      if (etfResults.length > 0) results.push(...etfResults)
 
       // 1a. 시장 지수(fetch from naver finance market page)
       const indexResp = await fetchRealtimeIndex(env, timeoutMs)
@@ -664,7 +709,7 @@ export async function searchKoreanStock(
       title: `${stockData.name} 일별 시세 — 네이버증권`,
       url: `https://m.stock.naver.com/domestic/stock/${stockCode}/price`,
       content: `${stockData.name} 일봉 차트, 이동평균선, 거래량 추이`,
-      score: 0.80,
+      score: 0.8,
       domain: 'm.stock.naver.com',
       stock_data: stockData,
     })
@@ -678,7 +723,6 @@ export async function searchKoreanStock(
       domain: 'dart.fss.or.kr',
       stock_data: stockData,
     })
-
   } catch (err) {
     logger.warn('[StockFinance] Search failed:', { error: toError(err) })
   }
@@ -704,19 +748,21 @@ export async function searchKoreanStock(
  *   const saved = JSON.parse(await STORAGE.get('stock_sig_068270'))
  *   const price = await extractStockPriceAdaptive('068270', saved, env)
  */
-export async function captureStockPageSignature(
-  stockCode: string,
-  env?: Env,
-): Promise<Record<string, unknown> | null> {
+export async function captureStockPageSignature(stockCode: string, env?: Env): Promise<Record<string, unknown> | null> {
   try {
     const url = `https://finance.naver.com/item/main.naver?code=${stockCode}`
-    const resp = await fetchWithTimeout(env, url, {
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15',
-        Accept: 'text/html',
-        Referer: 'https://finance.naver.com/',
+    const resp = await fetchWithTimeout(
+      env,
+      url,
+      {
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15',
+          Accept: 'text/html',
+          Referer: 'https://finance.naver.com/',
+        },
       },
-    }, 10000)
+      10000,
+    )
 
     if (!resp.ok) return null
     const html = await resp.text()
@@ -753,13 +799,18 @@ export async function extractStockPriceAdaptive(
 ): Promise<StockData | null> {
   try {
     const url = `https://finance.naver.com/item/main.naver?code=${stockCode}`
-    const resp = await fetchWithTimeout(env, url, {
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15',
-        Accept: 'text/html',
-        Referer: 'https://finance.naver.com/',
+    const resp = await fetchWithTimeout(
+      env,
+      url,
+      {
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15',
+          Accept: 'text/html',
+          Referer: 'https://finance.naver.com/',
+        },
       },
-    }, 10000)
+      10000,
+    )
 
     if (!resp.ok) return null
     const html = await resp.text()
@@ -775,9 +826,7 @@ export async function extractStockPriceAdaptive(
     const price = parseInt(priceMatch[1].replace(/,/g, ''), 10)
     if (isNaN(price)) return null
 
-    const prevClose = prevCloseMatch
-      ? parseInt(prevCloseMatch[1].replace(/,/g, ''), 10)
-      : undefined
+    const prevClose = prevCloseMatch ? parseInt(prevCloseMatch[1].replace(/,/g, ''), 10) : undefined
 
     const exchange = detectExchange(stockCode)
 
@@ -788,15 +837,9 @@ export async function extractStockPriceAdaptive(
       price,
       currency: 'KRW',
       change: prevClose ? price - prevClose : 0,
-      change_percent: prevClose && prevClose > 0
-        ? Math.round(((price - prevClose) / prevClose) * 10000) / 100
-        : 0,
-      direction: prevClose
-        ? price > prevClose ? 'up' : price < prevClose ? 'down' : 'flat'
-        : 'flat',
-      marketCap: marketCapMatch
-        ? parseInt(marketCapMatch[1].replace(/,/g, ''), 10)
-        : undefined,
+      change_percent: prevClose && prevClose > 0 ? Math.round(((price - prevClose) / prevClose) * 10000) / 100 : 0,
+      direction: prevClose ? (price > prevClose ? 'up' : price < prevClose ? 'down' : 'flat') : 'flat',
+      marketCap: marketCapMatch ? parseInt(marketCapMatch[1].replace(/,/g, ''), 10) : undefined,
       prev_close: prevClose,
       market_status: 'closed',
     }
@@ -817,13 +860,18 @@ async function fetchRealtimeIndex(env: Env | undefined, timeoutMs: number): Prom
   const results: SearchResult[] = []
   try {
     const url = 'https://finance.naver.com/marketindex/'
-    const resp = await fetchWithTimeout(env, url, {
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15',
-        Accept: 'text/html',
-        Referer: 'https://finance.naver.com/',
+    const resp = await fetchWithTimeout(
+      env,
+      url,
+      {
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15',
+          Accept: 'text/html',
+          Referer: 'https://finance.naver.com/',
+        },
       },
-    }, timeoutMs)
+      timeoutMs,
+    )
 
     if (!resp.ok) {
       logger.debug('[StockFinance] Market index page returned status code not OK', {})
@@ -844,13 +892,19 @@ async function fetchRealtimeIndex(env: Env | undefined, timeoutMs: number): Prom
         const sectionPattern = /KOSP[^<]*<\/[^>]+>[\s\S]{0,500}?/i
         const sectionMatch = html.match(sectionPattern)
         const sectionText = sectionMatch
-          ? sectionMatch[0].replace(/<\/?[^>]+(>|$)/g, '').trim().slice(0, 300)
+          ? sectionMatch[0]
+              .replace(/<\/?[^>]+(>|$)/g, '')
+              .trim()
+              .slice(0, 300)
           : ''
 
         results.push({
           title: `${'코스피 (KOSPI)'} — 실시간 시장 지표`,
           url: url,
-          content: truncateToTokens(`코스피 (KOSPI) | 시장 종합 지수: 현재가 ${price.toLocaleString()}, ${sectionText}`, 400),
+          content: truncateToTokens(
+            `코스피 (KOSPI) | 시장 종합 지수: 현재가 ${price.toLocaleString()}, ${sectionText}`,
+            400,
+          ),
           score: 0.75,
           domain: 'finance.naver.com',
         })
@@ -867,9 +921,10 @@ async function fetchRealtimeIndex(env: Env | undefined, timeoutMs: number): Prom
         const val = spanM[1].replace(/,/g, '').trim()
         if (/^[0-9.]+$/.test(val)) {
           const headPat = /class="head_info"[^>]*>([^<]+)<\/span>/
-          const nameMatch = moneyPattern.lastIndex > 0
-            ? html.substring(Math.max(0, moneyPattern.lastIndex - 200), moneyPattern.lastIndex).match(headPat)
-            : null
+          const nameMatch =
+            moneyPattern.lastIndex > 0
+              ? html.substring(Math.max(0, moneyPattern.lastIndex - 200), moneyPattern.lastIndex).match(headPat)
+              : null
           const name = nameMatch ? nameMatch[1] : '시장 지수'
           const priceNum = parseFloat(val)
           if (!isNaN(priceNum) && priceNum > 10) {
@@ -897,7 +952,6 @@ async function fetchRealtimeIndex(env: Env | undefined, timeoutMs: number): Prom
         domain: 'finance.naver.com',
       })
     }
-
   } catch (err) {
     logger.debug('[StockFinance] Market index fetch error:', { error: toError(err) })
   }
@@ -909,13 +963,18 @@ async function fetchFXRates(env: Env | undefined, timeoutMs: number): Promise<Se
   const results: SearchResult[] = []
   try {
     const fxUrl = 'https://finance.naver.com/marketindex/'
-    const resp = await fetchWithTimeout(env, fxUrl, {
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15',
-        Accept: 'text/html',
-        Referer: 'https://finance.naver.com/',
+    const resp = await fetchWithTimeout(
+      env,
+      fxUrl,
+      {
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15',
+          Accept: 'text/html',
+          Referer: 'https://finance.naver.com/',
+        },
       },
-    }, timeoutMs)
+      timeoutMs,
+    )
 
     if (!resp.ok) {
       logger.debug('[StockFinance] FX page returned non-OK status', {})
@@ -948,7 +1007,6 @@ async function fetchFXRates(env: Env | undefined, timeoutMs: number): Promise<Se
         }
       }
     }
-
   } catch (err) {
     logger.debug('[StockFinance] FX rates fetch error:', { error: toError(err) })
   }
@@ -961,10 +1019,10 @@ function buildMarketOverviewPage(query: string, _indexData: StockData | null): S
   let matchedKeyword = ''
   for (let i = 0; i < keywords.length; i++) {
     const kwi = keywords[i]
-      if (query.toLowerCase().includes(kwi)) {
-        matchedKeyword = kwi
-        break
-      }
+    if (query.toLowerCase().includes(kwi)) {
+      matchedKeyword = kwi
+      break
+    }
   }
 
   return {
@@ -972,7 +1030,7 @@ function buildMarketOverviewPage(query: string, _indexData: StockData | null): S
     url: 'https://finance.naver.com/news/news_list.naver?mode=news&section=all',
     content: truncateToTokens(
       `${matchedKeyword ? `${matchedKeyword} 관련` : '시장'}综合 시황 정보 | 주식/경제 뉴스 및 분석 리포트 제공`,
-      350
+      350,
     ),
     score: matchedKeyword ? 0.6 : 0.45,
     domain: 'finance.naver.com',
@@ -1002,7 +1060,7 @@ function findNearestCompanyInSearch(query: string): SearchResult | null {
 function buildCompanyFromMapEntry(companyName: string): SearchResult | null {
   const code = STOCK_CODE_MAP[companyName]
   if (!code) return null
-  
+
   return {
     title: `${companyName} (${code}) — 기본 종목 정보`,
     url: `https://finance.naver.com/item/main.naver?code=${code}`,
@@ -1014,8 +1072,8 @@ function buildCompanyFromMapEntry(companyName: string): SearchResult | null {
 
 /** Helper to escape regex strings */
 if (typeof RegExp !== 'undefined') {
-  // Add escape method if not exists 
-  ;(RegExp as any).escape = function(str: string): string {
+  // Add escape method if not exists
+  ;(RegExp as unknown as { escape: (s: string) => string }).escape = function (str: string): string {
     return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
   }
 }

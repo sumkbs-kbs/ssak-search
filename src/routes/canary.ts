@@ -31,10 +31,7 @@ canaryRoute.get('/', async (c) => {
 
   const orchestrator = getCanaryOrchestrator(c.env)
   if (!orchestrator) {
-    return c.json<ErrorResponse>(
-      { detail: 'CANARY_DO binding is not configured.', code: 'binding_missing' },
-      500,
-    )
+    return c.json<ErrorResponse>({ detail: 'CANARY_DO binding is not configured.', code: 'binding_missing' }, 500)
   }
 
   const result = await orchestrator.runCanary()

@@ -7,12 +7,7 @@
 
 import type { SearchStrategy } from './types'
 import type { BackendTask, SearchContext } from '../context'
-import {
-  buildBingModifiedTask,
-  buildBingYouTubeTask,
-  buildWikipediaTask,
-  buildYoutubeTask,
-} from '../backend-tasks'
+import { buildBingModifiedTask, buildBingYouTubeTask, buildWikipediaTask, buildYoutubeTask } from '../backend-tasks'
 
 export class VideoStrategy implements SearchStrategy {
   readonly focus = 'video' as const

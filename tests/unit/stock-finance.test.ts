@@ -21,22 +21,24 @@ globalThis.fetch = mockFetch
 
 function makeNaverApiResponse(overrides: Partial<Record<string, string>> = {}) {
   return {
-    datas: [{
-      itemCode: '005930',
-      stockName: '삼성전자',
-      closePrice: '45,900',
-      compareToPreviousClosePrice: '-500',
-      fluctuationsRatio: '-1.08',
-      openPrice: '46,200',
-      highPrice: '46,500',
-      lowPrice: '45,500',
-      accumulatedTradingVolume: '130,000',
-      accumulatedTradingValue: '5,967,000,000',
-      marketValueFull: '300,000,000,000,000',
-      marketStatus: 'OPEN',
-      previousClose: '46,400',
-      ...overrides,
-    }],
+    datas: [
+      {
+        itemCode: '005930',
+        stockName: '삼성전자',
+        closePrice: '45,900',
+        compareToPreviousClosePrice: '-500',
+        fluctuationsRatio: '-1.08',
+        openPrice: '46,200',
+        highPrice: '46,500',
+        lowPrice: '45,500',
+        accumulatedTradingVolume: '130,000',
+        accumulatedTradingValue: '5,967,000,000',
+        marketValueFull: '300,000,000,000,000',
+        marketStatus: 'OPEN',
+        previousClose: '46,400',
+        ...overrides,
+      },
+    ],
     dateTime: '20260722153000',
   }
 }
@@ -61,6 +63,44 @@ describe('searchKoreanStock', () => {
     const results = await searchKoreanStock('unknownstockname', { maxResults: 5 })
     expect(results.length).toBeGreaterThanOrEqual(1)
     expect(results[0].title).toContain('시황')
+  })
+
+  it('returns ETF finance pages for ETF learning intent (S48)', async () => {
+    // kr-stock-14 ('ETF 투자 방법 초보'): lookupStockCode finds no ticker and
+    // the composite path used to return only generic 시황 pages — no
+    // m.stock.naver.com at all, finance.naver.com buried at rank 9. The S48
+    // ETF branch adds real ETF pages FIRST (network-free, so the mocked fetch
+    // returning undefined just makes the composite fetch fail gracefully).
+    const { searchKoreanStock } = await import('../../src/lib/stock-finance')
+    const results = await searchKoreanStock('ETF 투자 방법 초보', { maxResults: 5 })
+    const etfNaver = results.find((r) => r.url.includes('etf.naver'))
+    const etfMobile = results.find((r) => r.domain === 'm.stock.naver.com')
+    expect(etfNaver).toBeTruthy()
+    expect(etfNaver!.domain).toBe('finance.naver.com')
+    expect(etfMobile).toBeTruthy()
+    // ETF pages lead the results — pushed before the generic 시황 fallback
+    expect(results[0].url).toContain('etf.naver')
+    expect(results[1].domain).toBe('m.stock.naver.com')
+  })
+
+  it('returns ETF pages for fund learning intent variants (S48)', async () => {
+    const { searchKoreanStock } = await import('../../src/lib/stock-finance')
+    const results = await searchKoreanStock('펀드 투자 처음 시작하는 법', { maxResults: 5 })
+    expect(results.some((r) => r.domain === 'finance.naver.com' && r.url.includes('etf.naver'))).toBe(true)
+  })
+
+  it('does NOT add ETF pages for non-finance queries (S48 guard)', async () => {
+    const { searchKoreanStock } = await import('../../src/lib/stock-finance')
+    const results = await searchKoreanStock('주말 등산 코스 추천', { maxResults: 5 })
+    expect(results.some((r) => r.url.includes('etf.naver'))).toBe(false)
+  })
+
+  it('does NOT add ETF pages when a stock IS resolved (S48 guard)', async () => {
+    const { searchKoreanStock } = await import('../../src/lib/stock-finance')
+    mockFetch.mockResolvedValueOnce({ ok: true, json: async () => makeNaverApiResponse() })
+    const results = await searchKoreanStock('삼성전자 주가', { maxResults: 5 })
+    expect(results.some((r) => r.url.includes('etf.naver'))).toBe(false)
+    expect(results[0].title).toContain('삼성전자')
   })
 
   it('returns results for known stock via stock code', async () => {
@@ -131,7 +171,9 @@ describe('searchKoreanStock', () => {
 
     mockFetch.mockResolvedValueOnce({
       ok: true,
-      json: async () => { throw new Error('Invalid JSON') },
+      json: async () => {
+        throw new Error('Invalid JSON')
+      },
     })
 
     const results = await searchKoreanStock('005930', { maxResults: 5 })
@@ -209,11 +251,12 @@ describe('searchKoreanStock', () => {
 
     mockFetch.mockResolvedValueOnce({
       ok: true,
-      json: async () => makeNaverApiResponse({
-        closePrice: '70,000',
-        compareToPreviousClosePrice: '+1,000',
-        fluctuationsRatio: '+1.45',
-      }),
+      json: async () =>
+        makeNaverApiResponse({
+          closePrice: '70,000',
+          compareToPreviousClosePrice: '+1,000',
+          fluctuationsRatio: '+1.45',
+        }),
     })
 
     const results = await searchKoreanStock('005930', { maxResults: 5 })
@@ -320,5 +363,3 @@ describe('expandCompanyAlias', () => {
     expect(expandCompanyAlias('한화에오엔진')).toBe('한화에오엔진')
   })
 })
-
-

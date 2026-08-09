@@ -27,10 +27,7 @@ const MIN_RESULTS = 2
  * Ranking-pipeline step: filter → recompute → boost → LTR → sort → threshold.
  * Inserts after applyDomainBoosting() in applyRankingPipeline().
  */
-export async function applyLtrRanking(
-  results: SearchResult[],
-  ctx: SearchContext,
-): Promise<SearchResult[]> {
+export async function applyLtrRanking(results: SearchResult[], ctx: SearchContext): Promise<SearchResult[]> {
   const sidecarUrl = ctx.env?.SIDECAR_RERANK_URL
   if (!sidecarUrl || results.length < MIN_RESULTS) return results
 

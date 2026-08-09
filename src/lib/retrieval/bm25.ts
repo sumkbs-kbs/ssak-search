@@ -482,6 +482,28 @@ export class BM25Scorer {
 }
 
 // ============================================================
+// Test/simulation hook
+// ============================================================
+
+/**
+ * Default title field weight used by bm25Score when the caller omits it.
+ * Exposed so simulation scripts (scripts/sim-wave1-accuracy.ts) and unit tests
+ * can attribute NDCG deltas to the field-weighting lever without threading a
+ * parameter through every call site. Mirrors the __resetClientRateLimitForTests
+ * hook pattern. Default 2 ≈ the pre-Wave-1 "title counted twice in tf".
+ */
+let defaultTitleWeight = 2
+/**
+ * Override the bm25Score default title weight. Used ONLY by the Wave 1
+ * simulation script (scripts/sim-wave1-accuracy.ts) and unit tests to
+ * attribute NDCG deltas to the field-weighting lever. Callers MUST reset to 2
+ * (or set explicitly per call) — the module default persists for the isolate.
+ */
+export function setBm25TitleWeight(weight: number): void {
+  defaultTitleWeight = weight
+}
+
+// ============================================================
 // Convenience function
 // ============================================================
 
@@ -492,18 +514,39 @@ export class BM25Scorer {
  *
  * This is a simplified version that doesn't need full corpus stats.
  */
-export function bm25Score(query: string, title: string, content: string, avgDocLen: number = 200): number {
+export function bm25Score(
+  query: string,
+  title: string,
+  content: string,
+  avgDocLen: number = 200,
+  titleWeight: number = defaultTitleWeight,
+): number {
   const queryTerms = tokenize(query)
   if (queryTerms.length === 0) return 0.5
 
-  const docText = (title + ' ' + content + ' ' + title).toLowerCase() // boost title
+  const titleLower = title.toLowerCase()
+  const contentLower = content.toLowerCase()
+  // Field-weighted tf: titleWeight × title tf + content tf. The OLD code
+  // achieved the title boost by concatenating "title + content + title" (2×
+  // title tf) while counting the title only ONCE in the length normalization
+  // below — field separation reproduces that exact contract at titleWeight=2
+  // (the default) and lets the weight be tuned explicitly beyond it. docLen
+  // intentionally counts the title ONCE (like the old code) so a larger
+  // titleWeight strengthens the title signal without renormalizing the scale
+  // (a scale shift would move results across the quality threshold tiers).
+  // docLen counts split tokens WITHOUT filtering empties, exactly like the
+  // pre-Wave-1 code (content.split(/\s+/).length + title.split(/\s+/).length)
+  // — a filter(Boolean) would change docLen for whitespace-heavy titles and
+  // shift results across the quality-threshold tiers for no NDCG gain.
   const docLen = content.split(/[\s]+/).length + title.split(/[\s]+/).length
 
   let score = 0
   let matchedTerms = 0
 
   for (const term of queryTerms) {
-    const tf = termFrequency(term, docText)
+    const tfTitle = termFrequency(term, titleLower)
+    const tfContent = termFrequency(term, contentLower)
+    const tf = titleWeight * tfTitle + tfContent
     if (tf === 0) continue
 
     // Simplified IDF: assume each term appears in ~10% of documents
@@ -520,7 +563,12 @@ export function bm25Score(query: string, title: string, content: string, avgDocL
 
   if (matchedTerms === 0) return 0.01
 
-  // Normalize by max possible score (all terms matched once)
+  // Normalize by max possible score with tf=1 (the ORIGINAL contract). The
+  // titleWeight affects ONLY the numerator tf — keeping the normalization
+  // denominator fixed means titleWeight=2 (the default) reproduces the
+  // pre-Wave-1 score EXACTLY (title counted 2× in tf, 1× in docLen, tf=1 in
+  // maxScore), so the default is a zero-regression baseline and the weight is
+  // a pure title-emphasis dial (higher = title matches dominate more).
   const maxScore =
     queryTerms.length *
     Math.log((1000 - 100 + 0.5) / (100 + 0.5) + 1) *

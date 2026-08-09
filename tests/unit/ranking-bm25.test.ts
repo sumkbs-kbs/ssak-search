@@ -29,6 +29,8 @@ import {
   freshnessBlendKey,
   NEWS_FRESHNESS_WEIGHT,
   DEFAULT_FRESHNESS_WEIGHT,
+  TITLE_WEIGHT_NON_TECHNICAL,
+  TITLE_WEIGHT_TECHNICAL,
 } from '../../src/lib/search/ranking'
 import { bm25Score } from '../../src/lib/retrieval/bm25'
 import { computeScore } from '../../src/lib/util'
@@ -323,6 +325,98 @@ describe('hybridScore', () => {
 })
 
 // ============================================================
+// Wave 1 — context-gated BM25 title-field weight (AGGRESSIVE plan, A2)
+// ============================================================
+
+describe('Wave 1 title-weight gate', () => {
+  it('hybridScore without a weight uses the bm25 module default (2)', () => {
+    // No titleWeight arg → bm25Score(query, title, content) with its default.
+    // Assert the full blend math so the default path is actually verified.
+    const query = 'react hooks'
+    const title = 'React Hooks Guide'
+    const content = 'react hooks content'
+    const url = 'https://x.com'
+    const expectedBm25 = bm25Score(query, title, content)
+    const expectedHeuristic = computeScore(title, content, query, undefined, url)
+    const actual = hybridScore(query, title, content, undefined, url)
+    const expected = Math.max(0, Math.min(1, 0.7 * expectedBm25 + 0.3 * expectedHeuristic))
+    if (expectedBm25 > 0.02 || expectedHeuristic > 0.05) {
+      expect(actual).toBeCloseTo(expected, 5)
+    } else {
+      expect(actual).toBe(0.01)
+    }
+  })
+
+  it('recomputeScores uses TITLE_WEIGHT_NON_TECHNICAL (3) for non-technical contexts', () => {
+    const ctx = makeCtx({ query: 'react hooks tutorial', queryType: 'general' as never })
+    const result = makeResult({
+      title: 'React Hooks Tutorial — complete guide',
+      url: 'https://react.dev/hooks',
+      content: 'Learn react hooks with this tutorial',
+    })
+    const [r] = recomputeScores([result], ctx)
+    const expected = hybridScore(
+      ctx.query,
+      result.title,
+      result.content,
+      result.published_date,
+      result.url,
+      TITLE_WEIGHT_NON_TECHNICAL,
+    )
+    expect(r.score).toBeCloseTo(expected, 5)
+  })
+
+  it('recomputeScores uses TITLE_WEIGHT_TECHNICAL (2) for technical contexts', () => {
+    const ctx = makeCtx({ query: 'react hooks tutorial', queryType: 'technical' as never })
+    const result = makeResult({
+      // Neutral URL — react.dev carries a +0.12 TECH_DOCS authority bonus in
+      // technical context that would clamp 0.99 → 1.0 and hide the weight math.
+      title: 'React Hooks Tutorial — complete guide',
+      url: 'https://blog.example.com/react-hooks',
+      content: 'Learn react hooks with this tutorial',
+    })
+    const [r] = recomputeScores([result], ctx)
+    const expected = hybridScore(
+      ctx.query,
+      result.title,
+      result.content,
+      result.published_date,
+      result.url,
+      TITLE_WEIGHT_TECHNICAL,
+    )
+    expect(r.score).toBeCloseTo(expected, 5)
+  })
+
+  it('technical vs general scores differ for a title-dominant result (weight gate has an effect)', () => {
+    const title = 'React Hooks Tutorial — complete guide'
+    const content = 'Learn react hooks with this tutorial'
+    const wTech = hybridScore('react hooks', title, content, undefined, 'https://x.com', TITLE_WEIGHT_TECHNICAL)
+    const wDef = hybridScore('react hooks', title, content, undefined, 'https://x.com', TITLE_WEIGHT_NON_TECHNICAL)
+    // titleWeight 3 emphasizes the title match MORE than 2 → higher BM25 share
+    expect(wDef).toBeGreaterThanOrEqual(wTech)
+  })
+
+  it('recomputeScores titleWeightOverride is honored (simulation/baseline path)', () => {
+    const ctx = makeCtx({ query: 'react hooks', queryType: 'general' as never })
+    const result = makeResult({
+      title: 'React Hooks Guide',
+      url: 'https://react.dev/hooks',
+      content: 'react hooks usage patterns',
+    })
+    const [r] = recomputeScores([result], ctx, TITLE_WEIGHT_TECHNICAL)
+    const expected = hybridScore(
+      ctx.query,
+      result.title,
+      result.content,
+      result.published_date,
+      result.url,
+      TITLE_WEIGHT_TECHNICAL,
+    )
+    expect(r.score).toBeCloseTo(expected, 5)
+  })
+})
+
+// ============================================================
 // recomputeScores — search context + authority bonus
 // ============================================================
 
@@ -428,7 +522,16 @@ describe('recomputeScores', () => {
       })
 
       const [r] = recomputeScores([result], ctx)
-      const base = hybridScore(ctx.query, result.title, result.content, result.published_date, result.url)
+      // Wave 1: general ctx uses the default title weight (3) — match it in the
+      // expected baseline so the authority math stays the thing under test.
+      const base = hybridScore(
+        ctx.query,
+        result.title,
+        result.content,
+        result.published_date,
+        result.url,
+        TITLE_WEIGHT_NON_TECHNICAL,
+      )
       expect(r.score).toBeCloseTo(Math.max(0, Math.min(1, base - 0.15)), 5)
     })
 

@@ -7,6 +7,7 @@
  */
 
 import { describe, it, expect } from 'vitest'
+import type { Env } from '../../src/types'
 import { computeBm25Score, computeRrfScore, escapeRegex } from '../../src/lib/index/pipeline'
 
 // ============================================================
@@ -271,7 +272,9 @@ describe('searchIndex export', () => {
 
   it('searchIndexPaginated returns empty when no bindings configured', async () => {
     const { searchIndexPaginated } = await import('../../src/lib/index/pipeline')
-    const result = await searchIndexPaginated({} as any, { query: 'test' })
+    // S70: same `{} as unknown as Env` cast as eval/runner-self.ts — the empty
+    // env is deliberate here (verifying the graceful no-bindings path).
+    const result = await searchIndexPaginated({} as unknown as Env, { query: 'test' })
     expect(result.results).toEqual([])
     expect(result.total).toBe(0)
     expect(result.page).toBe(1)

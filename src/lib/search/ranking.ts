@@ -19,6 +19,7 @@ import { domainMatches, computeScore, timeRangeToDays } from '../util'
 import { bm25Score, tokenize as bm25Tokenize } from '../retrieval/bm25'
 import { logger, toError } from '../logger'
 import { applyLtrRanking } from '../ltr/ranker'
+import { expandQuery } from '../understanding/query-expander'
 
 /**
  * Apply domain include/exclude and time-range filters.
@@ -657,6 +658,64 @@ function getDomainAuthorityBonus(url: string, ctx: SearchContext, fallbackDomain
  * Returns 0.01 (last-resort tier of quality threshold) when BM25 returns
  * no matches AND the heuristic is also weak, so callers can fall through
  * to the adaptive threshold tiers.
+ *//**
+ * Non-technical BM25 title-field weight used by hybridScore via
+ * recomputeScores. The value 3 is the Wave 1 (AGGRESSIVE plan, A2)
+ * data-driven result: title matches carry strong intent for news/financial/
+ * factual queries, so emphasizing them lifts NDCG (sim 2026-08-09: en-news
+ * +0.18, kr-fin +0.10, kr-tech +0.09 cumulative). Technical queries stay at
+ * TITLE_WEIGHT_TECHNICAL (2) — short repo names saturate, so extra title
+ * emphasis HURTS (en-tech -0.10 at weight 3).
+ *
+ * NOTE: this is the RANKING context default, distinct from bm25Score's own
+ * module default (2, via setBm25TitleWeight) — callers that invoke
+ * hybridScore without a weight get the bm25 module default.
+ */
+export const TITLE_WEIGHT_NON_TECHNICAL = 3
+/** Technical queries keep the pre-Wave-1 weight (short repo titles). */
+export const TITLE_WEIGHT_TECHNICAL = 2
+
+/**
+ * Query-expansion match bonus — Wave 2 (AGGRESSIVE plan, A3).
+ *
+ * expandedTerms are cross-language/abbreviation expansions of the query (see
+ * query-expander.ts). A result containing an expanded term earns a bounded
+ * bonus. This is a SEPARATE signal from BM25 (which cannot match CJK bigrams
+ * against English content — the kr/ja/zh tech gold gap) so it is bounded to
+ * break ties/near-ties, mirroring the freshness blend (S11) and the Wave 1
+ * title-weight philosophy: it must never flip a keyword-saturated 0.99
+ * snippet, only lift a gold page that the raw query under-matches.
+ * Title matches count double (title carries the compressed intent).
+ */
+const EXPANSION_MATCH_BOOST = 0.02
+const EXPANSION_MATCH_BOOST_CAP = 0.05
+
+export function expansionMatchBoost(
+  title: string,
+  content: string,
+  expandedTerms: readonly string[] | undefined,
+): number {
+  if (!expandedTerms || expandedTerms.length === 0) return 0
+  const titleLower = title.toLowerCase()
+  const contentLower = content.toLowerCase()
+  let boost = 0
+  for (const raw of expandedTerms) {
+    if (!raw || raw.length < 2) continue
+    const term = raw.toLowerCase()
+    if (titleLower.includes(term)) boost += EXPANSION_MATCH_BOOST * 2
+    else if (contentLower.includes(term)) boost += EXPANSION_MATCH_BOOST
+    if (boost >= EXPANSION_MATCH_BOOST_CAP) break
+  }
+  return Math.min(boost, EXPANSION_MATCH_BOOST_CAP)
+}
+
+/**
+ * Hybrid score — BM25 + heuristic blend, plus an optional query-expansion
+ * boost.
+ *
+ * `titleWeight` and `expandedTerms` are optional so the blend-math unit test
+ * and other callers keep working unchanged; recomputeScores passes the
+ * context-gated weight and the expanded terms.
  */
 export function hybridScore(
   query: string,
@@ -664,10 +723,12 @@ export function hybridScore(
   content: string,
   publishedDate: string | undefined,
   url: string,
+  titleWeight?: number,
+  expandedTerms?: readonly string[],
 ): number {
   let bm25 = 0
   try {
-    bm25 = bm25Score(query, title, content)
+    bm25 = bm25Score(query, title, content, 200, titleWeight)
   } catch (err) {
     logger.warn('[ranking] bm25Score threw, falling back to heuristic-only:', { error: toError(err) })
     bm25 = 0
@@ -682,10 +743,18 @@ export function hybridScore(
   }
 
   const blended = 0.7 * bm25 + 0.3 * heuristic
+  const expansion = expansionMatchBoost(title, content, expandedTerms)
 
-  if (bm25 <= 0.02 && heuristic <= 0.05) return 0.01
+  // Both-signal floor. The expansion boost must be computed BEFORE this check:
+  // a pure-CJK query ('상태관리 방법') against an English gold page scores
+  // bm25 ≈ 0.01 + low heuristic (cross-language penalty) → the OLD ordering
+  // returned 0.01 and the expansion boost — the exact signal built for this
+  // case — never fired (review Wave 2, 2026-08-09). A positive expansion match
+  // means the gold page DOES carry the query's semantic terms, so it clears
+  // the floor.
+  if (expansion <= 0 && bm25 <= 0.02 && heuristic <= 0.05) return 0.01
 
-  return Math.max(0, Math.min(1, blended))
+  return Math.max(0, Math.min(1, blended + expansion))
 }
 
 /**
@@ -696,7 +765,16 @@ export function hybridScore(
  * Stock-data branch is preserved — Naver finance results carry hand-tuned
  * scores from searchKoreanStock that should not be overwritten by BM25.
  */
-export function recomputeScores(results: SearchResult[], ctx: SearchContext): SearchResult[] {
+export function recomputeScores(
+  results: SearchResult[],
+  ctx: SearchContext,
+  titleWeightOverride?: number,
+): SearchResult[] {
+  // Wave 2 (A3): cross-language / abbreviation query expansion, computed ONCE
+  // per query (not per result) — dictionary scans are cheap but pointless to
+  // repeat for every pool item (review Wave 2, 2026-08-09). expandQuery()
+  // returns [] when the module hook is disabled or the query has no matches.
+  const expandedTerms = expandQuery(ctx.query)
   return results.map((r) => {
     const authorityBonus = getDomainAuthorityBonus(r.url, ctx, r.domain)
     const clamp = (v: number): number => Math.max(0, Math.min(1, v))
@@ -711,7 +789,15 @@ export function recomputeScores(results: SearchResult[], ctx: SearchContext): Se
       }
     }
 
-    const baseScore = hybridScore(ctx.query, r.title, r.content, r.published_date, r.url)
+    // Wave 1 (A2): context-gated BM25 title-field weight. Technical queries
+    // stay at the pre-Wave-1 weight (short repo titles saturate — weight 3
+    // regressed en-tech -0.10 in the 2026-08-09 pool simulation); all other
+    // contexts use 3 (title matches carry intent for news/financial/factual).
+    // titleWeightOverride exists for the Wave 1 simulation script (baseline
+    // comparison = old fixed weight 2) and unit tests.
+    const titleWeight =
+      titleWeightOverride ?? (ctx.queryType === 'technical' ? TITLE_WEIGHT_TECHNICAL : TITLE_WEIGHT_NON_TECHNICAL)
+    const baseScore = hybridScore(ctx.query, r.title, r.content, r.published_date, r.url, titleWeight, expandedTerms)
 
     // Reserve headroom when a POSITIVE bonus exists. Without this, a saturated
     // base (0.99, routine since computeScore caps at 0.99) plus a +0.15 bonus

@@ -1,19 +1,8 @@
 // S68: recompute the median NDCG@10 of the fresh eval run-1..3 pools under the
 // CURRENT gold (S54 path — the same recompute the S58 gate uses), and report
 // the wikipedia-missing subset (availability-attributable pool degradation).
-import { readFileSync } from 'fs'
 import { computeNdcg, loadGoldStandards } from '../eval/metrics'
-import type { SearchResult } from '../src/types'
-
-interface StoredQuery {
-  query: { id: string }
-  response: { results: SearchResult[] } | null
-  backends?: string[]
-}
-interface StoredReport {
-  results?: StoredQuery[]
-  report?: { results?: StoredQuery[] }
-}
+import { parseRunFiles } from '../eval/run-files'
 
 const gold = loadGoldStandards()
 function median(xs: number[]): number {
@@ -25,9 +14,10 @@ function median(xs: number[]): number {
 const perQuery: Record<string, number[]> = {}
 const wikiMissing: Record<string, number> = {}
 let runs = 0
-for (const n of [1, 2, 3]) {
-  const r = JSON.parse(readFileSync(`eval/results/run-${n}.json`, 'utf8')) as StoredReport
-  const results = r.report?.results ?? r.results ?? []
+// S86h: shared single-parse loader — the legacy bare-file branch is dropped
+// (the gate only accepts report-shaped artifacts).
+for (const rf of parseRunFiles('eval')) {
+  const results = rf.report.results ?? []
   runs++
   for (const q of results) {
     const pool = q?.response?.results

@@ -2,26 +2,18 @@
 // run-1..3 is an independent single-run snapshot; recomputing NDCG@10 under
 // the CURRENT gold (S54 path) and diffing run-vs-run shows how often pure run
 // noise would trip the -0.05 gate (diffBaseline's ndcgAt10 threshold).
-import { readFileSync } from 'fs'
 import { computeNdcg, loadGoldStandards } from '../eval/metrics'
+import { parseRunFiles } from '../eval/run-files'
 import type { SearchResult } from '../src/types'
-
-interface StoredQuery {
-  query: { id: string }
-  response: { results: SearchResult[] } | null
-  backends?: string[]
-}
-interface StoredReport {
-  results?: StoredQuery[]
-  report?: { results?: StoredQuery[] }
-}
 
 const gold = loadGoldStandards()
 type Pool = { id: string; results: SearchResult[]; hasWiki: boolean }
+// S86h: shared single-parse loader. The gate (parseEvalArtifacts) only accepts
+// report-shaped artifacts, so the legacy `r.results ??` bare-file branch and
+// the StoredQuery/StoredReport interfaces are gone.
 const runs: Record<number, Pool[]> = {}
-for (const n of [1, 2, 3]) {
-  const r = JSON.parse(readFileSync(`eval/results/run-${n}.json`, 'utf8')) as StoredReport
-  runs[n] = (r.results ?? r.report?.results ?? [])
+for (const rf of parseRunFiles('eval')) {
+  runs[rf.run] = (rf.report.results ?? [])
     .filter((q) => q?.query?.id && Array.isArray(q?.response?.results))
     .map((q) => ({
       id: q.query.id,

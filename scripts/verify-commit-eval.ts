@@ -35,7 +35,7 @@
  * import — S54/S58-style re-scoring of historical artifacts under current
  * rules (the commit's own copy of the gate code, if any, is not consulted).
  */
-import { readFileSync, readdirSync, existsSync } from 'node:fs'
+import { existsSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import type { EvalReport, EvalQuery, EvalBaseline, RegressionDiff } from '../eval/types'
 import { computeMedianReport } from '../eval/median'
@@ -53,56 +53,29 @@ export interface GateOptions {
   gold?: Record<string, string[]>
 }
 
-/** Load run-*.json artifacts from `dir` (must contain run-N.json files). */
-export function loadRunFiles(dir: string): { reports: EvalReport[]; queries: EvalQuery[]; files: string[] } {
-  const files = readdirSync(dir)
-    .filter((f) => /^run-\d+\.json$/.test(f))
-    .sort((a, b) => {
-      const ma = a.match(/^run-(\d+)\.json$/)
-      const mb = b.match(/^run-(\d+)\.json$/)
-      const na = ma ? parseInt(ma[1], 10) : 0
-      const nb = mb ? parseInt(mb[1], 10) : 0
-      return na - nb
-    })
-  if (files.length === 0) {
-    throw new Error('no run-*.json artifacts found')
-  }
-  const reports = files.map((f) => {
-    const raw = JSON.parse(readFileSync(join(dir, f), 'utf-8')) as { report?: EvalReport } | EvalReport
-    // Stored shape: { report: EvalReport }. Accept a bare EvalReport too.
-    const rep = (raw as { report?: EvalReport }).report ?? (raw as EvalReport)
-    if (!rep || !Array.isArray(rep.results)) throw new Error(`${f}: not an EvalReport`)
-    return rep
-  })
-  // Query set: union across ALL runs' results so a query dropped from run-1
-  // (runner error) is not silently excluded from the median aggregation
-  // (live eval uses the full EVAL_QUERIES set; run files embed full
-  // EvalQuery objs, so the union reconstructs it).
-  const seen = new Map<string, EvalQuery>()
-  for (const rep of reports) {
-    for (const r of rep.results) seen.set(r.query.id, r.query)
-  }
-  const queries = [...seen.values()]
-  return { reports, queries, files }
-}
-
-/** Load the worktree's own baseline snapshot (eval/baselines/latest.json). */
-export function loadBaselineFromWorktree(evalDir: string): EvalBaseline | null {
-  try {
-    // loadBaseline() from eval/baseline.ts resolves via import.meta.url (the
-    // SCRIPT's location), NOT cwd — for a worktree run we must load the
-    // WORKTREE's baseline file explicitly.
-    const file = join(evalDir, 'baselines', 'latest.json')
-    if (!existsSync(file)) return null
-    const raw = JSON.parse(readFileSync(file, 'utf-8')) as {
-      timestamp?: string
-      report?: EvalReport
-    }
-    if (!raw.report) return null
-    return { timestamp: raw.timestamp ?? '', report: raw.report }
-  } catch {
-    return null
-  }
+/**
+ * S86f: derive the worktree baseline from the ALREADY-parsed artifacts — the
+ * integrity pass (parseEvalArtifacts) parsed baselines/latest.json once, so
+ * re-reading it (the removed loadBaselineFromWorktree) was a second ~3.4 MB
+ * parse per commit. Shape is already validated (isEvalArtifactWellFormed
+ * requires report.results), so only the timestamp/report extraction remains.
+ * A missing artifact (commit predates baselines, or the file is absent)
+ * yields null — the gate then reports `baseline: none` (PASS, weak signal).
+ * Pure and exported for unit tests.
+ */
+export function baselineFromArtifacts(
+  artifacts: ReadonlyArray<{ file: string; ok: boolean; parsed?: unknown }>,
+  evalDir: string,
+): EvalBaseline | null {
+  const file = join(evalDir, 'baselines', 'latest.json')
+  const artifact = artifacts.find((a) => a.file === file && a.ok && a.parsed !== undefined)
+  if (!artifact) return null
+  const raw = artifact.parsed as { timestamp?: string; report?: EvalReport }
+  // Defensive: for an ok artifact the shape check already guarantees
+  // report.results, so this is unreachable in the runGate flow — kept so the
+  // helper stays safe if ever fed unvalidated artifacts directly.
+  if (!raw.report) return null
+  return { timestamp: raw.timestamp ?? '', report: raw.report }
 }
 
 /**
@@ -124,15 +97,17 @@ export function runGate(evalDir: string, opts: GateOptions = {}): GateOutcome {
   // EVERY *.json under results/ + baselines/ (syntax + report.results shape,
   // the verify-jsonc.ts --eval semantics). Corrupt artifacts are gate ERROR
   // (exit 3), not SKIP and not a silently-weakened PASS:
-  //  - a corrupt baselines/latest.json previously loaded as null via
-  //    loadBaselineFromWorktree's try/catch → "baseline: none" → PASS
-  //  - a corrupt results/latest.json was never read by loadRunFiles at all
+  //  - a corrupt baselines/latest.json previously loaded as null via the
+  //    removed loadBaselineFromWorktree's try/catch → "baseline: none" → PASS
+  //  - a corrupt results/latest.json was never read by the removed
+  //    loadRunFiles path at all
   // This surfaces both as ERROR with the offending files.
   //
   // S86d: parseEvalArtifacts parses every artifact EXACTLY ONCE and returns
   // the parsed values — the run reports below are built from those objects,
   // so the gate no longer re-reads/re-parses the ~3.4 MB run files (the old
-  // loadRunFiles path). 1019 ms → 38 ms on the real artifact set.
+  // loadRunFiles path). 1019 ms → 38 ms on the real artifact set. S86e:
+  // loadRunFiles is removed — runGate is the only run-loading path.
   const artifacts = parseEvalArtifacts(evalDir)
   const corrupt = artifacts.filter((a) => !a.ok)
   if (corrupt.length > 0) {
@@ -141,7 +116,16 @@ export function runGate(evalDir: string, opts: GateOptions = {}): GateOutcome {
   }
 
   // Build the run report list from the ALREADY-parsed artifacts (no re-read).
-  const runArtifacts = artifacts.filter((a) => /run-\d+\.json$/.test(a.file))
+  // Numeric order (run-1, run-2, ... run-10) — parseEvalArtifacts globs
+  // alphabetically, and the removed loadRunFiles path sorted numerically
+  // (deterministic detail line + report ordering for the stabilized gate).
+  const runArtifacts = artifacts
+    .filter((a) => /run-(\d+)\.json$/.test(a.file))
+    .sort((a, b) => {
+      const na = parseInt(a.file.match(/run-(\d+)\.json$/)?.[1] ?? '0', 10)
+      const nb = parseInt(b.file.match(/run-(\d+)\.json$/)?.[1] ?? '0', 10)
+      return na - nb
+    })
   if (runArtifacts.length === 0) {
     return { status: 'ERROR', detail: 'no run-*.json artifacts found' }
   }
@@ -178,7 +162,7 @@ export function runGate(evalDir: string, opts: GateOptions = {}): GateOutcome {
   // with `baseline: none` — parity with the live gate (no baseline → no
   // regressions). The detail line surfaces it, so an artifact-bearing commit
   // that has never been baselined is visibly a weak signal, not a false fail.
-  const baseline = loadBaselineFromWorktree(evalDir)
+  const baseline = baselineFromArtifacts(artifacts, evalDir)
   if (baseline) {
     baselineTimestamp = baseline.timestamp
     regressions =

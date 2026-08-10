@@ -3,17 +3,16 @@
  * 사용자 지시(좁은 gold 유지)와 S51 측정(quant-s51.ts는 넓은 gold 유지)이 상충하므로
  * 저장된 run-1..3 풀에서 두 방향을 모두 계산해 데이터로 확정한다.
  */
-import { computeNdcg } from '../eval/metrics'
-import { readFileSync } from 'node:fs'
+import { computeNdcg, loadGoldStandards } from '../eval/metrics'
+import { parseRunFiles } from '../eval/run-files'
 
-const gold = JSON.parse(readFileSync('eval/gold-standards.json', 'utf8')) as Record<
-  string,
-  { relevantDomains?: string[] }
->
+const gold = loadGoldStandards() // S86g: canonical gold loader
 type RunData = { results?: Array<{ query?: { id?: string }; response?: { results?: unknown } }> }
+const byRun = new Map(parseRunFiles('eval').map((rf) => [rf.run, rf.report] as const))
 function loadRun(n: number): RunData {
-  const r = JSON.parse(readFileSync(`eval/results/run-${n}.json`, 'utf8')) as { report?: RunData }
-  return (r.report ?? r) as RunData
+  const rep = byRun.get(n)
+  if (!rep) throw new Error(`eval/results/run-${n}.json not found or gate-excluded (missing report.results)`)
+  return rep as RunData
 }
 const runs = [1, 2, 3].map(loadRun)
 function med(a: number, b: number, c: number) {
@@ -46,7 +45,7 @@ let sumCur = 0,
   sumNarrow = 0,
   sumBroad = 0
 for (const qid of ids) {
-  const gs = gold[qid]?.relevantDomains ?? []
+  const gs = gold[qid] ?? []
   const narrow = keepNarrow(gs)
   const broad = keepBroad(gs)
   const cur = score(qid, gs),

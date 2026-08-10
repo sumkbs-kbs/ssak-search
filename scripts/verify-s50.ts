@@ -1,17 +1,16 @@
 /**
  * S50 검증: 실제 computeNdcg(캡)로 저장 풀 재채점 — NDCG>1 전멸 + 평균 확인.
  */
-import { computeNdcg } from '../eval/metrics'
-import * as fs from 'fs'
+import { computeNdcg, loadGoldStandards } from '../eval/metrics'
+import { parseRunFiles } from '../eval/run-files'
 
-const gold = JSON.parse(fs.readFileSync('eval/gold-standards.json', 'utf8')) as Record<
-  string,
-  { relevantDomains?: string[] }
->
+const gold = loadGoldStandards() // S86g: canonical gold loader
 type RunData = { results?: Array<{ query?: { id?: string }; response?: { results?: unknown } }> }
+const byRun = new Map(parseRunFiles('eval').map((rf) => [rf.run, rf.report] as const))
 function loadRun(n: number): RunData {
-  const r = JSON.parse(fs.readFileSync(`eval/results/run-${n}.json`, 'utf8')) as { report?: RunData }
-  return (r.report ?? r) as RunData
+  const rep = byRun.get(n)
+  if (!rep) throw new Error(`eval/results/run-${n}.json not found or gate-excluded (missing report.results)`)
+  return rep as RunData
 }
 const runs = [1, 2, 3].map(loadRun)
 function med(a: number, b: number, c: number) {
@@ -30,8 +29,7 @@ let n = 0,
   sum = 0,
   over1 = 0
 const over1List: string[] = []
-for (const [qid, g] of Object.entries(gold)) {
-  const gs: string[] = g?.relevantDomains ?? []
+for (const [qid, gs] of Object.entries(gold)) {
   if (gs.length === 0) continue
   const vals = runs.map((run) => {
     const pool = poolOf(run, qid)
@@ -54,7 +52,7 @@ console.log(`NDCG>1 잔존: ${over1}건`)
 if (over1List.length) console.log(over1List.slice(0, 5).join(' '))
 // 특정 쿼리 대표값
 for (const qid of ['en-tech-07', 'kr-stock-03', 'kr-news-02', 'en-fact-01', 'zh-travel-04']) {
-  const gs = gold[qid]?.relevantDomains ?? []
+  const gs = gold[qid] ?? []
   const vals = runs.map((run) => {
     const pool = poolOf(run, qid)
     return pool.length ? ndcgOf(pool, gs) : null

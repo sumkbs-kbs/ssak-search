@@ -26,18 +26,15 @@ import {
   TITLE_WEIGHT_TECHNICAL,
   TITLE_WEIGHT_NON_TECHNICAL,
 } from '../src/lib/search/ranking'
-import { computeNdcg } from '../eval/metrics'
+import { computeNdcg, loadGoldStandards } from '../eval/metrics'
 import { detectQueryType } from '../src/lib/specialized'
 import { setBm25TitleWeight } from '../src/lib/retrieval/bm25'
 import { setQueryExpansionEnabled } from '../src/lib/understanding/query-expander'
-import * as fs from 'fs'
+import { parseRunFiles } from '../eval/run-files'
 import type { SearchContext } from '../src/lib/search/context'
 
-// ── gold ──
-const gold = JSON.parse(fs.readFileSync('eval/gold-standards.json', 'utf8')) as Record<
-  string,
-  { relevantDomains?: string[] }
->
+// ── gold (S86g: canonical loader) ──
+const gold = loadGoldStandards()
 
 // Simulated BASELINE = pre-Wave-1-equivalent settings: titleWeight=2 (the old
 // title+content+title behavior), which the sim's repro run confirms is Δ≈0.
@@ -117,13 +114,9 @@ function titleWeightFor(queryType: string): number {
 type RunData = {
   results?: Array<{ query?: { id?: string; query?: string; topic?: string }; response?: { results?: unknown } }>
 }
-const runs: RunData[] = []
-for (const n of [1, 2, 3]) {
-  const path = `eval/results/run-${n}.json`
-  if (!fs.existsSync(path)) continue // run-3 was cleaned in S80 (--runs 2 session)
-  const r = JSON.parse(fs.readFileSync(path, 'utf8')) as { report?: RunData }
-  runs.push((r.report ?? r) as RunData)
-}
+// S86h: shared single-parse loader — missing run files are skipped the same
+// way the old existsSync guard did (run-3 was cleaned in S80 --runs 2 sessions).
+const runs = parseRunFiles('eval').map((rf) => rf.report as RunData)
 if (runs.length === 0) throw new Error('no run-*.json files found')
 
 type RunResult = NonNullable<RunData['results']>[number]
@@ -134,9 +127,8 @@ function runQuery(run: RunData, qid: string): RunResult {
 }
 
 const deltas: Record<string, { before: number; after: number; perRun: number[]; tag: string }> = {}
-for (const [qid, g] of Object.entries(gold)) {
-  const gs = g.relevantDomains
-  if (!gs || gs.length === 0) continue
+for (const [qid, gs] of Object.entries(gold)) {
+  if (gs.length === 0) continue
   const per = runs.map((run) => {
     try {
       const q = runQuery(run, qid)

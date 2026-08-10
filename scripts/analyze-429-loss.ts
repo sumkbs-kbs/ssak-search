@@ -62,9 +62,10 @@
  * S36 (wikidata) / S38 (dbpedia-lang) tiers, which the JSON-only analysis
  * cannot.
  */
-import { readFileSync, readdirSync } from 'fs'
+import { readFileSync } from 'fs'
 import { resolve } from 'path'
-import { computeNdcg, recomputeNdcgAt10 } from '../eval/metrics'
+import { computeNdcg, recomputeNdcgAt10, loadGoldStandards } from '../eval/metrics'
+import { parseRunFiles } from '../eval/run-files'
 import { loadBaseline, diffBaselineStabilized } from '../eval/baseline'
 import { EVAL_QUERIES } from '../eval/queries'
 import type { SearchResult } from '../src/types'
@@ -73,8 +74,9 @@ import type { EvalReport, EvalBaseline } from '../eval/types'
 const ID_BY_QUERY = new Map<string, string>()
 for (const q of EVAL_QUERIES) ID_BY_QUERY.set(q.query, q.id)
 
-const DEFAULT_RESULTS_DIR = resolve(process.cwd(), 'eval', 'results')
-const GOLD_PATH = resolve(process.cwd(), 'eval', 'gold-standards.json')
+// S86h-②: eval-ROOT contract (parseRunFiles globs results/ + baselines/) —
+// the old DEFAULT_RESULTS_DIR ('eval/results') is now derived inside the loader.
+const DEFAULT_EVAL_DIR = resolve(process.cwd(), 'eval')
 
 /** S35/S36/S38 wikipedia mirror backends — excluded from the composition key. */
 const MIRROR_BACKENDS = ['dbpedia', 'wikidata', 'dbpedia-lang']
@@ -188,7 +190,16 @@ export interface LossSummary {
 }
 
 /**
- * Load one run file as query-id → { backends, ndcg }.
+ * S86h-②: run-file loader — a thin composite over the SHARED single-parse
+ * entry point eval/run-files.ts `parseRunFiles` (which reuses the S86d
+ * parseEvalArtifacts gate). Both outputs derive from the SAME parsed objects:
+ *   - `runMaps`: query-id → { backends, ndcg } for the S34 composition logic
+ *   - `reports`: full EvalReports for the S75 gate cross-reference
+ * computeLossReport previously called loadRuns() then loadRunReports() (2×
+ * ~10 MB parse), then S86f merged them into one pass, and now the parse itself
+ * is the codebase-wide shared loader (numeric order + report ?? raw + the
+ * well-formed gate: bare-format/corrupt run files are EXCLUDED — the same
+ * rule verify-jsonc --eval applies in CI).
  *
  * S54 (2026-08-08): the stored `ranking.ndcgAt10` field in run-*.json can be
  * STALE relative to the current metric rules — S50's DCG cap (NDCG∈[0,1]) and
@@ -204,21 +215,24 @@ export interface LossSummary {
  * Legacy fallback: run files that predate result serialization (or test
  * fixtures that write only backends+ranking) have no response.results — those
  * fall back to the stored ranking field so old artifacts remain analyzable.
+ *
+ * Contract: `evalDir` is the eval ROOT (results/ + baselines/) — same as
+ * parseRunFiles. S86f's legacy bare-file behavior (a file that parses but
+ * lacks report.results contributed its run map) is superseded by the S86h
+ * gate: bare = corrupt = absent, consistent with the CI integrity gate.
  */
-function loadRuns(resultsDir: string, gold: Map<string, string[]>): Array<Map<string, RunInfo>> {
-  const files = readdirSync(resultsDir)
-    .filter((f) => /^run-\d+\.json$/.test(f))
-    .sort((a, b) => Number(a.match(/\d+/)?.[0]) - Number(b.match(/\d+/)?.[0]))
-  return files.map((f) => {
-    const raw = JSON.parse(readFileSync(resolve(resultsDir, f), 'utf8'))
-    const results: Array<{
-      query?: { id?: string }
-      backends?: unknown
-      ranking?: Record<string, unknown>
-      response?: { results?: unknown }
-    }> = raw.report?.results ?? raw.results ?? []
+export interface RunArtifacts {
+  runMaps: Array<Map<string, RunInfo>>
+  reports: EvalReport[]
+}
+
+export function loadRunArtifacts(evalDir: string, gold: Map<string, string[]>): RunArtifacts {
+  const runFiles = parseRunFiles(evalDir)
+  const runMaps: Array<Map<string, RunInfo>> = []
+  const reports: EvalReport[] = []
+  for (const rf of runFiles) {
     const m = new Map<string, RunInfo>()
-    for (const q of results) {
+    for (const q of rf.report.results) {
       if (!q.query?.id) continue // unattributed result rows are not eval queries
       const goldDomains = gold.get(q.query.id) ?? []
       const respResults = q.response?.results
@@ -233,7 +247,7 @@ function loadRuns(resultsDir: string, gold: Map<string, string[]>): Array<Map<st
       if (pool && pool.length > 0) {
         ndcg = computeNdcg(pool, goldDomains, 10)
       } else {
-        const ndcgRaw = q.ranking?.ndcgAt10 ?? q.ranking?.ndcg10 ?? 0
+        const ndcgRaw = q.ranking?.ndcgAt10 ?? 0
         ndcg = typeof ndcgRaw === 'number' && Number.isFinite(ndcgRaw) ? ndcgRaw : 0
       }
       m.set(q.query.id, {
@@ -241,28 +255,10 @@ function loadRuns(resultsDir: string, gold: Map<string, string[]>): Array<Map<st
         ndcg,
       })
     }
-    return m
-  })
-}
-
-/**
- * Load each run-*.json as a FULL EvalReport (S75 — the S73 gate cross-ref
- * needs the per-run response pools + ranking fields, not just backends/ndcg).
- */
-function loadRunReports(resultsDir: string): EvalReport[] {
-  const files = readdirSync(resultsDir)
-    .filter((f) => /^run-\d+\.json$/.test(f))
-    .sort((a, b) => Number(a.match(/\d+/)?.[0]) - Number(b.match(/\d+/)?.[0]))
-  const out: EvalReport[] = []
-  for (const f of files) {
-    try {
-      const raw = JSON.parse(readFileSync(resolve(resultsDir, f), 'utf8'))
-      if (raw?.report?.results) out.push(raw.report as EvalReport)
-    } catch {
-      /* malformed run file — skip (loadRuns already surfaces the hard failure) */
-    }
+    runMaps.push(m)
+    reports.push(rf.report)
   }
-  return out
+  return { runMaps, reports }
 }
 
 /**
@@ -333,15 +329,11 @@ function parseQuery429s(logText: string): Map<string, { runs: Set<number>; count
   return perQuery
 }
 
+/** S86g: canonical gold loader — merged from the hand-rolled variants (the
+ *  `?? []`/Array.isArray guard and the canonical truthy filter agree on the
+ *  real gold file: 0 nulls / 0 non-arrays — parseGoldStandards wins). */
 function loadGold(): Map<string, string[]> {
-  const g = JSON.parse(readFileSync(GOLD_PATH, 'utf8'))
-  const out = new Map<string, string[]>()
-  for (const [k, v] of Object.entries(g)) {
-    if (k.startsWith('_')) continue
-    const domains = (v as { relevantDomains?: unknown } | undefined)?.relevantDomains ?? []
-    if (Array.isArray(domains)) out.set(k, domains)
-  }
-  return out
+  return new Map(Object.entries(loadGoldStandards()))
 }
 
 const avg = (a: number[]) => (a.length ? a.reduce((s, v) => s + v, 0) / a.length : 0)
@@ -634,13 +626,15 @@ export function crossReferenceGate429(
  * classified as mirror-recovered / mirror-still-lost / no-mirror.
  */
 export function computeLossReport(
-  resultsDir: string = DEFAULT_RESULTS_DIR,
+  evalDir: string = DEFAULT_EVAL_DIR,
   logText?: string,
   baseline?: EvalBaseline | null,
 ): LossSummary {
-  // S54: gold is loaded FIRST — loadRuns recomputes NDCG against it.
+  // S54: gold is loaded FIRST — loadRunArtifacts recomputes NDCG against it.
   const gold = loadGold()
-  const runs = loadRuns(resultsDir, gold)
+  // S86h-②: shared single-parse run loading (parseRunFiles) — the S75 gate
+  // cross-ref reports come from the SAME parsed objects the run maps use.
+  const { runMaps: runs, reports } = loadRunArtifacts(evalDir, gold)
   const perQuery429 = logText ? parseQuery429s(logText) : new Map<string, { runs: Set<number>; count: number }>()
 
   // ── group runs per query by other-backend composition ──────────────────
@@ -866,11 +860,10 @@ export function computeLossReport(
   // injected when the runner has one loaded (eval/index.ts passes the SAME
   // snapshot the gate compared against — a --save run must NOT self-compare
   // against the baseline it is about to write); the CLI defaults to disk.
-  // NOTE: for a historical --results-dir the disk baseline may postdate the
+  // NOTE: for a historical --eval-dir the disk baseline may postdate the
   // analyzed runs — the cross-ref then compares era-mismatched snapshots
   // (acceptable for trend analysis; pass a baseline explicitly for precision).
   const baselineSnapshot = baseline === undefined ? loadBaseline() : baseline
-  const reports = loadRunReports(resultsDir)
   const gate429 = crossReferenceGate429(reports, baselineSnapshot, runs, gold, outRows, perQuery429)
 
   return {
@@ -910,21 +903,21 @@ export function computeLossReport(
 }
 
 // ── CLI ───────────────────────────────────────────────────────────────────
-function parseCli(): { logPath?: string; threshold: number; resultsDir: string } {
+function parseCli(): { logPath?: string; threshold: number; evalDir: string } {
   const args = process.argv.slice(2)
   let logPath: string | undefined
   let threshold = 5.0
-  let resultsDir = DEFAULT_RESULTS_DIR
+  let evalDir = DEFAULT_EVAL_DIR
   for (let i = 0; i < args.length; i++) {
     switch (args[i]) {
       case '--threshold':
         threshold = Number(args[++i])
         break
-      case '--results-dir':
-        resultsDir = resolve(process.cwd(), args[++i])
+      case '--eval-dir':
+        evalDir = resolve(process.cwd(), args[++i])
         break
       case '--help':
-        console.log(`Usage: npx tsx scripts/analyze-429-loss.ts [logPath] [--threshold <n>] [--results-dir <dir>]
+        console.log(`Usage: npx tsx scripts/analyze-429-loss.ts [logPath] [--threshold <n>] [--eval-dir <dir>]
 
 Computes the S34 composition-controlled NDCG loss from wikipedia 429 noise,
 split into mirror-recovered (S35/S36/S38) vs still-lost runs.
@@ -932,7 +925,7 @@ split into mirror-recovered (S35/S36/S38) vs still-lost runs.
   logPath        Path to the eval:median log (default: /tmp/eval-median.log).
                  Optional — the weighted-loss core works from run-*.json alone.
   --threshold <n>  Warn (::warning::) when weighted loss exceeds n (default 5.0).
-  --results-dir    Directory with run-*.json (default: eval/results).
+  --eval-dir       Eval root with results/run-*.json (default: eval).
 `)
         process.exit(0)
         break // unreachable — satisfies no-fallthrough (process.exit is not a recognized terminator)
@@ -940,13 +933,13 @@ split into mirror-recovered (S35/S36/S38) vs still-lost runs.
         if (!logPath) logPath = args[i]
     }
   }
-  return { logPath, threshold, resultsDir }
+  return { logPath, threshold, evalDir }
 }
 
 function main(): void {
-  const { logPath, threshold, resultsDir } = parseCli()
+  const { logPath, threshold, evalDir } = parseCli()
   const logText = logPath ? readFileSync(logPath, 'utf8') : undefined
-  const s = computeLossReport(resultsDir, logText)
+  const s = computeLossReport(evalDir, logText)
 
   console.log(`=== S34: wikipedia-429 NDCG loss — composition-controlled (runs: ${s.runCount}) ===`)
   console.log(`queries with a same-composition present/absent pair: ${s.attributableCount}`)

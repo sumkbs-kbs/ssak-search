@@ -15,14 +15,9 @@
  * Usage: npx tsx scripts/verify-kr-finance.ts
  */
 import { executeSearch } from '../src/lib/orchestrator'
-import { computeRankingMetrics } from '../eval/metrics'
-import { readFileSync } from 'node:fs'
-import { join } from 'node:path'
+import { computeRankingMetrics, loadGoldStandards } from '../eval/metrics'
 
-const gold = JSON.parse(readFileSync(join(process.cwd(), 'eval', 'gold-standards.json'), 'utf-8')) as Record<
-  string,
-  { relevantDomains?: string[] }
->
+const gold = loadGoldStandards() // S86g: canonical gold loader
 
 const QUERIES: Array<[string, string]> = [
   ['배당주 추천 2025', 'kr-stock-13'],
@@ -34,7 +29,7 @@ const QUERIES: Array<[string, string]> = [
 ]
 
 for (const [q, id] of QUERIES) {
-  const relevantDomains = gold[id]?.relevantDomains ?? []
+  const relevantDomains = gold[id] ?? []
   const r = await executeSearch({ query: q, topic: 'finance', max_results: 10, include_answer: false }, { env: {} })
   const ndcg = computeRankingMetrics(r.results ?? [], relevantDomains)?.ndcgAt10.toFixed(4) ?? 'n/a'
   console.log(`${id.padEnd(13)} ${q.padEnd(16)} count: ${r.results?.length} | backend: ${r.backend} | NDCG@10: ${ndcg}`)

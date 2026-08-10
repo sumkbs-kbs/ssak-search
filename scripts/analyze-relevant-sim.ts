@@ -2,12 +2,10 @@
  * S49: 3개 매칭 규칙의 NDCG 영향 시뮬레이션 (run-1..3, median-of-3).
  * R0 substring(현행) / R1 label-suffix / R2 exact-or-www.
  */
-import * as fs from 'fs'
+import { loadGoldStandards } from '../eval/metrics'
+import { parseRunFiles } from '../eval/run-files'
 
-const gold = JSON.parse(fs.readFileSync('eval/gold-standards.json', 'utf8')) as Record<
-  string,
-  { relevantDomains?: string[] }
->
+const gold = loadGoldStandards() // S86g: canonical gold loader
 
 function extractDomain(url: string): string {
   try {
@@ -39,13 +37,14 @@ function median3(a: number, b: number, c: number): number {
   return [a, b, c].sort((x, y) => x - y)[1]
 }
 
-// load all 3 runs
+// load all 3 runs (S86h: shared single-parse loader)
 type RunData = { results?: Array<{ query?: { id?: string }; response?: { results?: unknown } }> }
-const runs: RunData[] = []
-for (const n of [1, 2, 3]) {
-  const r = JSON.parse(fs.readFileSync(`eval/results/run-${n}.json`, 'utf8')) as { report?: RunData }
-  runs.push((r.report ?? r) as RunData)
-}
+const byRun = new Map(parseRunFiles('eval').map((rf) => [rf.run, rf.report] as const))
+const runs: RunData[] = [1, 2, 3].map((n) => {
+  const rep = byRun.get(n)
+  if (!rep) throw new Error(`eval/results/run-${n}.json not found or gate-excluded (missing report.results)`)
+  return rep as RunData
+})
 
 // per-query pool domains from each run
 function poolDomains(run: RunData, qid: string): string[][] {
@@ -58,9 +57,8 @@ function poolDomains(run: RunData, qid: string): string[][] {
 }
 
 const diffs: Record<string, { r0: number; r1: number; r2: number; pool: string[] }> = {}
-for (const [qid, g] of Object.entries(gold)) {
-  const gs = g.relevantDomains
-  if (!gs || gs.length === 0) continue
+for (const [qid, gs] of Object.entries(gold)) {
+  if (gs.length === 0) continue
   const per = runs.map((run) => {
     const doms = poolDomains(run, qid)
     if (doms.length === 0) return null
@@ -103,7 +101,7 @@ const gains = Object.entries(diffs).sort((a, b) => b[1].r1 - b[1].r0 - (a[1].r1 
 console.log('\n=== R1 worst LOSSES (rule would break gold matching) ===')
 for (const [qid, d] of losses.slice(0, 15)) {
   console.log(
-    `${qid}  ${d.r0.toFixed(3)}→${d.r1.toFixed(3)}  gold=${(gold[qid].relevantDomains ?? []).join('|')}  pool=[${d.pool
+    `${qid}  ${d.r0.toFixed(3)}→${d.r1.toFixed(3)}  gold=${(gold[qid] ?? []).join('|')}  pool=[${d.pool
       .filter((x, i, a) => a.indexOf(x) === i)
       .slice(0, 6)
       .join(',')}]`,
@@ -111,10 +109,10 @@ for (const [qid, d] of losses.slice(0, 15)) {
 }
 console.log('\n=== R1 worst GAINS (substring over-match fixed) ===')
 for (const [qid, d] of gains.slice(0, 15)) {
-  console.log(`${qid}  ${d.r0.toFixed(3)}→${d.r1.toFixed(3)}  gold=${(gold[qid].relevantDomains ?? []).join('|')}`)
+  console.log(`${qid}  ${d.r0.toFixed(3)}→${d.r1.toFixed(3)}  gold=${(gold[qid] ?? []).join('|')}`)
 }
 console.log('\n=== R2 worst LOSSES ===')
 const losses2 = Object.entries(diffs).sort((a, b) => a[1].r2 - a[1].r0 - (b[1].r2 - b[1].r0))
 for (const [qid, d] of losses2.slice(0, 12)) {
-  console.log(`${qid}  ${d.r0.toFixed(3)}→${d.r2.toFixed(3)}  gold=${(gold[qid].relevantDomains ?? []).join('|')}`)
+  console.log(`${qid}  ${d.r0.toFixed(3)}→${d.r2.toFixed(3)}  gold=${(gold[qid] ?? []).join('|')}`)
 }

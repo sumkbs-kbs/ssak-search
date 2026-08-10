@@ -40,16 +40,18 @@
  *   0 = ok · 1 = no runs/log found · 2 = parse error
  */
 
-import { readFileSync, existsSync, readdirSync } from 'fs'
+import { readFileSync, existsSync } from 'fs'
 import { resolve } from 'path'
 import { EVAL_QUERIES } from '../eval/queries'
+import { parseRunFiles } from '../eval/run-files'
 
 /** query text → eval query id (log lines carry text, run JSONs carry ids). */
 const ID_BY_QUERY = new Map<string, string>()
 for (const q of EVAL_QUERIES) ID_BY_QUERY.set(q.query, q.id)
 
 // ── config ──────────────────────────────────────────────────────────────
-const RESULTS_DIR = resolve(process.cwd(), 'eval', 'results')
+const EVAL_DIR = resolve(process.cwd(), 'eval')
+const RESULTS_DIR = resolve(EVAL_DIR, 'results')
 
 function arg(name: string): string | undefined {
   const i = process.argv.indexOf(name)
@@ -84,26 +86,18 @@ interface Query429 {
 }
 
 function loadRuns(): RunData[] {
-  if (!existsSync(RESULTS_DIR)) throw new Error(`no ${RESULTS_DIR}`)
-  const files = readdirSync(RESULTS_DIR)
-    .filter((f) => /^run-\d+\.json$/.test(f))
-    .sort((a, b) => {
-      const na = Number(a.match(/\d+/)?.[0] ?? 0)
-      const nb = Number(b.match(/\d+/)?.[0] ?? 0)
-      return na - nb
-    })
-  if (!files.length) throw new Error(`no run-N.json in ${RESULTS_DIR}`)
-  return files.map((f, idx) => {
-    // S82: `idx` was referenced but never a parameter (TS2304 under the
-    // widened include) — the map callback only declared `f`. Run ids are
-    // 1-based in file order.
-    const raw = JSON.parse(readFileSync(resolve(RESULTS_DIR, f), 'utf8'))
-    const results: Array<{
-      query?: { id?: string }
-      backends?: unknown
-      ranking?: Record<string, unknown>
-      resultCount?: unknown
-    }> = raw.report?.results ?? raw.results ?? []
+  // S86h: shared single-parse loader — numeric order + run index preserved
+  // (id = rf.run, equivalent to the old 1-based file order).
+  const runFiles = parseRunFiles(EVAL_DIR)
+  if (!runFiles.length) throw new Error(`no run-N.json in ${RESULTS_DIR}`)
+  return runFiles.map((rf) => {
+    const results =
+      (rf.report.results as unknown as Array<{
+        query?: { id?: string }
+        backends?: unknown
+        ranking?: Record<string, unknown>
+        resultCount?: unknown
+      }>) ?? []
     const byQuery = new Map<string, QueryRunInfo>()
     for (const q of results) {
       // S82: ranking/resultCount arrive as `unknown` from the JSON files —
@@ -119,7 +113,7 @@ function loadRuns(): RunData[] {
         resultCount: n(q.resultCount),
       })
     }
-    return { id: idx + 1, byQuery }
+    return { id: rf.run, byQuery }
   })
 }
 

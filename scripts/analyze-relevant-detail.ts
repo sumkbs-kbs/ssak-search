@@ -2,13 +2,13 @@
  * S49 detail: ① 'naver.com' gold 보유 쿼리 ② cross-registrable 오버매칭(R1이 고치는 것)
  * ③ bare-wikipedia gold 의존 쿼리 (R2가 깨뜨리는 것).
  */
-import * as fs from 'fs'
+import { loadGoldStandards } from '../eval/metrics'
+import { parseRunFiles } from '../eval/run-files'
 
-const gold = JSON.parse(fs.readFileSync('eval/gold-standards.json', 'utf8')) as Record<
-  string,
-  { relevantDomains?: string[] }
->
-const run = JSON.parse(fs.readFileSync('eval/results/run-3.json', 'utf8'))
+const gold = loadGoldStandards() // S86g: canonical gold loader — id → domains[]
+// S86h: shared single-parse loader — run-3.json by numeric index
+const rf3 = parseRunFiles('eval').find((rf) => rf.run === 3)
+if (!rf3) throw new Error('eval/results/run-3.json not found or gate-excluded (missing report.results)')
 
 type RunData = {
   results?: Array<{
@@ -17,7 +17,7 @@ type RunData = {
     response?: { results?: unknown }
   }>
 }
-const rep = (run.report ?? run) as RunData
+const rep = rf3.report as RunData
 const runResults = rep.results ?? []
 const findRun = (id: string) => runResults.find((x) => x.query?.id === id)
 const poolOf = (id: string): Array<{ url: string }> => {
@@ -28,12 +28,10 @@ const poolOf = (id: string): Array<{ url: string }> => {
 // ① queries with 'naver.com' gold
 console.log('=== ① gold "naver.com" 보유 쿼리 (S43 타깃) ===')
 for (const [id, g] of Object.entries(gold)) {
-  if (g.relevantDomains?.includes('naver.com')) {
+  if (g.includes('naver.com')) {
     const q = findRun(id)
     const nd = typeof q?.ranking?.ndcgAt10 === 'number' ? q.ranking.ndcgAt10.toFixed(3) : '?'
-    console.log(
-      `${id}\tgold=${g.relevantDomains.join('|')}\tndcg=${nd}\tquery="${(q?.query?.query ?? '').slice(0, 30)}"`,
-    )
+    console.log(`${id}\tgold=${g.join('|')}\tndcg=${nd}\tquery="${(q?.query?.query ?? '').slice(0, 30)}"`)
   }
 }
 
@@ -43,7 +41,6 @@ console.log('\n=== ② cross-registrable 오버매칭 (R1이 제거 — 정당�
 const seen = new Set<string>()
 let crossCount = 0
 for (const [id, g] of Object.entries(gold)) {
-  if (!g.relevantDomains) continue
   for (const x of poolOf(id)) {
     let host = ''
     try {
@@ -51,7 +48,7 @@ for (const [id, g] of Object.entries(gold)) {
     } catch {
       continue
     }
-    for (const rd of g.relevantDomains) {
+    for (const rd of g) {
       const g2 = rd.toLowerCase()
       if (host.includes(g2) && host !== g2 && !host.endsWith('.' + g2)) {
         const k = `${id}:${g2}⊂${host}`
@@ -70,9 +67,9 @@ console.log(`cross-registrable over-match pairs: ${crossCount}`)
 console.log('\n=== ③ gold "wikipedia.org" 보유 (R2 exact가 깨는 것) ===')
 let wikiBare = 0
 for (const [id, g] of Object.entries(gold)) {
-  if (g.relevantDomains?.includes('wikipedia.org')) {
+  if (g.includes('wikipedia.org')) {
     wikiBare++
-    if (wikiBare <= 6) console.log(`${id}\t${(g.relevantDomains || []).join('|')}`)
+    if (wikiBare <= 6) console.log(`${id}\t${g.join('|')}`)
   }
 }
 console.log(`bare wikipedia.org gold queries: ${wikiBare}`)

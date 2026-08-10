@@ -28,8 +28,8 @@
  * Run: npx tsx scripts/measure-mirror-latency.ts
  */
 
-import { readFileSync, existsSync } from 'node:fs'
 import { resolve } from 'node:path'
+import { parseRunFiles } from '../eval/run-files'
 
 interface RunRow {
   query?: { id?: string }
@@ -37,21 +37,22 @@ interface RunRow {
   backends?: string[]
 }
 
-interface RunFile {
-  report?: { results?: RunRow[] }
-}
-
 const MIRROR_BACKENDS = new Set(['dbpedia', 'wikidata', 'dbpedia-lang'])
 
+// S86h: shared single-parse loader — per-run rows by numeric index; a missing
+// run yields [] (same as the old existsSync guard), a corrupt artifact is
+// excluded by the gate (same as the old try/catch → []). Lazy-init keeps the
+// module import side-effect-free (unit tests import analyzeMirrorLatencyRows).
+let rowsByRun: Map<number, RunRow[]> | undefined
 function loadRows(run: number): RunRow[] {
-  const path = resolve(process.cwd(), 'eval', 'results', `run-${run}.json`)
-  if (!existsSync(path)) return []
-  try {
-    const data = JSON.parse(readFileSync(path, 'utf8')) as RunFile
-    return data.report?.results ?? []
-  } catch {
-    return []
+  if (!rowsByRun) {
+    rowsByRun = new Map(
+      parseRunFiles(resolve(process.cwd(), 'eval')).map((rf) => {
+        return [rf.run, (rf.report.results as unknown as RunRow[]) ?? []] as const
+      }),
+    )
   }
+  return rowsByRun.get(run) ?? []
 }
 
 function pct(sorted: number[], p: number): number {

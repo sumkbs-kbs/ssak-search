@@ -23,18 +23,39 @@ import type { EvalResult, RankingMetrics, AggregateRankingMetrics, CacheHitMetri
  * orchestrator/specialized stack through runner.ts — the regression gate
  * recomputes NDCG against the CURRENT gold and must load it in isolation.
  */
+/**
+ * S86g: pure gold-shape → domain-map mapper, extracted from loadGoldStandards
+ * so path-based loaders (scripts/detect-gold-drift loadGoldFile) share the
+ * SAME filtering semantics. Merged from ~13 scripts that each hand-rolled a
+ * subtly different variant (S86g audit):
+ *   - `_`-prefixed keys are skipped (metadata, e.g. _s52 notes)
+ *   - entries WITHOUT a truthy relevantDomains are excluded — EXCEPT an
+ *     EMPTY array, which is truthy and stays PRESENT as `key: []` (a query
+ *     whose gold was emptied keeps its key, so `map.get(id) ?? []` and
+ *     `.has(id)` behave identically for every consumer)
+ *   - a null/primitive entry is skipped defensively (a null entry used to
+ *     crash loadGoldStandards into its catch-all {} — losing the WHOLE map)
+ *   - the `?? []` variant's Array.isArray guard is ALSO merged (review S86g):
+ *     a non-array truthy relevantDomains (e.g. a stray string) is excluded
+ *     rather than leaking a wrong-typed value into every consumer's map —
+ *     Array.isArray([]) is true, so the empty-array contract above survives
+ */
+export function parseGoldStandards(data: unknown): Record<string, string[]> {
+  const result: Record<string, string[]> = {}
+  if (typeof data !== 'object' || data === null) return result
+  for (const [key, val] of Object.entries(data as Record<string, { relevantDomains?: string[] }>)) {
+    if (key.startsWith('_')) continue
+    const domains = (val as { relevantDomains?: string[] } | null | undefined)?.relevantDomains
+    if (Array.isArray(domains)) result[key] = domains
+  }
+  return result
+}
+
 export function loadGoldStandards(): Record<string, string[]> {
   try {
     const path = resolve(process.cwd(), 'eval', 'gold-standards.json')
     const raw = readFileSync(path, 'utf-8')
-    const data = JSON.parse(raw) as Record<string, { relevantDomains?: string[] }>
-    const result: Record<string, string[]> = {}
-    for (const [key, val] of Object.entries(data)) {
-      if (!key.startsWith('_') && val.relevantDomains) {
-        result[key] = val.relevantDomains
-      }
-    }
-    return result
+    return parseGoldStandards(JSON.parse(raw))
   } catch {
     // Gold standards not available — ranking metrics will be skipped
     return {}

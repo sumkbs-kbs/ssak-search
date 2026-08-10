@@ -107,7 +107,23 @@ runGate가 아티팩트를 **한 번만 파싱**하도록 리팩터: `parseJsonc
 JSON.parse fast-path — eval 아티팩트는 JSON.stringify 출력이라 순수 JSON,
 실패 시에만 comment-aware strip) + `parseEvalArtifacts` (전 아티팩트를
 1회 파싱해 파싱 결과 반환). runGate가 이 파싱 결과로 run 리포트를 구축해
-`loadRunFiles`의 재파싱을 제거. 벤치마크 (`scripts/bench-eval-parse.ts`):
+`loadRunFiles`의 재파싱을 제거 (S86e: `loadRunFiles` 자체도 제거 — runGate/parseEvalArtifacts 단일 경로로 통일, 숫자순 재정렬은 runGate가 보존). 벤치마크 (`scripts/bench-eval-parse.ts`):
+
+### S86f — 2중 파싱 추가 2건 제거 (analyze-429-loss + runGate baseline)
+
+전수 조사(S86f 사전)에서 같은 버그 클래스 2건을 추가 발견해 수정:
+
+1. **`analyze-429-loss.ts`** — `loadRuns` + `loadRunReports`(각각 전 run-*.json을 read+parse 2회)를 `loadRunArtifacts` 단일 패스로 병합. computeLossReport가 1회 호출로 `{runMaps, reports}` 도출. 실측 벤치: **41.5ms → 20.8ms (49.9% 감소)** — `npm run eval:loss`와 매 eval:median:save 후 실행 경로에서 절감. (감사 시점의 ~394ms 추정치는 게이트 벤치의 stripJsonc 지배 비용을 plain JSON.parse 경로에 외삽한 과대값 — 실측이 정확함)
+2. **`verify-commit-eval.ts`** — `loadBaselineFromWorktree` 제거, `baselineFromArtifacts` 신규: runGate가 parseEvalArtifacts의 이미 파싱된 baselines/latest.json(3.4MB) 객체를 재사용 (커밋당 재파싱 제거).
+
+### S86g — gold-standards.json 로더 통일 (13+개 스크립트 핸드롤 파싱 제거)
+
+전수 조사에서 **15개 핸드롤 파싱 + 2개 JSON import**를 발견해 canonical 로더로 통일:
+
+- **`eval/metrics.ts`** — `parseGoldStandards(data)` 순수 헬퍼 추출 (병합 의미론: `_` 키 스킵 · 빈 배열은 truthy라 `key: []`로 유지 — gold가 비워진 쿼리의 `.has()` 의미론 보존 · null 항목은 방어적 스킵 — 기존엔 TypeError로 맵 전체가 {}가 되는 함정). `loadGoldStandards()`가 이를 사용
+- **전환 13파일**: analyze-relevant-sim/boundary/detail/fix · sim-wave1-accuracy · verify-s49/s50 · quant-s51 · compare-s51-dirs · sweep-gold-overbreadth · verify-kr-finance · analyze-429-loss(loadGold) · detect-gold-drift(loadGoldFile은 경로 기반 유지, 파싱만 위임) + probe-s36/s38-recovery(JSON import 제거)
+- **유지 2파일 (의도적)**: `generate-gold-standards.ts`(gold **작성자** — raw `{relevantDomains}` 래퍼 재직렬화 필요) · `probe-still-vuln.ts`(relevantUrls 필드 사용)
+- **실측 동등성**: 실제 gold 파일은 null/비배열/빈배열 0건 — 모든 변형이 동일 결과 (gold-loader 테스트로 고정). 스모크: verify-s50 en-fact-01 NDCG 0.613, boundary bare 341 도메인, detect-gold-drift JSON, sim-wave1, sweep-gold, eval:loss 전부 정상
 
 ```
 artifacts: 6 files, 16.9 MB total, 15 iterations (median)
@@ -379,3 +395,69 @@ eval run도 steps 1-6 그린 + Run evaluation 정상 진행 (push 모드 500쿼�
 ci.yml에서 잡은 3건 + 이번 2건 = **총 5건의 실제 CI 블로커**를 act가 전수
 발견. deploy.yml의 download-artifact@v4 `run-id` 누락(이전 턴 발견)은
 별도 수정 대상으로 남음.
+
+## 2026-08-10 S86h — 공용 run-N.json 로더 통일 (parseRunFiles)
+
+S86e가 마지막 공용 run 로더(loadRunFiles)를 제거한 뒤, run-N.json 파싱은
+분석 스크립트 ~17곳이 각자 readdirSync + 숫자 정렬 + `report ?? raw` 폴백 +
+에러 처리를 재구현하던 상태였다. **`eval/run-files.ts` — `parseRunFiles()`**
+공용 로더를 신설해 전부 대체했다.
+
+### 계약
+
+- **eval-root 인자**: `parseEvalArtifacts`와 동일한 계약 — `results/` +
+  `baselines/` 서브디렉토리를 가진 eval 루트를 받는다 ('eval' 또는 절대 경로).
+  기존 스크립트의 하드코딩 `eval/results/run-N.json`과 동치.
+- **단일 파싱 + 게이트 재사용**: `parseEvalArtifacts`(S86d)를 그대로 재사용해
+  파일당 1파싱, **well-formed 게이트(report.results 필수)**로 corrupt/truncated
+  및 **bare-format(raw.results) 파일을 제외** — CI 게이트와 동일 규칙.
+- **report ?? raw**: 게이트 하에서는 항상 `report`로 귀결(방어적 폴백,
+  게이트 완화 대비 주석화).
+- **숫자순**: parseEvalArtifacts의 알파벳순 glob(run-1, run-10, run-2)을
+  `runNumber()` 재정렬로 교정.
+- **빈 결과**: run 파일이 없으면 `[]` 반환 — 스크립트별 빈 처리 정책은 유지
+  (일부는 throw, 일부는 skip 계열).
+
+### 마이그레이션 (17개 스크립트)
+
+| 계열 | 스크립트 | 패턴 |
+|---|---|---|
+| loadRun(n) | verify-s49/s50, quant-s51, compare-s51-dirs | byRun Map + missing 시 throw (구 readFileSync ENOENT 동치, 메시지에 gate-excluded 명시) |
+| 동일 루프 | analyze-relevant-sim/fix, sweep-gold-overbreadth | `[1,2,3].map` + throw |
+| existsSync-skip | sim-wave1-accuracy, sim-wave5-cache, measure-mirror-latency, report-backend-availability | 로더가 자연 스킵 (missing run 제외), measure-mirror는 lazy-init Map |
+| run-3 단일 | sim-s48, analyze-relevant-detail | `find(rf.run === 3)` + throw |
+| results 추출 | probe-s67/s68 (legacy `r.results ??` 브랜치 + StoredQuery/StoredReport 인터페이스 제거), probe-still-vuln(3-run 가드 + ndcg10 레거시 폴백 제거 — 타입된 RankingMetrics) | `rf.report.results` |
+| 계약 전환 | detect-gold-drift | **`resultsDir` → `evalDir`**(CLI `--results-dir` → `--eval-dir`, 외부 참조 0건으로 안전), latest.json 폴백 경로 `evalDir/results/latest.json` |
+
+### 검증
+
+- **유닛 1,622건 / 86파일** 통과 (+8: run-files.test.ts — 숫자순 run-1/2/10,
+  report 추출, latest/baselines 제외, corrupt/bare 제외, 빈 디렉토리 [],
+  헬퍼) + detect-gold-drift I/O 3건 eval-root 레이아웃 갱신
+- tsc / eslint 0-warning / prettier 그린, 전환 스크립트 11종 스모크 기대값 일치
+  (verify-s49 평균 0.2813, probe-s67 67/67/76, detect-gold-drift source
+  run-1..3 등)
+- **실측 로드**: parseRunFiles('eval') 3 run 파일(약 17MB — latest/baseline
+  파싱 포함) **70.8ms** — 기존 개별 readFileSync 합계 대비 단일화 + 게이트
+  의미론 일치
+
+### S86h-② — analyze-429-loss의 loadRunArtifacts를 parseRunFiles 위로 재구성
+
+S86h 잔여였던 loss 경로의 전용 로더를 공용 진입점으로 통합했다:
+
+- `loadRunArtifacts(resultsDir, gold)` → **`loadRunArtifacts(evalDir, gold)`** —
+  parseRunFiles(evalDir) 위의 얇은 합성 로더로 전환 (runMaps + reports를 같은
+  파싱 객체에서 도출)
+- **S54 recompute 의미론 보존**: pool(response.results) 존재 시 현재 gold로
+  라이브 재계산, pool 부재 시 저장 ranking 폴백 (ndcg10 레거시 폴백은 타입된
+  RankingMetrics로 정리) — 단위 테스트로 고정
+- **bare 파일 의미론 변경 (S86f → S86h)**: S86f는 bare(raw.results) 파일이 run
+  map에 기여했지만, S86h 게이트 계약(bare = corrupt = absent — verify-jsonc
+  --eval과 동일)에 따라 **완전 제외**로 대체
+- **계약 전환**: computeLossReport/CLI `--results-dir` → `--eval-dir` (eval 루트),
+  eval/index.ts는 undefined 기본값을 쓰므로 무변경
+- **벤치 정직화**: bench lossNewPath가 실제 parseRunFiles 경로(전 아티팩트
+  파싱)를 측정 — **39.9 → 36.8ms (7.9%)** (S86f 기록의 20.8ms는 run 파일만
+  plain-parse한 근사치)
+- **테스트**: writeRuns eval-root 레이아웃 전환, bare 테스트를 게이트 계약으로
+  재작성, S54 recompute-vs-stored 테스트 신규 (총 28건)

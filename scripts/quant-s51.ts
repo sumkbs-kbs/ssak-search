@@ -1,17 +1,16 @@
 /**
  * S51: subsumption 페어 8쿼리의 gold dedup 효과 정량화 (실제 computeNdcg).
  */
-import { computeNdcg } from '../eval/metrics'
-import * as fs from 'fs'
+import { computeNdcg, loadGoldStandards } from '../eval/metrics'
+import { parseRunFiles } from '../eval/run-files'
 
-const gold = JSON.parse(fs.readFileSync('eval/gold-standards.json', 'utf8')) as Record<
-  string,
-  { relevantDomains?: string[] }
->
+const gold = loadGoldStandards() // S86g: canonical gold loader
 type RunData = { results?: Array<{ query?: { id?: string }; response?: { results?: unknown } }> }
+const byRun = new Map(parseRunFiles('eval').map((rf) => [rf.run, rf.report] as const))
 function loadRun(n: number): RunData {
-  const r = JSON.parse(fs.readFileSync(`eval/results/run-${n}.json`, 'utf8')) as { report?: RunData }
-  return (r.report ?? r) as RunData
+  const rep = byRun.get(n)
+  if (!rep) throw new Error(`eval/results/run-${n}.json not found or gate-excluded (missing report.results)`)
+  return rep as RunData
 }
 const runs = [1, 2, 3].map(loadRun)
 function med(a: number, b: number, c: number) {
@@ -39,7 +38,7 @@ const affected = ['kr-tech-03', 'kr-tech-05', 'en-tech-01', 'en-tech-11', 'en-te
 let sumCur = 0,
   sumDed = 0
 for (const qid of affected) {
-  const gs = gold[qid]?.relevantDomains ?? []
+  const gs = gold[qid] ?? []
   const dgs = dedup(gs)
   const cur = score(qid, gs)
   const dd = score(qid, dgs)

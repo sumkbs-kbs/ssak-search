@@ -16,7 +16,12 @@ import { tmpdir } from 'os'
 import { join } from 'path'
 import type { SearchResult } from '../../src/types'
 import type { EvalBaseline } from '../../eval/types'
-import { computeLossReport, parseMirrorEvents, aggregateMirrorStats } from '../../scripts/analyze-429-loss'
+import {
+  computeLossReport,
+  loadRunArtifacts,
+  parseMirrorEvents,
+  aggregateMirrorStats,
+} from '../../scripts/analyze-429-loss'
 
 function makeRunDir(): string {
   const dir = mkdtempSync(join(tmpdir(), 'loss-test-'))
@@ -32,8 +37,12 @@ interface FixtureQuery {
   pools?: Array<Array<Pick<SearchResult, 'url' | 'domain' | 'title' | 'content' | 'score'>>>
 }
 
-/** Write one run-N.json per run index with the per-query backends/ndcg (+ optional pool). */
+/** Write one run-N.json per run index with the per-query backends/ndcg (+ optional pool).
+ *  S86h-②: fixtures use the eval-root layout (results/ subdir) — parseRunFiles
+ *  globs evalDir/results/run-*.json, so `dir` IS the eval root in every test. */
 function writeRuns(dir: string, queries: FixtureQuery[], runCount: number): void {
+  const resultsDir = join(dir, 'results')
+  mkdirSync(resultsDir, { recursive: true })
   for (let r = 0; r < runCount; r++) {
     const results = queries.map((q) => ({
       query: { id: q.id },
@@ -41,9 +50,88 @@ function writeRuns(dir: string, queries: FixtureQuery[], runCount: number): void
       ranking: { ndcgAt10: q.ndcgs[r] ?? 0 },
       ...(q.pools?.[r] ? { response: { results: q.pools[r] } } : {}),
     }))
-    writeFileSync(join(dir, `run-${r + 1}.json`), JSON.stringify({ report: { results } }), 'utf-8')
+    writeFileSync(join(resultsDir, `run-${r + 1}.json`), JSON.stringify({ report: { results } }), 'utf-8')
   }
 }
+
+describe('loadRunArtifacts (S86f single-pass)', () => {
+  let dir: string
+  beforeEach(() => {
+    dir = makeRunDir()
+  })
+  afterEach(() => {
+    rmSync(dir, { recursive: true, force: true })
+  })
+
+  it('derives run maps and full reports from ONE parse per run file', () => {
+    writeRuns(
+      dir,
+      [
+        { id: 'en-fact-01', backends: [['wikipedia', 'bing'], ['bing']], ndcgs: [0.9, 0.2] },
+        { id: 'zh-fact-03', backends: [['wikipedia', 'bing'], ['bing']], ndcgs: [0.8, 0.1] },
+      ],
+      2,
+    )
+    const gold = new Map<string, string[]>([
+      ['en-fact-01', ['wikipedia.org']],
+      ['zh-fact-03', ['baike.baidu.com']],
+    ])
+    const { runMaps, reports } = loadRunArtifacts(dir, gold)
+    expect(runMaps).toHaveLength(2)
+    expect(reports).toHaveLength(2)
+    // run maps carry per-query backends + NDCG (legacy stored-ranking fallback)
+    expect(runMaps[0].get('en-fact-01')?.backends).toEqual(['wikipedia', 'bing'])
+    expect(runMaps[0].get('en-fact-01')?.ndcg).toBeCloseTo(0.9, 3)
+    expect(runMaps[1].get('en-fact-01')?.backends).toEqual(['bing'])
+    // full reports come from the SAME parse (S75 gate cross-ref input)
+    expect(reports[0].results.map((r) => r.query.id)).toEqual(['en-fact-01', 'zh-fact-03'])
+    expect(reports[1].results).toHaveLength(2)
+  })
+
+  it('EXCLUDES a bare-format (no report wrapper) run file — S86h gate contract', () => {
+    // S86f kept the legacy behavior (bare raw.results file → run map
+    // contributed, report skipped). S86h's parseRunFiles gate treats bare
+    // files as CORRUPT — verify-jsonc --eval rejects the same shape, so the
+    // loss report must not analyze them either (single entry point shared
+    // with the CI integrity gate).
+    writeRuns(dir, [{ id: 'q1', backends: [['wikipedia'], ['wikipedia']], ndcgs: [0.5, 0.5] }], 2)
+    writeFileSync(
+      join(dir, 'results', 'run-1.json'),
+      JSON.stringify({
+        results: [{ query: { id: 'q1' }, backends: ['wikipedia'], ranking: { ndcgAt10: 0.5 } }],
+      }),
+      'utf-8',
+    )
+    const { runMaps, reports } = loadRunArtifacts(dir, new Map([['q1', ['good.example.com']]]))
+    expect(runMaps).toHaveLength(1) // bare run-1.json is gate-excluded
+    expect(reports).toHaveLength(1)
+    expect(runMaps[0].get('q1')?.ndcg).toBeCloseTo(0.5, 3) // run-2 stored-ranking fallback
+  })
+
+  it('recomputes NDCG live from the pool, falling back to stored ranking only without a pool (S54)', () => {
+    const good = { url: 'https://good.example.com/a', domain: 'good.example.com', title: 'g', content: 'g', score: 1 }
+    const other = {
+      url: 'https://other.example.com/b',
+      domain: 'other.example.com',
+      title: 'o',
+      content: 'o',
+      score: 1,
+    }
+    writeRuns(
+      dir,
+      [{ id: 'q1', backends: [['wikipedia'], ['wikipedia']], ndcgs: [0.9, 0.4], pools: [[good, other]] }],
+      2,
+    )
+    const { runMaps } = loadRunArtifacts(dir, new Map([['q1', ['good.example.com']]]))
+    // run-1: pool present → LIVE recompute under CURRENT gold — good.example.com
+    // at rank 1 → NDCG@10 = 1.0 (S49 label-suffix + S50 DCG cap). The stored
+    // 0.9 is IGNORED even though it is plausible.
+    expect(runMaps[0].get('q1')?.ndcg).toBeCloseTo(1.0, 3)
+    expect(runMaps[0].get('q1')?.ndcg).not.toBeCloseTo(0.9, 3)
+    // run-2: no pool → legacy stored-ranking fallback
+    expect(runMaps[1].get('q1')?.ndcg).toBeCloseTo(0.4, 3)
+  })
+})
 
 describe('computeLossReport', () => {
   let dir: string

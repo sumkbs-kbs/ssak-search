@@ -1,14 +1,16 @@
 /**
  * S49: kr-stock-03 gold 교정 + IDCG-cap 지표의 영향 정량화.
  */
-import * as fs from 'fs'
+import { loadGoldStandards } from '../eval/metrics'
+import { parseRunFiles } from '../eval/run-files'
 
 type RunData = { results?: Array<{ query?: { id?: string }; response?: { results?: unknown } }> }
-const runs: RunData[] = []
-for (const n of [1, 2, 3]) {
-  const r = JSON.parse(fs.readFileSync(`eval/results/run-${n}.json`, 'utf8')) as { report?: RunData }
-  runs.push((r.report ?? r) as RunData)
-}
+const byRun = new Map(parseRunFiles('eval').map((rf) => [rf.run, rf.report] as const))
+const runs: RunData[] = [1, 2, 3].map((n) => {
+  const rep = byRun.get(n)
+  if (!rep) throw new Error(`eval/results/run-${n}.json not found or gate-excluded (missing report.results)`)
+  return rep as RunData
+})
 function extractDomain(url: string): string {
   try {
     return new URL(url).hostname.replace(/^www\./, '').toLowerCase()
@@ -75,12 +77,8 @@ let n = 0,
   sumC = 0,
   changed = 0,
   worstLoss = 0
-const gold = JSON.parse(fs.readFileSync('eval/gold-standards.json', 'utf8')) as Record<
-  string,
-  { relevantDomains?: string[] }
->
-for (const [qid, g] of Object.entries(gold)) {
-  const gs: string[] = g?.relevantDomains ?? []
+const gold = loadGoldStandards() // S86g: canonical gold loader
+for (const [qid, gs] of Object.entries(gold)) {
   if (gs.length === 0) continue
   const perRunP = runs.map((run) => pool(run, qid))
   if (perRunP.some((p) => p.length === 0)) continue

@@ -122,25 +122,32 @@ describe('analyzeGoldDrift + loadGoldFile (I/O)', () => {
     rmSync(dir, { recursive: true, force: true })
   })
 
-  it('reads run-N.json files and labels the source', () => {
-    mkdirSync(join(dir, 'sub'))
-    writeFileSync(join(dir, 'sub', 'run-1.json'), JSON.stringify({ report: { results: [entry('q1', 1.0, POOL)] } }))
-    const report = analyzeGoldDrift({ resultsDir: join(dir, 'sub'), goldFile: emptyGold })
+  it('reads run-N.json files and labels the source (S86h eval-root layout)', () => {
+    // S86h: parseRunFiles expects the eval root (results/ + baselines/ subdirs)
+    mkdirSync(join(dir, 'sub', 'results'), { recursive: true })
+    writeFileSync(
+      join(dir, 'sub', 'results', 'run-1.json'),
+      JSON.stringify({ report: { results: [entry('q1', 1.0, POOL)] } }),
+    )
+    const report = analyzeGoldDrift({ evalDir: join(dir, 'sub'), goldFile: emptyGold })
     expect(report.resultsSource).toBe('run-1.json')
     expect(report.runCount).toBe(1)
     expect(report.queryCount).toBe(1)
   })
 
   it('falls back to latest.json when no run-N files exist', () => {
-    mkdirSync(join(dir, 'sub'))
-    writeFileSync(join(dir, 'sub', 'latest.json'), JSON.stringify({ report: { results: [entry('q1', 0.9, POOL)] } }))
-    const report = analyzeGoldDrift({ resultsDir: join(dir, 'sub'), goldFile: emptyGold })
+    mkdirSync(join(dir, 'sub', 'results'), { recursive: true })
+    writeFileSync(
+      join(dir, 'sub', 'results', 'latest.json'),
+      JSON.stringify({ report: { results: [entry('q1', 0.9, POOL)] } }),
+    )
+    const report = analyzeGoldDrift({ evalDir: join(dir, 'sub'), goldFile: emptyGold })
     expect(report.resultsSource).toBe('latest.json')
     expect(report.runCount).toBe(1)
   })
 
   it('handles an empty/missing results dir gracefully', () => {
-    const report = analyzeGoldDrift({ resultsDir: join(dir, 'does-not-exist'), goldFile: emptyGold })
+    const report = analyzeGoldDrift({ evalDir: join(dir, 'does-not-exist'), goldFile: emptyGold })
     expect(report.resultsSource).toBe('none')
     expect(report.runCount).toBe(0)
     expect(report.queryCount).toBe(0)

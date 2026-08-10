@@ -154,7 +154,7 @@ export function evalArtifactFiles(): string[] {
  * loading run files, so corruption is surfaced as gate ERROR instead of being
  * silently swallowed (a corrupt baselines/latest.json used to load as null →
  * "baseline: none" → PASS; a corrupt results/latest.json was never read by
- * loadRunFiles at all).
+ * the removed loadRunFiles path at all).
  *
  * CONTRACT: these dirs hold ONLY EvalReport artifacts — any *.json placed
  * here must serialize `{ report: { results: [...] } }`. A non-report JSON
@@ -171,8 +171,9 @@ export function checkEvalArtifacts(evalDir: string): Array<{ file: string; reaso
  * S86d: parse EVERY artifact under an eval dir exactly ONCE, returning each
  * file's parsed top-level value (when valid). The parsed objects are reused
  * by verify-commit-eval.ts to build run reports — eliminating the third parse
- * that loadRunFiles previously performed on the same files. Benchmark on the
- * real artifacts: 16.9 MB / 6 files, 1019 ms (3× parse) → 38 ms (1× parse).
+ * that the (now removed) loadRunFiles path previously performed on the same
+ * files. Benchmark on the real artifacts: 16.9 MB / 6 files, 1019 ms
+ * (3× parse) → 38 ms (1× parse).
  */
 export function parseEvalArtifacts(
   evalDir: string,

@@ -6,6 +6,7 @@
  * Usage: npx tsx scripts/probe-s36-recovery.ts
  */
 import { wikidataWikiSearch } from '../src/lib/specialized'
+import { loadGoldStandards } from '../eval/metrics'
 
 const VULNERABLE: Record<string, string> = {
   'ja-fact-02': '人工知能の仕組み',
@@ -18,20 +19,14 @@ const VULNERABLE: Record<string, string> = {
   'zh-fact-15': '什么是5G网络',
 }
 
-type GoldEntry = { relevantDomains?: string[] }
-type GoldMap = Record<string, GoldEntry>
-
 async function main(): Promise<void> {
-  const gold = await import('../eval/gold-standards.json')
-  // S82: the JSON import is untyped — normalize to a typed GoldMap so the
-  // `goldMap[id]` index (TS7053) type-checks under the widened include.
-  const goldMap: GoldMap = ((gold.default ?? gold) as GoldMap) ?? {}
+  // S86g: canonical gold loader — replaced the untyped JSON module import.
+  const goldMap = loadGoldStandards()
 
   let recovered = 0
   let total = 0
   for (const [id, queryText] of Object.entries(VULNERABLE)) {
-    const entry = goldMap[id]
-    const domains: string[] = entry?.relevantDomains ?? []
+    const domains: string[] = goldMap[id] ?? []
     const lang = id.startsWith('ja') ? 'ja' : 'zh'
     const results = await wikidataWikiSearch(queryText, { language: lang, maxResults: 5 })
     total++

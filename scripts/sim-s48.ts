@@ -1,12 +1,12 @@
 import { recomputeScores, sortResults, applyQualityThreshold } from '../src/lib/search/ranking'
 import { computeNdcg } from '../eval/metrics'
-import * as fs from 'fs'
+import { parseRunFiles } from '../eval/run-files'
 import type { SearchContext } from '../src/lib/search/context'
 
-const r = JSON.parse(fs.readFileSync('eval/results/run-3.json', 'utf8')) as {
-  report?: { results?: Array<{ query?: { id?: string }; response?: { results?: unknown } }> }
-}
-const rep = (r.report ?? r) as { results?: Array<{ query?: { id?: string }; response?: { results?: unknown } }> }
+// S86h: shared single-parse loader — run-3.json by numeric index
+const rf3 = parseRunFiles('eval').find((rf) => rf.run === 3)
+if (!rf3) throw new Error('eval/results/run-3.json not found or gate-excluded (missing report.results)')
+const rep = rf3.report as { results?: Array<{ query?: { id?: string }; response?: { results?: unknown } }> }
 const q = (rep.results ?? []).find((x) => x.query?.id === 'kr-stock-14')
 const respResults = q?.response?.results
 const rawPool = Array.isArray(respResults) ? respResults : []

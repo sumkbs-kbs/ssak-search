@@ -26,7 +26,7 @@
  * Defaults: the old config (120s/30s), a mid point (600s/120s), the B3
  * aligned config (1800s/300s), and a 1h bound (3600s/300s).
  */
-import * as fs from 'fs'
+import { parseRunFiles } from '../eval/run-files'
 
 interface RunQuery {
   id: string
@@ -42,17 +42,14 @@ export interface RunData {
 }
 
 function loadRuns(): RunData[] {
+  // S86h: shared single-parse loader — numeric order + existsSync-skip
+  // semantics preserved (missing run files are simply absent from the result).
   const runs: RunData[] = []
-  for (const n of [1, 2, 3]) {
-    const file = `eval/results/run-${n}.json`
-    if (!fs.existsSync(file)) continue
-    const raw = JSON.parse(fs.readFileSync(file, 'utf8')) as {
-      report?: { timestamp?: string; results?: Array<Record<string, unknown>> }
-    }
-    const rep = raw.report ?? (raw as unknown as { timestamp?: string; results?: Array<Record<string, unknown>> })
+  for (const rf of parseRunFiles('eval')) {
+    const rep = rf.report as unknown as { timestamp?: string; results?: Array<Record<string, unknown>> }
     const ts = rep.timestamp ? new Date(rep.timestamp).getTime() : NaN
     if (Number.isNaN(ts)) {
-      console.error(`  !! run-${n}.json has no report.timestamp — cannot place queries on a timeline`)
+      console.error(`  !! run-${rf.run}.json has no report.timestamp — cannot place queries on a timeline`)
       process.exit(1)
     }
     const queries = (rep.results ?? [])
@@ -66,7 +63,7 @@ function loadRuns(): RunData[] {
         }
       })
       .filter((q) => q.id)
-    runs.push({ runIndex: n, startMs: ts, queries })
+    runs.push({ runIndex: rf.run, startMs: ts, queries })
   }
   return runs
 }

@@ -25,9 +25,10 @@
  *   npx tsx scripts/detect-gold-drift.ts --gold /tmp/gold-whatif.json   # what-if
  *   npx tsx scripts/detect-gold-drift.ts --threshold 0.05 --json
  */
-import { readFileSync, readdirSync } from 'fs'
+import { readFileSync } from 'fs'
 import { resolve } from 'path'
-import { computeNdcg, computeRankingMetrics } from '../eval/metrics'
+import { computeNdcg, computeRankingMetrics, parseGoldStandards } from '../eval/metrics'
+import { parseRunFiles } from '../eval/run-files'
 import type { SearchResult } from '../src/types'
 
 /** Minimal shape of a run-file result row (loose on purpose — artifacts vary). */
@@ -183,28 +184,22 @@ export function computeGoldDrift(
   }
 }
 
-/** Load all eval/results/run-N.json files (or latest.json when none exist). */
-function loadRunResults(resultsDir: string): { source: string; runs: RunEntry[][] } {
-  let runFiles: string[] = []
-  try {
-    runFiles = readdirSync(resultsDir)
-      .filter((f) => /^run-\d+\.json$/.test(f))
-      .sort((a, b) => Number(a.match(/\d+/)?.[0]) - Number(b.match(/\d+/)?.[0]))
-  } catch {
-    return { source: 'none', runs: [] } // missing/empty dir — nothing to compare
-  }
+/** Load all run-N.json artifacts under an eval dir (or latest.json when none exist). */
+function loadRunResults(evalDir: string): { source: string; runs: RunEntry[][] } {
+  // S86h: shared single-parse loader — missing/corrupt artifacts are excluded
+  // by the same gate rules the CI applies ([] → latest.json fallback below).
+  const runFiles = parseRunFiles(evalDir)
   if (runFiles.length > 0) {
-    const runs = runFiles.map((f) => {
-      const raw = JSON.parse(readFileSync(resolve(resultsDir, f), 'utf-8')) as {
-        report?: { results?: RunEntry[] }
-        results?: RunEntry[]
-      }
-      return raw.report?.results ?? raw.results ?? []
-    })
-    return { source: `${runFiles.join(', ')}`, runs }
+    return {
+      source: runFiles.map((rf) => rf.file).join(', '),
+      runs: runFiles.map((rf) => (rf.report.results as unknown as RunEntry[]) ?? []),
+    }
   }
+  // latest.json fallback is deliberately NOT well-formedness-gated (legacy
+  // single-run path — bare `raw.results` files still parse here), unlike the
+  // run files above which go through parseRunFiles' gate.
   try {
-    const raw = JSON.parse(readFileSync(resolve(resultsDir, 'latest.json'), 'utf-8')) as {
+    const raw = JSON.parse(readFileSync(resolve(evalDir, 'results', 'latest.json'), 'utf-8')) as {
       report?: { results?: RunEntry[] }
       results?: RunEntry[]
     }
@@ -214,28 +209,28 @@ function loadRunResults(resultsDir: string): { source: string; runs: RunEntry[][
   }
 }
 
-/** Load a gold map from a gold-standards.json file (skips `_`-prefixed keys).
+/** Load a gold map from a gold-standards.json file — S86g: delegates the
+ *  shape mapping to the canonical parseGoldStandards so every gold consumer
+ *  shares ONE filter (skips `_`-prefixed keys; empty arrays stay present).
  *  Throws when the file is missing/unreadable — callers must distinguish that
  *  (a footgun: silently returning {} would classify every gold-bearing query
- *  as "gold removed"). */
+ *  as "gold removed"); the read+parse stay here, parseGoldStandards only maps
+ *  an already-parsed object. */
 export function loadGoldFile(path: string): Record<string, string[]> {
-  const data = JSON.parse(readFileSync(path, 'utf-8')) as Record<string, { relevantDomains?: string[] }>
-  const result: Record<string, string[]> = {}
-  for (const [key, val] of Object.entries(data)) {
-    if (!key.startsWith('_') && val.relevantDomains) result[key] = val.relevantDomains
-  }
-  return result
+  const data = JSON.parse(readFileSync(path, 'utf-8')) as unknown
+  return parseGoldStandards(data)
 }
 
 export interface DriftOptions {
   goldFile?: string
-  resultsDir?: string
+  /** eval root (containing results/ + baselines/) — same contract as parseRunFiles. */
+  evalDir?: string
   threshold?: number
 }
 
 /** I/O entry: load artifacts, compute drift, attach the source label. */
 export function analyzeGoldDrift(opts: DriftOptions = {}): GoldDriftReport {
-  const resultsDir = opts.resultsDir ?? resolve(process.cwd(), 'eval', 'results')
+  const evalDir = opts.evalDir ?? resolve(process.cwd(), 'eval')
   const goldFile = opts.goldFile ?? resolve(process.cwd(), 'eval', 'gold-standards.json')
   const threshold = opts.threshold ?? 0.01
   let gold: Record<string, string[]>
@@ -245,7 +240,7 @@ export function analyzeGoldDrift(opts: DriftOptions = {}): GoldDriftReport {
     console.error(`::warning::detect-gold-drift: cannot read gold file ${goldFile} — treating gold as empty`)
     gold = {}
   }
-  const { source, runs } = loadRunResults(resultsDir)
+  const { source, runs } = loadRunResults(evalDir)
   return { ...computeGoldDrift(runs, gold, threshold), resultsSource: source }
 }
 
@@ -253,15 +248,15 @@ function main(): void {
   const args = process.argv.slice(2)
   const json = args.includes('--json')
   let goldFile: string | undefined
-  let resultsDir: string | undefined
+  let evalDir: string | undefined
   let threshold = 0.01
   for (let i = 0; i < args.length; i++) {
     if (args[i] === '--gold') goldFile = args[++i]
-    else if (args[i] === '--results-dir') resultsDir = args[++i]
+    else if (args[i] === '--eval-dir') evalDir = args[++i]
     else if (args[i] === '--threshold') threshold = Number(args[++i]) || 0.01
     else if (args[i] === '--help') {
       console.log(
-        'Usage: npx tsx scripts/detect-gold-drift.ts [--gold <path>] [--results-dir <dir>] [--threshold <n>] [--json]',
+        'Usage: npx tsx scripts/detect-gold-drift.ts [--gold <path>] [--eval-dir <dir>] [--threshold <n>] [--json]',
       )
       console.log('  Detects NDCG drift caused by gold/rules edits: recomputes the saved pools')
       console.log('  under the CURRENT gold and diffs against the stored ranking (the eval-time')
@@ -273,7 +268,7 @@ function main(): void {
     }
   }
 
-  const report = analyzeGoldDrift({ goldFile, resultsDir, threshold })
+  const report = analyzeGoldDrift({ goldFile, evalDir, threshold })
 
   if (json) {
     console.log(JSON.stringify(report, null, 2))

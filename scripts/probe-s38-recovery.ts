@@ -7,24 +7,20 @@
  * Usage: npx tsx scripts/probe-s38-recovery.ts
  */
 import { dbpediaLangSearch, wikidataWikiSearch } from '../src/lib/specialized'
+import { loadGoldStandards } from '../eval/metrics'
 
 const VULNERABLE_JA: Array<{ id: string; query: string }> = [
   { id: 'ja-fact-02', query: '人工知能の仕組み' },
   { id: 'ja-fact-10', query: '地球温暖化の仕組み' },
 ]
 
-type GoldEntry = { relevantDomains?: string[] }
-type GoldMap = Record<string, GoldEntry>
-
 async function main(): Promise<void> {
-  const gold = await import('../eval/gold-standards.json')
-  // S82: normalize the untyped JSON import to a typed GoldMap (TS7053).
-  const goldMap: GoldMap = ((gold.default ?? gold) as GoldMap) ?? {}
+  // S86g: canonical gold loader — replaced the untyped JSON module import.
+  const goldMap = loadGoldStandards()
 
   let recovered = 0
   for (const { id, query } of VULNERABLE_JA) {
-    const entry = goldMap[id]
-    const domains: string[] = entry?.relevantDomains ?? []
+    const domains: string[] = goldMap[id] ?? []
 
     // Tier 1: wikidata (S36)
     const wd = await wikidataWikiSearch(query, { language: 'ja', maxResults: 5 })

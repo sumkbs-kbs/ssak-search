@@ -2,7 +2,8 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 import { mkdtempSync, writeFileSync, mkdirSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { runGate, loadRunFiles, loadBaselineFromWorktree } from '../../scripts/verify-commit-eval'
+import { runGate, baselineFromArtifacts } from '../../scripts/verify-commit-eval'
+import { parseEvalArtifacts } from '../../scripts/verify-jsonc'
 import type { EvalReport, EvalResult, EvalQuery } from '../../eval/types'
 
 /** Build a minimal EvalReport with a query whose pool ranks gold[0] first. */
@@ -98,38 +99,74 @@ afterEach(() => {
 
 const gold: Record<string, string[]> = { 'q-pass': ['good.example.com'], 'q-fail': ['good.example.com'] }
 
-describe('loadRunFiles', () => {
-  it('loads run-N.json in numeric order', () => {
-    const dir = join(tmp, 'results')
-    mkdirSync(dir, { recursive: true })
-    writeRun(dir, 1, makeReport('q-pass', { poolDomains: ['good.example.com'] }))
-    writeRun(dir, 2, makeReport('q-pass', { poolDomains: ['good.example.com'] }))
-    const { reports, files, queries } = loadRunFiles(dir)
-    expect(files).toEqual(['run-1.json', 'run-2.json'])
-    expect(reports).toHaveLength(2)
-    expect(queries[0].id).toBe('q-pass')
+// S86e: loadRunFiles was removed — runGate (via parseEvalArtifacts) is the
+// single run-loading path. The numeric-order and missing-runs behaviors that
+// loadRunFiles used to guarantee are asserted through runGate below.
+describe('runGate run-file loading (S86e single path)', () => {
+  it('lists run files in numeric order (run-1, run-2, ... run-10)', () => {
+    const dir = join(tmp, 'eval')
+    mkdirSync(join(dir, 'results'), { recursive: true })
+    writeRun(join(dir, 'results'), 1, makeReport('q-pass', { poolDomains: ['good.example.com'] }))
+    writeRun(join(dir, 'results'), 2, makeReport('q-pass', { poolDomains: ['good.example.com'] }))
+    writeRun(join(dir, 'results'), 10, makeReport('q-pass', { poolDomains: ['good.example.com'] }))
+    const o = runGate(dir, { gold })
+    expect(o.status).toBe('PASS')
+    // parseEvalArtifacts globs alphabetically (run-1, run-10, run-2); the
+    // gate re-sorts numerically like the removed loadRunFiles path.
+    expect(o.detail).toContain('run-1.json, run-2.json, run-10.json')
+    expect(o.detail).toContain('runs: 3')
   })
 
-  it('throws when no run files exist', () => {
-    const dir = join(tmp, 'results')
-    mkdirSync(dir, { recursive: true })
-    expect(() => loadRunFiles(dir)).toThrow('no run-*.json')
+  it('ERROR when results/ exists but has no run files', () => {
+    const dir = join(tmp, 'eval')
+    mkdirSync(join(dir, 'results'), { recursive: true })
+    const o = runGate(dir, { gold })
+    expect(o.status).toBe('ERROR')
+    expect(o.detail).toContain('no run-*.json artifacts found')
+  })
+
+  it('unions queries across runs (q-pass in run-1, q-fail in run-2)', () => {
+    // The removed loadRunFiles returned a query union across ALL runs so a
+    // query dropped from one run (runner error) is not silently excluded
+    // from the median aggregation. runGate preserves that contract.
+    const dir = join(tmp, 'eval')
+    mkdirSync(join(dir, 'results'), { recursive: true })
+    writeRun(join(dir, 'results'), 1, makeReport('q-pass', { poolDomains: ['good.example.com'] }))
+    writeRun(join(dir, 'results'), 2, makeReport('q-fail', { poolDomains: ['good.example.com'] }))
+    const o = runGate(dir, { gold })
+    expect(o.status).toBe('PASS')
+    expect(o.detail).toContain('queries: 2')
   })
 })
 
-describe('loadBaselineFromWorktree', () => {
-  it('returns null when no baseline file', () => {
-    expect(loadBaselineFromWorktree(tmp)).toBeNull()
+// S86f: loadBaselineFromWorktree was removed — runGate derives the baseline
+// from the SAME parsed artifacts (parseEvalArtifacts), so baselines/latest.json
+// is never re-read/re-parsed (~3.4 MB per commit).
+describe('baselineFromArtifacts (S86f — derived from the single parse pass)', () => {
+  it('returns null when no baseline artifact exists', () => {
+    const artifacts = parseEvalArtifacts(tmp)
+    expect(baselineFromArtifacts(artifacts, tmp)).toBeNull()
   })
 
-  it('loads a valid baseline snapshot', () => {
-    const bd = join(tmp, 'baselines')
-    mkdirSync(bd, { recursive: true })
+  it('derives a valid baseline from the already-parsed artifact', () => {
+    const dir = join(tmp, 'eval')
+    mkdirSync(join(dir, 'baselines'), { recursive: true })
     const rep = makeReport('q-pass', { poolDomains: ['good.example.com'] })
-    writeFileSync(join(bd, 'latest.json'), JSON.stringify({ timestamp: 't1', report: rep }), 'utf-8')
-    const b = loadBaselineFromWorktree(tmp)
+    writeFileSync(join(dir, 'baselines', 'latest.json'), JSON.stringify({ timestamp: 't1', report: rep }), 'utf-8')
+    const artifacts = parseEvalArtifacts(dir)
+    const b = baselineFromArtifacts(artifacts, dir)
     expect(b?.timestamp).toBe('t1')
     expect(b?.report.results).toHaveLength(1)
+  })
+
+  it('runGate surfaces the derived baseline timestamp (baseline not re-read)', () => {
+    const dir = join(tmp, 'eval')
+    mkdirSync(join(dir, 'results'), { recursive: true })
+    writeRun(join(dir, 'results'), 1, makeReport('q-pass', { poolDomains: ['good.example.com'] }))
+    writeBaseline(dir, makeReport('q-pass', { poolDomains: ['good.example.com'] }), '2026-02-02T00:00:00.000Z')
+    const o = runGate(dir, { gold })
+    expect(o.status).toBe('PASS')
+    expect(o.detail).toContain('baseline: 2026-02-02T00:00:00.000Z')
   })
 })
 
@@ -200,9 +237,9 @@ describe('runGate', () => {
     const dir = join(tmp, 'eval')
     mkdirSync(join(dir, 'results'), { recursive: true })
     writeRun(join(dir, 'results'), 1, makeReport('q-pass', { poolDomains: ['good.example.com'] }))
-    // A corrupt baseline used to load as null via loadBaselineFromWorktree's
-    // try/catch → "baseline: none" → PASS. The integrity pre-check must
-    // surface it as ERROR instead.
+    // A corrupt baseline used to load as null via the removed
+    // loadBaselineFromWorktree's try/catch → "baseline: none" → PASS. The
+    // integrity pre-check must surface it as ERROR instead.
     const bd = join(dir, 'baselines')
     mkdirSync(bd, { recursive: true })
     writeFileSync(join(bd, 'latest.json'), '{ "report": {', 'utf-8')

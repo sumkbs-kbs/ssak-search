@@ -1,17 +1,16 @@
 /**
  * S49 검증: 실제 computeNdcg로 저장 풀 재채점 — 기대 변화 3건.
  */
-import { computeNdcg } from '../eval/metrics'
-import * as fs from 'fs'
+import { computeNdcg, loadGoldStandards } from '../eval/metrics'
+import { parseRunFiles } from '../eval/run-files'
 
-const gold = JSON.parse(fs.readFileSync('eval/gold-standards.json', 'utf8')) as Record<
-  string,
-  { relevantDomains?: string[] }
->
+const gold = loadGoldStandards() // S86g: canonical gold loader
 type RunData = { results?: Array<{ query?: { id?: string }; response?: { results?: unknown } }> }
+const byRun = new Map(parseRunFiles('eval').map((rf) => [rf.run, rf.report] as const))
 function loadRun(n: number): RunData {
-  const r = JSON.parse(fs.readFileSync(`eval/results/run-${n}.json`, 'utf8')) as { report?: RunData }
-  return (r.report ?? r) as RunData
+  const rep = byRun.get(n)
+  if (!rep) throw new Error(`eval/results/run-${n}.json not found or gate-excluded (missing report.results)`)
+  return rep as RunData
 }
 function med(a: number, b: number, c: number) {
   return [a, b, c].sort((x, y) => x - y)[1]
@@ -28,7 +27,7 @@ function ndcgOf(pool: unknown[], golds: string[]): number {
 const targets = ['zh-travel-04', 'zh-general-06', 'kr-stock-03']
 const runs = [1, 2, 3].map(loadRun)
 for (const qid of targets) {
-  const g = gold[qid]?.relevantDomains
+  const g = gold[qid]
   if (!g) {
     console.log(qid, 'NO GOLD')
     continue
@@ -48,8 +47,7 @@ for (const qid of targets) {
 // 전체 gold 쿼리 평균 재계산 (R1 + gold fix 반영)
 let n = 0,
   sum = 0
-for (const [qid, g] of Object.entries(gold)) {
-  const gs: string[] = g?.relevantDomains ?? []
+for (const [qid, gs] of Object.entries(gold)) {
   if (gs.length === 0) continue
   const vals = runs.map((run) => {
     const pool = poolOf(run, qid)

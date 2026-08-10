@@ -4,12 +4,18 @@
  */
 import { readFileSync } from 'fs'
 import { EVAL_QUERIES } from '../eval/queries'
+import { parseRunFiles } from '../eval/run-files'
 
 const gold = JSON.parse(readFileSync('eval/gold-standards.json', 'utf8')) as Record<
   string,
   { relevantDomains?: string[]; relevantUrls?: string[] }
 >
-const runs = [1, 2, 3].map((i) => JSON.parse(readFileSync(`eval/results/run-${i}.json`, 'utf8')).report)
+// S86h: shared single-parse loader — same 3-run contract as the old hardcoded
+// [1, 2, 3] map (throws when a run artifact is missing).
+const runFiles = parseRunFiles('eval')
+if (runFiles.length < 3)
+  throw new Error('expected 3 valid runs (eval/results/run-1..3.json — corrupt/bare artifacts are gate-excluded)')
+const runs = runFiles.map((rf) => rf.report)
 
 const ids = [
   'kr-news-03',
@@ -34,7 +40,9 @@ for (const id of ids) {
   for (const [i, rep] of runs.entries()) {
     const r = rep.results.find((x: { query?: { id?: string } }) => x.query?.id === id)
     if (!r) continue
-    const nd = Number(r.ranking?.ndcgAt10 ?? r.ranking?.ndcg10 ?? 0)
+    // S86h: `r` is now a typed EvalResult — RankingMetrics has ndcgAt10 only
+    // (the legacy ndcg10 fallback was for untyped artifacts, gone with the gate).
+    const nd = Number(r.ranking?.ndcgAt10 ?? 0)
     const bks = (r.backends ?? []).join('+')
     const res: Array<{ domain?: string; title?: string }> = r.response?.results ?? []
     const top = res.slice(0, 8).map((x) => x.domain || '?')

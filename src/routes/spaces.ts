@@ -13,11 +13,16 @@
  *   DELETE /api/spaces/:id/files/:key — Remove file from space
  */
 
-import { Hono } from 'hono'
+import { Hono, type Context } from 'hono'
 import { logger, toError } from '../lib/logger'
 import { z } from 'zod'
 import type { AppBindings, ErrorResponse } from '../types'
 import { getSpaceStub } from '../lib/space-do'
+
+// Binding check helper (same contract as pages.ts / keys.ts)
+function checkBinding(c: Context<{ Bindings: AppBindings }>): boolean {
+  return Boolean(c.env.SPACE_DO)
+}
 
 // ============================================================
 // Schema
@@ -54,6 +59,9 @@ const spaces = new Hono<{ Bindings: AppBindings }>()
  * GET / — List spaces for current user
  */
 spaces.get('/', async (c) => {
+  if (!checkBinding(c)) {
+    return c.json<ErrorResponse>({ detail: 'Spaces requires SPACE_DO binding', code: 'binding_missing' }, 501)
+  }
   const userId = c.req.header('X-User-Id') || c.req.query('user_id') || 'anonymous'
   const stub = getSpaceStub(c.env)
   const list = await stub.listSpaces(userId)
@@ -64,6 +72,9 @@ spaces.get('/', async (c) => {
  * POST / — Create a new space
  */
 spaces.post('/', async (c) => {
+  if (!checkBinding(c)) {
+    return c.json<ErrorResponse>({ detail: 'Spaces requires SPACE_DO binding', code: 'binding_missing' }, 501)
+  }
   try {
     const userId = c.req.header('X-User-Id') || c.req.query('user_id') || 'anonymous'
     const body = CreateSchema.parse(await c.req.json())
@@ -83,6 +94,9 @@ spaces.post('/', async (c) => {
  * GET /:id — Get space details
  */
 spaces.get('/:id', async (c) => {
+  if (!checkBinding(c)) {
+    return c.json<ErrorResponse>({ detail: 'Spaces requires SPACE_DO binding', code: 'binding_missing' }, 501)
+  }
   const stub = getSpaceStub(c.env)
   const space = await stub.getSpace(c.req.param('id'))
   if (!space) {
@@ -95,6 +109,9 @@ spaces.get('/:id', async (c) => {
  * PUT /:id — Update space
  */
 spaces.put('/:id', async (c) => {
+  if (!checkBinding(c)) {
+    return c.json<ErrorResponse>({ detail: 'Spaces requires SPACE_DO binding', code: 'binding_missing' }, 501)
+  }
   try {
     const body = UpdateSchema.parse(await c.req.json())
     const stub = getSpaceStub(c.env)
@@ -116,6 +133,9 @@ spaces.put('/:id', async (c) => {
  * DELETE /:id — Delete space
  */
 spaces.delete('/:id', async (c) => {
+  if (!checkBinding(c)) {
+    return c.json<ErrorResponse>({ detail: 'Spaces requires SPACE_DO binding', code: 'binding_missing' }, 501)
+  }
   const stub = getSpaceStub(c.env)
   const deleted = await stub.deleteSpace(c.req.param('id'))
   if (!deleted) {
@@ -128,6 +148,9 @@ spaces.delete('/:id', async (c) => {
  * POST /:id/files — Add file reference to space
  */
 spaces.post('/:id/files', async (c) => {
+  if (!checkBinding(c)) {
+    return c.json<ErrorResponse>({ detail: 'Spaces requires SPACE_DO binding', code: 'binding_missing' }, 501)
+  }
   try {
     const body = AddFileSchema.parse(await c.req.json())
     const stub = getSpaceStub(c.env)
@@ -155,6 +178,9 @@ spaces.post('/:id/files', async (c) => {
  * DELETE /:id/files/:key — Remove file from space
  */
 spaces.delete('/:id/files/:key', async (c) => {
+  if (!checkBinding(c)) {
+    return c.json<ErrorResponse>({ detail: 'Spaces requires SPACE_DO binding', code: 'binding_missing' }, 501)
+  }
   const stub = getSpaceStub(c.env)
   const space = await stub.removeFile(c.req.param('id'), c.req.param('key'))
   if (!space) {

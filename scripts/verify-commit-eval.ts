@@ -41,7 +41,7 @@ import type { EvalReport, EvalQuery, EvalBaseline, RegressionDiff } from '../eva
 import { computeMedianReport } from '../eval/median'
 import { diffBaselineStabilized, diffBaseline } from '../eval/baseline'
 import { loadGoldStandards } from '../eval/metrics'
-import { checkEvalArtifacts } from './verify-jsonc'
+import { parseEvalArtifacts } from './verify-jsonc'
 
 export interface GateOutcome {
   status: 'PASS' | 'FAIL' | 'SKIP' | 'ERROR'
@@ -128,20 +128,36 @@ export function runGate(evalDir: string, opts: GateOptions = {}): GateOutcome {
   //    loadBaselineFromWorktree's try/catch → "baseline: none" → PASS
   //  - a corrupt results/latest.json was never read by loadRunFiles at all
   // This surfaces both as ERROR with the offending files.
-  const corrupt = checkEvalArtifacts(evalDir)
+  //
+  // S86d: parseEvalArtifacts parses every artifact EXACTLY ONCE and returns
+  // the parsed values — the run reports below are built from those objects,
+  // so the gate no longer re-reads/re-parses the ~3.4 MB run files (the old
+  // loadRunFiles path). 1019 ms → 38 ms on the real artifact set.
+  const artifacts = parseEvalArtifacts(evalDir)
+  const corrupt = artifacts.filter((a) => !a.ok)
   if (corrupt.length > 0) {
     const files = corrupt.map((c) => `${c.file}: ${c.reason}`).join('; ')
     return { status: 'ERROR', detail: `artifact integrity check failed: ${files}` }
   }
 
-  let reports: EvalReport[]
-  let queries: EvalQuery[]
-  let files: string[]
-  try {
-    ;({ reports, queries, files } = loadRunFiles(resultsDir))
-  } catch (err) {
-    return { status: 'ERROR', detail: `could not load run-*.json: ${(err as Error).message}` }
+  // Build the run report list from the ALREADY-parsed artifacts (no re-read).
+  const runArtifacts = artifacts.filter((a) => /run-\d+\.json$/.test(a.file))
+  if (runArtifacts.length === 0) {
+    return { status: 'ERROR', detail: 'no run-*.json artifacts found' }
   }
+  const reports = runArtifacts.map((a) => {
+    const raw = a.parsed as { report?: EvalReport } | EvalReport
+    return (raw as { report?: EvalReport }).report ?? (raw as EvalReport)
+  })
+  const files = runArtifacts.map((a) => a.file.split('/').pop() ?? a.file)
+
+  // Query set: union across ALL runs' results so a query dropped from run-1
+  // (runner error) is not silently excluded from the median aggregation.
+  const seen = new Map<string, EvalQuery>()
+  for (const rep of reports) {
+    for (const r of rep.results) seen.set(r.query.id, r.query)
+  }
+  const queries = [...seen.values()]
 
   // Gold is loaded from the WORKTREE (cwd) — the commit's own gold — unless a
   // test injects it.

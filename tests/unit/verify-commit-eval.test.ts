@@ -251,6 +251,30 @@ describe('runGate', () => {
     expect(['PASS', 'FAIL']).toContain(o.status)
   })
 
+  it('S86d run reports are built from parseEvalArtifacts (no separate re-parse)', () => {
+    // The integrity pre-check parses every artifact once; the gate must build
+    // run reports from those SAME parsed objects. A corrupt results/latest.json
+    // (not a run file) that WOULD have been ignored by loadRunFiles is caught
+    // here; a valid run file passes through with the parsed report intact.
+    const dir = join(tmp, 'eval')
+    mkdirSync(join(dir, 'results'), { recursive: true })
+    writeRun(join(dir, 'results'), 1, makeReport('q-pass', { poolDomains: ['good.example.com'] }))
+    writeBaseline(dir, makeReport('q-pass', { poolDomains: ['good.example.com'] }))
+    const o = runGate(dir, { gold })
+    expect(['PASS', 'FAIL']).toContain(o.status)
+    expect(o.detail).toContain('run-1.json')
+  })
+
+  it('S86d gate ERRORs when results/latest.json is corrupt (was silently ignored)', () => {
+    const dir = join(tmp, 'eval')
+    mkdirSync(join(dir, 'results'), { recursive: true })
+    writeRun(join(dir, 'results'), 1, makeReport('q-pass', { poolDomains: ['good.example.com'] }))
+    writeFileSync(join(dir, 'results', 'latest.json'), 'broken {', 'utf-8')
+    const o = runGate(dir, { gold })
+    expect(o.status).toBe('ERROR')
+    expect(o.detail).toContain('latest.json')
+  })
+
   it('does not fail when eval/ exists but results/ is absent (SKIP, not ERROR)', () => {
     const dir = join(tmp, 'eval')
     mkdirSync(dir, { recursive: true })

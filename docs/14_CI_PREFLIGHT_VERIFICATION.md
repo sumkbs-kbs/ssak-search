@@ -101,6 +101,24 @@ node_modules로 게이트가 전부 오실패했다 — 이제 npm ci 실패를 
 — 손상된 baseline이 커밋되는 것을 원천 차단. 단위 테스트 6건 추가
 (evalArtifactFiles/isEvalArtifactWellFormed/validateFile 손상·형태 검출).
 
+### S86d: 3중 JSON 파싱 → 단일 파싱 (2026-08-10)
+
+runGate가 아티팩트를 **한 번만 파싱**하도록 리팩터: `parseJsonc` (direct
+JSON.parse fast-path — eval 아티팩트는 JSON.stringify 출력이라 순수 JSON,
+실패 시에만 comment-aware strip) + `parseEvalArtifacts` (전 아티팩트를
+1회 파싱해 파싱 결과 반환). runGate가 이 파싱 결과로 run 리포트를 구축해
+`loadRunFiles`의 재파싱을 제거. 벤치마크 (`scripts/bench-eval-parse.ts`):
+
+```
+artifacts: 6 files, 16.9 MB total, 15 iterations (median)
+old (3× parse): 997.5 ms
+new (1× parse): 36.0 ms
+reduction: 96.4%
+```
+
+실제 runGate CLI: **0.47초** (기존 3중 파싱 시 ~1.4초+ 예상). 단위 테스트
++2건 (S86d 재사용 경로 고정, results/latest.json 손상 ERROR).
+
 ### S86c: --eval 게이트의 아티팩트 무결성 선행 검사 (2026-08-10)
 
 `verify-commit-eval.ts`의 runGate가 run 파일 로딩 **전에** `checkEvalArtifacts`

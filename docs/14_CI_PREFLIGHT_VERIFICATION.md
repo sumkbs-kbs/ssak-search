@@ -27,7 +27,20 @@ bash scripts/verify-commits-ci.sh --eval
 
 # 실패 시 worktree 유지 (디버깅용)
 bash scripts/verify-commits-ci.sh --keep
+
+# act-정확 모드 — symlink 없이 매 커밋에서 실제 npm ci 실행 (act 갭 해소)
+bash scripts/verify-commits-ci.sh --force-npm-ci
 ```
+
+## --force-npm-ci (2026-08-10)
+
+기본 node_modules 전략은 manifest 미변경 시 메인 node_modules를 symlink한다.
+하지만 symlink는 act/실제 CI의 **clean-container 설치**를 재현하지 않는다:
+로컬 npm이 남긴 플랫폼별 optional deps·호이스팅 drift·stale postinstall이
+그대로 실려, symlink에선 그린이지만 fresh 설치에선 레드가 될 수 있다.
+`--force-npm-ci`는 symlink를 아예 비활성화하고 **모든 worktree에서 실제
+`npm ci`를 실행**한다 (~1-2분/커밋 — 정확성이 우선일 때만 사용). act와의
+검증 갭을 없애는 모드로, manifest 변경과 무관하게 동작한다.
 
 ## --eval 게이트 (2026-08-10)
 
@@ -67,6 +80,26 @@ bash scripts/verify-commits-ci.sh --keep
 lockfile 커밋은 `npm ci`가 실패한다. 과거엔 이 실패를 조용히 삼켜 빈
 node_modules로 게이트가 전부 오실패했다 — 이제 npm ci 실패를 감지해 전체 게이트를
 `NPMCI-FAIL`로 표시하고 npm ci 로그(`<short>-npmci.log`)의 에러를 요약한다.
+
+## eval 아티팩트 무결성 검증 (2026-08-10)
+
+`scripts/verify-jsonc.ts`가 `--eval` 플래그로 **저장된 eval 아티팩트**
+(`eval/results/*.json` + `eval/baselines/*.json`)도 검증한다 — offline eval
+게이트(verify-commit-eval.ts)와 S54 실시간 재스코어링 경로가 읽는 바로 그
+파일들이다.
+
+- **구문 검증**: JSONC string-aware 스트립 + JSON.parse (기존 메커니즘).
+- **의미 검증 (신규)**: eval 아티팩트는 `report.results` 배열을 가져야
+  한다 — 부분 쓰기로 `{}`처럼 **파싱은 되지만 형태가 깨진** 파일도 잡는다
+  (truncated write가 구문만으로는 미검출되는 갭을 커버).
+- **SKIP 의미론**: 아티팩트가 없는 커밋(디렉터리 부재)은 `[SKIP]` exit 0 —
+  CI가 아티팩트 미보유 커밋에서 오실패하지 않는다.
+
+연결: ① ci.yml `Verify JSON/JSONC integrity` 스텝이 `--eval`로 실행
+(push/PR마다 커밋된 아티팩트 손상 조기 감지) ② eval.yml은 Run evaluation
+직후·아티팩트 업로드/커밋 **전에** `--eval` 검증 스텝을 실행 (`if: always()`)
+— 손상된 baseline이 커밋되는 것을 원천 차단. 단위 테스트 6건 추가
+(evalArtifactFiles/isEvalArtifactWellFormed/validateFile 손상·형태 검출).
 
 ## CI 워크플로우 연결 (2026-08-10)
 

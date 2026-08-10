@@ -82,8 +82,14 @@ jobs:
       # itself parses the file. scripts/verify-jsonc.ts strips comments
       # outside strings only (string-aware), tolerates JSONC trailing
       # commas, and JSON.parse()es both wrangler.jsonc + wrangler.dev.jsonc.
-      - name: Verify wrangler.jsonc integrity
-        run: npx tsx scripts/verify-jsonc.ts
+      # S86 (2026-08-10): --eval also validates the SAVED eval artifacts
+      # (eval/results/*.json + eval/baselines/*.json) that verify-commit-
+      # eval.ts and the S54 recompute path consume — a truncated run file
+      # (corrupt JSON or a parseable-but-shapeless `{}`) is caught here at
+      # push time instead of surfacing as a confusing gate ERROR later.
+      # Commits WITHOUT artifacts print SKIP and pass.
+      - name: Verify JSON/JSONC integrity (wrangler + eval artifacts)
+        run: npx tsx scripts/verify-jsonc.ts --eval
 
   unit-tests:
     name: Unit Tests

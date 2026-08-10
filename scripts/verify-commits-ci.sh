@@ -33,6 +33,13 @@
 # Otherwise the script falls back to `npm ci` per worktree (slow but exact)
 # and warns.
 #
+# --force-npm-ci: ALWAYS run `npm ci` in every worktree, never symlink. This
+# closes the gap with `act`/real CI, which install from a clean container:
+# the symlinked main node_modules carries whatever npm left behind locally
+# (platform-specific optional deps, hoisting drift, stale postinstall), so a
+# gate that passes under symlink could still fail in a fresh CI container.
+# Exactness costs ~1-2 min of npm ci per commit.
+#
 # bash 3.2 compatible (macOS default) — state is kept in files, not
 # associative arrays.
 #
@@ -45,6 +52,8 @@
 #                                                   # gate from saved artifacts
 #                                                   # (replaces build)
 #   bash scripts/verify-commits-ci.sh --keep        # keep worktrees on failure
+#   bash scripts/verify-commits-ci.sh --force-npm-ci
+#                                   # real npm ci per commit (act-faithful)
 #
 # Exit code: 0 = every gate green on every commit; 1 = at least one failure.
 #
@@ -56,6 +65,7 @@ GATES=(lint-ci eslint format unit build)
 KEEP=0
 SKIP_BUILD=0
 EVAL_GATE=0
+FORCE_NPM_CI=0
 BASE=""
 HEAD_REF=""
 
@@ -67,8 +77,9 @@ while [[ $# -gt 0 ]]; do
     --skip-build) SKIP_BUILD=1; shift ;;
     --eval) EVAL_GATE=1; shift ;;
     --keep) KEEP=1; shift ;;
+    --force-npm-ci) FORCE_NPM_CI=1; shift ;;
     --help|-h)
-      sed -n '2,52p' "$0" | sed 's/^# \{0,1\}//'
+      sed -n '2,59p' "$0" | sed 's/^# \{0,1\}//'
       exit 0
       ;;
     *)
@@ -132,7 +143,10 @@ else
 fi
 if [[ $MANIFEST_CHANGED -eq 1 ]]; then
   echo "⚠️  Manifest changes detected in range → per-worktree npm ci (slow)"
-else
+fi
+if [[ $FORCE_NPM_CI -eq 1 ]]; then
+  echo "⚠️  --force-npm-ci → real npm ci in EVERY worktree (act-faithful, ~1-2min/commit; symlink disabled)"
+elif [[ $MANIFEST_CHANGED -eq 0 ]]; then
   echo "✓ No manifest changes → worktrees symlink the main node_modules"
 fi
 echo ""
@@ -205,8 +219,9 @@ for sha in "${COMMITS[@]}"; do
     ALL_OK=0
     continue
   fi
-  # node_modules: symlink when manifests unchanged, else npm ci.
-  if [[ $MANIFEST_CHANGED -eq 0 ]]; then
+  # node_modules: symlink when manifests unchanged AND --force-npm-ci not set,
+  # else run the real npm ci (exact, act-faithful).
+  if [[ $FORCE_NPM_CI -eq 0 && $MANIFEST_CHANGED -eq 0 ]]; then
     ln -s "$ROOT/node_modules" "$wt/node_modules"
   else
     # npm ci failure must NOT be silently swallowed: an old/broken lock (e.g.

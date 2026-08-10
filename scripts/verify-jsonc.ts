@@ -9,11 +9,21 @@
  * OUTSIDE strings only (single-line // and block /* *\/), tolerates trailing
  * commas (JSONC), and JSON.parse()es the result.
  *
+ * S86 (2026-08-10): extended to also validate the SAVED eval artifacts
+ * (eval/results/*.json + eval/baselines/*.json) — the same files the offline
+ * eval gate (verify-commit-eval.ts) and the S54 realtime recompute path
+ * consume. A truncated/partial write that still PARSES (e.g. `{}` or a
+ * missing results array) is caught by a semantic shape check on top of the
+ * syntax check, so CI detects artifact corruption early instead of surfacing
+ * a confusing gate ERROR later.
+ *
  * Usage:
  *   npx tsx scripts/verify-jsonc.ts [file...]     # default: wrangler.jsonc wrangler.dev.jsonc
- * Exit 0 = all files valid, 1 = at least one invalid.
+ *   npx tsx scripts/verify-jsonc.ts --eval        # defaults + all eval artifacts (SKIP if none)
+ * Exit 0 = all files valid, 1 = at least one invalid, 0 (SKIP) = --eval and no artifacts present.
  */
 import * as fs from 'fs'
+import { join } from 'node:path'
 
 /** Strip comments outside string literals and JSONC trailing commas. */
 export function stripJsonc(src: string): string {
@@ -88,26 +98,90 @@ export function isJsoncValid(src: string): boolean {
 }
 
 const DEFAULTS = ['wrangler.jsonc', 'wrangler.dev.jsonc']
+const EVAL_DIRS = ['eval/results', 'eval/baselines']
+
+/** True when `file` is one of the saved eval artifact paths (or a child). */
+export function isEvalArtifact(file: string): boolean {
+  return EVAL_DIRS.some((d) => file === d || file.startsWith(d + '/'))
+}
+
+/**
+ * All *.json files under the eval artifact dirs that actually exist on disk
+ * (sorted for deterministic output). Empty when the dirs are absent — CI runs
+ * on commits that do not carry artifacts must SKIP, not fail.
+ */
+export function evalArtifactFiles(): string[] {
+  const out: string[] = []
+  for (const dir of EVAL_DIRS) {
+    if (!fs.existsSync(dir)) continue
+    for (const f of fs.readdirSync(dir).sort()) {
+      if (!f.endsWith('.json')) continue
+      const p = join(dir, f)
+      if (fs.existsSync(p) && fs.statSync(p).isFile()) out.push(p)
+    }
+  }
+  return out
+}
+
+/**
+ * Semantic shape check for eval artifacts, beyond syntax: every stored
+ * artifact (run-N.json, results/latest.json, baselines/*.json) serializes an
+ * EvalReport as `{ report: { results: [...] } }` — verify-commit-eval.ts
+ * requires `report.results` to be an array and the S54 recompute path reads
+ * response.results. A partial write that still parses (e.g. `{}` from an
+ * interrupted save) is caught here.
+ */
+export function isEvalArtifactWellFormed(parsed: unknown): boolean {
+  const report = (parsed as { report?: unknown } | null)?.report
+  return typeof report === 'object' && report !== null && Array.isArray((report as { results?: unknown }).results)
+}
+
+/**
+ * Validate one file (syntax + eval-artifact shape). Returns ok + reason.
+ * `isEval` defaults to the path-based isEvalArtifact(f) classification; tests
+ * on temp paths pass it explicitly.
+ */
+export function validateFile(f: string, isEval?: boolean): { ok: boolean; message: string } {
+  if (!fs.existsSync(f) || !fs.statSync(f).isFile()) return { ok: false, message: 'file not found' }
+  const src = fs.readFileSync(f, 'utf8')
+  if (!isJsoncValid(src)) return { ok: false, message: 'invalid JSON/JSONC (comment-aware parse failed)' }
+  if (isEval ?? isEvalArtifact(f)) {
+    let parsed: unknown = null
+    try {
+      parsed = JSON.parse(stripJsonc(src))
+    } catch {
+      // isJsoncValid above already returned true — unreachable, but keep the
+      // variable definite for the shape check.
+    }
+    if (!isEvalArtifactWellFormed(parsed)) {
+      return { ok: false, message: 'eval artifact missing report.results (truncated/partial write?)' }
+    }
+  }
+  return { ok: true, message: 'valid' }
+}
 
 function main(): void {
-  const files = process.argv.slice(2).length > 0 ? process.argv.slice(2) : DEFAULTS
+  const args = process.argv.slice(2)
+  const checkEval = args.includes('--eval')
+  const explicit = args.filter((a) => a !== '--eval')
+  const evalFiles = checkEval ? evalArtifactFiles() : []
+  if (checkEval && evalFiles.length === 0) {
+    console.log('[SKIP] no eval artifacts found under eval/results or eval/baselines')
+  }
+  const targets = (explicit.length > 0 ? explicit : [...DEFAULTS]).concat(evalFiles)
+
   let allOk = true
-  for (const f of files) {
-    if (!fs.existsSync(f)) {
-      console.error('[ERR] ' + f + ': file not found')
-      allOk = false
-      continue
-    }
-    const src = fs.readFileSync(f, 'utf8')
-    if (isJsoncValid(src)) {
-      console.log('[OK] ' + f + ': valid JSONC')
+  for (const f of targets) {
+    const { ok, message } = validateFile(f)
+    if (ok) {
+      console.log(`[OK] ${f}: ${message}`)
     } else {
-      console.error('[ERR] ' + f + ': invalid JSONC (comment-aware parse failed)')
+      console.error(`[ERR] ${f}: ${message}`)
       allOk = false
     }
   }
   if (!allOk) process.exit(1)
-  console.log('[OK] All JSONC files valid')
+  console.log('[OK] All JSON/JSONC files valid')
 }
 
 if (import.meta.url === 'file://' + process.argv[1]) main()

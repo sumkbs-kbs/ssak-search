@@ -162,6 +162,16 @@ jobs:
         run: |
           npm run ${{ steps.config.outputs.run_mode }} -- ${{ steps.config.outputs.tag_flag }} ${{ steps.config.outputs.save_flag }} ${{ steps.config.outputs.cache_flag }} ${{ steps.config.outputs.runs_flag }} ${{ steps.config.outputs.loss_flag }} 2>&1
 
+      # S86 (2026-08-10): validate the artifacts the run just wrote BEFORE
+      # they are uploaded / committed as a baseline. verify-jsonc.ts --eval
+      # syntax-checks eval/results/*.json + eval/baselines/*.json AND checks
+      # the EvalReport shape (report.results array) — a truncated write that
+      # still parses is caught here, so a corrupt baseline can never be
+      # committed by the step below. SKIPs (exit 0) when nothing was written.
+      - name: Verify eval artifact JSON integrity
+        if: always()
+        run: npx tsx scripts/verify-jsonc.ts --eval
+
       - name: Upload eval results artifact
         if: always()
         uses: actions/upload-artifact@v4

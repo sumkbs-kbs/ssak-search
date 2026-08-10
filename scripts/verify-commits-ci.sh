@@ -173,13 +173,24 @@ run_gate() {
     unit)    (cd "$wt" && npx vitest run --project unit > "$log" 2>&1); rc=$? ;;
     build)   (cd "$wt" && npm run build > "$log" 2>&1); rc=$? ;;
     # Offline eval gate: verify-commit-eval.ts exits 0=PASS 1=FAIL 2=SKIP
-    # 3=ERROR. SKIP (no artifacts in the commit) must NOT fail the pre-flight.
+    # 3=ERROR. SKIP (no artifacts in the commit) must NOT fail the pre-flight;
+    # ERROR (artifacts present but CORRUPT — S86c integrity pre-check, or
+    # unreadable) is a distinct red state: written as ERROR (not FAIL) so the
+    # summary distinguishes corruption from a plain regression.
     eval)
       (cd "$wt" && npx tsx "$ROOT/scripts/verify-commit-eval.ts" > "$log" 2>&1)
       rc=$?
       if [[ $rc -eq 2 ]]; then
         # SKIP = commit has no eval artifacts — not a failure. No time file.
         echo "SKIP" > "$WORKTREE_BASE/results/$short.eval"
+        return
+      fi
+      if [[ $rc -eq 3 ]]; then
+        # ERROR = artifacts present but corrupt / unreadable — red, distinct
+        # from FAIL (regressions). Note: no time file is written, mirroring
+        # the SKIP branch (nothing was evaluated).
+        echo "ERROR" > "$WORKTREE_BASE/results/$short.eval"
+        ALL_OK=0
         return
       fi
       ;;

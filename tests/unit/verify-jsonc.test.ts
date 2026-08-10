@@ -4,6 +4,8 @@ import {
   isJsoncValid,
   isEvalArtifact,
   evalArtifactFiles,
+  evalArtifactFilesIn,
+  checkEvalArtifacts,
   isEvalArtifactWellFormed,
   validateFile,
 } from '../../scripts/verify-jsonc'
@@ -152,6 +154,50 @@ describe('eval artifact validation (S86)', () => {
   it('validates the real committed eval artifacts end-to-end', () => {
     for (const f of evalArtifactFiles()) {
       expect(validateFile(f).ok, f).toBe(true)
+    }
+  })
+
+  it('evalArtifactFilesIn lists files under an arbitrary eval dir', () => {
+    const os = require('node:os')
+    const path = require('node:path')
+    const fs = require('node:fs')
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'vjsonc-'))
+    try {
+      fs.mkdirSync(path.join(root, 'results'), { recursive: true })
+      fs.mkdirSync(path.join(root, 'baselines'), { recursive: true })
+      fs.writeFileSync(path.join(root, 'results', 'run-1.json'), '{}')
+      fs.writeFileSync(path.join(root, 'baselines', 'latest.json'), '{}')
+      fs.writeFileSync(path.join(root, 'results', 'notes.txt'), 'x')
+      const files = evalArtifactFilesIn(root)
+      expect(files.sort()).toEqual([
+        path.join(root, 'baselines', 'latest.json'),
+        path.join(root, 'results', 'run-1.json'),
+      ])
+    } finally {
+      fs.rmSync(root, { recursive: true, force: true })
+    }
+  })
+
+  it('checkEvalArtifacts reports only corrupt files with reasons', () => {
+    const os = require('node:os')
+    const path = require('node:path')
+    const fs = require('node:fs')
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'vjsonc-'))
+    try {
+      fs.mkdirSync(path.join(root, 'results'), { recursive: true })
+      fs.writeFileSync(path.join(root, 'results', 'run-1.json'), 'not json')
+      fs.writeFileSync(path.join(root, 'results', 'run-2.json'), '{ "report": { "results": [] } }')
+      const corrupt = checkEvalArtifacts(root)
+      expect(corrupt).toHaveLength(1)
+      expect(corrupt[0].file).toContain('run-1.json')
+      expect(corrupt[0].reason).toContain('JSON/JSONC')
+      // Clean dir → no corrupt files.
+      const clean = fs.mkdtempSync(path.join(os.tmpdir(), 'vjsonc-'))
+      fs.mkdirSync(path.join(clean, 'results'), { recursive: true })
+      fs.writeFileSync(path.join(clean, 'results', 'run-1.json'), '{ "report": { "results": [] } }')
+      expect(checkEvalArtifacts(clean)).toEqual([])
+    } finally {
+      fs.rmSync(root, { recursive: true, force: true })
     }
   })
 })

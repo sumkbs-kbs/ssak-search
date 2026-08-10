@@ -168,7 +168,13 @@ jobs:
       # the EvalReport shape (report.results array) — a truncated write that
       # still parses is caught here, so a corrupt baseline can never be
       # committed by the step below. SKIPs (exit 0) when nothing was written.
+      # S86b: the step carries `id: verify` — the baseline-commit and README
+      # steps below gate on `steps.verify.outcome == 'success'`. GitHub Actions
+      # REPLACES the implicit success() with an explicit `if:`, so a plain
+      # ref/event guard would run EVEN when this step fails; the explicit
+      # outcome check is what actually blocks committing a corrupt baseline.
       - name: Verify eval artifact JSON integrity
+        id: verify
         if: always()
         run: npx tsx scripts/verify-jsonc.ts --eval
 
@@ -184,11 +190,23 @@ jobs:
           retention-days: 90
           if-no-files-found: ignore
 
+      # S86b (2026-08-10): only commit the baseline when the integrity check
+      # PASSED — a corrupt artifact must never reach main. The verify step
+      # fails (exit 1) on a truncated/partial write, so this `if:` skips the
+      # commit (and the git push) entirely; the workflow still fails on the
+      # red verify step, which is the desired signal.
+      #
+      # NOTE: this gate is deliberately ONLY about corruption. A run whose
+      # eval step FAILED with regressions (continue-on-error) but wrote
+      # VALID artifacts still commits the baseline — the regression is
+      # surfaced by the Check results / Fail workflow steps below instead,
+      # and the baseline tracks the actual measured state (S73 G2 semantics).
       - name: Commit updated baseline
         if: >
           github.ref == 'refs/heads/main' &&
           github.event_name != 'pull_request' &&
-          (github.event.inputs.save_baseline == 'true' || github.event_name == 'push')
+          (github.event.inputs.save_baseline == 'true' || github.event_name == 'push') &&
+          steps.verify.outcome == 'success'
         run: |
           if [ -f "eval/baselines/latest.json" ]; then
             git config user.name "github-actions[bot]"
@@ -199,8 +217,10 @@ jobs:
             echo "Baseline updated and committed"
           fi
 
+      # S86b: the weekly README update reads eval/results/latest.json — gate it
+      # on the integrity check too, so corrupt metrics are never published.
       - name: Update README metrics (weekly)
-        if: github.event_name == 'schedule' && github.ref == 'refs/heads/main'
+        if: github.event_name == 'schedule' && github.ref == 'refs/heads/main' && steps.verify.outcome == 'success'
         run: |
           if [ -f "eval/results/latest.json" ]; then
             npx tsx scripts/update-readme-eval.ts

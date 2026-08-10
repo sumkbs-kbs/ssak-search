@@ -106,21 +106,56 @@ export function isEvalArtifact(file: string): boolean {
 }
 
 /**
- * All *.json files under the eval artifact dirs that actually exist on disk
- * (sorted for deterministic output). Empty when the dirs are absent — CI runs
- * on commits that do not carry artifacts must SKIP, not fail.
+ * All *.json files under an eval dir's results/ + baselines/ that exist on
+ * disk (sorted for deterministic output). `evalDir` is the resolved eval
+ * directory (containing results/ + baselines/): verify-commit-eval.ts passes
+ * the worktree's eval dir so the gate validates the commit's own artifacts
+ * (S86c). The CLI derives it as './eval'.
  */
-export function evalArtifactFiles(): string[] {
+export function evalArtifactFilesIn(evalDir: string): string[] {
   const out: string[] = []
-  for (const dir of EVAL_DIRS) {
-    if (!fs.existsSync(dir)) continue
-    for (const f of fs.readdirSync(dir).sort()) {
+  for (const sub of ['results', 'baselines']) {
+    const abs = join(evalDir, sub)
+    if (!fs.existsSync(abs)) continue
+    for (const f of fs.readdirSync(abs).sort()) {
       if (!f.endsWith('.json')) continue
-      const p = join(dir, f)
+      const p = join(abs, f)
       if (fs.existsSync(p) && fs.statSync(p).isFile()) out.push(p)
     }
   }
   return out
+}
+
+/** All *.json files under ./eval/results + ./eval/baselines (CLI/CI path). */
+export function evalArtifactFiles(): string[] {
+  return evalArtifactFilesIn('eval')
+}
+
+/**
+ * S86c: integrity pre-check over an eval dir's artifacts — every *.json under
+ * results/ + baselines/ must pass syntax AND the EvalReport shape check
+ * (report.results array). Returns the corrupt files with reasons; an empty
+ * array means all artifacts are valid. Used by verify-commit-eval.ts BEFORE
+ * loading run files, so corruption is surfaced as gate ERROR instead of being
+ * silently swallowed (a corrupt baselines/latest.json used to load as null →
+ * "baseline: none" → PASS; a corrupt results/latest.json was never read by
+ * loadRunFiles at all).
+ *
+ * CONTRACT: these dirs hold ONLY EvalReport artifacts — any *.json placed
+ * here must serialize `{ report: { results: [...] } }`. A non-report JSON
+ * (e.g. a future meta file) would fail this check by design; add such files
+ * under a different dir.
+ */
+export function checkEvalArtifacts(evalDir: string): Array<{ file: string; reason: string }> {
+  const corrupt: Array<{ file: string; reason: string }> = []
+  for (const f of evalArtifactFilesIn(evalDir)) {
+    // isEval=true — force the shape check on temp/worktree paths that are not
+    // under the literal './eval/' prefix (the run files are eval artifacts
+    // regardless of where the worktree lives).
+    const { ok, message } = validateFile(f, true)
+    if (!ok) corrupt.push({ file: f, reason: message })
+  }
+  return corrupt
 }
 
 /**

@@ -101,6 +101,42 @@ node_modules로 게이트가 전부 오실패했다 — 이제 npm ci 실패를 
 — 손상된 baseline이 커밋되는 것을 원천 차단. 단위 테스트 6건 추가
 (evalArtifactFiles/isEvalArtifactWellFormed/validateFile 손상·형태 검출).
 
+### S86c: --eval 게이트의 아티팩트 무결성 선행 검사 (2026-08-10)
+
+`verify-commit-eval.ts`의 runGate가 run 파일 로딩 **전에** `checkEvalArtifacts`
+(verify-jsonc.ts의 `--eval` 의미론: 구문 + report.results 형태)로 eval
+디렉터리의 **모든** *.json(results/ + baselines/)를 검사한다. 손상 발견 시
+게이트 ERROR(exit 3)로 조기 구분 — 이전에 조용히 삼켜지던 2가지 경로를 차단:
+
+| 경로 | 이전 동작 | S86c 후 |
+|---|---|---|
+| 손상 `baselines/latest.json` | loadBaselineFromWorktree try/catch → null → "baseline: none" → **PASS** (조용한 오류) | **ERROR** (파일명+이유) |
+| 손상 `results/latest.json` | loadRunFiles가 run-N.json만 읽어 **무시** → PASS | **ERROR** |
+| 손상 run-N.json | 이미 ERROR | ERROR (상세 메시지 추가) |
+
+verify-commits-ci.sh의 eval 게이트는 exit 3을 **FAIL이 아닌 ERROR**로 결과
+파일에 기록해 요약 표에서 regression(FAIL)과 손상(ERROR)을 구분한다.
+단위 테스트 +6건 (verify-commit-eval 4 + verify-jsonc 2, 기존 run-file
+손상 테스트 1건 갱신).
+
+### S86b: 손상 baseline 커밋 가드 (2026-08-10)
+
+GitHub Actions는 스텝에 명시적 `if:`가 있으면 기본 `success()` 조건을
+**대체**한다 — 즉 `Commit updated baseline` 스텝의 기존 `if:`(ref/event
+가드만)는 verify 스텝이 실패해도 **여전히 실행**돼 손상 baseline을 커밋할 수
+있었다. 수정:
+
+- verify 스텝에 `id: verify` 부여
+- `Commit updated baseline`의 `if:`에 `steps.verify.outcome == 'success'` 추가
+- `Update README metrics (weekly)`도 동일 가드 (손상 메트릭 출판 방지)
+- 드리프트 가드 단위 테스트 5건 (`tests/unit/eval-baseline-commit-guard
+  .test.ts`) — verify 스텝 id 존재·두 커밋 스텝의 가드·verify가 `always()`
+  ·커밋 스텝이 Check results보다 앞에 위치 (손상이 main에 도달하기 전
+  차단) 를 js-yaml 파싱으로 고정
+
+게이트 시뮬레이션 (5 시나리오): 손상 감지 시 commit/README 둘 다 SKIP,
+정상 시 commit 실행·PR에서는 유지 (원래 게이트 보존) 확인.
+
 ## CI 워크플로우 연결 (2026-08-10)
 
 ci.yml에 `preflight-replay` 잡 추가 — push/PR 커밋 범위를 `fetch-depth: 0`으로
@@ -256,11 +292,39 @@ fab8bf5  NPMCI-FAIL NPMCI-FAIL NPMCI-FAIL NPMCI-FAIL NPMCI-FAIL
   실제로 깨져 있음을 알려준다. history rewrite 없이 해결하는 방법은 없으며,
   실제 push 범위(신규 커밋)에는 영향 없다.
 
+## 2026-08-10 --force-npm-ci vs act 교차 검증 (S86)
+
+`--force-npm-ci`(모든 worktree에서 실제 npm ci)가 act의 fresh-container
+설치를 재현하는지, 같은 범위를 양쪽에서 실행해 비교했다.
+
+**범위**: act가 PR 이벤트 페이로드의 base.sha를 해석하지 못해 **HEAD~10..HEAD
+폴백**(0f0902c8..9cfe7c8, 10커밋)을 탔다 (act 한계 — docs/14 기록과 일치).
+이 범위에는 manifest 변경 커밋(86552a5)이 포함되어 npm ci 폴백이 발동.
+
+| 커밋 | act (fresh container) | 로컬 --force-npm-ci |
+|---|---|---|
+| de8c00a/cd7d928/f8eb6a1/fab8bf5/2660263 | **NPMCI-FAIL** | **NPMCI-FAIL** ✓ |
+| 86552a5 | (진행 중단) | PASS |
+| 78b8cae/2da4c4c/d9be200/9cfe7c8 | — | PASS |
+
+**결과: act가 재현한 5건 NPMCI-FAIL(lockfile 수정 이전 커밋)이 로컬
+`--force-npm-ci`와 1:1 일치** — `--force-npm-ci`는 act의 npm ci 동작(구 lockfile
+커밋의 `Missing: @cloudflare/workers-types@4.20260702.1` EUSAGE 포함)을 정확히
+재현한다. symlink 모드가 이 실패를 숨겼다면 act와 갭이 발생했을 것 — 이제
+없다.
+
+**부수 발견 (도구 아티팩트)**: 중단된 실행(세션 정리 kill)이 남긴 stale
+worktree가 `git worktree add`를 "already exists"로 실패시켜 해당 커밋이 전
+게이트 SKIP으로 표시됐다. `git worktree prune`은 orphaned metadata만 정리하고
+살아있는 등록은 남긴다 — 재실행 전 `git worktree remove --force`로 정리하면
+된다. 스크립트 버그가 아니라 실행 환경 문제.
+
 ## 한계
 
-- **worktree 스크립트**: build는 로컬(노드 22) 기준이고 node_modules symlink라
-  `npm ci`/lockfile 정합성·워크플로우 인라인 스텝을 재현하지 않는다 — 이 갭을
-  act로 커버한다 (위 act 섹션).
+- **worktree 스크립트**: build는 로컬(노드 22) 기준이고, symlink 모드(default)는
+  `npm ci`/lockfile 정합성·워크플로우 인라인 스텝을 재현하지 않는다 — 이 갭은
+  act로 커버하거나 `--force-npm-ci`로 로컬에서도 npm ci를 재현한다 (S86 교차
+  검증에서 act와 1:1 일치 확인).
 - **act 한계**: ① `actions/upload-artifact@v4`는 실제 러너의
   `ACTIONS_RUNTIME_TOKEN`이 필요해 로컬에서 실패 (build 잡의 마지막 스텝만 —
   build/dist 검증 자체는 통과). ② Docker Desktop 재시작 직후 간헐

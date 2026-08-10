@@ -192,6 +192,54 @@ describe('runGate', () => {
     writeFileSync(join(dir, 'results', 'run-1.json'), 'not json', 'utf-8')
     const o = runGate(dir, { gold })
     expect(o.status).toBe('ERROR')
+    expect(o.detail).toContain('artifact integrity')
+    expect(o.detail).toContain('run-1.json')
+  })
+
+  it('S86c ERROR (not silent PASS) on corrupt baselines/latest.json', () => {
+    const dir = join(tmp, 'eval')
+    mkdirSync(join(dir, 'results'), { recursive: true })
+    writeRun(join(dir, 'results'), 1, makeReport('q-pass', { poolDomains: ['good.example.com'] }))
+    // A corrupt baseline used to load as null via loadBaselineFromWorktree's
+    // try/catch → "baseline: none" → PASS. The integrity pre-check must
+    // surface it as ERROR instead.
+    const bd = join(dir, 'baselines')
+    mkdirSync(bd, { recursive: true })
+    writeFileSync(join(bd, 'latest.json'), '{ "report": {', 'utf-8')
+    const o = runGate(dir, { gold })
+    expect(o.status).toBe('ERROR')
+    expect(o.detail).toContain('baselines/latest.json')
+  })
+
+  it('S86c ERROR on parseable-but-shapeless baseline ({} shape)', () => {
+    const dir = join(tmp, 'eval')
+    mkdirSync(join(dir, 'results'), { recursive: true })
+    writeRun(join(dir, 'results'), 1, makeReport('q-pass', { poolDomains: ['good.example.com'] }))
+    const bd = join(dir, 'baselines')
+    mkdirSync(bd, { recursive: true })
+    writeFileSync(join(bd, 'latest.json'), '{}', 'utf-8')
+    const o = runGate(dir, { gold })
+    expect(o.status).toBe('ERROR')
+    expect(o.detail).toContain('report.results')
+  })
+
+  it('S86c ERROR on corrupt results/latest.json (not read by loadRunFiles)', () => {
+    const dir = join(tmp, 'eval')
+    mkdirSync(join(dir, 'results'), { recursive: true })
+    writeRun(join(dir, 'results'), 1, makeReport('q-pass', { poolDomains: ['good.example.com'] }))
+    writeFileSync(join(dir, 'results', 'latest.json'), 'not json', 'utf-8')
+    const o = runGate(dir, { gold })
+    expect(o.status).toBe('ERROR')
+    expect(o.detail).toContain('results/latest.json')
+  })
+
+  it('S86c valid artifacts still PASS (no false positives)', () => {
+    const dir = join(tmp, 'eval')
+    mkdirSync(join(dir, 'results'), { recursive: true })
+    writeRun(join(dir, 'results'), 1, makeReport('q-pass', { poolDomains: ['good.example.com'] }))
+    writeBaseline(dir, makeReport('q-pass', { poolDomains: ['good.example.com'] }))
+    const o = runGate(dir, { gold })
+    expect(['PASS', 'FAIL']).toContain(o.status)
   })
 
   it('single run file uses the single-run diffBaseline path (no crash)', () => {

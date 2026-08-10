@@ -41,6 +41,7 @@ import type { EvalReport, EvalQuery, EvalBaseline, RegressionDiff } from '../eva
 import { computeMedianReport } from '../eval/median'
 import { diffBaselineStabilized, diffBaseline } from '../eval/baseline'
 import { loadGoldStandards } from '../eval/metrics'
+import { checkEvalArtifacts } from './verify-jsonc'
 
 export interface GateOutcome {
   status: 'PASS' | 'FAIL' | 'SKIP' | 'ERROR'
@@ -117,6 +118,20 @@ export function runGate(evalDir: string, opts: GateOptions = {}): GateOutcome {
       status: 'SKIP',
       detail: 'no eval/results in this commit (artifacts not committed or commit predates median saves)',
     }
+  }
+
+  // S86c: artifact integrity pre-check — BEFORE loading run files, validate
+  // EVERY *.json under results/ + baselines/ (syntax + report.results shape,
+  // the verify-jsonc.ts --eval semantics). Corrupt artifacts are gate ERROR
+  // (exit 3), not SKIP and not a silently-weakened PASS:
+  //  - a corrupt baselines/latest.json previously loaded as null via
+  //    loadBaselineFromWorktree's try/catch → "baseline: none" → PASS
+  //  - a corrupt results/latest.json was never read by loadRunFiles at all
+  // This surfaces both as ERROR with the offending files.
+  const corrupt = checkEvalArtifacts(evalDir)
+  if (corrupt.length > 0) {
+    const files = corrupt.map((c) => `${c.file}: ${c.reason}`).join('; ')
+    return { status: 'ERROR', detail: `artifact integrity check failed: ${files}` }
   }
 
   let reports: EvalReport[]

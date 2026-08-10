@@ -57,6 +57,17 @@ jobs:
         if: failure()
         run: npm run build
 
+      - name: Deploy do-worker (Staging)
+        # S94 (2026-08-10): Pages references the 11 Durable Objects via
+        # script_name → ssak-do-worker (S88). Deploy the DO worker BEFORE the
+        # Pages bundle so the script_name binding always points at the newest
+        # DO code. Do-worker uses the same wrangler.do.jsonc config.
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: deploy --config=wrangler.do.jsonc
+
       - name: Deploy to Pages (Staging)
         uses: cloudflare/wrangler-action@v3
         with:
@@ -97,6 +108,13 @@ jobs:
       - name: Build (if artifact not found)
         if: failure()
         run: npm run build
+
+      - name: Deploy do-worker (Production)
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: deploy --config=wrangler.do.jsonc
 
       - name: Deploy to Pages (Production)
         uses: cloudflare/wrangler-action@v3

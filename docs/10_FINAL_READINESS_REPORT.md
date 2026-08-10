@@ -52,6 +52,14 @@
 > 태그: financial 0.4432 > korean 0.3672 > academic 0.3115 > chinese 0.3100 > technical 0.3060
 > > japanese 0.3032 > factual 0.2977 > comparison 0.2824 > news 0.2475 > english 0.2472
 > > general 0.1650. 상세는 STRATEGIC_PLAN S68.
+> **S88~S93 (2026-08-10)**: **DO 바인딩 11/11 해소** — do-worker 분리 배포
+> (ssak-do-worker, src/do-worker/index.ts + wrangler.do.jsonc) 후 Pages wrangler.jsonc가
+> script_name으로 바인딩, production /api/health **mode: durable_object + source: durable
+> + hosts_tracked 9 단조 증가** 실측 (6→8→6 인메모리 요동과 대조). SPACE_DO 501 가드 추가
+> (786b652). S89: HostHealth source 스탬프 + /api/health rate_limiter.source. S91: Prometheus
+> search_rate_limiter_source 게이지 + Grafana 패널. S93: probe-inmemory-bypass 자동 판정
+> (classifyHealthProbe). 유닛 **1,691건/89파일**. **S94 (P0): deploy.yml do-worker 스테이지
+> 추가 + setup-do-worker-secrets.sh + PRIVACY_POLICY.md 초안.**
 > **08-10 갱신 (냉정 재평가 + P1/P2 실측 진단 + S86~S86l CI 인프라)**: 완성도 **71.2/100
 > (베타서비스 수준)** 냉정 재평가 — 실측 NDCG@10 **0.2813** (latest/baseline
 > 2026-08-10T00:29:29Z, S50/S52 새 규칙), MRR 0.5004, P@10 0.2865, **zero 118/500 (23.6%)**,
@@ -73,26 +81,26 @@
 
 ## 1. 최종 완성도
 - **전체 완성도: 베타서비스 수준 — 71.2/100 (냉정 재평가, 2026-08-10)** — 축별 편차 극심: 공학·운영 인프라(테스트/CI/평가/배포)는 상용급에 근접, 검색 본질(정확도/커버리지/지연)은 상용 허용치 미달
-- **코드/테스트/보안/평가 인프라**: 상용 수준 (typecheck 0, 유닛 **1,660건 / 87파일**, **CI 린트 0경고(--max-warnings=0) + preflight 3중 점검 + eval 회귀 게이트**, SSRF/CSP/감사)
+- **코드/테스트/보안/평가 인프라**: 상용 수준 (typecheck 0, 유닛 **1,691건 / 89파일**, **CI 린트 0경고(--max-warnings=0) + preflight 3중 점검 + eval 회귀 게이트**, SSRF/CSP/감사)
 - **검색 본질 (실측)**: NDCG@10 **0.2813** · MRR 0.5004 · P@10 0.2865 · **zero 118/500 (23.6%)** · p50 857ms / p95 3,503ms — 상용(p50 100~300ms, 제로적중 <5%) 대비 미달
-- **운영(배포) 검증**: ✅ **프로덕션 HTTP 200 가동 (9edef79d, 08-10 재배포)** — ⚠️ **DO 바인딩 0개 실측** (인프라 작업 미완)
+- **운영(배포) 검증**: ✅ **프로덕션 HTTP 200 가동 + DO 바인딩 11/11 (S88, mode: durable_object · source: durable · hosts 9 실측)**
 
 | 구분 | 점수 |
 |---|---|
 | 코드 품질·테스트·유지보수성 | **85~88** (lint 0 · 유닛 1,660건 · 공용 로더 수렴) |
 | 검색 정확도·커버리지·속도 | **45~60** (NDCG 0.2813 · 제로적중 23.6% · p95 3.5s — 상용 장벽) |
-| 배포·운영 준비 | **85** (가동·CI→staging·롤백, ⚠️ DO 바인딩 미구성) |
+| 배포·운영 준비 | **88** (가동·CI→staging·롤백 + DO 11/11 구성 + do-worker 배포 스테이지) |
 | 평가 재현성 | ✅ median-of-3 + S54 실시간 재계산 + S37 loss 리포트 자동 실행 (NDCG@10 **0.2813**, 08-10 baseline — S49/S50 지표 재정의 + S63 gold 좁힘, 구 0.5482와 직접 비교 금지) |
 
 ## 2. 상용화 가능 여부
-- **코드베이스/운영 인프라 기준**: 가능 (기능/보안/테스트/배포 체계 충족)
-- **즉시 상용 선언 기준**: 🔴 **미달** — ① 검색 본질 3종 (정확도 NDCG 0.28 · 커버리지 자체 403문서+free-tier 의존 · 지연 p95 3.5s) ② DO 바인딩 0개 (RATE_LIMITER 인메모리) ③ open mode 해제(키 설정) ④ 개인정보 정책 — 운영 작업 + 검색 품질 레버 모두 남음
+- **코드베이스/운영 인프라 기준**: 가능 (기능/보안/테스트/배포 체계 충족 + **DO 11/11 구성 완료**)
+- **즉시 상용 선언 기준**: 🔴 **미달** — ① 검색 본질 3종 (정확도 NDCG 0.28 · 커버리지 자체 403문서+free-tier 의존 · 지연 p95 3.5s) ② **do-worker secrets 4종 미설정** (canary/crawler 키리스) ③ open mode 해제(키 설정 — auth_required 실측 False) ④ 개인정보 정책(초안 완료, 법률 검토 전) — 운영 작업 + 검색 품질 레버 모두 남음
 
 ## 3. 출시 차단 문제 (Go/No-Go 게이트)
 | # | 차단 문제 | 해결 조건 | 상태 |
 |---|---|---|---|
 | 1 | ~~프로덕션 무응답~~ | 배포 복구 + `/api/health` 200 | ✅ **해소 (HTTP 200, 9edef79d)** |
-| 2 | **DO 11종 바인딩 미설정 (실측 0/11)** | Pages API/Dashboard로 전 DO 구성 (RATE_LIMITER ⭐최우선 — 현재 인메모리 fallback · SPACE_DO는 500 — 가드 부재) | 🔴 남음 |
+| 2 | ~~DO 11종 바인딩 미설정 (실측 0/11)~~ | ~~Pages API/Dashboard로 전 DO 구성~~ | ✅ **해소 (S88 — do-worker 분리 + script_name, mode: durable_object 실측)** |
 | 3 | **검색 정확도 (zero 118/500)** | NDCG=0 원인이 커버리지(COVERAGE 92 + MIXED 26, RANKING 0) — 뉴스 아웃렛·tech-doc 회수 레버 + msn.com 신디케이션 포화 제어 | 🔴 남음 |
 | 4 | **open mode 기본값** | SEARCH_API_KEY/TENANTS_CONFIG 설정 확인 | 🔴 남음 |
 | 5 | ~~eval 실패 2건~~ | 백엔드 안정화 + CJK 커버리지 | ✅ **해소 (S8/S9, 500/500 pass)** |
@@ -103,7 +111,7 @@
 |---|---|---|
 | **검색 정확도 — NDCG=0 118/500 (23.6%)** | **High** | P1 진단: 원인 100% 커버리지 (COVERAGE 92 + MIXED 26, RANKING 0 — gold 등장 시 median rank 1로 랭킹은 정상). 레버: 뉴스 아웃렛 피드 커버리지·tech-doc/community 회수·MIXED 회수 변동성 축소 |
 | **뉴스 풀 신디케이션 포화 (msn.com 100/109)** | High | msn.com 신디케이션이 뉴스 풀을 지배 — LOW_QUALITY 하향/cap 검토 (저품질 패널티 후보) |
-| **DO 바인딩 0개 (RATE_LIMITER 인메모리 fallback)** | High | isolate별 리셋 — Dashboard/API로 바인딩 구성 (⭐최우선), SPACE_DO 500 가드 부재 수정 |
+| ~~DO 바인딩 0개 (RATE_LIMITER 인메모리 fallback)~~ | ~~High~~ | ✅ **해소 (S88) — 11/11 구성 + SPACE_DO 501 가드** |
 | 스크래핑 대상 ToS 위반 소지 | Medium | 상용 전 법률 검토, robots 준수 유지 |
 | HTML 구조 변경 → 0건 회귀 | Medium | canary + 스냅샷 (운영 중) |
 | 백엔드 가용성 노이즈 (단일 run) | Medium | median-of-3 평가 + wikipedia 캐시 (S9) + **DBpedia 미러 폴백 (S28→S35 orchestrator 승격)** + **위키데이터 미러 (S36)** + **ja 2차 티어 DBpedia 언어 엔드포인트 (S38)** |
@@ -130,7 +138,7 @@
 | 미해결 위험·기술부채 투명 문서화 | ✅ 본 보고서 + 08_CHANGELOG |
 
 ## 6. 후속 고도화 계획 (요약)
-1. **즉시 (1주)**: **DO 11종 바인딩 구성 (⭐RATE_LIMITER 우선 — Pages API로 일괄, SPACE_DO 501 가드 추가)** → SEARCH_API_KEY 설정 → prod 헬스체크에서 degraded 제거
+1. **즉시 (1주)**: ✅ DO 11종 바인딩 (S88 완료) → **do-worker secrets 4종 설정 (setup-do-worker-secrets.sh)** → SEARCH_API_KEY 설정 (open mode 해제) → PRIVACY_POLICY 법률 검토 → prod 헬스체크에서 degraded 제거
 2. **단기 (1개월, P1 레버 중심)**: NDCG 0.2813→0.38 목표 (신규 규칙 하 재설정 — 구 0.55→0.65는 캡 규칙과 비교 불가) · **zero 118/500 커버리지 공략**: ① 뉴스 아웃렛 피드 커버리지 + **msn.com 신디케이션 패널티** (100/109 풀 포화) ② tech-doc/community 회수 (MDN/stackoverflow/reddit site: 보강) ③ MIXED 26건 회수 변동성 축소 ④ **academic 16쿼리 (0.1414 최악 태그) 백엔드 라우팅 진단** · reranker 실측 · 교차검증 런타임화
 3. **중기 (3개월)**: 인용 검증 · 개인정보 정책 · 부하/장시간 테스트 · LTR 실측
 4. **장기 (6~12개월)**: 멀티리전 · 자체 인덱스 1M URL · 상용 SLA 99.9% · NDCG 0.80

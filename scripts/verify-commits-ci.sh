@@ -7,7 +7,7 @@
 # worktrees — a fresh checkout of each commit, exactly as CI would see it.
 # It verifies the gates are green at each commit BEFORE push.
 #
-# Gates replayed (mirrors .github/workflows/ci.yml):
+# Gates replayed (mirrors .github/workflows/ci.yml + eval.yml):
 #   lint-ci       npm run lint:ci                       (tsc --noEmit)
 #   eslint        npm run lint:eslint:ci                (--max-warnings=0)
 #   format        npm run format:check
@@ -16,6 +16,15 @@
 #                                                       the script runs it
 #                                                       unconditionally — fine
 #                                                       for a pre-flight)
+#   eval          (--eval) offline replay of the eval regression gate from
+#                 the commit's SAVED run-*.json artifacts — scripts/
+#                 verify-commit-eval.ts loads run-1..N.json, rebuilds the
+#                 median report, and runs the G2 stabilized baseline
+#                 comparison. ~seconds, no network. Commits WITHOUT eval
+#                 artifacts (predate median saves / not committed) report
+#                 SKIP and do not fail the pre-flight. Replaces build when
+#                 --eval is given (eval gate is the expensive-to-know one;
+#                 build is cheap and covered by the default gate set).
 #
 # node_modules: symlinked from the main checkout when (a) no commit in the
 # range touches package.json/package-lock.json AND (b) the working tree is
@@ -32,6 +41,9 @@
 #   bash scripts/verify-commits-ci.sh <base>..<head> # explicit range
 #   bash scripts/verify-commits-ci.sh --base 97a042f --head fab8bf5
 #   bash scripts/verify-commits-ci.sh --skip-build  # build takes the longest
+#   bash scripts/verify-commits-ci.sh --eval        # replay eval regression
+#                                                   # gate from saved artifacts
+#                                                   # (replaces build)
 #   bash scripts/verify-commits-ci.sh --keep        # keep worktrees on failure
 #
 # Exit code: 0 = every gate green on every commit; 1 = at least one failure.
@@ -43,6 +55,7 @@ WORKTREE_BASE="${TMPDIR:-/tmp}/verify-commits-ci"
 GATES=(lint-ci eslint format unit build)
 KEEP=0
 SKIP_BUILD=0
+EVAL_GATE=0
 BASE=""
 HEAD_REF=""
 
@@ -52,9 +65,10 @@ while [[ $# -gt 0 ]]; do
     --base) BASE="$2"; shift 2 ;;
     --head) HEAD_REF="$2"; shift 2 ;;
     --skip-build) SKIP_BUILD=1; shift ;;
+    --eval) EVAL_GATE=1; shift ;;
     --keep) KEEP=1; shift ;;
     --help|-h)
-      sed -n '2,44p' "$0" | sed 's/^# \{0,1\}//'
+      sed -n '2,52p' "$0" | sed 's/^# \{0,1\}//'
       exit 0
       ;;
     *)
@@ -98,9 +112,20 @@ if [[ $MANIFEST_CHANGED -eq 0 ]] && ! (cd "$ROOT" && git diff --quiet HEAD -- pa
   MANIFEST_CHANGED=1
 fi
 
+# Gate list: --eval swaps build for the offline eval replay. If both
+# --eval and --skip-build are given, --eval wins (build is replaced anyway).
+if [[ $EVAL_GATE -eq 1 ]]; then
+  GATES=(lint-ci eslint format unit eval)
+  if [[ $SKIP_BUILD -eq 1 ]]; then
+    echo "Note: --eval implies skipping build — --skip-build is redundant." >&2
+  fi
+fi
+
 echo "═══ verify-commits-ci ═══"
 echo "Range: ${BASE}..${HEAD_REF} (${#COMMITS[@]} commits)"
-if [[ $SKIP_BUILD -eq 1 ]]; then
+if [[ $EVAL_GATE -eq 1 ]]; then
+  echo "Gates: lint-ci eslint format unit eval (offline replay from saved artifacts; build skipped)"
+elif [[ $SKIP_BUILD -eq 1 ]]; then
   echo "Gates: lint-ci eslint format unit (build skipped)"
 else
   echo "Gates: ${GATES[*]}"
@@ -133,6 +158,17 @@ run_gate() {
     format)  (cd "$wt" && npm run format:check > "$log" 2>&1); rc=$? ;;
     unit)    (cd "$wt" && npx vitest run --project unit > "$log" 2>&1); rc=$? ;;
     build)   (cd "$wt" && npm run build > "$log" 2>&1); rc=$? ;;
+    # Offline eval gate: verify-commit-eval.ts exits 0=PASS 1=FAIL 2=SKIP
+    # 3=ERROR. SKIP (no artifacts in the commit) must NOT fail the pre-flight.
+    eval)
+      (cd "$wt" && npx tsx "$ROOT/scripts/verify-commit-eval.ts" > "$log" 2>&1)
+      rc=$?
+      if [[ $rc -eq 2 ]]; then
+        # SKIP = commit has no eval artifacts — not a failure. No time file.
+        echo "SKIP" > "$WORKTREE_BASE/results/$short.eval"
+        return
+      fi
+      ;;
     *) rc=2 ;;
   esac
   end=$(date +%s)

@@ -22,9 +22,32 @@ bash scripts/verify-commits-ci.sh 97a042f~1..97a042f
 # 빌드 생략 (가장 오래 걸리는 게이트)
 bash scripts/verify-commits-ci.sh --skip-build
 
+# eval 회귀 게이트 오프라인 재현 (build 대체) — 저장된 run-*.json 아티팩트로
+bash scripts/verify-commits-ci.sh --eval
+
 # 실패 시 worktree 유지 (디버깅용)
 bash scripts/verify-commits-ci.sh --keep
 ```
+
+## --eval 게이트 (2026-08-10)
+
+`--eval`은 60분짜리 라이브 eval 대신 **저장된 eval 아티팩트로 오프라인 재현**을
+한다 — 커밋의 `eval/results/run-*.json`을 로드해 `computeMedianReport`로 median
+리포트를 재구성(S81 median-NDCG pick)하고, 그 커밋의 `eval/baselines/latest.json`
+과 G2 안정화 비교(`diffBaselineStabilized`, 2-run 이상; 단일 run은
+`diffBaseline`)를 실행한다. 수 초, 네트워크 없음.
+
+| 상태 | 의미 | pre-flight 영향 |
+|---|---|---|
+| PASS | 아티팩트 있고 회귀 없음 (또는 baseline 없음) | 통과 |
+| FAIL | 아티팩트 있고 회귀 감지 | 실패 |
+| SKIP | 커밋에 run-*.json 없음 (median save 이전/미커밋) | 통과 (아티팩트가 없으므로 평가 불가 — 실패로 오판하지 않음) |
+| ERROR | 아티팩트 있으나 손상/비일관 | 실패 |
+
+구현: `scripts/verify-commit-eval.ts` (순수 `runGate(evalDir, opts)` export +
+단위 테스트 12건). 데이터(아티팩트·gold·baseline)는 커밋의 것이고, 게이트
+알고리즘(median/baseline/metrics)은 현재 체크아웃 것 — S54/S58 방식으로 과거
+아티팩트를 현재 규칙으로 재스코어링한다.
 
 데몬 실행 (터미널 세션과 분리 — ~3분 소요):
 
@@ -42,6 +65,7 @@ tail -f /tmp/verify-ci.log
 | format | `npm run format:check` | prettier --check (src/tests/scripts/eval) |
 | unit | `npx vitest run --project unit` | unit-tests job |
 | build | `npm run build` | build job (needs: lint+unit) |
+| eval | `npx tsx scripts/verify-commit-eval.ts` (--eval) | eval.yml 회귀 게이트의 오프라인 재현 (저장 아티팩트 기반) |
 
 ## node_modules 전략
 

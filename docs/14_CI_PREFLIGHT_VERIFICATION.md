@@ -49,6 +49,35 @@ bash scripts/verify-commits-ci.sh --keep
 알고리즘(median/baseline/metrics)은 현재 체크아웃 것 — S54/S58 방식으로 과거
 아티팩트를 현재 규칙으로 재스코어링한다.
 
+## 회귀 가드 — red-gate 요약 (2026-08-10)
+
+게이트가 하나라도 레드면 스크립트가 **어떤 커밋·어떤 게이트·어떤 파일이
+레드인지** 자동 요약한다 (`scripts/summarize-gate-failures.ts`). 게이트별 로그
+포맷을 파싱한다: tsc `path(line,col)`, eslint stylish 파일 헤더, prettier
+`[warn]`, vitest FAIL/AssertionError, vite build 에러, eval `[EVAL GATE]` 라인.
+
+```
+❌ FAIL — red gates per commit:
+  commit 2660263:
+    [npmci]
+      npm error Missing: @cloudflare/workers-types@4.20260702.1 from lock file
+```
+
+**NPMCI-FAIL**: 범위 내 manifest 변경 커밋이 npm ci 폴백을 강제할 때, 구
+lockfile 커밋은 `npm ci`가 실패한다. 과거엔 이 실패를 조용히 삼켜 빈
+node_modules로 게이트가 전부 오실패했다 — 이제 npm ci 실패를 감지해 전체 게이트를
+`NPMCI-FAIL`로 표시하고 npm ci 로그(`<short>-npmci.log`)의 에러를 요약한다.
+
+## CI 워크플로우 연결 (2026-08-10)
+
+ci.yml에 `preflight-replay` 잡 추가 — push/PR 커밋 범위를 `fetch-depth: 0`으로
+체크아웃하고 `bash scripts/verify-commits-ci.sh <range> --eval`을 실행한다.
+기존 잡들이 MERGED 트리를 한 번 게이트하는 반면, 이 잡은 범위 내 **모든 커밋에
+같은 게이트 셋을 재현**해 중간 커밋에서 도입된 회귀를 정확히 지목한다. eval
+게이트는 저장 아티팩트 기반 오프라인 재현 (초 단위, 아티팩트 없는 커밋은
+SKIP). 실제 CI(push/PR)에서는 `github.event.before`가 짧은 범위를 만들어
+과거의 깨진 lockfile 커밋을 포함하지 않는다.
+
 데몬 실행 (터미널 세션과 분리 — ~3분 소요):
 
 ```bash
@@ -171,6 +200,28 @@ fab8bf5  PASS     PASS    PASS    PASS     PASS    (Wave 4 실측 아티팩트)
 
 **결론: 6개 커밋 전부 모든 게이트 그린. 신규 체크아웃 CI가 그린으로 시작할
 것으로 확인됨 (푸시 가능).**
+
+## 2026-08-10 회귀 가드 실측 — 과거 커밋의 npm ci 실패 재현
+
+`86552a5~4..86552a5` 범위(lockfile 수정 커밋 포함)를 `--eval`로 실행:
+
+```
+commit   lint-ci    eslint     format     unit       eval
+f8eb6a1  NPMCI-FAIL NPMCI-FAIL NPMCI-FAIL NPMCI-FAIL NPMCI-FAIL
+fab8bf5  NPMCI-FAIL NPMCI-FAIL NPMCI-FAIL NPMCI-FAIL NPMCI-FAIL
+2660263  NPMCI-FAIL NPMCI-FAIL NPMCI-FAIL NPMCI-FAIL NPMCI-FAIL
+86552a5  PASS       PASS       PASS       PASS       PASS
+```
+
+- f8eb6a1/fab8bf5/2660263: 86552a5의 lockfile 수정(+11/-2, 중첩
+  workers-types@4.x) **이전** 커밋 — npm ci가 `Missing:
+  @cloudflare/workers-types@4.20260702.1`으로 실패. 회귀 가드가 이를 명시적으로
+  NPMCI-FAIL로 표시 (이전엔 빈 node_modules로 전 게이트 오실패).
+- 86552a5: lockfile 수정 커밋 — npm ci 성공, 전 게이트 PASS.
+- act로도 동일 재현 (workflow_dispatch → HEAD~5..HEAD 폴백). **해석**: 이건
+  커밋 결함이 아니라 도구의 정확한 동작 — 과거 커밋 재현 시 해당 커밋의 lock이
+  실제로 깨져 있음을 알려준다. history rewrite 없이 해결하는 방법은 없으며,
+  실제 push 범위(신규 커밋)에는 영향 없다.
 
 ## 한계
 

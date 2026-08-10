@@ -195,3 +195,74 @@ jobs:
           name: worker-bundle
           path: dist/
           retention-days: 7
+
+  # 2026-08-10: per-commit gate replay — mirrors the local pre-flight tool
+  # (scripts/verify-commits-ci.sh). Every job above gates the MERGED tree once;
+  # this job replays the same gate set against EVERY commit in the push/PR
+  # range via git worktrees, so a regression introduced mid-range is caught at
+  # the exact commit that broke it (and the new red-gate summary pinpoints
+  # the gates + files). The eval gate (--eval) is included: it replays the
+  # eval regression comparison offline from committed run-*.json artifacts
+  # (seconds, no network; commits without artifacts report SKIP).
+  # NOTE: the slow path is a range with lockfile changes — verify-commits-ci.sh
+  # then runs npm ci per commit (~1-2 min each). Typical PRs (1-5 commits,
+  # no manifest change) finish in 1-2 min.
+  preflight-replay:
+    name: Per-commit gate replay
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    needs: [lint-typecheck, unit-tests]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Resolve commit range
+        id: range
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            # Merge-base (not base.sha) so a PR head that merged newer main
+            # does not drag unrelated base-branch commits into the replay.
+            BASE="$(git merge-base "${{ github.event.pull_request.base.sha }}" "${{ github.event.pull_request.head.sha }}")"
+            HEAD="${{ github.event.pull_request.head.sha }}"
+          else
+            BASE="${{ github.event.before }}"
+            HEAD="${{ github.sha }}"
+          fi
+          if [ -z "$BASE" ] || [ "$BASE" = "0000000000000000000000000000000000000000" ]; then
+            # First push to the branch: before is empty/zeros. Replaying the
+            # FULL history (root..HEAD) would flag historical broken-lock
+            # commits as NPMCI-FAIL and can exceed the 20-min budget — the
+            # merged-tree gates above already validate HEAD, so this job only
+            # needs to pinpoint regressions in the NEW commits. Cap at the
+            # last 10 (fall back to root on a younger repo).
+            BASE="$(git rev-parse HEAD~10 2>/dev/null || git rev-list --max-parents=0 HEAD | head -1)"
+          fi
+          if [ "$BASE" = "$HEAD" ]; then
+            # No-op push (before == sha): empty range would make the script
+            # exit 2 and fail the job. Skip with a note instead.
+            echo "Range is empty (before == sha) — nothing to replay, skipping."
+            echo "range-skip=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "range=${BASE}..${HEAD}" >> "$GITHUB_OUTPUT"
+            echo "Replaying gates for range ${BASE}..${HEAD}"
+          fi
+
+      - name: Replay gates per commit
+        if: steps.range.outputs.range-skip != 'true'
+        run: |
+          COUNT=$(git rev-list --count "${{ steps.range.outputs.range }}")
+          if [ "$COUNT" -gt 15 ]; then
+            echo "::warning::Range has $COUNT commits (>15) — skipping per-commit replay to stay within the 20-min budget (lockfile-heavy ranges run npm ci per commit). The merged-tree gates above still validate HEAD."
+            exit 0
+          fi
+          bash scripts/verify-commits-ci.sh "${{ steps.range.outputs.range }}" --eval

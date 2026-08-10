@@ -209,7 +209,20 @@ for sha in "${COMMITS[@]}"; do
   if [[ $MANIFEST_CHANGED -eq 0 ]]; then
     ln -s "$ROOT/node_modules" "$wt/node_modules"
   else
-    (cd "$wt" && npm ci > /dev/null 2>&1)
+    # npm ci failure must NOT be silently swallowed: an old/broken lock (e.g.
+    # commits that predate a lockfile fix) leaves an EMPTY node_modules and
+    # every gate then fails for the wrong reason. Detect it and mark the whole
+    # commit NPMCI-FAIL (act cross-check 2026-08-10: 2660263 et al. had no
+    # nested workers-types@4.x entry and npm ci failed).
+    if ! (cd "$wt" && npm ci > "$WORKTREE_BASE/$short-npmci.log" 2>&1); then
+      ALL_OK=0
+      echo "  !! npm ci FAILED for $short (see $short-npmci.log) — marking all gates NPMCI-FAIL"
+      for gate in "${GATES[@]}"; do
+        echo "NPMCI-FAIL" > "$WORKTREE_BASE/results/$short.$gate"
+      done
+      (cd "$ROOT" && git worktree remove --force "$wt" 2>/dev/null)
+      continue
+    fi
   fi
   for gate in "${GATES[@]}"; do
     if [[ "$gate" == "build" && $SKIP_BUILD -eq 1 ]]; then
@@ -226,7 +239,7 @@ echo "═══ Summary ═══"
 printf "%-9s" "commit"
 for gate in "${GATES[@]}"; do
   [[ "$gate" == "build" && $SKIP_BUILD -eq 1 ]] && continue
-  printf "%-9s" "$gate"
+  printf "%-11s" "$gate"
 done
 echo "  (sec/gate)"
 
@@ -236,9 +249,9 @@ for sha in "${COMMITS[@]}"; do
   for gate in "${GATES[@]}"; do
     [[ "$gate" == "build" && $SKIP_BUILD -eq 1 ]] && continue
     if [[ -f "$WORKTREE_BASE/results/$short.$gate" ]]; then
-      printf "%-9s" "$(cat "$WORKTREE_BASE/results/$short.$gate")"
+      printf "%-11s" "$(cat "$WORKTREE_BASE/results/$short.$gate")"
     else
-      printf "%-9s" "SKIP"
+      printf "%-11s" "SKIP"
     fi
   done
   echo -n "  "
@@ -256,6 +269,28 @@ echo ""
 echo "Detailed logs: $WORKTREE_BASE/*-<gate>.log"
 if [[ $ALL_OK -eq 0 ]]; then
   echo "❌ FAIL: at least one gate is red. Logs: $WORKTREE_BASE/*-<gate>.log"
+  # Regression guard: summarize the red (commit, gate) pairs — which gates and
+  # which FILES are red — so CI / a local pre-flight pinpoints the breakage
+  # without opening N logs. summarize-gate-failures.ts parses each gate's log
+  # format (tsc/eslint/prettier/vitest/build/eval).
+  FAILED_COMMITS=()
+  for sha in "${COMMITS[@]}"; do
+    short="${sha:0:7}"
+    for gate in "${GATES[@]}"; do
+      [[ "$gate" == "build" && $SKIP_BUILD -eq 1 ]] && continue
+      if [[ -f "$WORKTREE_BASE/results/$short.$gate" ]] && [[ "$(cat "$WORKTREE_BASE/results/$short.$gate")" != "PASS" && "$(cat "$WORKTREE_BASE/results/$short.$gate")" != "SKIP" ]]; then
+        FAILED_COMMITS+=("$short")
+        break
+      fi
+    done
+  done
+  if [[ ${#FAILED_COMMITS[@]} -gt 0 ]]; then
+    echo ""
+    echo "── red-gate summary ─────────────────────────────────────────"
+    npx tsx "$ROOT/scripts/summarize-gate-failures.ts" "$WORKTREE_BASE" "${FAILED_COMMITS[*]}" "${GATES[*]}" 2>/dev/null || \
+      echo "  (summarizer failed — see detailed logs above)"
+    echo "──────────────────────────────────────────────────────────────"
+  fi
   exit 1
 else
   echo "✅ ALL GREEN: every commit passes every gate (CI pre-flight ok)."

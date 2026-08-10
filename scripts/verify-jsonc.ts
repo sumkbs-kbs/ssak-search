@@ -168,6 +168,22 @@ export function checkEvalArtifacts(evalDir: string): Array<{ file: string; reaso
 }
 
 /**
+ * One artifact parse result from parseEvalArtifacts (S86d single parse).
+ * `file` is the ABSOLUTE path; consumers deriving basenames use node:path
+ * basename (eval/run-files.ts does). S86k: exported so run-files.ts and the
+ * eval gates share the same typed artifact contract instead of re-inlining it.
+ */
+export interface EvalArtifact {
+  file: string
+  /** true when the artifact parsed AND passed the report.results shape gate. */
+  ok: boolean
+  /** Why the artifact failed (only when !ok). */
+  reason?: string
+  /** Parsed top-level value (only when ok). */
+  parsed?: unknown
+}
+
+/**
  * S86d: parse EVERY artifact under an eval dir exactly ONCE, returning each
  * file's parsed top-level value (when valid). The parsed objects are reused
  * by verify-commit-eval.ts to build run reports — eliminating the third parse
@@ -175,10 +191,8 @@ export function checkEvalArtifacts(evalDir: string): Array<{ file: string; reaso
  * files. Benchmark on the real artifacts: 16.9 MB / 6 files, 1019 ms
  * (3× parse) → 38 ms (1× parse).
  */
-export function parseEvalArtifacts(
-  evalDir: string,
-): Array<{ file: string; ok: boolean; reason?: string; parsed?: unknown }> {
-  const out: Array<{ file: string; ok: boolean; reason?: string; parsed?: unknown }> = []
+export function parseEvalArtifacts(evalDir: string): EvalArtifact[] {
+  const out: EvalArtifact[] = []
   for (const f of evalArtifactFilesIn(evalDir)) {
     if (!fs.existsSync(f) || !fs.statSync(f).isFile()) {
       out.push({ file: f, ok: false, reason: 'file not found' })

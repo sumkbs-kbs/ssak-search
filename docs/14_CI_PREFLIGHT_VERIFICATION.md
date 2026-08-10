@@ -593,3 +593,69 @@ S86h 잔여였던 loss 경로의 전용 로더를 공용 진입점으로 통합�
 eval/metrics.ts (NDCG@10 unchanged 0.2813)` · ③ `recomputed 0.2813 ==
 stored baseline 0.2813 (Δ+0.000000)` — 재계산 NDCG가 저장 baseline과
 소수 6자리까지 일치, S86g/S86h 리팩터의 동작 중립을 수치로 확정.
+
+## 2026-08-10 S86k-② — 호출부 중복 전수 스캔 진단 (baseline 로딩 3종 병존)
+
+S86k로 runGate/checkBaselineEquivalence의 run-로딩 중복을 통일한 뒤,
+`baselineFromArtifacts`·`computeMedianReport`·`loadGoldStandards` 호출부를
+전수 스캔(ripgrep + 원문 실측)해 같은 방식으로 정리할 반복 패턴이 더 있는지
+진단한 결과. 중복은 **"baseline 로딩" 한 곳에 집중** — 구현이 **3종 병존**:
+
+### 발견 — baseline 로딩 3구현 병존
+
+| 로딩 경로 | 위치 | 사용처 | 특성 |
+|---|---|---|---|
+| `loadBaseline()` | eval/baseline.ts:31 | eval/index.ts:210 (라이브 경로), analyze-429-loss CLI 폴백 (S86l에서 제거) | null-safe, 경로 하드코딩 (`__dirname`) |
+| `baselineFromArtifacts()` | S86f에서 scripts/verify-commit-eval.ts:116 → **S86l에서 eval/run-files.ts로 이동** | runGate, checkBaselineEquivalence | 파싱된 아티팩트에서 도출 — **단일 파싱 불변식** |
+| 핸드롤 `JSON.parse(readFileSync(...))` | scripts/probe-s58-gate.ts:11 | 일회성 프로브 | null-safe 없음, cwd 의존 |
+
+**핵심 불일치**: analyze-429-loss는 S86h-② eval-ROOT 계약으로 `parseRunFiles`를
+쓰는데(parseEvalArtifacts가 baselines/도 함께 파싱) 이후 `loadBaseline()`이 **같은
+파일을 재읽기** — runGate에서 S86f가 제거한 바로 그 2중 파싱 패턴이 게이트-인접
+스크립트에 잔존했습니다.
+
+**스캔 부수 발견 (잠복 버그 2종)**:
+1. **__dirname 커플링** — `loadBaseline()`은 모듈 `__dirname` 기준으로 **실제
+   eval/을 읽음** (evalDir과 무관). `--eval-dir` 히스토리 분석이 repo 라이브
+   baseline과 era-mismatch 비교를 하던 구조
+2. **shapeless baseline 크래시** — `loadBaseline()`은 형태 검증 없이
+   `JSON.parse(raw) as EvalBaseline` → `{}`가 **truthy**로 반환되어
+   `crossReferenceGate429`의 `baseline.report.results`가 TypeError 크래시할 경로
+
+### ①안 채택 근거 (→ S86l 구현)
+
+"parseRunFiles 위 공용 헬퍼"라는 제안의 의도(단일 로더)는 맞지만,
+`parseRunFiles` 자체가 아니라 그 **저수준 단계**(`runFilesFromArtifacts`)를
+공유해야 S86d 단일 파싱 불변식과 S86c 손상 체크라는 두 게이트 계약이 보존됩니다
+(`parseRunFiles`를 게이트가 직접 쓰면 2중 파싱 + 손상 체크 상실). 따라서:
+
+- `baselineFromArtifacts`를 eval/run-files.ts로 이동 (runFilesFromArtifacts /
+  corruptArtifacts의 형제 — "파싱된 아티팩트에서 도출" 계약의 단일 진실 지점)
+- analyze-429-loss `loadRunArtifacts`를
+  `parseEvalArtifacts + runFilesFromArtifacts + baselineFromArtifacts` 합성으로
+  재구성 — **단일 파싱에서 baseline 도출**, `loadBaseline()` 호출 제거
+- 의존성 방향: 신규 eval→scripts 엣지 없음(기존 S86h-① 경로만), 두 게이트의
+  scripts→scripts 결합 감소 — S86h-① 권고(공용 로더를 eval/로 수렴)와 일치
+- 부수 수정: 위 잠복 버그 2종 해소 (fixture/`--eval-dir`가 자기 baseline 사용,
+  `{}` → graceful `hasBaseline: false`)
+
+**구현 결과 (S86l, 7파일 +340/−137)**: 유닛 **1,655건 / 87파일** 통과,
+tsc/lint/format 그린, 스모크 `[EVAL GATE] PASS — NDCG@10: 0.2813` ·
+`[BASELINE EQ] PASS — Δ+0.000000` — **동작 중립**. discriminator 테스트 6건으로
+고정 — 특히 fixture 무baseline 시 repo 라이브 baseline(3.4MB) 폴백 부재
+(구 코드라면 hasBaseline true → 레드)가 __dirname 커플링 해소를 실증합니다.
+
+### ②③ 무조치 판정 (②는 이후 S86l-②로 구현됨)
+
+| # | 후보 | 진단 판정 | 실제 후속 |
+|---|---|---|---|
+| ② | computeMedianReport 3줄 트리플 (`unionQueries + loadGoldStandards + computeMedianReport`, 두 게이트) | **저가치** — S86k로 공유 스캐폴딩(parse→손상체크→runFiles→유니온)은 이미 통일, 잔여 3줄은 반환 타입(GateOutcome vs BaselineEquivalenceResult) 차이로 수용했던 ~10줄과 동일 사유 | **사용자 요청으로 S86l-② 구현** (4파일 +98/−86): `computeMedianReportFromRuns(reports, gold?)` thin 래퍼를 eval/median.ts에 추가 (유니온 + gold default 내장), 두 게이트 전환. 유닛 **1,660건**, 동작 중립. **eval/index.ts는 유지** — 라이브 러너는 정규 `EVAL_QUERIES`를 직접 전달 (유니온과 다른 정규 셋 의미론) |
+| ③ | loadGoldStandards Map 래퍼 (`analyze-429-loss` `new Map(Object.entries(...))` 1건) + probe-s58 핸드롤 | **무조치** — Map 래퍼는 뷰 변환(파싱 경로 아님), probe-s58은 일회성 프로브 아티팩트 (S86g로 gold 로딩은 이미 20+ 호출부 전부 통일) | 무조치 유지 |
+
+④ `eval/baseline-self.ts`의 `SELF_LATEST_FILE`(자체 구현)도 별도 self-check
+baseline (G2 노이즈 교정용, latest.json과 다른 의도)으로 **무조치** 판정.
+
+**결론**: baseline 로딩이 세 갈래로 나뉜 것이 진짜 문제였고, S86k 스타일(파싱된
+아티팩트에서 도출하는 저수준 헬퍼 공유)이 정확한 해법 — S86l/S86l-②로 수렴
+완료. 이후 이 코드베이스의 baseline 로딩 경로는 단일 파싱 도출
+(`baselineFromArtifacts`) 1종 + 라이브 러너 전용 `loadBaseline()` 1종입니다.

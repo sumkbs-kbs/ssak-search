@@ -36,6 +36,7 @@ import {
   recomputeNdcgAt10,
   loadGoldStandards,
 } from './metrics'
+import { unionQueries } from './run-files'
 
 /** Sort-copy helper. */
 function sorted<T>(vals: T[], cmp: (a: T, b: T) => number): T[] {
@@ -231,4 +232,19 @@ export function computeMedianReport(
     runs: { count: n, timestamps: reports.map((r) => r.timestamp) },
     results,
   }
+}
+
+/**
+ * S86l-②: thin wrapper over computeMedianReport for consumers that replay
+ * STORED run artifacts (the two offline gates: verify-commit-eval.ts runGate
+ * and verify-baseline-equivalence.ts). Each previously hand-rolled the same
+ * triple — `unionQueries(reports)` (a query dropped from one run must not
+ * vanish from the median), `loadGoldStandards()` (the CURRENT gold for the
+ * S81 median-NDCG representative pick), `computeMedianReport(reports, q, g)`
+ * — so the query union + gold default now live here once. NOT used by the
+ * live runner (eval/index.ts): it passes the authoritative EVAL_QUERIES
+ * directly, which is exactly the union of a complete live run's results.
+ */
+export function computeMedianReportFromRuns(reports: EvalReport[], gold?: Record<string, string[]>): EvalReport {
+  return computeMedianReport(reports, unionQueries(reports), gold ?? loadGoldStandards())
 }

@@ -6,7 +6,9 @@
  * passthrough, and runs metadata.
  */
 import { describe, it, expect } from 'vitest'
-import { computeMedianReport, resolveCacheMeasurement } from '../../eval/median'
+import { computeMedianReport, computeMedianReportFromRuns, resolveCacheMeasurement } from '../../eval/median'
+import { unionQueries } from '../../eval/run-files'
+import { loadGoldStandards } from '../../eval/metrics'
 import type { EvalQuery, EvalReport, EvalResult } from '../../eval/types'
 
 const mkQuery = (id: string): EvalQuery => ({ id, query: id, tags: ['test'] })
@@ -292,5 +294,50 @@ describe('computeMedianReport', () => {
     const r2 = mkReport('t2', [mkResult('q1', {})]) // no cache (run 2: measureCache false)
     const median = computeMedianReport([r1, r2], queries)
     expect(median.cache).toEqual(cache1)
+  })
+})
+
+// S86l-②: the offline-gate convenience wrapper — the query union + gold
+// default that runGate / checkBaselineEquivalence used to hand-roll in the
+// same 3 lines each. The wrapper MUST stay byte-equivalent to the manual
+// triple (computeMedianReport(reports, unionQueries(reports), gold)).
+describe('computeMedianReportFromRuns (S86l-② — thin wrapper over the triple)', () => {
+  it('equals the manual triple with an explicit gold (contract pin)', () => {
+    const r1 = mkReport('t1', [mkResult('q1', { responseTimeMs: 800 }), mkResult('q2', { responseTimeMs: 3000 })])
+    const r2 = mkReport('t2', [mkResult('q1', { responseTimeMs: 1200 }), mkResult('q2', { responseTimeMs: 5000 })])
+    const gold = { q1: ['good.example.com'], q2: ['good.example.com'] }
+    // Both sides generate their own `timestamp: new Date().toISOString()` —
+    // normalize it so the comparison cannot flake on a millisecond boundary.
+    const viaWrapper = { ...computeMedianReportFromRuns([r1, r2], gold), timestamp: '' }
+    const viaTriple = { ...computeMedianReport([r1, r2], unionQueries([r1, r2]), gold), timestamp: '' }
+    expect(viaWrapper).toEqual(viaTriple)
+  })
+
+  it('defaults gold to loadGoldStandards() — same aggregation as the manual default', () => {
+    const r1 = mkReport('t1', [mkResult('q1', { responseTimeMs: 800 })])
+    const r2 = mkReport('t2', [mkResult('q1', { responseTimeMs: 1200 })])
+    const viaWrapper = { ...computeMedianReportFromRuns([r1, r2]), timestamp: '' }
+    const viaTriple = { ...computeMedianReport([r1, r2], unionQueries([r1, r2]), loadGoldStandards()), timestamp: '' }
+    expect(viaWrapper).toEqual(viaTriple)
+  })
+
+  it('unions queries across runs — a query present in ONE run survives the median', () => {
+    const r1 = mkReport('t1', [mkResult('q1', {})])
+    const r2 = mkReport('t2', [mkResult('q1', {}), mkResult('q2', {})])
+    const median = computeMedianReportFromRuns([r1, r2])
+    const ids = median.results.map((r) => r.query.id)
+    expect(ids).toContain('q1')
+    expect(ids).toContain('q2') // present only in run-2 — must not vanish
+  })
+
+  it('passes a single run through with runs metadata (count: 1)', () => {
+    const rep = mkReport('t1', [mkResult('q1', {})])
+    const median = computeMedianReportFromRuns([rep])
+    expect(median.results).toEqual(rep.results)
+    expect(median.runs).toEqual({ count: 1, timestamps: ['t1'] })
+  })
+
+  it('throws on empty reports (propagates computeMedianReport contract)', () => {
+    expect(() => computeMedianReportFromRuns([])).toThrow(/expected at least 1 run/)
   })
 })

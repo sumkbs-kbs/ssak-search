@@ -789,3 +789,92 @@ describe('parseMirrorEvents (S40)', () => {
     expect(wd!.successRate).toBeCloseTo(0.5, 3)
   })
 })
+
+// S86l: the baseline comes from the SAME single parse as the runs
+// (baselineFromArtifacts over the fixture's own artifacts) — NOT a second
+// loadBaseline() read. This matters because loadBaseline() resolves
+// eval/baselines/latest.json via its module __dirname (the REAL repo eval/
+// dir), so the removed CLI default compared a historical --eval-dir against
+// the repo's LIVE baseline and every fixture run in these tests against the
+// committed repo baseline. Deriving from the parsed artifacts keys the
+// baseline to the analyzed evalDir — and lets these tests pin the contract.
+describe('S86l baseline derivation (single parse — no loadBaseline re-read)', () => {
+  let dir: string
+  beforeEach(() => {
+    dir = makeRunDir()
+  })
+  afterEach(() => {
+    rmSync(dir, { recursive: true, force: true })
+  })
+
+  function writeBaselineFixture(timestamp = '2026-03-03T00:00:00.000Z'): void {
+    const bd = join(dir, 'baselines')
+    mkdirSync(bd, { recursive: true })
+    writeFileSync(
+      join(bd, 'latest.json'),
+      JSON.stringify({
+        timestamp,
+        report: { results: [{ query: { id: 'en-fact-01' }, backends: ['wikipedia'], ranking: { ndcgAt10: 0.9 } }] },
+      }),
+      'utf-8',
+    )
+  }
+
+  it('loadRunArtifacts derives the fixture baseline from the parsed artifacts', () => {
+    writeRuns(dir, [{ id: 'en-fact-01', backends: [['wikipedia'], ['wikipedia']], ndcgs: [0.9, 0.9] }], 2)
+    writeBaselineFixture('2026-03-03T00:00:00.000Z')
+    const { baseline: b } = loadRunArtifacts(dir, new Map([['en-fact-01', ['wikipedia.org']]]))
+    expect(b?.timestamp).toBe('2026-03-03T00:00:00.000Z')
+    expect(b?.report.results[0].query.id).toBe('en-fact-01')
+  })
+
+  it('loadRunArtifacts returns baseline null when the fixture has no baseline file', () => {
+    writeRuns(dir, [{ id: 'en-fact-01', backends: [['wikipedia'], ['wikipedia']], ndcgs: [0.9, 0.9] }], 2)
+    const { baseline: b } = loadRunArtifacts(dir, new Map([['en-fact-01', ['wikipedia.org']]]))
+    expect(b).toBeNull()
+  })
+
+  it('treats a parseable-but-shapeless baseline ({} shape) as absent — no crash (S86l fix)', () => {
+    // The removed loadBaseline() had NO shape check: JSON.parse('{}') returned
+    // a TRUTHY object, so crossReferenceGate429 would have dereferenced
+    // baseline.report.results → TypeError crash. parseEvalArtifacts marks the
+    // {} shape !ok (isEvalArtifactWellFormed requires report.results) →
+    // baselineFromArtifacts skips it → null → graceful hasBaseline false.
+    writeRuns(dir, [{ id: 'en-fact-01', backends: [['wikipedia'], ['wikipedia']], ndcgs: [0.9, 0.9] }], 2)
+    const bd = join(dir, 'baselines')
+    mkdirSync(bd, { recursive: true })
+    writeFileSync(join(bd, 'latest.json'), '{}', 'utf-8')
+    const s = computeLossReport(dir)
+    expect(s.gate429.hasBaseline).toBe(false)
+  })
+
+  it('computeLossReport uses the PARSED fixture baseline when none is injected (hasBaseline true)', () => {
+    // 2 runs so the S75 cross-reference passes its runCount guard.
+    writeRuns(dir, [{ id: 'en-fact-01', backends: [['wikipedia'], ['wikipedia']], ndcgs: [0.9, 0.9] }], 2)
+    writeBaselineFixture()
+    const s = computeLossReport(dir)
+    expect(s.gate429.hasBaseline).toBe(true)
+    expect(s.gate429.runCount).toBe(2)
+  })
+
+  it('does NOT fall back to the repo live baseline when the fixture has none (S86l fix)', () => {
+    // The repo's eval/baselines/latest.json exists on disk (committed). The
+    // removed loadBaseline() read THAT file via its __dirname regardless of
+    // evalDir — so before S86l this fixture run compared against the repo's
+    // live baseline (hasBaseline true). The parsed-artifacts derivation must
+    // key the baseline to the analyzed dir instead.
+    writeRuns(dir, [{ id: 'en-fact-01', backends: [['wikipedia'], ['wikipedia']], ndcgs: [0.9, 0.9] }], 2)
+    const s = computeLossReport(dir)
+    expect(s.gate429.hasBaseline).toBe(false)
+  })
+
+  it('an injected baseline still overrides the parsed one', () => {
+    writeRuns(dir, [{ id: 'en-fact-01', backends: [['wikipedia'], ['wikipedia']], ndcgs: [0.9, 0.9] }], 2)
+    writeBaselineFixture()
+    // The runner (eval/index.ts) may explicitly pass null (a --save run must
+    // not self-compare against the baseline it is about to write) — that must
+    // win over the fixture baseline on disk.
+    const s = computeLossReport(dir, undefined, null)
+    expect(s.gate429.hasBaseline).toBe(false)
+  })
+})

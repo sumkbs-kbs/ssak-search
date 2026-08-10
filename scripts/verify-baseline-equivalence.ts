@@ -29,10 +29,10 @@
  * Exit: 0 PASS/NO_BASELINE · 1 DRIFT · 3 ERROR
  */
 import { join, resolve } from 'node:path'
-import type { EvalReport, EvalQuery, EvalBaseline } from '../eval/types'
-import { computeMedianReport } from '../eval/median'
-import { loadGoldStandards } from '../eval/metrics'
-import { baselineFromArtifacts, SCORING_DRIFT_EPSILON } from './verify-commit-eval'
+import type { EvalReport, EvalBaseline } from '../eval/types'
+import { computeMedianReportFromRuns } from '../eval/median'
+import { runFilesFromArtifacts, corruptArtifacts, baselineFromArtifacts } from '../eval/run-files'
+import { SCORING_DRIFT_EPSILON } from './verify-commit-eval'
 import { parseEvalArtifacts } from './verify-jsonc'
 
 export interface BaselineEquivalenceOptions {
@@ -74,26 +74,17 @@ export function checkBaselineEquivalence(
   })
 
   const artifacts = parseEvalArtifacts(evalDir)
-  const corrupt = artifacts.filter((a) => !a.ok)
+  // S86k: shared helpers (single point of truth with runGate) — corrupt
+  // filter, numeric-order run derivation, and the query union below.
+  const corrupt = corruptArtifacts(artifacts)
   if (corrupt.length > 0) {
     const files = corrupt.map((c) => `${c.file}: ${c.reason}`).join('; ')
     return fail('ERROR', `artifact integrity check failed: ${files}`)
   }
 
-  // Numeric-order run files (run-1, run-2, ... run-10) — same rule as runGate.
-  const runArtifacts = artifacts
-    .filter((a) => /run-(\d+)\.json$/.test(a.file))
-    .sort((a, b) => {
-      const na = parseInt(a.file.match(/run-(\d+)\.json$/)?.[1] ?? '0', 10)
-      const nb = parseInt(b.file.match(/run-(\d+)\.json$/)?.[1] ?? '0', 10)
-      return na - nb
-    })
-  if (runArtifacts.length === 0) return fail('ERROR', 'no run-*.json artifacts found')
-
-  const reports = runArtifacts.map((a) => {
-    const raw = a.parsed as { report?: EvalReport } | EvalReport
-    return (raw as { report?: EvalReport }).report ?? (raw as EvalReport)
-  })
+  const runFiles = runFilesFromArtifacts(artifacts)
+  if (runFiles.length === 0) return fail('ERROR', 'no run-*.json artifacts found')
+  const reports = runFiles.map((r) => r.report)
   // NOTE (single-run weak signal): with exactly 1 run file, computeMedianReport
   // returns the run's STORED ranking as-is (median.ts single-run shortcut) —
   // the recompute degenerates to stored-vs-stored and trivially PASSes. That
@@ -101,17 +92,11 @@ export function checkBaselineEquivalence(
   // number) but is a WEAK signal; the `runs` field lets callers see it. The
   // eval:median:save / eval:median:ci flows always produce >=2 runs.
 
-  // Query union across ALL runs (a query dropped from one run must not vanish
-  // from the median aggregation) — same contract as runGate.
-  const seen = new Map<string, EvalQuery>()
-  for (const rep of reports) {
-    for (const r of rep.results) seen.set(r.query.id, r.query)
-  }
-  const gold = opts.gold ?? loadGoldStandards()
-
   let medianReport: EvalReport
   try {
-    medianReport = computeMedianReport(reports, [...seen.values()], gold)
+    // S86l-②: query union + gold default inside the shared wrapper — same
+    // aggregation as runGate's replay, single call site.
+    medianReport = computeMedianReportFromRuns(reports, opts.gold)
   } catch (err) {
     return fail('ERROR', `median aggregation failed: ${(err as Error).message}`)
   }

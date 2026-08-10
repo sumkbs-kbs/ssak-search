@@ -2,8 +2,7 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 import { mkdtempSync, writeFileSync, mkdirSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { runGate, baselineFromArtifacts, scoringFilesIn, SCORING_DRIFT_EPSILON } from '../../scripts/verify-commit-eval'
-import { parseEvalArtifacts } from '../../scripts/verify-jsonc'
+import { runGate, scoringFilesIn, SCORING_DRIFT_EPSILON } from '../../scripts/verify-commit-eval'
 import type { EvalReport, EvalResult, EvalQuery } from '../../eval/types'
 
 /** Build a minimal EvalReport with a query whose pool ranks gold[0] first. */
@@ -153,37 +152,9 @@ describe('runGate run-file loading (S86e single path)', () => {
   })
 })
 
-// S86f: loadBaselineFromWorktree was removed — runGate derives the baseline
-// from the SAME parsed artifacts (parseEvalArtifacts), so baselines/latest.json
-// is never re-read/re-parsed (~3.4 MB per commit).
-describe('baselineFromArtifacts (S86f — derived from the single parse pass)', () => {
-  it('returns null when no baseline artifact exists', () => {
-    const artifacts = parseEvalArtifacts(tmp)
-    expect(baselineFromArtifacts(artifacts, tmp)).toBeNull()
-  })
-
-  it('derives a valid baseline from the already-parsed artifact', () => {
-    const dir = join(tmp, 'eval')
-    mkdirSync(join(dir, 'baselines'), { recursive: true })
-    const rep = makeReport('q-pass', { poolDomains: ['good.example.com'] })
-    writeFileSync(join(dir, 'baselines', 'latest.json'), JSON.stringify({ timestamp: 't1', report: rep }), 'utf-8')
-    const artifacts = parseEvalArtifacts(dir)
-    const b = baselineFromArtifacts(artifacts, dir)
-    expect(b?.timestamp).toBe('t1')
-    expect(b?.report.results).toHaveLength(1)
-  })
-
-  it('runGate surfaces the derived baseline timestamp (baseline not re-read)', () => {
-    const dir = join(tmp, 'eval')
-    mkdirSync(join(dir, 'results'), { recursive: true })
-    writeRun(join(dir, 'results'), 1, makeReport('q-pass', { poolDomains: ['good.example.com'] }))
-    writeBaseline(dir, makeReport('q-pass', { poolDomains: ['good.example.com'] }), '2026-02-02T00:00:00.000Z')
-    const o = runGate(dir, { gold })
-    expect(o.status).toBe('PASS')
-    expect(o.detail).toContain('baseline: 2026-02-02T00:00:00.000Z')
-  })
-})
-
+// S86f/S86l: the baseline is derived from the SAME parseEvalArtifacts pass
+// (baselineFromArtifacts now lives in eval/run-files.ts — the pure
+// derivation is unit-tested there; runGate surfaces the derived timestamp).
 describe('runGate', () => {
   it('SKIP when the eval dir does not exist', () => {
     const o = runGate(join(tmp, 'missing'), { gold })
@@ -331,6 +302,18 @@ describe('runGate', () => {
     mkdirSync(dir, { recursive: true })
     const o = runGate(dir, { gold })
     expect(o.status).toBe('SKIP')
+  })
+
+  // S86f: baselineFromArtifacts (shared helper) feeds the derived timestamp —
+  // the gate surfaces the commit's own baseline without a second disk read.
+  it('runGate surfaces the derived baseline timestamp (baseline not re-read)', () => {
+    const dir = join(tmp, 'eval')
+    mkdirSync(join(dir, 'results'), { recursive: true })
+    writeRun(join(dir, 'results'), 1, makeReport('q-pass', { poolDomains: ['good.example.com'] }))
+    writeBaseline(dir, makeReport('q-pass', { poolDomains: ['good.example.com'] }), '2026-02-02T00:00:00.000Z')
+    const o = runGate(dir, { gold })
+    expect(o.status).toBe('PASS')
+    expect(o.detail).toContain('baseline: 2026-02-02T00:00:00.000Z')
   })
 })
 

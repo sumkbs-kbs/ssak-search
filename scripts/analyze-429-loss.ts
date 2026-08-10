@@ -65,8 +65,9 @@
 import { readFileSync } from 'fs'
 import { resolve } from 'path'
 import { computeNdcg, recomputeNdcgAt10, loadGoldStandards } from '../eval/metrics'
-import { parseRunFiles } from '../eval/run-files'
-import { loadBaseline, diffBaselineStabilized } from '../eval/baseline'
+import { runFilesFromArtifacts, baselineFromArtifacts } from '../eval/run-files'
+import { parseEvalArtifacts } from './verify-jsonc'
+import { diffBaselineStabilized } from '../eval/baseline'
 import { EVAL_QUERIES } from '../eval/queries'
 import type { SearchResult } from '../src/types'
 import type { EvalReport, EvalBaseline } from '../eval/types'
@@ -190,11 +191,18 @@ export interface LossSummary {
 }
 
 /**
- * S86h-②: run-file loader — a thin composite over the SHARED single-parse
- * entry point eval/run-files.ts `parseRunFiles` (which reuses the S86d
- * parseEvalArtifacts gate). Both outputs derive from the SAME parsed objects:
+ * S86h-②: run-file loader — a composite over the SHARED single-parse entry
+ * point eval/run-files.ts (which reuses the S86d parseEvalArtifacts gate).
+ * EVERY output derives from the SAME parsed objects:
  *   - `runMaps`: query-id → { backends, ndcg } for the S34 composition logic
  *   - `reports`: full EvalReports for the S75 gate cross-reference
+ *   - `baseline`: the worktree baseline (S86l) — derived from the same
+ *     artifacts pass via baselineFromArtifacts instead of a second
+ *     loadBaseline() disk read. NOTE this also FIXES a latent coupling:
+ *     loadBaseline() resolves eval/baselines/latest.json via its module
+ *     __dirname (the REAL eval/ dir), so the old CLI default read the repo's
+ *     live baseline even for a historical --eval-dir. Deriving from the
+ *     parsed artifacts keys the baseline to the analyzed evalDir.
  * computeLossReport previously called loadRuns() then loadRunReports() (2×
  * ~10 MB parse), then S86f merged them into one pass, and now the parse itself
  * is the codebase-wide shared loader (numeric order + report ?? raw + the
@@ -217,17 +225,25 @@ export interface LossSummary {
  * fall back to the stored ranking field so old artifacts remain analyzable.
  *
  * Contract: `evalDir` is the eval ROOT (results/ + baselines/) — same as
- * parseRunFiles. S86f's legacy bare-file behavior (a file that parses but
+ * parseEvalArtifacts. S86f's legacy bare-file behavior (a file that parses but
  * lacks report.results contributed its run map) is superseded by the S86h
  * gate: bare = corrupt = absent, consistent with the CI integrity gate.
  */
 export interface RunArtifacts {
   runMaps: Array<Map<string, RunInfo>>
   reports: EvalReport[]
+  /** S86l: baseline derived from the SAME single parse (never a re-read). */
+  baseline: EvalBaseline | null
 }
 
 export function loadRunArtifacts(evalDir: string, gold: Map<string, string[]>): RunArtifacts {
-  const runFiles = parseRunFiles(evalDir)
+  // S86d single-parse invariant: one parseEvalArtifacts pass feeds the run
+  // derivation (runFilesFromArtifacts), the baseline derivation
+  // (baselineFromArtifacts), AND the S86c corrupt-filter semantics — nothing
+  // is re-read/re-parsed. (The caller's gold map is the only separate input.)
+  const artifacts = parseEvalArtifacts(evalDir)
+  const runFiles = runFilesFromArtifacts(artifacts)
+  const baseline = baselineFromArtifacts(artifacts, evalDir)
   const runMaps: Array<Map<string, RunInfo>> = []
   const reports: EvalReport[] = []
   for (const rf of runFiles) {
@@ -258,7 +274,7 @@ export function loadRunArtifacts(evalDir: string, gold: Map<string, string[]>): 
     runMaps.push(m)
     reports.push(rf.report)
   }
-  return { runMaps, reports }
+  return { runMaps, reports, baseline }
 }
 
 /**
@@ -632,9 +648,10 @@ export function computeLossReport(
 ): LossSummary {
   // S54: gold is loaded FIRST — loadRunArtifacts recomputes NDCG against it.
   const gold = loadGold()
-  // S86h-②: shared single-parse run loading (parseRunFiles) — the S75 gate
-  // cross-ref reports come from the SAME parsed objects the run maps use.
-  const { runMaps: runs, reports } = loadRunArtifacts(evalDir, gold)
+  // S86h-②/S86l: shared single-parse run loading — the S75 gate cross-ref
+  // reports AND the baseline come from the SAME parsed objects the run maps
+  // use (baselineFromArtifacts, not a loadBaseline() re-read).
+  const { runMaps: runs, reports, baseline: baselineFromRun } = loadRunArtifacts(evalDir, gold)
   const perQuery429 = logText ? parseQuery429s(logText) : new Map<string, { runs: Set<number>; count: number }>()
 
   // ── group runs per query by other-backend composition ──────────────────
@@ -859,11 +876,17 @@ export function computeLossReport(
   // S75: S73 2-run gate × wikipedia-429 cross-reference. The baseline is
   // injected when the runner has one loaded (eval/index.ts passes the SAME
   // snapshot the gate compared against — a --save run must NOT self-compare
-  // against the baseline it is about to write); the CLI defaults to disk.
-  // NOTE: for a historical --eval-dir the disk baseline may postdate the
-  // analyzed runs — the cross-ref then compares era-mismatched snapshots
-  // (acceptable for trend analysis; pass a baseline explicitly for precision).
-  const baselineSnapshot = baseline === undefined ? loadBaseline() : baseline
+  // against the baseline it is about to write); the CLI defaults to the
+  // baseline derived from the SAME artifacts parse as the runs (S86l — keyed
+  // to evalDir, so a historical --eval-dir compares against ITS OWN baseline
+  // instead of the repo's live eval/baselines/latest.json, which the removed
+  // loadBaseline() read via its module __dirname regardless of evalDir).
+  // Robustness bonus (review S86l): loadBaseline() had NO shape check, so a
+  // parseable-but-shapeless baseline ("{}") was a truthy object and
+  // crossReferenceGate429 dereferenced baseline.report.results → TypeError
+  // crash; baselineFromArtifacts treats it as absent (parseEvalArtifacts
+  // marks {} !ok) → graceful hasBaseline false.
+  const baselineSnapshot = baseline === undefined ? baselineFromRun : baseline
   const gate429 = crossReferenceGate429(reports, baselineSnapshot, runs, gold, outRows, perQuery429)
 
   return {

@@ -21,7 +21,11 @@ on:
         default: ''
 
 env:
-  NODE_VERSION: '20'
+  # 2026-08-10 (act cross-check): was '20' — wrangler 4.112.0 requires
+  # node >= 22.0.0 (engines), so the "Start local preview server" step
+  # failed on every run (real CI history: all integration-tests runs red at
+  # that step). ci.yml/eval.yml stay on 20 — they never exec wrangler.
+  NODE_VERSION: '22'
   CI: 'true'
 
 jobs:
@@ -47,10 +51,25 @@ jobs:
         run: npm run build
         timeout-minutes: 3
 
+      # 2026-08-10 (act cross-check): wrangler 4.112.0 requires node >= 22
+      # (NODE_VERSION above) AND `wrangler pages dev` reads the PRODUCTION
+      # wrangler.jsonc, whose D1/Vectorize/AI bindings are marked `remote:
+      # true` — it starts a remote dev session that NEEDS Cloudflare
+      # credentials. Without CLOUDFLARE_API_TOKEN the preview server dies at
+      # "Establishing remote connection..." (reproduced in act + real CI
+      # history: every integration-tests run red at this step). deploy.yml
+      # uses the same secrets, so they are expected to exist in the repo.
       - name: Start local preview server
         if: github.event.inputs.deploy_url == ''
         id: preview
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: |
+          if [ -z "$CLOUDFLARE_API_TOKEN" ] || [ -z "$CLOUDFLARE_ACCOUNT_ID" ]; then
+            echo "::error::CLOUDFLARE_API_TOKEN / CLOUDFLARE_ACCOUNT_ID secrets are not configured — wrangler pages dev needs both to start the remote-dev session for the D1/Vectorize/AI bindings. Add them to the repo settings (deploy.yml already uses them)."
+            exit 1
+          fi
           # Start wrangler pages dev in the background with nohup
           nohup npx wrangler pages dev --port 8788 > wrangler.log 2>&1 &
           echo $! > wrangler.pid
@@ -120,11 +139,17 @@ jobs:
           echo "::error::Integration tests failed — check test output above for details."
           exit 1
 
+      # 2026-08-10 (review): the old status logic only read steps.check — when
+      # a step BEFORE the test step fails (e.g. preview server), check is
+      # skipped, its output is empty, and the summary lied "✅ Passed" on a
+      # failed run (seen in act). Combine both signals: the check step (covers
+      # the continue-on-error test step) OR the job conclusion (covers any
+      # upstream step failure).
       - name: Generate summary
         if: always()
         run: |
           STATUS='✅ Passed'
-          if [ "${{ steps.check.outputs.status }}" = "failed" ]; then
+          if [ "${{ steps.check.outputs.status }}" = "failed" ] || [ "${{ job.status }}" = "failure" ]; then
             STATUS='❌ Failed'
           fi
           echo "## 🔄 Integration Tests" >> $GITHUB_STEP_SUMMARY

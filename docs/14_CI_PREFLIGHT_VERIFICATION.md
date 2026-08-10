@@ -235,3 +235,32 @@ fab8bf5  NPMCI-FAIL NPMCI-FAIL NPMCI-FAIL NPMCI-FAIL NPMCI-FAIL
   (~60분 — `npm run eval:median:ci`는 별도 실행).
 - **실제 CI는 GitHub 러너에서 최종 확인 필요** — act는 근사치이며, artifact
   업로드·GitHub 토큰·네트워크 정책 등은 실제 러너 전용.
+
+## 2026-08-10 act 전수 점검 — eval.yml + integration-tests.yml (2차)
+
+ci.yml 블로커 3건 수정 후, 같은 act(--concurrent-jobs 1)로 나머지 CI
+워크플로우 2종을 전수 재현.
+
+### integration-tests.yml — 실제 CI 블로커 2건 발견·수정
+
+| # | 블로커 | 근본 원인 | 수정 |
+|---|---|---|---|
+| ④ | preview 서버 기동 실패 | `NODE_VERSION: '20'`인데 **wrangler 4.112.0은 node >=22 요구** (engines) — act가 정확히 재현했고, 실제 CI 이력(96fb017/9700c75/d23cec7 등 PR run 전부)도 같은 스텝에서 레드였음 | `NODE_VERSION: '22'` |
+| ⑤ | preview 서버 기동 실패 (2차) | `wrangler pages dev`는 프로덕션 wrangler.jsonc를 읽고 D1/Vectorize/AI 바인딩이 `remote: true`라 **원격 세션을 시작** — `CLOUDFLARE_API_TOKEN` 없이 "No credentials found"로 죽음 (deploy.yml은 같은 secrets를 쓰므로 저장소에 설정 전제) | preview 스텝에 `CLOUDFLARE_API_TOKEN`/`CLOUDFLARE_ACCOUNT_ID` env 주입 + 누락 시 명확한 `::error::` 조기 종료 |
+
+리뷰 반영: ① Generate summary가 실패 잡을 "✅ Passed"로 오보하던 버그 수정
+(check 스텝이 skip되면 status가 빈 값 — `job.status == failure` 병합) ②
+secrets 게이트가 ACCOUNT_ID도 함께 검사하도록 확장.
+
+### eval.yml — 블로커 없음
+
+act로 install/format/config 스텝 전부 그린 확인. 실제 CI(2da4c4c push)의
+eval run도 steps 1-6 그린 + Run evaluation 정상 진행 (push 모드 500쿼리 ×
+2 runs — 설계상 장시간). eval 실행 스텝은 100분 예산이라 act 완주는
+생략(장기 실행 경로는 실제 CI run이 검증 중).
+
+### 2차 점검 결론
+
+ci.yml에서 잡은 3건 + 이번 2건 = **총 5건의 실제 CI 블로커**를 act가 전수
+발견. deploy.yml의 download-artifact@v4 `run-id` 누락(이전 턴 발견)은
+별도 수정 대상으로 남음.

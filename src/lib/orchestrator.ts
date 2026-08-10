@@ -67,8 +67,16 @@ interface CacheEntry {
   expiresAt: number
 }
 const MEMORY_CACHE = new Map<string, CacheEntry>()
-const MEMORY_CACHE_TTL_GENERAL = 120_000 // 2 minutes
-const MEMORY_CACHE_TTL_NEWS = 30_000 // 30 seconds
+// Wave 5 (B3): memory TTLs ALIGNED with the Cache API tier (cache.ts
+// DEFAULT_TTL 1800s / NEWS_TTL 300s). Previously 120s/30s, the memory tier
+// expired entries 15× sooner than the same response lived in the Cache API,
+// so an isolate that re-served a query from Cache API still re-fanned-out on
+// its own second ask. Tuning memory to match means the fastest tier holds
+// data for exactly as long as the slower tiers — a repeat query hits memory
+// (~1ms) for its whole Cache-API-valid lifetime. The eval keeps median-of-3
+// integrity by clearing this map between runs (see eval/index.ts run loop).
+const MEMORY_CACHE_TTL_GENERAL = 1_800_000 // 30 minutes (Cache API DEFAULT_TTL)
+const MEMORY_CACHE_TTL_NEWS = 300_000 // 5 minutes (Cache API NEWS_TTL)
 
 /**
  * Single-flight map: in-flight executeSearch promises keyed by memory cache
@@ -85,6 +93,13 @@ function getMemoryCacheKey(request: SearchRequest, variant?: string): string {
   // otherwise Tier 0 (memory) and Tier 1/2 (Cache API / KV) fragment into
   // separate key spaces for the same logical query, defeating the cache.
   // See canonicalCacheQuery() in cache.ts for the shared implementation.
+  //
+  // Wave 5 (B3): include_raw_content + location are now in the key too,
+  // mirroring cache.ts's `irc=`/`loc=` params. The memory TTL was aligned
+  // with the Cache API tier (30min), so a key that omits a field the Cache
+  // API keys on would serve a stripped cached response (no raw_content, wrong
+  // location) for the whole aligned window — a 15× amplification of a latent
+  // divergence (review Wave 5).
   const canonicalQuery = request.query
     .trim()
     .normalize('NFC')
@@ -93,7 +108,7 @@ function getMemoryCacheKey(request: SearchRequest, variant?: string): string {
     .toLowerCase()
   const includeSorted = request.include_domains ? [...request.include_domains].sort().join(',') : ''
   const excludeSorted = request.exclude_domains ? [...request.exclude_domains].sort().join(',') : ''
-  return `${canonicalQuery}|${request.topic}|${request.max_results}|${request.search_depth}|${request.time_range ?? ''}|${request.sort_by ?? 'blend'}|${request.country ?? ''}|${request.language ?? ''}|${request.focus ?? 'all'}|${request.page ?? 1}|ia=${request.include_answer ? 1 : 0}|ifc=${request.include_fact_check ? 1 : 0}|inc=${includeSorted}|exc=${excludeSorted}|exp=${variant ?? ''}`
+  return `${canonicalQuery}|${request.topic}|${request.max_results}|${request.search_depth}|${request.time_range ?? ''}|${request.sort_by ?? 'blend'}|${request.country ?? ''}|${request.language ?? ''}|${request.location ?? ''}|${request.focus ?? 'all'}|${request.page ?? 1}|ia=${request.include_answer ? 1 : 0}|irc=${request.include_raw_content ? 1 : 0}|ifc=${request.include_fact_check ? 1 : 0}|inc=${includeSorted}|exc=${excludeSorted}|exp=${variant ?? ''}`
 }
 
 function getFromMemoryCache(key: string): SearchResponse | undefined {
@@ -1107,6 +1122,10 @@ export {
   mergeAndDeduplicate,
   toBingTimeRange,
   isEvalMode,
+  // Wave 5 (B3): exported so the unit test can lock the memory-key ↔
+  // cache.ts-key field parity (include_raw_content / location) — the TTL
+  // alignment made a divergent key a 30-min stale-response risk.
+  getMemoryCacheKey,
 }
 
 /**

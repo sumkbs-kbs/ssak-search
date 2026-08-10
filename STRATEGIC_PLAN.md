@@ -2708,3 +2708,35 @@
   확정 (~60분 별도 세션) ② B4 팬아웃 예산 재조정 — wikipedia 4500ms ceiling은 페이싱 가드와
   직교하나 재시도 체인이 짧아져 사실상 여유 확보 ③ 가드 쿨다운 30s는 튜닝 노브 (15s면 회복
   빠르나 재-429 증가 — 라이브 데이터로 결정).
+
+### Wave 5 (docs/13 B3): 캐시 계층 TTL 정렬 + 메모리 키 패리티 + eval 무결성 (2026-08-10)
+
+- **데이터 기반 진단 (저장 500쿼리 × 3-run, Wave 4 실측)**: median-of-3 eval은 **단일
+  프로세스**에서 3회 실행되므로 orchestrator 메모리 캐시(Tier 0)가 run 전부를 관통. 그런데
+  메모리 TTL(120s/30s)이 run 간격(~20분: 1224s/1253s)보다 짧아 **교차-run 히트 0** —
+  run-1/2/3의 p50이 863/842/852ms로 통계적으로 동일 (3-run이 전부 재팬아웃). 같은 응답이
+  Cache API 티어에서 30분 살아있는데 메모리에서 2분만에 만료되는 불일치.
+- **수정** (4개 파일 + 테스트):
+  1. `src/lib/orchestrator.ts` — 메모리 캐시 TTL **120s/30s → 1800s/300s** (cache.ts
+     DEFAULT_TTL/NEWS_TTL과 정렬): 반복 쿼리가 Cache API 유효 기간 전체 동안 메모리(~1ms)로
+     서빙. ② `getMemoryCacheKey`에 **include_raw_content + location 추가** (cache.ts `irc=`/
+     `loc=` 패리티) — TTL 상향으로 stale-stripped 응답 창이 15× 커지는 잠재 키 불일치 선제
+     제거 (리뷰 반영).
+  2. `src/lib/cache.ts` — KV promote TTL 하드코딩 1800 → `resolveTtl(env, 'general')`
+     (KV는 general만 저장 — CACHE_TTL_GENERAL env 오버라이드와 정렬).
+  3. `eval/index.ts` — **run 사이 `__clearMemoryCacheForTests()`** (static import): TTL이
+     run 간격을 초과하므로 클리어 없으면 run-2/3이 run-1 캐시로 median-of-3 정합성 붕괴.
+     S80 인터리브 warm pass는 runEval 내부라 무영향.
+  4. `scripts/sim-wave5-cache.ts` — 저장 풀에서 쿼리별 절대 실행 시각 복원(보고서
+     timestamp + 누적 responseTimeMs)해 (generalTtl, newsTtl) 시나리오별 교차-run 히트율·
+     p50/p95 투영.
+- **시뮬레이션 실측 (저장 풀)**: 구 TTL(120s/30s) **0/1000 히트** → p50 854ms 유지 (실측과
+  일치). B3(1800s/300s) **708/1000 히트 (일반 쿼리 ~83%, 뉴스/금융 146개는 300s TTL로
+  미스)** → pooled p50 854→**803ms**, p95 3.50→**2.81s**, avg 1.38s→**694ms**. 3600s/300s는
+  동일 (TTL 포화).
+- **테스트**: sim-wave5-cache.test.ts +7건 + memory-cache-key.test.ts +4건. 유닛 **1,547건**
+  (80파일), tsc 0, lint 0, format 0. 리뷰 반영 5건 (키 패리티, static import, pacing 주석
+  정정, dead resultCount 제거, baseline 호출 단순화).
+- **잔여**: 라이브 `eval:median:save` 재실행으로 run-2/3 p50 붕괴 실측 확정 (별도 ~60분
+  세션 — Wave 관례), B2 스트리밍은 `/api/search/stream`(SSE, results-first)이 이미 존재 —
+  로드테스트 검증만 남음, B4 팬아웃 예산 재조정.

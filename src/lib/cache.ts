@@ -154,8 +154,12 @@ export async function getCached<T>(key: string, env?: AppBindings): Promise<T | 
       const kvValue = await env.CACHE_KV.get(key, 'json')
       if (kvValue !== null) {
         recordCacheHit(2)
-        // Promote back to Cache API for fast access next time
-        const ttl = 1800
+        // Promote back to Cache API for fast access next time. KV only
+        // persists GENERAL queries (setCached skips news/finance), so the
+        // promote TTL must resolve through the same env-aware path — a
+        // hardcoded 1800 would drift from a configured CACHE_TTL_GENERAL
+        // (Wave 5 B3).
+        const ttl = resolveTtl(env, 'general')
         const response = new Response(JSON.stringify(kvValue), {
           headers: {
             'Content-Type': 'application/json',

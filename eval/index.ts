@@ -12,6 +12,12 @@
 import type { EvalReport } from './types'
 import { EVAL_QUERIES } from './queries'
 import { runEval } from './runner'
+// Wave 5 (B3): the median-of-3 runs share one isolate; the memory cache TTL
+// (1800s/300s) now exceeds the inter-run gap, so each run must clear the
+// tier-0 map or runs 2..N would replay run 1's cached responses. Static
+// import — runner.ts already imports executeSearch from the same module, so
+// there is no circularity (review Wave 5).
+import { __clearMemoryCacheForTests } from '../src/lib/orchestrator'
 import { computeMedianReport, resolveCacheMeasurement } from './median'
 import { saveBaseline, loadBaseline, diffBaseline, diffBaselineStabilized } from './baseline'
 import { formatReport, formatReportJSON, formatReportSummary } from './reporter'
@@ -167,6 +173,14 @@ Options:
       // a --cache --runs 3 dispatch runs 3 cold passes with NO cache metric.
       const rep = await runEval(queries, { measureCache: cachePlan.measure && i === 1 })
       reports.push(rep)
+      // Wave 5 (B3): the memory cache TTL (1800s/300s) now exceeds the
+      // inter-run gap (~20 min on the 500×3 median) — without clearing, runs
+      // 2..N would be served ENTIRELY from run 1's cache, making the median
+      // a copy of run 1 (0 latency, identical results). The median must
+      // aggregate independent cold runs; clear the isolate-level map between
+      // runs (the S80 interleaved warm pass lives INSIDE runEval and is
+      // unaffected — this clears only after each run completes).
+      __clearMemoryCacheForTests()
       // Persist each raw run for auditability (run-1.json … run-N.json).
       // Regressions are intentionally NOT computed here — per-run diffs against
       // a moving baseline are ambiguous; the median report is the signal.

@@ -153,14 +153,18 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      # 2026-08-10 (act cross-check): the job previously checked wrangler.jsonc
-      # (production), which is a Pages project — wrangler pages deploy REJECTS
-      # durable_objects without a script_name, so production DO/R2 bindings are
-      # intentionally NOT in the file (configured via Dashboard) and the check
-      # ALWAYS failed. The meaningful static target is wrangler.dev.jsonc, which
-      # declares all 11 DO + R2 + INDEX_QUEUE for local dev.
+      # 2026-08-10 (P2 ④): wrangler.jsonc (production) NOW declares the 11 DO
+      # bindings via script_name → `ssak-do-worker` (separate Workers deploy),
+      # so the production config passes this check too. The dev target is
+      # checked here for CI stability (no live API dependency); both files
+      # declare all 11 DO + R2 + INDEX_QUEUE-compatible bindings.
       - name: Verify DO Binding (wrangler.dev.jsonc)
         run: npx tsx scripts/verify-do-binding.ts --config=wrangler.dev.jsonc
+
+      - name: Verify DO Binding (wrangler.jsonc production)
+        # --do-only: production R2 (UPLOAD_BUCKET) + INDEX_QUEUE are still
+        # Dashboard-only (bucket/queue never provisioned); gate DOs alone.
+        run: npx tsx scripts/verify-do-binding.ts --config=wrangler.jsonc --do-only
 
       - name: Verify Analytics Engine Config
         run: npx tsx scripts/verify-analytics-binding.ts

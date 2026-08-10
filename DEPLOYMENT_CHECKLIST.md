@@ -105,10 +105,23 @@ echo "https://dash.cloudflare.com/ → Pages → search-engine-api → Settings 
 ### 개요
 
 Durable Object(DO)는 Cloudflare Workers의 상태 저장(sticky) 컴퓨팅 레이어입니다.
-총 **8개**의 DO 클래스가 `src/index.tsx`에서 export되어 있습니다.
+총 **11개**의 DO 클래스가 `src/index.tsx`에서 export되어 있습니다
+(RateLimiterDO · ThreadDO · PagesDO · LibraryDO · UserProfileDO · SpaceDO · ApiKeyDO ·
+CrawlerDO · ClickLogDO · ExperimentDO · CanaryOrchestratorDO).
 
-**중요**: Pages Functions에서 DO 바인딩은 `wrangler.jsonc`가 아닌 **Cloudflare Dashboard**에서 설정해야 합니다.
-`wrangler.jsonc`의 `durable_objects.bindings`는 로컬 개발(wrangler pages dev)에서만 사용됩니다.
+**구현 완료 (P2 ④, 2026-08-10)**: Pages 프로젝트는 DO를 **직접 소유/생성할 수 없습니다**
+(Cloudflare 공식 문서: "You cannot create and deploy a Durable Object within a Pages
+project"). 따라서 11개 DO 클래스는 **별도 Workers(`ssak-do-worker`, `wrangler.do.jsonc`)로
+배포**하고 Pages(`wrangler.jsonc`)에서 `script_name`으로 바인딩합니다. 이 구조로
+2026-08-10에 실배포 완료 — `/api/health`가 `rate_limiter_do: true` + `mode: durable_object`
++ `hosts_tracked` 단조 증가를 확인했습니다.
+
+**배포 순서 (반드시 이 순서)**:
+1. `npx wrangler deploy --config wrangler.do.jsonc` — DO 클래스 호스트 워커 배포
+2. `npm run build && npx wrangler pages deploy` — Pages 워커 배포 (script_name 바인딩)
+
+> 과거 버전의 "Dashboard에서 DO 바인딩 추가" 방식은 Pages가 DO를 직접 소유할 수 없어
+> 동작하지 않았습니다 (P2 실측). project 레벨 바인딩은 git 연결 빌드에만 적용됩니다.
 
 ---
 
@@ -124,18 +137,21 @@ Durable Object(DO)는 Cloudflare Workers의 상태 저장(sticky) 컴퓨팅 레�
 
 | # | DO 클래스 | 바인딩 이름 | 파일 | 관련 라우트 | 없을 때 동작 |
 |---|-----------|-------------|------|-----------|-------------|
-| 3.2 | `ApiKeyDO` | `API_KEY_DO` | `src/lib/api-key-do.ts` | `/api/keys` | 501 응답 |
-| 3.3 | `ThreadDO` | `THREAD_DO` | `src/lib/thread-do.ts` | `/api/chat` | 501 응답 |
-| 3.4 | `PagesDO` | `PAGES_DO` | `src/lib/pages-do.ts` | `/api/pages` | 501 응답 |
-| 3.5 | `LibraryDO` | `LIBRARY_DO` | `src/lib/library-do.ts` | `/api/library` | 501 응답 |
+| 3.2 | `ApiKeyDO` | `API_KEY_DO` | `src/lib/api-key-do.ts` | `/api/keys` | 501 응답 (`binding_missing`) |
+| 3.3 | `ThreadDO` | `THREAD_DO` | `src/lib/thread-do.ts` | `/api/chat` | 501 응답 (`binding_missing`) |
+| 3.4 | `PagesDO` | `PAGES_DO` | `src/lib/pages-do.ts` | `/api/pages` | 501 응답 (`binding_missing`) |
+| 3.5 | `LibraryDO` | `LIBRARY_DO` | `src/lib/library-do.ts` | `/api/library` | 501 응답 (`binding_missing`) |
 
 #### 🟢 선택 사항 (고급 기능)
 
 | # | DO 클래스 | 바인딩 이름 | 파일 | 관련 라우트 | 없을 때 동작 |
 |---|-----------|-------------|------|-----------|-------------|
-| 3.6 | `UserProfileDO` | `USER_PROFILE_DO` | `src/lib/user-profile-do.ts` | `/api/profile` | 501 응답 |
-| 3.7 | `SpaceDO` | `SPACE_DO` | `src/lib/space-do.ts` | `/api/spaces` | 501 응답 |
-| 3.8 | `CrawlerDO` | `CRAWLER_DO` | `src/lib/crawler-do.ts` | `/api/crawl` | 501 응답 |
+| 3.6 | `UserProfileDO` | `USER_PROFILE_DO` | `src/lib/user-profile-do.ts` | `/api/profile` | 501 응답 (`binding_missing`) |
+| 3.7 | `SpaceDO` | `SPACE_DO` | `src/lib/space-do.ts` | `/api/spaces` | 501 응답 (`binding_missing`) |
+| 3.8 | `CrawlerDO` | `CRAWLER_DO` | `src/lib/crawler-do.ts` | `/api/crawl` | 501 응답 (`binding_missing`) |
+| 3.9 | `ClickLogDO` | `CLICK_LOG_DO` | `src/lib/ltr/click-logger.ts` | `/api/ltr`, `/api/monitor` | 501 응답 (`binding_missing`) |
+| 3.10 | `ExperimentDO` | `EXPERIMENT_DO` | `src/lib/experiments/ab-test.ts` | `/api/experiments`, `/api/monitor` | 501 응답 (`binding_missing`) |
+| 3.11 | `CanaryOrchestratorDO` | `CANARY_DO` | `src/lib/canary/canary-orchestrator.ts` | `/api/canary` | 500 응답 (가드가 500 — `binding_missing`) |
 
 ---
 
@@ -157,49 +173,53 @@ Durable Object(DO)는 Cloudflare Workers의 상태 저장(sticky) 컴퓨팅 레�
       { "name": "USER_PROFILE_DO", "class_name": "UserProfileDO" },
       { "name": "SPACE_DO", "class_name": "SpaceDO" },
       { "name": "CRAWLER_DO", "class_name": "CrawlerDO" },
+      { "name": "CLICK_LOG_DO", "class_name": "ClickLogDO" },
+      { "name": "EXPERIMENT_DO", "class_name": "ExperimentDO" },
+      { "name": "CANARY_DO", "class_name": "CanaryOrchestratorDO" },
     ]
   }
 }
 ```
 
-> ⚠️ `wrangler.jsonc`의 `durable_objects.bindings`는 로컬 개발 전용입니다.
-> 프로덕션 배포 시에는 이 설정이 무시됩니다. 반드시 Dashboard에서도 설정하세요.
+> `wrangler.dev.jsonc`(로컬 dev)는 `exports` 맵 + script_name 없는 바인딩으로
+> Pages 엔트리포인트에서 DO 클래스를 직접 해석합니다. `wrangler.jsonc`(프로덕션)는
+> `script_name: "ssak-do-worker"`로 별도 배포된 DO 워커를 참조합니다.
 
-#### 3.2 프로덕션 환경 (Cloudflare Dashboard)
+#### 3.2 프로덕션 환경 (별도 DO 워커 배포)
 
-##### Step 1: Dashboard 접속
-1. [Cloudflare Dashboard](https://dash.cloudflare.com/) 로그인
-2. 좌측 메뉴 → **Workers & Pages** → **search-engine-api**
-3. 상단 탭 → **Settings** → **Functions**
-
-##### Step 2: DO 바인딩 추가
-
-**RATE_LIMITER (최우선):**
-```
-1. Settings → Functions → Durable Objects → "Add binding"
-2. Namespace name: RATE_LIMITER
-3. Class name: RateLimiterDO
-4. "Save"
+##### Step 1: DO 호스트 워커 배포
+```bash
+# DO 클래스 11개를 별도 Workers로 배포 (migrations 자동 적용)
+npx wrangler deploy --config wrangler.do.jsonc
+# → Uploaded ssak-do-worker … Deployed ssak-do-worker.sumkbs.workers.dev
 ```
 
-**나머지 DO (위와 동일한 방법으로 반복):**
+##### Step 2: Pages 배포 (script_name 바인딩)
 
-| 바인딩 이름 | Class 이름 |
-|-------------|-----------|
-| `RATE_LIMITER` | `RateLimiterDO` |
-| `API_KEY_DO` | `ApiKeyDO` |
-| `THREAD_DO` | `ThreadDO` |
-| `PAGES_DO` | `PagesDO` |
-| `LIBRARY_DO` | `LibraryDO` |
-| `USER_PROFILE_DO` | `UserProfileDO` |
-| `SPACE_DO` | `SpaceDO` |
-| `CRAWLER_DO` | `CrawlerDO` |
+`wrangler.jsonc`에 이미 11개 DO 바인딩이 `script_name: "ssak-do-worker"`로
+선언되어 있습니다. DO 변경이 없는 한 이 파일을 다시 편집할 필요가 없습니다:
 
-##### Step 3: 재배포
+```jsonc
+"durable_objects": {
+  "bindings": [
+    { "name": "RATE_LIMITER", "class_name": "RateLimiterDO", "script_name": "ssak-do-worker" },
+    { "name": "THREAD_DO", "class_name": "ThreadDO", "script_name": "ssak-do-worker" },
+    // … 11개 전부 …
+  ]
+}
 ```
-1. "Save & Redeploy" 버튼 클릭
-2. 배포 완료까지 약 1-2분 소요
-3. 배포 상태가 "Success"로 표시되는지 확인
+
+```bash
+# Pages 워커 재배포 (script_name 바인딩 적용)
+npm run build && npx wrangler pages deploy
+```
+
+##### Step 3: 검증
+```bash
+curl -s https://search-engine-api.pages.dev/api/health | python3 -c \
+  "import sys,json; d=json.load(sys.stdin); rl=d['rate_limiter'];
+  print('mode:', rl['mode'], '| hosts_tracked:', rl['hosts_tracked'])"
+# Expected: mode: durable_object | hosts_tracked: 6+ (단조 증가)
 ```
 
 ---
@@ -246,6 +266,9 @@ done
 | `USER_PROFILE_DO` | `UserProfileDO` | 사용자 프리퍼런스 저장 | SQLite 내장 |
 | `SPACE_DO` | `SpaceDO` | 워크스페이스/프로젝트 관리 | SQLite 내장 |
 | `CRAWLER_DO` | `CrawlerDO` | 웹 크롤링 작업 스케줄링/실행 | SQLite 내장 |
+| `CLICK_LOG_DO` | `ClickLogDO` | LTR 클릭/노출 로깅 (impression/click) | SQLite 내장 |
+| `EXPERIMENT_DO` | `ExperimentDO` | A/B 실험 생성/분석 (pause/resume/click) | SQLite 내장 |
+| `CANARY_DO` | `CanaryOrchestratorDO` | 파서 회귀 감지 오케스트레이션 (스냅샷 비교/알림) | SQLite 내장 |
 
 > 모든 DO는 Cloudflare Durable Object의 내장 SQLite를 사용하므로 별도의 DB 설정이 필요 없습니다.
 
@@ -255,10 +278,14 @@ done
 
 | 증상 | 원인 | 해결 |
 |------|------|------|
-| `curl /api/chat` → HTTP 501 | `THREAD_DO` 바인딩 누락 | Dashboard에서 THREAD_DO 추가 후 redeploy |
-| `curl /api/health` → rate_limiter_do: false | `RATE_LIMITER` 바인딩 누락 | Dashboard에서 RATE_LIMITER 추가 후 redeploy |
-| 로컬 dev에서 DO 미동작 | wrangler.jsonc에 bindings 누락 | wrangler.jsonc에 durable_objects.bindings 추가 |
-| 배포 후 DO 변경이 반영 안 됨 | 캐시된 이전 버전 | Dashboard에서 새 deployment 강제 트리거 |
+| `curl /api/chat` → HTTP 501 | `THREAD_DO` 바인딩 누락 | `wrangler.jsonc`에서 THREAD_DO script_name 확인 후 do-worker + Pages 재배포 |
+| `curl /api/health` → rate_limiter_do: false | `RATE_LIMITER` 미바인딩 또는 do-worker 미배포 | `npx wrangler deploy --config wrangler.do.jsonc` 후 Pages 재배포 |
+| `curl /api/ltr` → HTTP 501 | `CLICK_LOG_DO` 바인딩 누락 | wrangler.jsonc CLICK_LOG_DO 확인 후 재배포 |
+| `curl /api/experiments` → HTTP 501 | `EXPERIMENT_DO` 바인딩 누락 | wrangler.jsonc EXPERIMENT_DO 확인 후 재배포 |
+| `curl /api/canary` → HTTP 500 | `CANARY_DO` 바인딩 누락 | wrangler.jsonc CANARY_DO 확인 후 재배포 |
+| 배포 후에도 `mode: in_memory_fallback` | Pages가 DO를 직접 소유 불가 — do-worker 미배포 | ① `npx wrangler deploy --config wrangler.do.jsonc` ② Pages 재배포 (script_name 적용) |
+| 로컬 dev에서 DO 미동작 | wrangler.dev.jsonc에 bindings 누락 | wrangler.dev.jsonc에 durable_objects.bindings 추가 |
+| 배포 후 DO 변경이 반영 안 됨 | 캐시된 이전 버전 | do-worker 재배포 후 Pages 재배포 |
 
 ---
 

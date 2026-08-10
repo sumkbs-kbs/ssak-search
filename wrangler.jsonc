@@ -68,15 +68,34 @@
   // Cloudflare Dashboard → Workers & Pages → Queues → Create queue
   // (name: search-index-queue)
   // "queues": [ { "binding": "INDEX_QUEUE", "queue": "search-index-queue" } ],
-// Durable Object bindings are intentionally NOT declared here.
-// `wrangler pages deploy` rejects durable_objects without a script_name
-// (verified 2026-08-04 on wrangler 4.112.0: "Pages requires Durable Object
-// bindings to specify the name of the Worker where the Durable Object is
-// defined"), so production DO bindings MUST be configured via Cloudflare
-// Dashboard (or the Pages project API). See the consolidated setup checklist
-// at the bottom of this file.
-// Local dev: DO bindings are declared in wrangler.dev.jsonc instead.
-//
+// Durable Object bindings — P2 ④ (2026-08-10). Cloudflare Pages CANNOT
+// create Durable Objects within a Pages project, so the 11 DO classes are
+// deployed as a SEPARATE Workers script (wrangler.do.jsonc →
+// `ssak-do-worker`) and bound here via script_name. Deploy order:
+//   1. npx wrangler deploy --config wrangler.do.jsonc
+//   2. npx wrangler pages deploy   (this file)
+// Local dev: DO bindings are declared in wrangler.dev.jsonc instead
+// (resolved from the Pages entrypoint's exports — no script_name needed).
+"durable_objects": {
+  // ⚠️ The 11-DO list lives in FOUR places — keep in sync when adding a DO:
+  //    1. this file (script_name bindings)
+  //    2. wrangler.do.jsonc (bindings + migrations)
+  //    3. wrangler.dev.jsonc (exports + bindings)
+  //    4. scripts/verify-do-binding.ts REQUIRED_DO_BINDINGS
+  "bindings": [
+    { "name": "RATE_LIMITER", "class_name": "RateLimiterDO", "script_name": "ssak-do-worker" },
+    { "name": "THREAD_DO", "class_name": "ThreadDO", "script_name": "ssak-do-worker" },
+    { "name": "PAGES_DO", "class_name": "PagesDO", "script_name": "ssak-do-worker" },
+    { "name": "LIBRARY_DO", "class_name": "LibraryDO", "script_name": "ssak-do-worker" },
+    { "name": "USER_PROFILE_DO", "class_name": "UserProfileDO", "script_name": "ssak-do-worker" },
+    { "name": "SPACE_DO", "class_name": "SpaceDO", "script_name": "ssak-do-worker" },
+    { "name": "API_KEY_DO", "class_name": "ApiKeyDO", "script_name": "ssak-do-worker" },
+    { "name": "CRAWLER_DO", "class_name": "CrawlerDO", "script_name": "ssak-do-worker" },
+    { "name": "CLICK_LOG_DO", "class_name": "ClickLogDO", "script_name": "ssak-do-worker" },
+    { "name": "EXPERIMENT_DO", "class_name": "ExperimentDO", "script_name": "ssak-do-worker" },
+    { "name": "CANARY_DO", "class_name": "CanaryOrchestratorDO", "script_name": "ssak-do-worker" }
+  ]
+},
 // KV namespace for cross-restart cache persistence (Phase 5):
 // Hot queries persist across isolates and restarts (30 min TTL).
 // Cache.ts tier 2: Cache API miss → KV lookup → KV miss → live search.
@@ -139,16 +158,13 @@
   // For multi-region deployment strategy, see AUDIT.md § "Multi-Region Strategy".
   //
   // ════════════════════════════════════════════════════════════════════════════
-  // PRODUCTION DO / R2 BINDINGS — Dashboard configuration checklist
+  // PRODUCTION BINDINGS — deployment checklist (P2 ④, 2026-08-10)
   // ════════════════════════════════════════════════════════════════════════════
   //
-  // `wrangler pages deploy` REJECTS durable_objects / r2_buckets bindings
-  // without a script_name (Pages auto-generates the Worker name). So these
-  // bindings MUST be configured manually via Cloudflare Dashboard.
-  //
-  // Step 1 — For EACH Durable Object below:
-  //   Cloudflare Dashboard → Pages → search-engine-api → Settings → Functions
-  //   → Durable Objects → Add binding
+  // Durable Objects (11) are declared IN THIS FILE above, bound to the
+  // separate `ssak-do-worker` script (wrangler.do.jsonc) via script_name.
+  // The old "Dashboard-only" limitation is GONE — verified 2026-08-10:
+  // `wrangler pages deploy` accepts durable_objects with a valid script_name.
   //
   // ┌──────────────────┬──────────────────┬─────────────────────────────────┐
   // │ Binding name     │ Class name       │ Feature that breaks if missing  │
@@ -165,6 +181,12 @@
   // │ EXPERIMENT_DO    │ ExperimentDO     │ /api/experiments (A/B testing)   │
   // │ CANARY_DO        │ CanaryOrchestratorDO │ /api/canary (parser regression) │
   // └──────────────────┴──────────────────┴─────────────────────────────────┘
+  //
+  // Step 1 — Deploy the DO host worker FIRST (required for the bindings
+  //   above to validate):
+  //     npx wrangler deploy --config wrangler.do.jsonc
+  //   The DO classes live ONLY in `ssak-do-worker`; this Pages script merely
+  //   holds namespace references (script_name bindings).
   //
   // Step 2 — R2 bucket (file uploads):
   //   1. Cloudflare Dashboard → R2 → Create bucket (e.g. "search-engine-uploads")

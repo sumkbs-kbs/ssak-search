@@ -50,6 +50,13 @@ export interface HostHealth {
   tripCount?: number
   probeInFlight?: boolean
   backoffMs?: number
+  /**
+   * 'durable' — state persisted in DO storage, shared across isolates
+   * (S88 evidence surfacing: getBackendHealth's DO path stamps every host
+   * with this so /api/health clearly distinguishes cross-isolate state from
+   * the in-memory fallback's per-isolate 'local').
+   */
+  source?: 'local' | 'durable'
 }
 
 export interface RateLimitResult {
@@ -414,6 +421,9 @@ export class RateLimiterDO extends DurableObject<Env> {
         tripCount: circuit.tripCount,
         probeInFlight: circuit.probeInFlight,
         backoffMs: getBackoffMs(circuit.tripCount),
+        // Cross-isolate marker — this state lives in DO storage, visible to
+        // every isolate's /api/health (S88: contrast with 'local').
+        source: 'durable',
       }
     }
     return result

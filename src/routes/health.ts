@@ -75,6 +75,49 @@ export function shouldProbeBackend(name: string, env: AppBindings): boolean {
 }
 
 /**
+ * S88: resolve where the reported rate-limiter state lives.
+ *
+ * Prefers the actual source stamped on tracked hosts (every entry of
+ * getBackendHealth carries `source: 'local' | 'durable'`). When the state is
+ * empty (fresh isolate, nothing tracked yet) or mixed, falls back to the
+ * binding-based mode so the field is ALWAYS present and unambiguous.
+ * Pure function — unit-testable without any network/mocks.
+ */
+export function resolveRateLimiterSource(
+  circuitHealth: Record<string, { source?: 'local' | 'durable' }>,
+  doBound: boolean,
+): 'local' | 'durable' {
+  const sources = new Set(
+    Object.values(circuitHealth)
+      .map((h) => h.source)
+      .filter(Boolean),
+  )
+  if (sources.size === 1) return [...sources][0] as 'local' | 'durable'
+  return doBound ? 'durable' : 'local'
+}
+
+/**
+ * S89-③: Prometheus gauge block exposing the ACTIVE rate-limiter state source.
+ *
+ * Exactly ONE sample is emitted — `{source="durable"} 1` when the reported
+ * state lives in DO storage, `{source="local"} 1` when it lives in this
+ * isolate's in-memory maps. The value is always 1: the series' presence +
+ * label identifies the mode, and the OTHER label's absence marks it inactive
+ * (a clean `sum(search_rate_limiter_source)` always equals 1 — a broken
+ * double-emission would show 2). Grafana panels can key off the label to
+ * surface the DO↔in-memory transition (S88 6→8→6 hosts_tracked fluctuation)
+ * in dashboards, not just /api/health JSON.
+ * Pure function — unit-testable without any network/mocks.
+ */
+export function buildRateLimiterSourceMetricLines(source: 'local' | 'durable'): string[] {
+  return [
+    '# HELP search_rate_limiter_source Rate limiter state source (1 = active mode; durable = DO storage, local = per-isolate in-memory)',
+    '# TYPE search_rate_limiter_source gauge',
+    `search_rate_limiter_source{source="${source}"} 1`,
+  ]
+}
+
+/**
  * Aggregate per-backend probe results into the global health status.
  *
  * Unconfigured optional backends are excluded BEFORE this call (see
@@ -241,6 +284,9 @@ healthRoute.get('/', async (c) => {
     backends[name] = {
       status: result.status,
       latency_ms: result.latency_ms,
+      // circuit carries the FULL host entry — including S89's `source` stamp
+      // ('local' | 'durable') — so per-backend mode-transition surfacing is
+      // deliberate, not incidental.
       circuit: hostKey ? circuitHealth[hostKey] : undefined,
     }
     probedStatuses.push({ status: result.status })
@@ -278,6 +324,10 @@ healthRoute.get('/', async (c) => {
   // backend status. Failure is non-fatal — index section degrades gracefully.
   const indexInfo = await probeIndexHealth(c.env)
 
+  // S88 evidence surfacing: every host in circuitHealth is stamped with its
+  // state source ('local' = per-isolate in-memory maps, 'durable' = DO storage).
+  const rateLimiterSource = resolveRateLimiterSource(circuitHealth, !!c.env.RATE_LIMITER)
+
   const healthData = {
     status,
     version: '2.0.0',
@@ -300,6 +350,11 @@ healthRoute.get('/', async (c) => {
     index: indexInfo,
     rate_limiter: {
       mode: c.env.RATE_LIMITER ? 'durable_object' : 'in_memory_fallback',
+      // Where the reported hosts_tracked state actually lives:
+      // - 'durable': DO storage (cross-isolate, monotonically stable)
+      // - 'local': this isolate's in-memory maps only (fluctuates across
+      //   isolates — S88 6→8→6 measurement).
+      source: rateLimiterSource,
       hosts_tracked: Object.keys(circuitHealth).length,
     },
   }
@@ -337,6 +392,13 @@ metricsRoute.get('/', async (c) => {
     lines.push(`search_backend_inflight{host="${host}"} ${state.inflight}`)
     lines.push(`search_backend_circuit_tripped{host="${host}"} ${state.tripped ? 1 : 0}`)
   }
+
+  // S89-③: rate-limiter mode gauge — same resolveRateLimiterSource logic the
+  // /api/health rate_limiter.source field uses, so the Prometheus view and the
+  // health JSON can never disagree about which mode is active.
+  lines.push('')
+  const rateLimiterSource = resolveRateLimiterSource(circuitHealth, !!c.env.RATE_LIMITER)
+  lines.push(...buildRateLimiterSourceMetricLines(rateLimiterSource))
 
   lines.push('')
   const activeClients = getActiveClientCount()

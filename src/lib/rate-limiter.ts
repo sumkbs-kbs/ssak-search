@@ -27,6 +27,15 @@ export interface HostHealth {
   tripCount?: number
   probeInFlight?: boolean
   backoffMs?: number
+  /**
+   * Where this host's state is tracked (S88 evidence surfacing):
+   * - 'local': in-memory per-isolate maps (LOCAL_CIRCUITS) — invisible across
+   *   isolates; hosts_tracked fluctuates as /api/health lands on different
+   *   isolates (6→8→6 measured 2026-08-10).
+   * - 'durable': DO storage (RateLimiterDO.getAllHealth) — cross-isolate
+   *   shared; hosts_tracked is monotonically stable.
+   */
+  source?: 'local' | 'durable'
 }
 
 export interface RateLimitResult {
@@ -366,6 +375,10 @@ export async function getBackendHealth(env: AppBindings): Promise<Record<string,
       tripCount: circuit.tripCount,
       probeInFlight: circuit.probeInFlight,
       backoffMs: getBackoffMs(circuit.tripCount),
+      // Per-isolate visibility marker — this host is tracked in THIS isolate's
+      // module maps only (S88): a different isolate's /api/health may not see
+      // it at all, which is exactly why hosts_tracked fluctuates.
+      source: 'local',
     }
   }
   return result

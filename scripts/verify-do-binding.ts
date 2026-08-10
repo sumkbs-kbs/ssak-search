@@ -3,16 +3,11 @@
  * DO Binding Verification Script
  *
  * Verifies that ALL Durable Object bindings are present in a wrangler config.
- * The meaningful target is `wrangler.dev.jsonc` (local dev) — it declares all
- * 11 DO bindings + R2 + INDEX_QUEUE so every feature is testable locally.
  *
- * PRODUCTION (`wrangler.jsonc`) is a Cloudflare Pages project: `wrangler pages
- * deploy` REJECTS durable_objects / r2_buckets without a script_name (verified
- * 2026-08-04, wrangler 4.112.0), so production bindings CANNOT be declared in
- * the file — they are configured via the Cloudflare Dashboard (see the
- * checklist at the bottom of wrangler.jsonc). Running this script against
- * wrangler.jsonc therefore ALWAYS fails by design; use it against
- * wrangler.dev.jsonc instead (ci.yml does this).
+ * P2 ④ (2026-08-10): production wrangler.jsonc now DECLARES the 11 DO
+ * bindings (script_name → `ssak-do-worker`, a separate Workers deployment)
+ * and passes this check. Local dev (wrangler.dev.jsonc) declares the same 11
+ * bindings without script_name (classes resolved from the Pages entrypoint).
  *
  * Exit codes:
  *   0 = OK (all bindings present)
@@ -21,7 +16,7 @@
  *
  * Usage:
  *   npx tsx scripts/verify-do-binding.ts --config=wrangler.dev.jsonc
- *   npx tsx scripts/verify-do-binding.ts                       # defaults to wrangler.jsonc (Pages: expect FAIL, see above)
+ *   npx tsx scripts/verify-do-binding.ts                       # defaults to wrangler.jsonc
  */
 
 import { parse } from 'comment-json'
@@ -59,6 +54,10 @@ const REQUIRED_QUEUE_BINDINGS = ['INDEX_QUEUE']
 function main() {
   const args = process.argv.slice(2)
   const configArg = args.find((a) => a.startsWith('--config='))
+  // --do-only: skip the R2/queue checks (production wrangler.jsonc declares
+  // the 11 DO bindings via script_name but R2/queue are still Dashboard-only;
+  // ci.yml uses this to gate the production config on DOs alone).
+  const doOnly = args.includes('--do-only')
   const configPath = configArg
     ? resolve(process.cwd(), configArg.slice('--config='.length))
     : resolve(process.cwd(), 'wrangler.jsonc')
@@ -102,36 +101,40 @@ function main() {
   }
 
   // R2 buckets
-  for (const required of REQUIRED_R2_BINDINGS) {
-    if (r2Bindings.includes(required)) {
-      console.log(`✅ R2 ${required.padEnd(18)} → bound`)
-    } else {
-      console.error(`❌ MISSING R2: ${required}`)
-      failCount++
+  if (!doOnly) {
+    for (const required of REQUIRED_R2_BINDINGS) {
+      if (r2Bindings.includes(required)) {
+        console.log(`✅ R2 ${required.padEnd(18)} → bound`)
+      } else {
+        console.error(`❌ MISSING R2: ${required}`)
+        failCount++
+      }
     }
   }
 
   // Queues
-  for (const required of REQUIRED_QUEUE_BINDINGS) {
-    if (queueBindings.includes(required)) {
-      console.log(`✅ QUEUE ${required.padEnd(15)} → bound`)
-    } else {
-      console.error(`⚠️  MISSING QUEUE: ${required} (async indexing disabled)`)
-      // Queue is non-critical — don't fail build, but warn loudly
+  if (!doOnly) {
+    for (const required of REQUIRED_QUEUE_BINDINGS) {
+      if (queueBindings.includes(required)) {
+        console.log(`✅ QUEUE ${required.padEnd(15)} → bound`)
+      } else {
+        console.error(`⚠️  MISSING QUEUE: ${required} (async indexing disabled)`)
+        // Queue is non-critical — don't fail build, but warn loudly
+      }
     }
   }
 
   console.log('')
   if (failCount === 0) {
-    console.log(`✅ PASS: All ${REQUIRED_DO_BINDINGS.length} DO + ${REQUIRED_R2_BINDINGS.length} R2 bindings present`)
+    const suffix = doOnly ? 'DO ' : `${REQUIRED_DO_BINDINGS.length} DO + ${REQUIRED_R2_BINDINGS.length} R2 `
+    console.log(`✅ PASS: All ${suffix}bindings present`)
     process.exit(0)
   } else {
     console.error(`❌ FAIL: ${failCount} binding(s) missing in ${configPath}`)
     console.error('')
     console.error('If this is wrangler.jsonc (production):')
-    console.error('  Pages cannot declare durable_objects in wrangler.jsonc. You MUST')
-    console.error('  configure DO bindings via Cloudflare Dashboard:')
-    console.error('    Pages → ssak-search → Settings → Functions → Durable Objects')
+    console.error('  Declare the missing DO bindings under "durable_objects.bindings"')
+    console.error('  with script_name = "ssak-do-worker" (see the deployed worker).')
     console.error('')
     console.error('  Required bindings (binding_name → class_name):')
     for (const b of REQUIRED_DO_BINDINGS) {

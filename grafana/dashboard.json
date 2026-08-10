@@ -845,6 +845,47 @@
       "collapsed": false
     },
     {
+      "id": 26,
+      "title": "Rate Limiter Source",
+      "type": "stat",
+      "gridPos": { "h": 4, "w": 4, "x": 20, "y": 55 },
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "description": "Rate limiter state source (S89): durable = DO storage (cross-isolate stable), local = per-isolate in-memory maps (hosts_tracked fluctuates — S88 6→8→6)",
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "textMode": "name"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "red", "value": null },
+              { "color": "green", "value": 1 }
+            ]
+          },
+          "unit": "none",
+          "min": 0,
+          "max": 1
+        }
+      },
+      "targets": [
+        {
+          "expr": "search_rate_limiter_source",
+          "legendFormat": "{{source}}",
+          "interval": "",
+          "refId": "A"
+        }
+      ],
+      "transformations": [
+        { "id": "labelsToFields", "options": {} }
+      ]
+    },
+    {
       "id": 25,
       "title": "API Endpoints",
       "type": "table",

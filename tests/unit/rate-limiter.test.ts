@@ -103,6 +103,19 @@ describe('Rate Limiter — Local Fallback', () => {
       const health = await getBackendHealth(mockEnv)
       expect(typeof health).toBe('object')
     })
+
+    it('stamps every host with source: local (S88 per-isolate visibility marker)', async () => {
+      // Track a host so the in-memory map has an entry, then verify the
+      // source field distinguishes per-isolate state from DO storage.
+      const url = 'https://www.bing.com/search?q=source-marker'
+      await acquire(mockEnv, url)
+      await release(mockEnv, url, true)
+
+      const health = await getBackendHealth(mockEnv)
+      const entry = health['www.bing.com']
+      expect(entry).toBeDefined()
+      expect(entry.source).toBe('local')
+    })
   })
 
   describe('getRateLimitStatus', () => {

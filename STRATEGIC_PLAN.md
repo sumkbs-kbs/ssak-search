@@ -2740,3 +2740,141 @@
 - **잔여**: 라이브 `eval:median:save` 재실행으로 run-2/3 p50 붕괴 실측 확정 (별도 ~60분
   세션 — Wave 관례), B2 스트리밍은 `/api/search/stream`(SSE, results-first)이 이미 존재 —
   로드테스트 검증만 남음, B4 팬아웃 예산 재조정.
+
+### S87: P1 진단 — NDCG=0 118건 원인 정량화 (100% 회수 커버리지, RANKING 0건) (2026-08-10)
+
+- **배경/요청**: docs/10 냉정 재평가(완성도 71.2/100)에서 NDCG=0 쿼리 비율(23.6%)이 상용
+  허용치(<5%)를 크게 초과해, 정확도 격차의 원인이 커버리지(회수)인지 랭킹인지 데이터로
+  판별하라는 P1 요청. 저장된 500쿼리 풀(run-1..3, S50/S52 새 규칙 baseline)을 S54 실시간
+  재계산 경로로 전수 분석했다.
+- **방법**: `scripts/probe-p1-zero.ts` (신규, `npm run eval:zero`로 재현 — 아래 등록).
+  쿼리·run별로 저장 풀에 gold 도메인(label-suffix, computeNdcg와 동일 규칙)이 rank 전체에서
+  존재하는지 검사해 원인을 이분: **COVERAGE**(어떤 run에도 gold 없음) / **RANKING**(gold는
+  있으나 전부 rank 10 밖) / **MIXED**(run 간 gold 유무 갈림 — 가용성 노이즈) / **EMPTY**.
+- **데이터 기반 진단 (median-of-3)**: zero **118/500 (23.6%)** — run-1 단일 126건과 저장
+  ranking 일치 확인. 원인 분류: **COVERAGE 92건 (78%) + MIXED 26건 (22%) + RANKING 0건 +
+  EMPTY 0건** — **순수 랭킹 문제는 단 한 건도 없음**. gold가 풀에 등장한 1,138 run 전부
+  NDCG>0, 최고 gold 순위 **avg 2.6 / median 1** → 랭킹 계층은 gold가 들어오면 항상 상위에
+  배치. 모든 0점은 gold 도메인 자체가 풀에 없는 회수 문제.
+- **언어·태그별**: en **29%** (87/297) > zh 22% (15/67) > ja 15% (8/55) > kr 10% (8/81).
+  태그 — **academic 62%** (16/26, 최악) > general 44% (40/91) > news 29% (29/101) > technical
+  20% (32/158) > comparison 19% > factual 6% > financial 4%.
+- **지배 gold 도메인 (COVERAGE 쿼리)**: reuters 24 · nytimes 18 · theverge 17 · bbc 12 ·
+  apnews 11 · techcrunch 11 · **MDN 10 · stackoverflow 10** · cnn 10 · theguardian 10 · wired 10
+  · reddit 10 · healthline 10 · webmd 10 · arxiv 9. 카테고리 — 뉴스 아웃렛 26 · tech-doc 14
+  · community 10 · academic 9 · wiki/fact 6 · zh-community 6.
+- **부수 발견 (뉴스 풀 신디케이션 포화)**: 뉴스 gold 쿼리 109건 풀에서 **msn.com이 100건에
+  등장** (finance.yahoo 94 · en.wikipedia 59 · reuters 53 · forbes 40 · HN 36), 반면 gold
+  아웃렛(nytimes 19 · theguardian 21)은 훨씬 적게 등장 — 뉴스 백엔드(google-news-rss
+  37/bing-news 28건 발동)가 결과를 반환하지만 특정 gold 아웃렛은 피드에 미등장. S18 소스
+  해석 개선 이후에도 남은 아웃렛 롱테일 갭.
+- **레버 정량 (후속 시뮬레이션 실측)**: ① **뉴스 아웃렛 site: 보강 — 합산 Δ+16.8** (rank 2
+  삽입, 93쿼리, 전 NDCG 0.2813→~0.315 상한; Google News RSS site: 연산자 10/10 라이브
+  검증, S89 배선 예정) ② **academic 라우팅 미스 7건 — Δ+3.25** (ds-03→technical,
+  ds-06/07/08/10/13/15→general — arxiv 미wire; S88 진단 완료, 레버 A/B 예정) ③ **msn.com
+  패널티 — Δ+0.0002** (NDCG 레버 아님, 품질 개선으로 -0.15 적용 권장 — 회귀 0건 실측)
+  ④ **MIXED 26건** — gold 등장 시 median rank 1이므로 폴백/캐시 계층으로 회수 변동성 축소가
+  유일 레버.
+- **등록 스크립트 (재현 경로 고정)**: `scripts/probe-p1-zero.ts` — `npm run eval:zero`로
+  등록 (package.json, eval:loss/eval:drift와 같은 유지 관리 대상). 재실행:
+  `npx tsx scripts/probe-p1-zero.ts` — run-1..3을 단일 파싱(parseRunFiles)으로 로드해
+  median-of-3 NDCG=0 분류·언어/태그/백엔드 집계를 재현. 게이트: tsc 0 · eslint 0 · prettier
+  그린. 실측 데이터가 없으면 스크립트가 0건을 출력해 정직하게 실패한다.
+- **잔여**: ① 뉴스 아웃렛 배선(S89) ② academic 레버 A/B(S88) ③ msn -0.15 적용 ④ MIXED
+  회수 변동성 ⑤ 실측 NDCG 반영은 eval:median 재실행(~60분)으로 확정 — 시뮬레이션은 하한
+  추정(저장 풀 top-10 한정, rank 11+ gold 승격 불가).
+
+### S88: DO 분리 배포 — Pages가 DO를 직접 소유 불가한 제약을 `ssak-do-worker` 분리로 해소 (2026-08-10)
+
+- **요청**: P2 ④ — DO 클래스 11개를 별도 do-worker 엔트리로 분리·배포하고, Pages
+  wrangler.jsonc의 `script_name`으로 바인딩해서 `/api/health`가 `mode: durable_object` +
+  `hosts_tracked` 단조 증가를 보이는지 실측 대조.
+- **전제 확정 (P2 실측 + 공식 문서)**: Cloudflare 공식 문서 "You cannot create and
+  deploy a Durable Object within a Pages project". Pages는 DO를 직접 소유 불가 —
+  wrangler 3.114/4.112/4.120 3버전 전부 script_name 강제 + Pages 자체 워커 지정 시
+  "environment 없음" 오류. project 레벨 API 바인딩(PATCH로 11건 등록 완료)은 **git
+  연결 빌드에만 적용** — direct-upload(wrangler pages deploy)에 미전파 (실측 2회).
+- **구현** (3개 신규/변경 파일 + 검증 스크립트 2건 + docs 3건):
+  1. `src/do-worker/index.ts` 신규 — 11개 DO 클래스 re-export + 최소 fetch 핸들러
+     (wrangler deploy는 default export 요구). Pages 엔트리(src/index.tsx)의 export는
+     로컬 dev용으로 유지 (wrangler.dev.jsonc exports map이 엔트리포인트 해석).
+  2. `wrangler.do.jsonc` 신규 — 독립 Workers config: `ssak-do-worker`, main,
+     `durable_objects.bindings` 11건 + `migrations[].new_sqlite_classes` 11건
+     (dev exports storage:sqlite와 일치 — DO 코드는 KV-스타일 ctx.storage.get/put만 사용),
+     AI/CACHE_KV/D1/ANALYTICS 미러링 (DO가 this.env에서 읽는 바인딩). INDEX_QUEUE는
+     프로비저닝 안 된 생산 queue라 의도적 생략 (CrawlerDO가 동기 폴백).
+  3. `wrangler.jsonc` — "Dashboard 필수" 주석 블록 → 실제 `durable_objects.bindings`
+     11건 (`script_name: "ssak-do-worker"`) + 하단 체크리스트를 do-worker 배포 절차로
+     교체. **migrations는 Pages config에 미지원** (실측) → do-worker config에만.
+- **배포·실측**:
+  ```
+  npx wrangler deploy --config wrangler.do.jsonc  → ssak-do-worker (d5e37bad, 155KB)
+  npx wrangler pages deploy                       → a7ddebf0 (script_name 바인딩 부착 확정:
+                                                   deployment API에 service=ssak-do-worker)
+  ```
+  | 검증 | 인메모리 fallback (P2 실측) | **DO 모드 (이번 실측)** |
+  |---|---|---|
+  | mode | in_memory_fallback | **durable_object** ✅ |
+  | hosts_tracked | **6→8→6 요동** (isolate 분산 비가시) | **6→9 단조 증가, 5회 연속 probe 일관** ✅ |
+  | 백엔드 카운터 | 없음 (per-isolate) | DO storage 영속 (totalRequests 등) ✅ |
+  | verify-do-binding.sh | THREAD/LIBRARY 404 미가드, SPACE 500 | **7/8 DO 라우트 bound, RATE_LIMITER ACTIVE** ✅ |
+  | 영속성 | 콜드스타트 리셋 | 5초 후 재조회에도 9 유지 ✅ |
+- **CI 게이트**: `verify-do-binding.ts --do-only` 신규 (R2/queue는 Dashboard-only —
+  production wrangler.jsonc 검증 시 DO만 확인) + ci.yml에 wrangler.jsonc production
+  검증 스텝 추가. 로컬 재현: wrangler.jsonc --do-only PASS, wrangler.dev.jsonc PASS.
+- **게이트 검증**: tsc 0 · build 성공 · wrangler.jsonc JSONC 유효 · do-worker
+  dry-run 155KB/11 DO · verify-do-binding.ts 양쪽 PASS.
+- **per-isolate 우회 라이브 재현 (scripts/probe-inmemory-bypass.ts 신규)**: DO 미바인딩
+  상태에서 회로차단기·rate window의 isolate 간 비가시성을 재현하는 probe. rate-limiter.ts의
+  모듈 상태(LOCAL_CIRCUITS/LOCAL_RATE_WINDOWS)를 cache-busting import(`?iso=A/B`)로
+  **2개 인스턴스로 분리** — Cloudflare의 isolate 분산과 동일 의미론. 실측:
+  ```
+  [rate window] A: window 100건 소진 후 canRequest=false | B(별도 isolate)=true  → 우회 재현
+  [circuit]     A: 5회 실패 후 canRequest=false          | B(별도 isolate)=true  → 우회 재현
+  [대조-공유]   단일 인스턴스: A 소진/트립 후 B도 차단(DO 모드와 동일 의미)          → 공유 상태
+  [라이브]      mode=durable_object, hosts_tracked 9→9→9→9→9 (5회 일관)           → 전역 일관
+  ```
+  실행: `npm run probe:inmemory` (package.json 등록 — eval:zero와 동일 계열, --no-health로
+  네트워크 없는 결정적 실행, --no-sim으로 라이브만). **라이브
+  in_memory 요동 재현 한계**: 미바인딩 이전 배포(3e95a54a/d6d6f5d5)가 404로 삭제되어 에지
+  재현은 불가 — 6→8→6 요동은 P2 당시 실측 기록으로 고정, 시뮬레이션 경로가 재현을 담당.
+- **잔여**: ① do-worker secrets 미설정 (BRAVE_API_KEY/SLACK_WEBHOOK/GITHUB_TOKEN/
+  GITHUB_REPO — `wrangler secret put ssak-do-worker <NAME>`, Pages secret과 별개) —
+  DO들이 가드로 graceful 폴백 ② R2/INDEX_QUEUE 여전히 Dashboard 전용 ③ git 연결
+  저장소(`antigravity-k`)가 실제 저장소와 달라 자동 빌드 무동작 — do-worker 배포는
+  deploy.yml에 wrangler.do.jsonc 스테이지 추가 필요 (후속).
+
+### S90: DO 미바인딩(in_memory_fallback) 상태의 rate limit 유효성 라이브 실측 (2026-08-10)
+
+- **요청**: `/api/health` mode가 `in_memory_fallback`일 때 wikipedia 429 창에서 요청이 실제로
+  스로틀링되는지, 캐시 우회 고유 쿼리로 20회 연속 발사해 라이브 실측.
+- **실측 방법**: DO 바인딩 없는 로컬 인스턴스 기동 — `wrangler pages dev`는 `--config`
+  커스텀 경로를 지원하지 않아(확인), `dist/_worker.js`를 main으로 하는 임시 workers config
+  (`wrangler dev --config /tmp/wrangler-nodo.jsonc --port 8788`, durable_objects 선언 없음)를
+  double-fork 데몬으로 기동. `mode: in_memory_fallback` + `source: local`(S89) 확인 후
+  "DNA replication mechanism probe <ts>-<i>" 고유 쿼리 20회 연속 발사 + 5회마다 health 폴링.
+- **실측 결과 (전부 라이브 확정)**:
+  - **회로차단기 발동**: wikipedia REST search 429 수신 로그 → 5회 연속 실패 →
+    `Circuit tripped for en.wikipedia.org after 5 failures` → 이후 wikipedia 백엔드 거부
+    (rateLimitedFetch null) + `Wikipedia search skipped (429 cooldown window)` 스로틀링
+  - **health 관측**: trip 직후 `status: down, tripped: true, probeInFlight: true` —
+    failures=0/tripCount=0은 **half-open probe 진행 상태**의 정상 표시 (probe 진입 시
+    failures 리셋, 초회 trip은 tripCount 0; tripCount는 probe 실패 시에만 증가) — 버그 아님 확인
+  - **mirror 폴백 복원**: wikipedia 백엔드 거부 중에도 `[Orchestrator] Wikipedia mirror
+    fallback recovered wikipedia gold (wikipedia backend missing)` 10건 — 풀에 wikipedia.org
+    gold가 유지되어 9/20 요청이 WIKI 포함 200 응답 (스로틀링이 UX를 깨지 않는 3단계 설계 증명:
+    회로차단기 → 쿨다운 스킵 → mirror 폴백)
+  - **클라이언트 429 구분**: #10~#19 전부 status 429 `code: rate_limited` — 이는
+    **security-middleware IP_RATE_LIMIT=10/min**(auth.ts checkClientRateLimit DEFAULT 30/min과
+    별개 계층)이 발동한 것. 백엔드 스로틀링과 클라이언트 한도를 실측에서 명확히 구분
+  - **rate window(100/min)**: 이번 발사 20회 중 wikipedia 도달 ~10회로 window 미소진 —
+    rate window 자체는 미검증 범위 (회로차단기·쿨다운·클라이언트 한도는 실측 완료)
+- **기존 DO 모드 대조**: production은 `durable_object` + `hosts_tracked` 단조 증가 (S88 실측).
+  이번 실측은 in_memory fallback에서도 **로컬 모듈 상태 기반 회로차단기가 실제 발동**함을
+  입증 — DO 미바인딩이 rate limit을 무력화하지 않음 (단, S88의 per-isolate 비가시성은
+  시뮬레이션으로 이미 재현: A isolate 소진이 B에 전파 안 됨)
+- **부수 확인**: wikipediaSearch의 자체 429 쿨다운(`Wikipedia REST search rate-limited (429)
+  — skipping Action API fallback`)과 rate-limiter 회로차단기가 독립적으로 동작 — 이중 방어
+- **잔여**: ① rate window(100/min) 소진 시 스로틀링 실측은 별도 과제 (evagg: burst 100회) 
+  ② 로컬 in_memory 상태의 probe 회복 경로(30s 백오프 후 half-open probe 성공 시 close)는
+  시간 기반 관측 필요 ③ 로컬 실측 인프라를 스크립트로 고정 (scripts/probe-throttle.ts 등록)

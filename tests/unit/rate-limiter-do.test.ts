@@ -138,6 +138,13 @@ describe('RateLimiterDO self-healing circuit breaker (D.2)', () => {
     expect(health[HOST].tripCount).toBe(0)
   })
 
+  it('stamps every host with source: durable (S88 cross-isolate marker)', async () => {
+    instantiate()
+    await doInstance.release(HOST, true)
+    const health = await doInstance.getAllHealth()
+    expect(health[HOST].source).toBe('durable')
+  })
+
   it('alarm probes open circuit and auto-closes recovered backend', async () => {
     instantiate()
     for (let i = 0; i < FAILURE_THRESHOLD; i++) await doInstance.release(HOST, false)

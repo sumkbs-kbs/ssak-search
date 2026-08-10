@@ -24,6 +24,9 @@
 | 11 | `SPACE_DO` | **Durable Object** | 워크스페이스/프로젝트 (Phase 3.3) | 선택 |
 | 12 | `API_KEY_DO` | **Durable Object** | API 키 관리 (Phase 1.2) | 선택 |
 | 13 | `CRAWLER_DO` | **Durable Object** | 웹 크롤러 (Phase 2.1) | 선택 |
+| 13a | `CLICK_LOG_DO` | **Durable Object** | LTR 클릭/노출 로깅 (Phase LTR) | 선택 |
+| 13b | `EXPERIMENT_DO` | **Durable Object** | A/B 실험 관리 (Phase D.2) | 선택 |
+| 13c | `CANARY_DO` | **Durable Object** | 파서 회귀 감지 (Phase D.1) | 선택 |
 | 14 | `ANALYTICS` | **Workers Analytics Engine** | 메트릭 영속화 | 선택 |
 | 15 | `SENTRY_DSN` | **Pages Secret** | Sentry APM 에러 트래킹 (Phase 0.5) | 선택 |
 | 16 | `SIDECAR_URL` | **Pages Secret** | Python Sidecar URL (동적 페이지 스크래핑) | 선택 |
@@ -244,18 +247,20 @@ Queue를 사용하려면 **Queue Consumer를 Pages Functions에 연결**해야 �
 DO(Durable Object)는 상태를 유지하는 싱글톤 인스턴스로,  
 레이트 리밋, 쓰레드 저장, 크롤러 상태 관리 등에 사용됩니다.
 
-### 4.1 바인딩 설정 방법
+### 4.1 바인딩 설정 방법 (P2 ④, 2026-08-10)
 
-모든 DO 바인딩은 동일한 방식으로 설정합니다.
+Pages는 DO를 **직접 소유할 수 없으므로** (공식 문서 "You cannot create and deploy a
+Durable Object within a Pages project") 11개 DO 클래스는 **별도 Workers
+(`ssak-do-worker`)** 로 배포하고 Pages에서 `script_name`으로 바인딩합니다.
 
 | 단계 | 설명 |
 |:----|:------|
-| ① | Cloudflare Dashboard → **Workers & Pages** → **Pages** |
-| ② | `ssak-search` 프로젝트 클릭 |
-| ③ | **Settings** → **Functions** 탭 |
-| ④ | **Durable Objects** → **Add binding** |
-| ⑤ | 아래 표를 참고하여 각 바인딩 추가 |
-| ⑥ | **Save & Redeploy** |
+| ① | **DO 호스트 워커 배포**: `npx wrangler deploy --config wrangler.do.jsonc` |
+| ② | **Pages 배포**: `npm run build && npx wrangler pages deploy` — `wrangler.jsonc`의 `durable_objects.bindings`가 `script_name: "ssak-do-worker"`로 11개 전부 참조 |
+| ③ | **검증**: `curl https://…/api/health` → `rate_limiter_do: true` + `mode: durable_object` |
+
+> 대시보드/API project 레벨 DO 바인딩은 **git 연결 빌드 배포에만 적용**되고
+> `wrangler pages deploy`(direct-upload)에는 전파되지 않습니다 (P2 실측).
 
 ### 4.2 DO 바인딩 목록
 
@@ -269,12 +274,26 @@ DO(Durable Object)는 상태를 유지하는 싱글톤 인스턴스로,
 | `SPACE_DO` | `SpaceDO` | 워크스페이스 저장 (/api/spaces) | 🟢 Low |
 | `API_KEY_DO` | `ApiKeyDO` | API 키 관리 (/api/keys) | 🟢 Low |
 | `CRAWLER_DO` | `CrawlerDO` | 웹 크롤러 상태 관리 (/api/crawl) | 🟢 Low |
+| `CLICK_LOG_DO` | `ClickLogDO` | LTR 클릭/노출 로깅 (/api/ltr, /api/monitor) | 🟢 Low |
+| `EXPERIMENT_DO` | `ExperimentDO` | A/B 실험 관리 (/api/experiments, /api/monitor) | 🟢 Low |
+| `CANARY_DO` | `CanaryOrchestratorDO` | 파서 회귀 감지 (/api/canary) | 🟢 Low |
 
 > **⚠️ 중요**: DO 클래스 이름은 **코드와 정확히 일치**해야 합니다.  
 > `src/index.tsx` 하단에 export된 이름과 동일하게 입력하세요:
 > ```typescript
-> export { RateLimiterDO, ThreadDO, PagesDO, LibraryDO, UserProfileDO, SpaceDO, ApiKeyDO, CrawlerDO }
+> export {
+>   RateLimiterDO, ThreadDO, PagesDO, LibraryDO, UserProfileDO, SpaceDO,
+>   ApiKeyDO, CrawlerDO, ClickLogDO, ExperimentDO, CanaryOrchestratorDO,
+> }
 > ```
+
+> **아키텍처 제약 해소 (P2 ④, 2026-08-10)**: Cloudflare 공식 문서는 "You cannot create
+> and deploy a Durable Object within a Pages project" — Pages 프로젝트는 DO를 직접
+> 소유할 수 없습니다. 이 제약은 **별도 Workers(`ssak-do-worker`)로 DO 클래스를 배포**하고
+> Pages(`wrangler.jsonc`)에서 `script_name`으로 바인딩하는 구조로 해소했습니다. 2026-08-10
+> 실배포 검증: `/api/health` `rate_limiter_do: true` + `mode: durable_object` +
+> `hosts_tracked` 단조 증가(6→9). DO 코드를 변경하면 ① `npx wrangler deploy --config
+> wrangler.do.jsonc` ② Pages 재배포 순서로 반영합니다.
 
 ### 4.3 RATE_LIMITER 검증
 
@@ -641,12 +660,22 @@ npx wrangler d1 execute search-engine-index --file=./src/lib/index/schema.sql
 2. **Queues Producers/Consumers** 섹션 확인
 3. Consumer function이 `indexQueueConsumer`로 설정되었는지 확인
 
-### 문제: DO 바인딩이 적용되지 않음
+### 문제: DO 바인딩이 적용되지 않음 (`mode: in_memory_fallback`)
 
-**원인**: DO 바인딩 추가 후 **Redeploy**하지 않음
+**원인 1**: do-worker(`ssak-do-worker`)가 배포되지 않았거나 DO 코드가 변경됨  
+**원인 2**: Pages 배포 시 script_name 바인딩이 반영되지 않음
 
-**해결**: 바인딩 추가 후 반드시 **Save & Redeploy** 버튼 클릭  
-(설정만 저장하면 적용되지 않음 — 배포가 필요합니다)
+**해결**:
+```bash
+# ① DO 호스트 워커 재배포
+npx wrangler deploy --config wrangler.do.jsonc
+# ② Pages 재배포 (script_name 바인딩 적용)
+npm run build && npx wrangler pages deploy
+# ③ 검증
+curl -s https://…/api/health | python3 -c "import sys,json; d=json.load(sys.stdin);
+print(d['rate_limiter']['mode'], d['rate_limiter']['hosts_tracked'])"
+# Expected: durable_object 6+
+```
 
 ---
 

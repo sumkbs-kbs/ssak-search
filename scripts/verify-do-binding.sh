@@ -2,8 +2,10 @@
 # ==============================================================================
 # Verify ALL Durable Object Bindings
 #
-# Checks whether all 8 Durable Object bindings are active for a deployed
-# Cloudflare Pages Worker.
+# Checks whether all 11 Durable Object bindings are active for a deployed
+# Cloudflare Pages Worker. P2 ④ (2026-08-10): the DO classes now live in the
+# separate `ssak-do-worker` Workers script (wrangler.do.jsonc) and Pages binds
+# them via script_name in wrangler.jsonc.
 #
 # Usage:
 #   export WORKER_URL="https://your-worker.pages.dev"  # deployed URL
@@ -16,7 +18,7 @@
 #   1. /api/health returns `rate_limiter_do: true` in features
 #   2. /api/health shows circuit breaker state in backend data
 #   3. Rate-limited fetch via /api/search works with fallback
-#   4. All 8 DO bindings are accessible from the health endpoint
+#   4. All 11 DO bindings are accessible from the health endpoint
 # ==============================================================================
 
 set -euo pipefail
@@ -58,12 +60,12 @@ d=json.load(sys.stdin)
 print(d.get('rate_limiter',{}).get('mode','unknown'))
 " 2>/dev/null || echo "unknown")
   echo " ✅ RATE_LIMITER is ACTIVE (mode: ${RL_MODE})"
+  echo "    If mode != durable_object, the DO classes may not be deployed."
+  echo "    Fix: npx wrangler deploy --config wrangler.do.jsonc && npx wrangler pages deploy"
 else
   echo " ⚠️  RATE_LIMITER is INACTIVE (in-memory fallback)"
-  echo "    To enable: Cloudflare Dashboard → Pages → search-engine-api"
-  echo "    → Settings → Functions → Durable Objects → Add binding"
-  echo "    (name: RATE_LIMITER, class: RateLimiterDO)"
-  echo "    Then redeploy."
+  echo "    Fix: npx wrangler deploy --config wrangler.do.jsonc"
+  echo "    then npx wrangler pages deploy (DOs bound via script_name in wrangler.jsonc)"
 fi
 
 # ---- Check: Circuit breaker data -------------------------------------------
@@ -102,12 +104,13 @@ fi
 
 # ---- Check: All DO bindings via route tests ---------------------------------
 echo ""
-echo " [4] Checking all 8 DO bindings via route endpoints..."
+echo " [4] Checking all 11 DO bindings via route endpoints..."
 
 # Define all DOs as parallel arrays (bash 3 compatible, no declare -A)
 # RATE_LIMITER is already checked via JSON parsing at step 2, skip in route loop
-DO_BINDINGS=("THREAD_DO" "PAGES_DO" "LIBRARY_DO" "USER_PROFILE_DO" "SPACE_DO" "API_KEY_DO" "CRAWLER_DO")
-DO_ROUTES=("chat" "pages" "library" "profile" "spaces" "keys" "crawl")
+# CLICK_LOG_DO → /api/ltr/*, EXPERIMENT_DO → /api/experiments, CANARY_DO → /api/canary
+DO_BINDINGS=("THREAD_DO" "PAGES_DO" "LIBRARY_DO" "USER_PROFILE_DO" "SPACE_DO" "API_KEY_DO" "CRAWLER_DO" "CLICK_LOG_DO" "EXPERIMENT_DO" "CANARY_DO")
+DO_ROUTES=("chat" "pages" "library" "profile" "spaces" "keys" "crawl" "ltr" "experiments" "canary")
 
 PASS_COUNT=0
 FAIL_COUNT=0
@@ -175,7 +178,7 @@ else
   echo " ⚠️  RATE_LIMITER DO: INACTIVE (in-memory fallback)"
 fi
 
-echo "    Route checks: ${PASS_COUNT} bound / ${FAIL_COUNT} missing / ${SKIP_COUNT} skipped (of 8 DOs)"
+echo "    Route checks: ${PASS_COUNT} bound / ${FAIL_COUNT} missing / ${SKIP_COUNT} skipped (of 11 DOs)"
 
 if [ "${FAIL_COUNT}" -eq 0 ] && [ "${DO_ACTIVE}" = "true" ]; then
   echo ""
@@ -186,7 +189,7 @@ elif [ "${FAIL_COUNT}" -gt 0 ]; then
   echo "    To fix: Cloudflare Dashboard → Pages → search-engine-api"
   echo "    → Settings → Functions → Durable Objects → Add binding"
   echo ""
-  echo "    Required bindings (binding_name → class_name):"
+  echo "    Required bindings (binding_name → class_name, in ssak-do-worker):"
   echo "    ┌──────────────────┬──────────────────┐"
   echo "    │ RATE_LIMITER     │ RateLimiterDO    │"
   echo "    │ THREAD_DO        │ ThreadDO         │"
@@ -196,6 +199,9 @@ elif [ "${FAIL_COUNT}" -gt 0 ]; then
   echo "    │ SPACE_DO         │ SpaceDO          │"
   echo "    │ API_KEY_DO       │ ApiKeyDO         │"
   echo "    │ CRAWLER_DO       │ CrawlerDO        │"
+  echo "    │ CLICK_LOG_DO     │ ClickLogDO       │"
+  echo "    │ EXPERIMENT_DO    │ ExperimentDO     │"
+  echo "    │ CANARY_DO        │ CanaryOrchestratorDO │"
   echo "    └──────────────────┴──────────────────┘"
 fi
 

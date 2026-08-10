@@ -6,7 +6,12 @@
  * a false-positive outage for a backend the deployment isn't even using.
  */
 import { describe, it, expect } from 'vitest'
-import { computeOverallStatus, shouldProbeBackend } from '../../src/routes/health'
+import {
+  computeOverallStatus,
+  shouldProbeBackend,
+  resolveRateLimiterSource,
+  buildRateLimiterSourceMetricLines,
+} from '../../src/routes/health'
 import type { AppBindings } from '../../src/types'
 
 type ProbeStatus = 'operational' | 'degraded' | 'down'
@@ -34,6 +39,70 @@ describe('computeOverallStatus', () => {
 
   it('returns partial_outage when backends are both down and degraded', () => {
     expect(computeOverallStatus(probes(['down', 'degraded']))).toBe('partial_outage')
+  })
+})
+
+describe('resolveRateLimiterSource (S88 mode-transition surfacing)', () => {
+  it('returns local when every tracked host is source: local', () => {
+    const health = { 'www.bing.com': { source: 'local' as const }, 'en.wikipedia.org': { source: 'local' as const } }
+    expect(resolveRateLimiterSource(health, false)).toBe('local')
+  })
+
+  it('returns durable when every tracked host is source: durable', () => {
+    const health = {
+      'www.bing.com': { source: 'durable' as const },
+      'en.wikipedia.org': { source: 'durable' as const },
+    }
+    expect(resolveRateLimiterSource(health, true)).toBe('durable')
+  })
+
+  it('falls back to binding-based mode when no hosts are tracked yet (fresh isolate)', () => {
+    // Empty state — a fresh in-memory isolate reports hosts_tracked: 0.
+    expect(resolveRateLimiterSource({}, false)).toBe('local')
+    expect(resolveRateLimiterSource({}, true)).toBe('durable')
+  })
+
+  it('falls back to binding-based mode when sources are mixed', () => {
+    const health = { a: { source: 'local' as const }, b: { source: 'durable' as const } }
+    expect(resolveRateLimiterSource(health, true)).toBe('durable')
+    expect(resolveRateLimiterSource(health, false)).toBe('local')
+  })
+
+  it('ignores hosts without a source stamp (backward compat)', () => {
+    const health = { a: {}, b: { source: 'local' as const } }
+    expect(resolveRateLimiterSource(health, false)).toBe('local')
+  })
+})
+
+describe('buildRateLimiterSourceMetricLines (S89-③ Prometheus gauge)', () => {
+  it('emits the durable gauge with HELP/TYPE headers', () => {
+    const lines = buildRateLimiterSourceMetricLines('durable')
+    expect(lines[0]).toBe(
+      '# HELP search_rate_limiter_source Rate limiter state source (1 = active mode; durable = DO storage, local = per-isolate in-memory)',
+    )
+    expect(lines[1]).toBe('# TYPE search_rate_limiter_source gauge')
+    expect(lines[2]).toBe('search_rate_limiter_source{source="durable"} 1')
+  })
+
+  it('emits the local gauge when in-memory fallback is active', () => {
+    const lines = buildRateLimiterSourceMetricLines('local')
+    expect(lines[2]).toBe('search_rate_limiter_source{source="local"} 1')
+  })
+
+  it('emits exactly ONE sample — only the active source label', () => {
+    const samples = buildRateLimiterSourceMetricLines('durable').filter((l) =>
+      l.startsWith('search_rate_limiter_source'),
+    )
+    expect(samples).toHaveLength(1)
+    expect(samples[0]).not.toContain('source="local"')
+  })
+
+  it('produces Prometheus-parseable lines for both modes', () => {
+    for (const source of ['durable', 'local'] as const) {
+      for (const l of buildRateLimiterSourceMetricLines(source)) {
+        expect(l).toMatch(/^(# (HELP|TYPE) |[a-z_]+\{[^}]*\} \d+$)/)
+      }
+    }
   })
 })
 

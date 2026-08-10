@@ -1,0 +1,96 @@
+/**
+ * Durable Object host worker config — P2 ④ (2026-08-10)
+ *
+ * Cloudflare Pages CANNOT create Durable Objects within a Pages project
+ * (official docs). The supported path is a SEPARATE Workers deployment that
+ * owns the DO classes, bound from Pages via script_name:
+ *
+ *   npx wrangler deploy --config wrangler.do.jsonc
+ *
+ * Pages (wrangler.jsonc) then declares:
+ *   "durable_objects": {
+ *     "bindings": [
+ *       { "name": "RATE_LIMITER", "class_name": "RateLimiterDO", "script_name": "ssak-do-worker" },
+ *       ...
+ *     ]
+ *   }
+ *
+ * Storage: new_sqlite_classes matches wrangler.dev.jsonc's exports
+ * storage:sqlite (the DOs use only the KV-style ctx.storage.get/put API,
+ * which SQLite-backed DOs support).
+ *
+ * Secrets (BRAVE_API_KEY, SLACK_WEBHOOK, GITHUB_TOKEN, GITHUB_REPO, …) are NOT
+ * mirrored here — set them with:
+ *   npx wrangler secret put ssak-do-worker BRAVE_API_KEY
+ * DOs guard missing secrets and degrade gracefully (crawler runs without
+ * Brave, canary alerts fall back to logger-only).
+ */
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "ssak-do-worker",
+  "main": "src/do-worker/index.ts",
+  "compatibility_date": "2026-07-10",
+  "compatibility_flags": ["nodejs_compat"],
+  // Not routable by design — the fetch handler returns 404. workers_dev is
+  // only used to give wrangler deploy a valid attachment point for the DO
+  // classes (no routes needed; the Pages worker reaches the DOs by script_name).
+  "workers_dev": true,
+  "durable_objects": {
+    "bindings": [
+      { "name": "RATE_LIMITER", "class_name": "RateLimiterDO" },
+      { "name": "THREAD_DO", "class_name": "ThreadDO" },
+      { "name": "PAGES_DO", "class_name": "PagesDO" },
+      { "name": "LIBRARY_DO", "class_name": "LibraryDO" },
+      { "name": "USER_PROFILE_DO", "class_name": "UserProfileDO" },
+      { "name": "SPACE_DO", "class_name": "SpaceDO" },
+      { "name": "API_KEY_DO", "class_name": "ApiKeyDO" },
+      { "name": "CRAWLER_DO", "class_name": "CrawlerDO" },
+      { "name": "CLICK_LOG_DO", "class_name": "ClickLogDO" },
+      { "name": "EXPERIMENT_DO", "class_name": "ExperimentDO" },
+      { "name": "CANARY_DO", "class_name": "CanaryOrchestratorDO" }
+    ]
+  },
+  "migrations": [
+    {
+      "tag": "v1",
+      "new_sqlite_classes": [
+        "RateLimiterDO",
+        "ThreadDO",
+        "PagesDO",
+        "LibraryDO",
+        "UserProfileDO",
+        "SpaceDO",
+        "ApiKeyDO",
+        "CrawlerDO",
+        "ClickLogDO",
+        "ExperimentDO",
+        "CanaryOrchestratorDO"
+      ]
+    }
+  ],
+  // ── Env bindings the DOs read from this.env (subset of Pages) ──────────
+  // CrawlerDO uses SEARCH_INDEX_DB + INDEX_QUEUE; search backends called from
+  // CanaryOrchestratorDO use AI + CACHE_KV; metrics logging uses ANALYTICS.
+  // Deliberately NOT mirrored: VECTORIZE_INDEX/SEMANTIC_CACHE_INDEX (semantic
+  // cache no-ops gracefully without them — DO-hosted search paths don't need
+  // them) and all secrets (set via `wrangler secret put ssak-do-worker <NAME>`).
+  //
+  // ⚠️ The 11-DO list lives in FOUR places — keep in sync when adding a DO:
+  //    1. this file (bindings + migrations)
+  //    2. wrangler.jsonc (script_name bindings)
+  //    3. wrangler.dev.jsonc (exports + bindings)
+  //    4. scripts/verify-do-binding.ts REQUIRED_DO_BINDINGS
+  "ai": { "binding": "AI" },
+  "kv_namespaces": [{ "binding": "CACHE_KV", "id": "1f5b3825e6a240a5b500d0f2faed15a8" }],
+  "d1_databases": [
+    {
+      "binding": "SEARCH_INDEX_DB",
+      "database_name": "search-engine-index",
+      "database_id": "74e4966f-2496-491f-afbc-f26ffd109f25"
+    }
+  ],
+  "analytics_engine_datasets": [{ "binding": "ANALYTICS", "dataset": "ssak_search" }]
+  // INDEX_QUEUE producer intentionally omitted — the production queue was
+  // never provisioned (wrangler.jsonc keeps it commented out); CrawlerDO
+  // falls back to synchronous indexing when the binding is absent.
+}

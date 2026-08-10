@@ -263,12 +263,26 @@ jobs:
             echo "Replaying gates for range ${BASE}..${HEAD}"
           fi
 
-      - name: Replay gates per commit
+      # S86j: the local pre-push 3-check bundle (scripts/preflight-push.sh) is
+      # split into two CI steps so the HEAD-scoped checks (②③) survive the
+      # >15-commit replay skip: ① per-commit gate replay (verify-commits-ci.sh
+      # --eval) ② HEAD eval gate with the S86i scoring-drift marker ③ baseline
+      # equivalence (recomputed NDCG@10 vs the stored baseline). --ci makes ③
+      # DRIFT a ::warning:: (provenance note — S86i explains which scoring
+      # files moved NDCG) instead of a failure; ③ ERROR (corrupt artifacts) and
+      # ① ② regressions still fail the job. Local preflight and CI run the
+      # SAME script (②③ via preflight-push.sh --skip-replay) — no drift
+      # between the two preflight surfaces.
+      - name: Replay gates per commit (preflight ①)
         if: steps.range.outputs.range-skip != 'true'
         run: |
           COUNT=$(git rev-list --count "${{ steps.range.outputs.range }}")
           if [ "$COUNT" -gt 15 ]; then
-            echo "::warning::Range has $COUNT commits (>15) — skipping per-commit replay to stay within the 20-min budget (lockfile-heavy ranges run npm ci per commit). The merged-tree gates above still validate HEAD."
+            echo "::warning::Range has $COUNT commits (>15) — skipping per-commit replay to stay within the 20-min budget (lockfile-heavy ranges run npm ci per commit). The merged-tree gates above validate HEAD; the baseline-equivalence step below still runs."
             exit 0
           fi
           bash scripts/verify-commits-ci.sh "${{ steps.range.outputs.range }}" --eval
+
+      - name: Baseline equivalence + S86i marker (preflight ②③)
+        if: steps.range.outputs.range-skip != 'true'
+        run: bash scripts/preflight-push.sh "${{ steps.range.outputs.range }}" --ci --skip-replay

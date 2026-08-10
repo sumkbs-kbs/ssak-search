@@ -34,8 +34,17 @@
  * baseline.ts / metrics.ts) comes from the CURRENT checkout via relative
  * import — S54/S58-style re-scoring of historical artifacts under current
  * rules (the commit's own copy of the gate code, if any, is not consulted).
+ *
+ * S86i scoring-drift guard: because the gate re-scores stored pools under
+ * CURRENT code, a commit that changes the SCORING layer (metrics/median/
+ * baseline/gold) makes the recomputed-vs-baseline NDCG delta a mixture of
+ * "search quality change" and "metric redefinition". When such files are in
+ * the commit's diff (passed via --changed-files), the gate compares the
+ * recomputed NDCG@10 against the stored baseline NDCG@10 and appends a
+ * WARNING to the detail line when they drift beyond noise — a provenance
+ * note, never a FAIL (the regression gate stays the authority).
  */
-import { existsSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import type { EvalReport, EvalQuery, EvalBaseline, RegressionDiff } from '../eval/types'
 import { computeMedianReport } from '../eval/median'
@@ -51,7 +60,47 @@ export interface GateOutcome {
 export interface GateOptions {
   /** Gold map override for tests (defaults to loadGoldStandards() from cwd). */
   gold?: Record<string, string[]>
+  /**
+   * S86i: repo-root-relative paths changed in the checked commit (computed by
+   * verify-commits-ci.sh via `git diff --name-only` and passed through the
+   * CLI's --changed-files flag). Only scoring-layer files are inspected.
+   */
+  changedFiles?: readonly string[]
 }
+
+/**
+ * S86i: files whose change ALTERS the meaning of a stored NDCG number.
+ * - eval/metrics.ts   — relevance/scoring (computeNdcg / isRelevant / DCG cap)
+ * - eval/median.ts    — median aggregation + representative-pick
+ * - eval/baseline.ts  — G2 regression rules (diffBaselineStabilized)
+ * - eval/gold-standards.json — relevance itself (every consumer's gold map)
+ *
+ * Deliberately EXCLUDED: eval/run-files.ts + parseEvalArtifacts/verify-jsonc
+ * (loading/shape gates — do not change NDCG semantics) and every scripts/ probe
+ * / analyzer (consumers only).
+ */
+export const SCORING_FILE_PATTERNS: readonly string[] = [
+  'eval/metrics.ts',
+  'eval/median.ts',
+  'eval/baseline.ts',
+  'eval/gold-standards.json',
+]
+
+/**
+ * Pure: which of `changedFiles` (repo-root relative paths) touch the scoring
+ * layer. Empty for any non-scoring diff. Exported for unit tests.
+ */
+export function scoringFilesIn(changedFiles: readonly string[]): string[] {
+  // Defensive: runGate never passes undefined (it guards before calling), but
+  // the helper stays safe if a caller forgets — [] is the correct no-op.
+  return (changedFiles ?? []).filter((f) => SCORING_FILE_PATTERNS.includes(f))
+}
+
+/**
+ * S86i: NDCG@10 drift below this magnitude is aggregation noise (4th-decimal
+ * recompute wobble), not a metric redefinition worth warning about.
+ */
+export const SCORING_DRIFT_EPSILON = 1e-4
 
 /**
  * S86f: derive the worktree baseline from the ALREADY-parsed artifacts — the
@@ -169,6 +218,29 @@ export function runGate(evalDir: string, opts: GateOptions = {}): GateOutcome {
       reports.length >= 2 ? diffBaselineStabilized(reports, baseline, gold) : diffBaseline(medianReport, baseline, gold)
   }
 
+  // S86i scoring-drift guard: when the commit's diff touches the scoring
+  // layer AND a baseline exists, compare the RECOMPUTED NDCG (current code)
+  // against the STORED baseline NDCG (measured under the baseline commit's
+  // code). A real drift means the regression deltas below may be metric
+  // redefinition rather than search-quality change — surface it as a
+  // provenance warning (never a FAIL: the gate stays the authority).
+  let scoringNote = ''
+  const changedScoring = opts.changedFiles ? scoringFilesIn(opts.changedFiles) : []
+  if (baseline && changedScoring.length > 0) {
+    const cur = medianReport.ranking?.avgNdcgAt10
+    const base = baseline.report.ranking?.avgNdcgAt10
+    if (cur !== undefined && base !== undefined) {
+      const delta = cur - base
+      if (Math.abs(delta) > SCORING_DRIFT_EPSILON) {
+        scoringNote = ` · [WARN] scoring-drift: ${changedScoring.join(',')} — NDCG@10 ${cur.toFixed(4)} vs baseline ${base.toFixed(4)} (Δ${delta >= 0 ? '+' : ''}${delta.toFixed(4)}) — regression deltas may be metric redefinition, not search quality`
+      } else {
+        scoringNote = ` · scoring-files-changed: ${changedScoring.join(',')} (NDCG@10 unchanged ${cur.toFixed(4)})`
+      }
+    } else {
+      scoringNote = ` · scoring-files-changed: ${changedScoring.join(',')} (no comparable NDCG)`
+    }
+  }
+
   const summary = [
     `artifacts: ${files.join(', ')}`,
     `runs: ${reports.length}`,
@@ -178,7 +250,7 @@ export function runGate(evalDir: string, opts: GateOptions = {}): GateOutcome {
     `baseline: ${baselineTimestamp ?? 'none'}`,
     `regressions: ${regressions.length}`,
   ]
-  const detail = summary.join(' · ')
+  const detail = summary.join(' · ') + scoringNote
 
   if (regressions.length > 0) {
     const worst = regressions
@@ -194,9 +266,30 @@ export function runGate(evalDir: string, opts: GateOptions = {}): GateOutcome {
 // Only run as the entry point (import.meta.url guard keeps unit tests from
 // executing the gate on import).
 if (import.meta.url === 'file://' + resolve(process.argv[1] ?? '')) {
-  const arg = process.argv[2]
-  const evalDir = arg ? resolve(process.cwd(), arg) : join(process.cwd(), 'eval')
-  const outcome = runGate(evalDir)
+  // Parse `[evalDir] [--changed-files <file>]`. The changed-files file lists
+  // repo-root-relative paths (one per line) — the commit's own diff, computed
+  // by verify-commits-ci.sh. An unreadable/missing list degrades to "no diff
+  // info" ([]): the gate still runs, just without the S86i scoring warning.
+  const args = process.argv.slice(2)
+  let evalDirArg: string | undefined
+  let changedFilesArg: string | undefined
+  for (let i = 0; i < args.length; i++) {
+    if (args[i] === '--changed-files') changedFilesArg = args[++i]
+    else if (evalDirArg === undefined) evalDirArg = args[i]
+  }
+  const evalDir = evalDirArg ? resolve(process.cwd(), evalDirArg) : join(process.cwd(), 'eval')
+  let changedFiles: string[] | undefined
+  if (changedFilesArg) {
+    try {
+      changedFiles = readFileSync(changedFilesArg, 'utf-8')
+        .split('\n')
+        .map((l) => l.trim())
+        .filter((l) => l.length > 0)
+    } catch {
+      changedFiles = []
+    }
+  }
+  const outcome = runGate(evalDir, changedFiles ? { changedFiles } : {})
   if (outcome.status === 'FAIL') {
     console.error(`[EVAL GATE] FAIL — ${outcome.detail}`)
     process.exit(1)

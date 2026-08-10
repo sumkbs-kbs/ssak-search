@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 import { mkdtempSync, writeFileSync, mkdirSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { runGate, baselineFromArtifacts } from '../../scripts/verify-commit-eval'
+import { runGate, baselineFromArtifacts, scoringFilesIn, SCORING_DRIFT_EPSILON } from '../../scripts/verify-commit-eval'
 import { parseEvalArtifacts } from '../../scripts/verify-jsonc'
 import type { EvalReport, EvalResult, EvalQuery } from '../../eval/types'
 
@@ -85,6 +85,20 @@ function writeBaseline(dir: string, report: EvalReport, timestamp = '2026-01-01T
   const bd = join(dir, 'baselines')
   mkdirSync(bd, { recursive: true })
   writeFileSync(join(bd, 'latest.json'), JSON.stringify({ timestamp, report }, null, 2), 'utf-8')
+}
+
+/** Override the STORED aggregate NDCG of a report (the stored snapshot value). */
+function withNdcg(report: EvalReport, ndcg: number): EvalReport {
+  const base = report.ranking
+  return {
+    ...report,
+    ranking: {
+      queriesWithGoldStandard: base?.queriesWithGoldStandard ?? 1,
+      avgNdcgAt10: ndcg,
+      avgMrr: base?.avgMrr ?? 0,
+      avgPrecisionAt10: base?.avgPrecisionAt10 ?? 0,
+    },
+  }
 }
 
 let tmp: string
@@ -317,5 +331,129 @@ describe('runGate', () => {
     mkdirSync(dir, { recursive: true })
     const o = runGate(dir, { gold })
     expect(o.status).toBe('SKIP')
+  })
+})
+
+// S86i: the scoring-drift guard — when the checked commit's diff touches the
+// scoring layer (metrics/median/baseline/gold), the recomputed NDCG (current
+// code) is compared against the STORED baseline NDCG (baseline commit's code).
+// A real drift surfaces as a provenance WARNING in the detail line (never a
+// FAIL — the regression gate stays the authority).
+describe('scoringFilesIn (S86i — scoring-layer diff filter)', () => {
+  it('flags every scoring pattern', () => {
+    expect(
+      scoringFilesIn(['eval/metrics.ts', 'eval/median.ts', 'eval/baseline.ts', 'eval/gold-standards.json']),
+    ).toEqual(['eval/metrics.ts', 'eval/median.ts', 'eval/baseline.ts', 'eval/gold-standards.json'])
+  })
+
+  it('ignores loading/shape gates and consumer scripts', () => {
+    expect(
+      scoringFilesIn([
+        'eval/run-files.ts',
+        'scripts/verify-jsonc.ts',
+        'scripts/analyze-429-loss.ts',
+        'scripts/verify-commit-eval.ts',
+        'docs/14_CI_PREFLIGHT_VERIFICATION.md',
+        'eval/results/run-1.json',
+      ]),
+    ).toEqual([])
+  })
+
+  it('returns [] for empty input', () => {
+    expect(scoringFilesIn([])).toEqual([])
+    expect(scoringFilesIn(undefined as unknown as string[])).toEqual([])
+  })
+})
+
+describe('runGate scoring-drift guard (S86i)', () => {
+  // gold ['good.example.com'] at rank 1 → recomputed NDCG@10 = 1.0 for the
+  // single-query report (regardless of the stored ranking field, which
+  // computeMedianReport ignores — S54 recompute semantics).
+  const recomputed = 1.0
+
+  it('WARNs (PASS status) when scoring files changed and NDCG drifted vs baseline', () => {
+    const dir = join(tmp, 'eval')
+    mkdirSync(join(dir, 'results'), { recursive: true })
+    writeRun(join(dir, 'results'), 1, makeReport('q-pass', { poolDomains: ['good.example.com'] }))
+    writeRun(join(dir, 'results'), 2, makeReport('q-pass', { poolDomains: ['good.example.com'] }))
+    // Stored baseline NDCG (0.4) predates the metrics change → recompute (1.0)
+    // drifts beyond epsilon → warning surfaces, status stays PASS.
+    writeBaseline(dir, withNdcg(makeReport('q-pass', { poolDomains: ['good.example.com'] }), 0.4))
+    const o = runGate(dir, { gold, changedFiles: ['eval/metrics.ts'] })
+    expect(o.status).toBe('PASS')
+    expect(o.detail).toContain('[WARN] scoring-drift')
+    expect(o.detail).toContain('eval/metrics.ts')
+    expect(o.detail).toContain('Δ+0.6000')
+  })
+
+  it('records scoring files as INFO (no WARN) when NDCG is unchanged', () => {
+    const dir = join(tmp, 'eval')
+    mkdirSync(join(dir, 'results'), { recursive: true })
+    writeRun(join(dir, 'results'), 1, makeReport('q-pass', { poolDomains: ['good.example.com'] }))
+    writeRun(join(dir, 'results'), 2, makeReport('q-pass', { poolDomains: ['good.example.com'] }))
+    writeBaseline(dir, withNdcg(makeReport('q-pass', { poolDomains: ['good.example.com'] }), recomputed))
+    const o = runGate(dir, { gold, changedFiles: ['eval/gold-standards.json'] })
+    expect(o.status).toBe('PASS')
+    expect(o.detail).toContain('scoring-files-changed')
+    expect(o.detail).not.toContain('[WARN]')
+  })
+
+  it('adds no marker for a non-scoring diff', () => {
+    const dir = join(tmp, 'eval')
+    mkdirSync(join(dir, 'results'), { recursive: true })
+    writeRun(join(dir, 'results'), 1, makeReport('q-pass', { poolDomains: ['good.example.com'] }))
+    writeBaseline(dir, withNdcg(makeReport('q-pass', { poolDomains: ['good.example.com'] }), 0.4))
+    const o = runGate(dir, { gold, changedFiles: ['scripts/analyze-429-loss.ts'] })
+    expect(o.status).toBe('PASS')
+    expect(o.detail).not.toContain('scoring')
+  })
+
+  it('adds no marker when there is no baseline to compare (baseline: none)', () => {
+    const dir = join(tmp, 'eval')
+    mkdirSync(join(dir, 'results'), { recursive: true })
+    writeRun(join(dir, 'results'), 1, makeReport('q-pass', { poolDomains: ['good.example.com'] }))
+    const o = runGate(dir, { gold, changedFiles: ['eval/metrics.ts'] })
+    expect(o.status).toBe('PASS')
+    expect(o.detail).toContain('baseline: none')
+    expect(o.detail).not.toContain('scoring-files-changed')
+  })
+
+  it('warns for a delta just ABOVE epsilon', () => {
+    const dir = join(tmp, 'eval')
+    mkdirSync(join(dir, 'results'), { recursive: true })
+    writeRun(join(dir, 'results'), 1, makeReport('q-pass', { poolDomains: ['good.example.com'] }))
+    writeRun(join(dir, 'results'), 2, makeReport('q-pass', { poolDomains: ['good.example.com'] }))
+    const above = recomputed - SCORING_DRIFT_EPSILON * 2
+    writeBaseline(dir, withNdcg(makeReport('q-pass', { poolDomains: ['good.example.com'] }), above))
+    const o = runGate(dir, { gold, changedFiles: ['eval/median.ts'] })
+    expect(o.status).toBe('PASS')
+    expect(o.detail).toContain('[WARN] scoring-drift')
+  })
+
+  it('treats a delta just BELOW epsilon as info-only (no WARN)', () => {
+    const dir = join(tmp, 'eval')
+    mkdirSync(join(dir, 'results'), { recursive: true })
+    writeRun(join(dir, 'results'), 1, makeReport('q-pass', { poolDomains: ['good.example.com'] }))
+    writeRun(join(dir, 'results'), 2, makeReport('q-pass', { poolDomains: ['good.example.com'] }))
+    const below = recomputed - SCORING_DRIFT_EPSILON / 2
+    writeBaseline(dir, withNdcg(makeReport('q-pass', { poolDomains: ['good.example.com'] }), below))
+    const o = runGate(dir, { gold, changedFiles: ['eval/metrics.ts'] })
+    expect(o.status).toBe('PASS')
+    expect(o.detail).toContain('scoring-files-changed')
+    expect(o.detail).not.toContain('[WARN]')
+  })
+
+  it('renders a NEGATIVE delta with its sign (Δ-0.6000)', () => {
+    const dir = join(tmp, 'eval')
+    mkdirSync(join(dir, 'results'), { recursive: true })
+    writeRun(join(dir, 'results'), 1, makeReport('q-pass', { poolDomains: ['good.example.com'] }))
+    writeRun(join(dir, 'results'), 2, makeReport('q-pass', { poolDomains: ['good.example.com'] }))
+    // Baseline ABOVE the recompute → drift is negative → Δ-0.6000.
+    const above = recomputed + 0.6
+    writeBaseline(dir, withNdcg(makeReport('q-pass', { poolDomains: ['good.example.com'] }), above))
+    const o = runGate(dir, { gold, changedFiles: ['eval/baseline.ts'] })
+    expect(o.status).toBe('PASS')
+    expect(o.detail).toContain('[WARN] scoring-drift')
+    expect(o.detail).toContain('Δ-0.6000')
   })
 })

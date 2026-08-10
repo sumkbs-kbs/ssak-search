@@ -178,7 +178,16 @@ run_gate() {
     # unreadable) is a distinct red state: written as ERROR (not FAIL) so the
     # summary distinguishes corruption from a plain regression.
     eval)
-      (cd "$wt" && npx tsx "$ROOT/scripts/verify-commit-eval.ts" > "$log" 2>&1)
+      # S86i: pass the commit's OWN diff to the scoring-drift guard — which
+      # scoring-layer files (eval/metrics|median|baseline.ts, gold-standards)
+      # changed in THIS commit. `git diff HEAD~1 HEAD` inside the detached
+      # worktree = the commit's changes vs its FIRST parent; a root commit /
+      # empty diff yields an empty list (the guard has nothing to flag), and
+      # a merge's second-parent-only changes are not captured (this flow
+      # assumes the linear commit ranges verify-commits-ci checks). An empty
+      # result file is also fine: the gate treats it as no diff info.
+      (cd "$wt" && git diff --name-only HEAD~1 HEAD 2>/dev/null || true) > "$WORKTREE_BASE/results/$short.files"
+      (cd "$wt" && npx tsx "$ROOT/scripts/verify-commit-eval.ts" --changed-files "$WORKTREE_BASE/results/$short.files" > "$log" 2>&1)
       rc=$?
       if [[ $rc -eq 2 ]]; then
         # SKIP = commit has no eval artifacts — not a failure. No time file.

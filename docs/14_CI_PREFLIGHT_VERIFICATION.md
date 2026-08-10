@@ -109,6 +109,16 @@ JSON.parse fast-path — eval 아티팩트는 JSON.stringify 출력이라 순수
 1회 파싱해 파싱 결과 반환). runGate가 이 파싱 결과로 run 리포트를 구축해
 `loadRunFiles`의 재파싱을 제거 (S86e: `loadRunFiles` 자체도 제거 — runGate/parseEvalArtifacts 단일 경로로 통일, 숫자순 재정렬은 runGate가 보존). 벤치마크 (`scripts/bench-eval-parse.ts`):
 
+```
+artifacts: 6 files, 16.9 MB total, 15 iterations (median)
+old (3× parse): 997.5 ms
+new (1× parse): 36.0 ms
+reduction: 96.4%
+```
+
+실제 runGate CLI: **0.47초** (기존 3중 파싱 시 ~1.4초+ 예상). 단위 테스트
++2건 (S86d 재사용 경로 고정, results/latest.json 손상 ERROR).
+
 ### S86f — 2중 파싱 추가 2건 제거 (analyze-429-loss + runGate baseline)
 
 전수 조사(S86f 사전)에서 같은 버그 클래스 2건을 추가 발견해 수정:
@@ -125,15 +135,77 @@ JSON.parse fast-path — eval 아티팩트는 JSON.stringify 출력이라 순수
 - **유지 2파일 (의도적)**: `generate-gold-standards.ts`(gold **작성자** — raw `{relevantDomains}` 래퍼 재직렬화 필요) · `probe-still-vuln.ts`(relevantUrls 필드 사용)
 - **실측 동등성**: 실제 gold 파일은 null/비배열/빈배열 0건 — 모든 변형이 동일 결과 (gold-loader 테스트로 고정). 스모크: verify-s50 en-fact-01 NDCG 0.613, boundary bare 341 도메인, detect-gold-drift JSON, sim-wave1, sweep-gold, eval:loss 전부 정상
 
-```
-artifacts: 6 files, 16.9 MB total, 15 iterations (median)
-old (3× parse): 997.5 ms
-new (1× parse): 36.0 ms
-reduction: 96.4%
+### S86g-② — 경계 강화가 baseline 비교를 보호하는 방식
+
+`parseGoldStandards`의 경계 강화 3종은 단순 방어가 아니라 **게이트의 baseline
+비교(S54 실시간 재계산 + G2 안정화)를 gold 편집 실수로부터 격리**한다:
+
+| 경계 | 구 동작 (위험) | 신 동작 | baseline 보호 효과 |
+|---|---|---|---|
+| null 항목 (`"q3": null`) | `val.relevantDomains` → **TypeError** → catch-all `{}` — **맵 전체 소실** | 항목만 스킵, 나머지 499개 보존 | 한 줄 실수로 500쿼리 gold가 통째로 사라져 **전 쿼리 NDCG 0 → 대량 가짜 회귀로 커밋 차단**되는 연쇄 실패를 차단. 해당 쿼리만 gold 상실(NDCG 0)로 정직하게 노출 |
+| 비배열 `relevantDomains` (문자열 등) | truthy라 **타입 오염 유출** → 모든 소비자의 `.join`/`.includes` 크래시 | 제외 | gold-loader 실파일 동등성 테스트의 기대 맵(truthy 필터)과 불일치해 **유닛이 레드로 즉시 경고** — 게이트 오작동 전에 잡힘 |
+| 빈 배열 (`[]`) | truthy 유지 (`key: []`) | `Array.isArray([])` true → 동일 유지 | S69 gold 비움 의미론 보존 — `.has(id)` true 유지로 소비자 분기 안정 |
+
+요약: **한 줄 실수는 그 쿼리 하나에 격리**되고, 나머지 499쿼리의 baseline
+비교는 그대로 유효하다. 구 로더는 한 줄 실수가 전 코퍼스 gold 소실 → 전 쿼리
+가짜 회귀 → 커밋 차단이라는 연쇄 실패를 만들었다. 추가로 S86i 가드에서
+gold-standards.json은 SCORING_FILE_PATTERNS에 포함되므로, gold 편집 커밋은
+게이트 로그에 `scoring-files-changed`(또는 집계 NDCG 이동 시 `[WARN]`
+scoring-drift) 마커가 자동으로 붙는다.
+
+## gold 편집 가이드 (eval/gold-standards.json)
+
+gold는 500쿼리 NDCG/MRR/Precision@10 계산의 **평가 기준 정의 파일**이다
+(관련 도메인 목록 — 라벨-접미사 매칭, 엄밀한 human-judged qrels 코퍼스가
+아님). gold 변경은 "검색 품질 변경"이 아니라 **평가 기준 교정(EVAL-CRITERIA
+CORRECTION)**이며, 목록에 없는 쿼리는 랭킹 메트릭에서 스킵된다.
+
+### 형식
+
+```json
+{
+  "_comment": "메타데이터/변경 이력 키 — `_` 접두사는 파서가 스킵",
+  "_s70": "S70 (2026-08-10): <변경 사유 + 실측 수치> (관례 예시)",
+  "kr-stock-03": {
+    "relevantDomains": ["finance.naver.com", "m.stock.naver.com", "investing.com"]
+  }
+}
 ```
 
-실제 runGate CLI: **0.47초** (기존 3중 파싱 시 ~1.4초+ 예상). 단위 테스트
-+2건 (S86d 재사용 경로 고정, results/latest.json 손상 ERROR).
+### 필수 규칙 (S49~S69 관례)
+
+1. **라벨-접미사 매칭 전제** (S49): `D === G || D.endsWith('.' + G)` — bare
+   레지스트러블 gold(`naver.com`)는 하위 도메인(`m.blog.naver.com`)을 전부
+   매칭하므로, 의도가 좁으면 정밀 도메인(`m.stock.naver.com`)으로 쓸 것.
+   크로스-레지스트러블(`trip.com` ⊄ `xinjiangtrip.com`)은 매칭되지 않는다.
+2. **subsumption 페어 금지** (S50 WARNING / S52 / S63): 같은 엔티티의 좁은
+   변형(docs./developers./blog.) + 넓은 레지스트러블을 함께 쓰지 말 것 —
+   **넓은 쪽만 유지**(라벨-접미사가 서브도메인 변형을 이미 커버).
+   kr-tech-05는 S63에서 `aws.amazon.com` 단독으로 좁힘
+   (`aws.amazon.com`은 `amazon.com`과 subsumption이었음).
+3. **풀에 없는 gold 금지** (S63/S69): 저장 run-1..3 풀에 한 번도 안 뜨는
+   도메인은 **팬텀** — DCG에 0 기여하면서 IDCG 분모(R = min(goldLen, k))를
+   부풀려 **측정 NDCG를 억제**한다. 추가 전 저장 풀에서 등장 여부를 확인할 것.
+4. **비움은 `[]`로** (S69): gold를 지우려면 빈 배열로 — 키를 남겨 `.has()`
+   의미론을 보존한다. `null`/비배열 값은 쓰지 말 것 (위 경계 규칙).
+5. **변경 이력 `_sN` 키 필수**: 변경마다 `_sN` 메타데이터에 사유 + 실측
+   수치를 남긴다 (S49/S32/S52/S63/S69 관례 — "EVAL-CRITERIA CORRECTION, not
+   a search-quality change" 형식).
+
+### 편집 후 검증 절차
+
+1. **유닛**: `npx vitest run --project unit tests/unit/gold-loader.test.ts` —
+   실파일 동등성 테스트가 경계 값(null/비배열) 유입을 레드로 잡는다.
+2. **영향 실측**: `npx tsx scripts/detect-gold-drift.ts` (S57) — 저장 풀에
+   재계산을 돌려 어떤 쿼리 NDCG가 gold 변경으로 움직였는지 리포트
+   (네트워크 없음).
+3. **게이트 재생**: `npx tsx scripts/verify-commit-eval.ts` — S86i 가드가
+   `scoring-files-changed: eval/gold-standards.json` 마커를 붙이고, 집계
+   NDCG가 1e-4를 넘어 움직이면 `[WARN] scoring-drift`로 baseline 대비
+   델타를 표시한다.
+4. **작성 도구 예외**: `eval/generate-gold-standards.ts`(생성기)는 raw
+   `{relevantDomains}` 래퍼를 재직렬화해야 하므로 의도적으로
+   parseGoldStandards를 쓰지 않는다 (S86g 유지 2파일 중 하나).
 
 ### S86c: --eval 게이트의 아티팩트 무결성 선행 검사 (2026-08-10)
 
@@ -461,3 +533,63 @@ S86h 잔여였던 loss 경로의 전용 로더를 공용 진입점으로 통합�
   plain-parse한 근사치)
 - **테스트**: writeRuns eval-root 레이아웃 전환, bare 테스트를 게이트 계약으로
   재작성, S54 recompute-vs-stored 테스트 신규 (총 28건)
+
+## 2026-08-10 S86i — scoring-drift 가드 (metrics/스코어링 파일 diff 감지)
+
+### 배경
+
+게이트가 저장 풀을 **현재 코드**로 재스코어링하므로(S54/S58), 커밋이 스코어링
+레이어를 바꾸면 재계산 NDCG는 "검색 품질 변화"와 "메트릭 재정의"가 섞입니다.
+커밋별 오프라인 게이트는 이 구분을 못 해, 메트릭 변경 커밋의 회귀 수치가 오해를
+줄 수 있었습니다.
+
+### 변경 (2파일 + 테스트 +8)
+
+1. **`scripts/verify-commit-eval.ts`** — `SCORING_FILE_PATTERNS`(eval/metrics.ts,
+   eval/median.ts, eval/baseline.ts, eval/gold-standards.json — NDCG 의미를 바꾸는
+   파일 4종) + `scoringFilesIn()` 순수 필터 + `SCORING_DRIFT_EPSILON = 1e-4`
+   (4자리 노이즈 플로어). `GateOptions.changedFiles` 추가 — baseline 존재 &&
+   스코어링 파일 변경 시 **재계산 NDCG@10 vs 저장 baseline NDCG@10** 비교:
+   - `|Δ| > 1e-4` → `[WARN] scoring-drift: <files> — NDCG x vs baseline y (Δ±d)`
+     (회귀 델타가 메트릭 재정의일 수 있다는 **출처 경고** — status는 불변)
+   - `|Δ| ≤ 1e-4` → `scoring-files-changed: <files> (NDCG@10 unchanged x)` 정보 마커
+   - 스코어링 파일 없음 / baseline 없음 → 마커 없음 (기존 동작 유지)
+   - CLI `--changed-files <file>` 플래그 (누락·손상 시 `[]` degrade — 게이트는
+     diff 정보 없이도 정상 동작, 경고만 생략)
+   - **제외 설계**: eval/run-files.ts·verify-jsonc.ts(로딩/형태 게이트)와 scripts/ 소비자는
+     NDCG 의미를 안 바꾸므로 패턴에 없음
+2. **`scripts/verify-commits-ci.sh`** — eval 브랜치에서 `git diff --name-only
+   HEAD~1 HEAD`(detached worktree = 커밋 자체 diff)로 `$short.files` 생성 후
+   `--changed-files` 전달. root 커밋은 빈 목록, **merge는 첫 부모 대비만** (선형 범위
+   전제 주석화)
+
+### 검증
+
+- 테스트 +8 (scoringFilesIn 필터 3 + 경고/정보/무표시/무baseline/엡실론 상·하한/
+  음수 부호 7) — 유닛 **1,631건 / 86파일** 통과, tsc/lint/format 그린
+- **실측 스모크 (HEAD 5ab1477)**: eval/metrics.ts 변경 포함 diff →
+  `scoring-files-changed: eval/metrics.ts (NDCG@10 unchanged 0.2813)` — S86g
+  gold 로더 추출이 동작 중립임을 게이트가 스스로 확인 (경고 미발동).
+  verify-commits-ci.sh --eval 재현에서도 동일 마커 (PASS 유지)
+
+## 2026-08-10 preflight-push.sh — push 전 3중 최종 점검
+
+커밋을 push하기 전 세 관점을 한 번에 검증하는 오케스트레이터
+(`bash scripts/preflight-push.sh [커밋|범위]`, 기본 HEAD~1..HEAD):
+
+| 단계 | 검사 | 역할 |
+|---|---|---|
+| ① | `verify-commits-ci.sh <range> --eval` | 커밋별 전 게이트 재현 (lint-ci/eslint/format/unit/eval) |
+| ② | `verify-commit-eval.ts --changed-files` | HEAD 기준 eval 재생 + S86i 스코어링 마커 (`scoring-files-changed` / `[WARN] scoring-drift`) |
+| ③ | `verify-baseline-equivalence.ts` | **저장 baseline NDCG@10 재현성** — 현재 코드로 재계산한 median NDCG vs 저장 값, `|Δ| <= 1e-4` (S86i epsilon) |
+
+③은 S86i 가드(스코어링 파일 변경 시에만 비교)와 달리 **항상** 실행되는
+"수치가 baseline이 의미하는 그대로인가" 단언이다. 시그니처:
+`checkBaselineEquivalence(evalDir, { gold?, epsilon? })` — parseEvalArtifacts
+단일 파싱 + baselineFromArtifacts(S86f) 재사용, 순수 export + 단위 테스트 9건
+(PASS/DRIFT ±부호/epsilon 경계/NO_BASELINE/corrupt ERROR/쿼리 유니온).
+
+**실측 (5ab1477)**: ① 전 게이트 PASS · ② `scoring-files-changed:
+eval/metrics.ts (NDCG@10 unchanged 0.2813)` · ③ `recomputed 0.2813 ==
+stored baseline 0.2813 (Δ+0.000000)` — 재계산 NDCG가 저장 baseline과
+소수 6자리까지 일치, S86g/S86h 리팩터의 동작 중립을 수치로 확정.

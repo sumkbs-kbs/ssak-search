@@ -2,9 +2,17 @@
 /**
  * DO Binding Verification Script
  *
- * Verifies that ALL 8 Durable Object bindings are present in the active
- * wrangler config (`wrangler.dev.jsonc` for local dev, `wrangler.jsonc` for
- * production). Run in CI before deploy to catch missing bindings early.
+ * Verifies that ALL Durable Object bindings are present in a wrangler config.
+ * The meaningful target is `wrangler.dev.jsonc` (local dev) — it declares all
+ * 11 DO bindings + R2 + INDEX_QUEUE so every feature is testable locally.
+ *
+ * PRODUCTION (`wrangler.jsonc`) is a Cloudflare Pages project: `wrangler pages
+ * deploy` REJECTS durable_objects / r2_buckets without a script_name (verified
+ * 2026-08-04, wrangler 4.112.0), so production bindings CANNOT be declared in
+ * the file — they are configured via the Cloudflare Dashboard (see the
+ * checklist at the bottom of wrangler.jsonc). Running this script against
+ * wrangler.jsonc therefore ALWAYS fails by design; use it against
+ * wrangler.dev.jsonc instead (ci.yml does this).
  *
  * Exit codes:
  *   0 = OK (all bindings present)
@@ -12,8 +20,8 @@
  *   2 = Config parse error
  *
  * Usage:
- *   npx tsx scripts/verify-do-binding.ts                       # checks wrangler.jsonc
- *   npx tsx scripts/verify-do-binding.ts --config wrangler.dev.jsonc
+ *   npx tsx scripts/verify-do-binding.ts --config=wrangler.dev.jsonc
+ *   npx tsx scripts/verify-do-binding.ts                       # defaults to wrangler.jsonc (Pages: expect FAIL, see above)
  */
 
 import { parse } from 'comment-json'
@@ -40,6 +48,8 @@ const REQUIRED_DO_BINDINGS: DOBinding[] = [
   { name: 'SPACE_DO', class_name: 'SpaceDO' },
   { name: 'API_KEY_DO', class_name: 'ApiKeyDO' },
   { name: 'CRAWLER_DO', class_name: 'CrawlerDO' },
+  { name: 'CLICK_LOG_DO', class_name: 'ClickLogDO' },
+  { name: 'EXPERIMENT_DO', class_name: 'ExperimentDO' },
   { name: 'CANARY_DO', class_name: 'CanaryOrchestratorDO' },
 ]
 

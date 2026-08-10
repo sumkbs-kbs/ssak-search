@@ -57,6 +57,76 @@ CI의 build job은 `needs: [lint-typecheck, unit-tests]`로 lint/unit 통과 후
 간 순서 의존성이 문제된 적은 없으나, lint/unit이 레드인 상태의 build 결과는
 참고용으로만 해석할 것.
 
+## 2026-08-10 act 교차 검증 — 실제 CI 블로커 3건 발견 및 수정
+
+worktree 스크립트(위 표)가 6개 커밋 전부 그린이라고 판정한 뒤, Docker
+Desktop + `act`(v0.2.89, `catthehacker/ubuntu:act-latest` — ubuntu-latest
+이미지, Linux/arm64)로 `ci.yml`을 로컬 재현한 결과 **실제 CI 블로커 3건이
+발견**됐다. worktree 스크립트는 node_modules를 symlink하므로 `npm ci` 자체와
+워크플로우 인라인 스텝을 실행하지 않아서 이들을 놓쳤다.
+
+### 발견 ①: `package-lock.json` 누락 엔트리 → `npm ci` 실패
+
+`@cloudflare/vitest-pool-workers`의 하위 의존성 `wrangler@^4.20260625.1`이
+`@cloudflare/workers-types@^4.x`를 요구하는데 lockfile packages 섹션에 중첩
+4.20260702.1 엔트리가 없어 `npm ci`가 **Missing from lock**으로 실패.
+`npm install --package-lock-only`로 재생성 (+11/-2) → 호스트/컨테이너 모두
+`npm ci` 통과 확인. **(수정됨 — package-lock.json)**
+
+### 발견 ②: `Verify wrangler.jsonc integrity` 스텝의 naive 정규식 버그
+
+`node -e "JSON.parse(src.replace(/\/\/.*$/gm,''))"`가 **문자열 내부의 `//`까지
+삭제** — 주석 속 `https://...` URL이 `"https:`로 깨져 JSON.parse 실패.
+실제로 스텝은 레드였고 (로컬 재현 + act 재현 모두), wrangler 자체는 파일을
+정상 파싱한다. **수정됨 — `scripts/verify-jsonc.ts` (string-aware 스트립 +
+trailing comma 처리) + ci.yml 스텝 교체 + 단위 테스트 7건.**
+
+### 발견 ③: `binding-verify` 잡이 프로덕션 Pages config를 검사해 항상 실패
+
+wrangler.jsonc(프로덕션)는 Pages 프로젝트라 `wrangler pages deploy`가
+durable_objects를 거부 → DO/R2 바인딩은 **파일에 의도적으로 없음** (Dashboard
+구성). 그런데 ci.yml이 기본값(wrangler.jsonc)으로 `verify-do-binding.ts`를
+실행 → **10개 바인딩 MISSING으로 항상 실패** (이전 커밋들도 동일 — 실제 CI도
+레드). **수정됨 — ci.yml이 `--config=wrangler.dev.jsonc`를 검사하도록 변경**
+(dev config는 11 DO + R2 + QUEUE 전부 선언), `verify-do-binding.ts` REQUIRED에
+CLICK_LOG_DO/EXPERIMENT_DO 추가 + Pages 한계 docstring.
+
+### act 재현 후 최종 상태 (2026-08-10)
+
+```
+job              result
+lint-typecheck   PASS  (11/11 steps — lint:ci, eslint 0-warning, format, wrangler.jsonc)
+unit-tests       PASS  (coverage + snapshot integrity)
+binding-verify   PASS  (11 DO + R2 + QUEUE, wrangler.dev.jsonc)
+build            build+dist OK (1,054 kB) — artifact 업로드만 act 한계로 skip
+```
+
+act 실행 노트: ① Docker Desktop 재시작 직후 `context canceled`(docker exec
+스트리밍 취소)가 간헐 발생 — npm/코드 문제가 아니라 act-인프라 문제이며,
+포그라운드 실행으로 안정화됨. `docker run` 직접 재현으로 npm ci/format이
+컨테이너에서 통과함을 교차 확인. ② **전체 워크플로우 실행 시 setup-node
+액션 캐시 레이스 발생** — 동시 잡이 `~/.cache/act/actions-setup-node@v4/`
+재구축을 동시에 진행해 `lstat ... no such file` 실패. `--concurrent-jobs 1`
+(순차 실행)로 해결. ③ `actions/upload-artifact@v4`는 로컬에서 항상 실패
+(`ACTIONS_RUNTIME_TOKEN`은 실제 러너 전용) — build 잡의 마지막 스텝만
+영향이며 build/dist 검증 자체는 통과. **권장 실행**: `act -W
+.github/workflows/ci.yml --concurrent-jobs 1`.
+
+### worktree 스크립트 vs act — 교차 검증 결론
+
+| 관점 | worktree 스크립트 | act |
+|---|---|---|
+| npm ci / lockfile 정합성 | ✗ (symlink라 미재현) | ✓ (발견 ①) |
+| 워크플로우 인라인 스텝 | ✗ (게이트만 실행) | ✓ (발견 ②③) |
+| 게이트 자체 (lint/unit/build) | ✓ | ✓ (동일 결과) |
+| 속도 | ~3분 (병렬) | 잡당 30초~2분 |
+| Node 버전 | 로컬 (22) | CI와 동일 (20) |
+
+**결론: 두 도구는 보완 관계다.** act가 진짜 CI 동작(의존성 설치 + 인라인
+스텝)을 재현해 블로커를 잡고, worktree 스크립트는 게이트 수준 회귀를
+커밋별로 빠르게 검증한다. 푸시 전에는 **act(전 잡) + worktree 스크립트
+(커밋 범위)** 둘 다 실행할 것.
+
 ## 2026-08-10 검증 결과 (6개 커밋, act 미사용)
 
 `97a042f..fab8bf5` + `97a042f~1..97a042f` 범위, 5게이트 전부 재현:
@@ -80,11 +150,13 @@ fab8bf5  PASS     PASS    PASS    PASS     PASS    (Wave 4 실측 아티팩트)
 
 ## 한계
 
-- **build는 로컬(노드 22, vite v8) 기준** — CI는 ubuntu-latest + Node 20. 빌드
-  로직 자체는 플랫폼 독립적이나, Node 버전 차이는 CI에서 최종 확인.
-- **node_modules symlink 검증은 의존성 설치 과정을 재현하지 않는다** — lockfile
-  정합성(`npm ci`의 검증)은 범위-vs-메인 가드(②)로 간접 보장. 매니페스트를
-  건드린 커밋이 범위에 있으면 자동으로 npm ci 경로로 전환되므로 안전.
-- **eval 게이트는 제외** (~60분 — `npm run eval:median:ci`는 별도 실행).
-- `act`는 Docker 필요 — Docker 설치 후 `act -W .github/workflows/ci.yml`로
-  CI와 동일한 러너 이미지 검증 가능 (보강 옵션).
+- **worktree 스크립트**: build는 로컬(노드 22) 기준이고 node_modules symlink라
+  `npm ci`/lockfile 정합성·워크플로우 인라인 스텝을 재현하지 않는다 — 이 갭을
+  act로 커버한다 (위 act 섹션).
+- **act 한계**: ① `actions/upload-artifact@v4`는 실제 러너의
+  `ACTIONS_RUNTIME_TOKEN`이 필요해 로컬에서 실패 (build 잡의 마지막 스텝만 —
+  build/dist 검증 자체는 통과). ② Docker Desktop 재시작 직후 간헐
+  `context canceled` — 포그라운드 실행으로 안정화. ③ eval 게이트는 제외
+  (~60분 — `npm run eval:median:ci`는 별도 실행).
+- **실제 CI는 GitHub 러너에서 최종 확인 필요** — act는 근사치이며, artifact
+  업로드·GitHub 토큰·네트워크 정책 등은 실제 러너 전용.

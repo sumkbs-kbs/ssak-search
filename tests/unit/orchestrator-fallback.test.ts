@@ -48,8 +48,8 @@ vi.mock('../../src/lib/specialized', () => ({
     .fn()
     .mockReturnValue({ wikipedia: true, github: false, hackernews: true, reddit: false, arxiv: false }),
 }))
-vi.mock('../../src/lib/google-scholar', () => ({
-  searchGoogleScholarAsResults: vi.fn().mockResolvedValue([]),
+vi.mock('../../src/lib/openalex', () => ({
+  openalexSearch: vi.fn().mockResolvedValue([]),
 }))
 vi.mock('../../src/lib/searxng-search', () => ({
   searxngSearch: vi.fn().mockResolvedValue([]),

@@ -90,6 +90,22 @@ const LOW_QUALITY_DOMAINS: Record<string, number> = {
   // demotion must live in the ranking authority maps. Resolved sources get
   // their gold-domain authority instead and are untouched.
   'news.google.com': -0.35,
+  // S95 (2026-08-10): msn.com syndication saturation — P1 diagnosis found
+  // msn.com in 100/109 news-gold query pools (its syndicated feed re-hosts
+  // outlet articles with MSN transport URLs, so keyword-saturated snippets
+  // flood the top ranks and the gold OUTLET domain never surfaces). Saved-pool
+  // simulation (sim-msn-penalty.ts, -0.2): full NDCG Δ+0.0002, affected-query
+  // Δ+0.0136, ZERO losses across 9 affected queries (ja-news +0.074, en-fact
+  // +0.027, en-news +0.016). Value mirrors the LOW_QUALITY news-aggregator
+  // tier (topstarnews -0.15 → choicenews -0.12) — msn is a GLOBAL aggregator,
+  // so it sits slightly above the KR-spam entries.
+  //
+  // NOTE (review P1-G): the penalty is deliberately NOT isNews-gated — msn.com
+  // is a low-signal syndication aggregator in EVERY context (its articles are
+  // re-hosts, never first-party reporting), and the sim measured ZERO losses,
+  // so a global demotion is safe. A news-gate would only add complexity for no
+  // measured benefit.
+  'msn.com': -0.2,
 }
 
 /**

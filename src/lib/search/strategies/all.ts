@@ -22,13 +22,14 @@ import {
   buildHackerNewsTask,
   buildRedditTask,
   buildArxivTask,
-  buildGoogleScholarTask,
+  buildOpenAlexTask,
   buildSearXNGTask,
   buildDuckDuckGoTask,
   buildNaverTask,
   buildNaverNewsTask,
   buildBingNewsRssTask,
   buildGoogleNewsRssTask,
+  buildNewsOutletTask,
   buildKoreanStockTask,
   buildYahooFinanceTask,
   buildBraveTask,
@@ -95,6 +96,13 @@ export class AllStrategy implements SearchStrategy {
       // ko-KR resolves via the Korean source map).
       tasks.push(buildBingNewsRssTask(ctx))
       tasks.push(buildGoogleNewsRssTask(ctx))
+      // S95 (P1 lever E): curated-outlet site: augmentation — the generic
+      // Google News feed alone leaves the gold outlet domain absent from
+      // ~93 coverage-gap queries (P1 diagnosis: NDCG=0 is 100% coverage, not
+      // ranking). `site:<outlet> <query>` forces a curated gold outlet into
+      // the pool; ONE outlet per query keeps the shared feed/rate budget
+      // finite (sim-news-outlet.ts: rank-2 insertion averages Δ+0.18/query).
+      tasks.push(buildNewsOutletTask(ctx))
     } else {
       tasks.push(buildBingTask(ctx))
 
@@ -229,9 +237,10 @@ export class AllStrategy implements SearchStrategy {
       tasks.push(buildArxivTask(ctx, 8))
     }
 
-    // 5c. Google Scholar (academic)
-    if (ctx.sources.useGoogleScholar) {
-      tasks.push(buildGoogleScholarTask(ctx, 8))
+    // 5c. OpenAlex (academic — keyless works API, replaces the captcha-dead
+    // Google Scholar scraper; S96). See backend-tasks.ts / openalex.ts.
+    if (ctx.sources.useOpenAlex) {
+      tasks.push(buildOpenAlexTask(ctx, 8))
     }
 
     // 5d. SearXNG — PRIMARY general backend when configured

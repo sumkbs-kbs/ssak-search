@@ -63,7 +63,7 @@ function makeCtx(overrides: Partial<SearchContext> & { focus?: FocusMode } = {})
       useHackerNews: true,
       useReddit: true,
       useArxiv: false,
-      useGoogleScholar: false,
+      useOpenAlex: false,
     } as never,
     entityHints: undefined,
     isNews: false,
@@ -86,7 +86,7 @@ describe('Search Strategies — task composition', () => {
     it('produces bing + wikipedia + arxiv tasks', () => {
       const ctx = makeCtx({ focus: 'academic' })
       const tasks = getStrategy('academic').buildTasks(ctx)
-      expect(taskNames(tasks)).toEqual(['arxiv', 'bing', 'wikipedia'])
+      expect(taskNames(tasks)).toEqual(['arxiv', 'bing', 'openalex', 'wikipedia'])
     })
   })
 
@@ -499,7 +499,7 @@ describe('Search Strategies — task composition', () => {
     it('delegates to the correct strategy based on ctx.focus', () => {
       const ctxAcademic = makeCtx({ focus: 'academic' })
       const tasks = buildBackendTasks(ctxAcademic)
-      expect(taskNames(tasks)).toEqual(['arxiv', 'bing', 'wikipedia'])
+      expect(taskNames(tasks)).toEqual(['arxiv', 'bing', 'openalex', 'wikipedia'])
     })
 
     it('falls back to all strategy for unknown focus', () => {

@@ -350,7 +350,7 @@ describe('getSourcesForQueryType', () => {
     const sources = getSourcesForQueryType('academic')
     expect(sources.useWikipedia).toBe(true)
     expect(sources.useArxiv).toBe(true)
-    expect(sources.useGoogleScholar).toBe(true)
+    expect(sources.useOpenAlex).toBe(true)
     // Phase 6.7: github ON for academic — ds-01 (LLM fine-tuning LoRA) gold
     // includes github.com (huggingface repos), which academic used to skip.
     expect(sources.useGitHub).toBe(true)

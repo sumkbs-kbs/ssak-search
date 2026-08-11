@@ -1705,7 +1705,7 @@ export function detectQueryType(
   // Phase 6.7 diagnosis: 'GPT-4 architecture paper' and 'diffusion models
   // generative AI research' were reclassified 'technical' because
   // extractEntityHints tags GPT-4/diffusion-models as technologies and the
-  // `hasTech` branch below fires first — dropping arxiv/google-scholar and
+  // `hasTech` branch below fires first — dropping arxiv/openalex and
   // producing en-acad-04/05 NDCG 0.000 (top-10 = github repos only).
   // Paper/research/survey/arxiv markers are unambiguous academic intent, so
   // they take precedence over the hasTech boost. Also catches the modern ML
@@ -1831,7 +1831,8 @@ export function getSourcesForQueryType(type: QueryType): {
   useHackerNews: boolean
   useReddit: boolean
   useArxiv: boolean
-  useGoogleScholar: boolean
+  /** S96: keyless OpenAlex works API (replaces the captcha-dead Google Scholar scraper). */
+  useOpenAlex: boolean
 } {
   switch (type) {
     case 'technical':
@@ -1845,7 +1846,7 @@ export function getSourcesForQueryType(type: QueryType): {
         useHackerNews: true,
         useReddit: false,
         useArxiv: false,
-        useGoogleScholar: false,
+        useOpenAlex: false,
       }
     case 'factual':
       // Factual: Wikipedia for definitions + HackerNews for discussions/explanations
@@ -1856,7 +1857,7 @@ export function getSourcesForQueryType(type: QueryType): {
         useHackerNews: true,
         useReddit: false,
         useArxiv: false,
-        useGoogleScholar: false,
+        useOpenAlex: false,
       }
     case 'financial':
       // Financial queries: Wikipedia for company background + HackerNews for stock discussion/news.
@@ -1868,7 +1869,7 @@ export function getSourcesForQueryType(type: QueryType): {
         useHackerNews: true,
         useReddit: false,
         useArxiv: false,
-        useGoogleScholar: false,
+        useOpenAlex: false,
       }
     case 'news':
       return {
@@ -1877,19 +1878,22 @@ export function getSourcesForQueryType(type: QueryType): {
         useHackerNews: true,
         useReddit: true,
         useArxiv: false,
-        useGoogleScholar: false,
+        useOpenAlex: false,
       }
     case 'academic':
-      // Academic: Wikipedia + arXiv for research papers + Google Scholar
+      // Academic: Wikipedia + arXiv for research papers + OpenAlex works API.
       // Phase 6.7: github ON — ds-01 (LLM fine-tuning LoRA) gold includes
       // github.com (huggingface/awesome-list repos), which academic skipped.
+      // S96: useOpenAlex replaces useGoogleScholar — the Scholar scraper is
+      // captcha-dead (78/78 eval runs), OpenAlex is keyless and returns
+      // openreview/aclanthology/jmlr/nature/ieee landing pages directly.
       return {
         useWikipedia: true,
         useGitHub: true,
         useHackerNews: false,
         useReddit: false,
         useArxiv: true,
-        useGoogleScholar: true,
+        useOpenAlex: true,
       }
     default:
       return {
@@ -1898,7 +1902,7 @@ export function getSourcesForQueryType(type: QueryType): {
         useHackerNews: true,
         useReddit: false,
         useArxiv: false,
-        useGoogleScholar: false,
+        useOpenAlex: false,
       }
   }
 }

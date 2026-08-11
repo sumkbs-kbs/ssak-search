@@ -8,7 +8,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { fanoutBackends } from '../../src/lib/search/fanout'
+import { fanoutBackends, BACKEND_TIMEOUT_MS } from '../../src/lib/search/fanout'
 import type { BackendTask } from '../../src/lib/search/context'
 import type { SearchResult } from '../../src/types'
 
@@ -135,5 +135,23 @@ describe('fanoutBackends', () => {
     await vi.advanceTimersByTimeAsync(800)
     const result = await promise
     expect(result.usedBackends).toEqual(['bing'])
+  })
+
+  it('P1-G: arxiv ceiling covers slow XML responses so waitFor recovers the gold', async () => {
+    // Measured 2026-08-10: arxiv's Atom endpoint runs 450ms–2.9s under
+    // eval-style sequential load (one probe hit 2865ms). The OLD 2500ms
+    // ceiling fired the per-backend timer before the response arrived,
+    // marking the task rejected and dropping arxiv.org gold in 2/3 median
+    // runs (en-acad-06..17 + ds-11 NDCG 0.000 on those runs). The ceiling
+    // must be >= the slowest measured latency so waitFor can actually wait.
+    expect(BACKEND_TIMEOUT_MS['arxiv']).toBeGreaterThanOrEqual(4000)
+
+    // End-to-end: a slow-but-within-ceiling arxiv task IS recovered by waitFor.
+    const tasks = [fastTask('bing', 10), slowTask('arxiv', 3000, 5)]
+    const promise = fanoutBackends(tasks, 8, { waitFor: ['arxiv'] })
+    await vi.advanceTimersByTimeAsync(800)
+    await vi.advanceTimersByTimeAsync(3000)
+    const result = await promise
+    expect(result.usedBackends).toEqual(['bing', 'arxiv'])
   })
 })

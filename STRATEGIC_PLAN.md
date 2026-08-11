@@ -2878,3 +2878,97 @@
 - **잔여**: ① rate window(100/min) 소진 시 스로틀링 실측은 별도 과제 (evagg: burst 100회) 
   ② 로컬 in_memory 상태의 probe 회복 경로(30s 백오프 후 half-open probe 성공 시 close)는
   시간 기반 관측 필요 ③ 로컬 실측 인프라를 스크립트로 고정 (scripts/probe-throttle.ts 등록)
+
+### S95: P1 검색 품질 레버 E/F/G — 뉴스 아웃렛 site: 검색 + msn 패널티 + academic 라우팅 수정 (2026-08-10)
+
+- **요청**: P1 ①~⑤의 정확도 격차(NDCG 0.2813, zero 118/500) 중 커버리지 레버 실현. E(뉴스
+  아웃렛 site: 검색) · F(msn 신디케이션 패널티) · G(academic 라우팅)를 저장 풀 시뮬레이션과
+  라이브 실측으로 확정한 뒤 구현.
+- **F — msn.com 신디케이션 패널티 (ranking.ts)**: `LOW_QUALITY_DOMAINS['msn.com'] = -0.20`.
+  저장 풀 시뮬레이션(sim-msn-penalty.ts) — 전체 Δ+0.0002, 영향 쿼리 9건 Δ+0.0136, **손해
+  0건** (ja-news +0.074, en-fact +0.027, en-news +0.016). 리뷰 반영: 전역(비-뉴스 게이트) 패널티
+  의도성 주석화 — msn은 모든 맥락에서 재호스팅 집계자이며 시뮬 손해 0으로 검증됨.
+- **E — 뉴스 아웃렛 site: 검색 태스크 (backend-tasks.ts + all.ts)**: `pickNewsOutlet()`
+  순수 함수 — subject(금융/기술/일반) + 언어(ja/ko/zh 로컬 아웃렛 우선) 그룹에서 FNV-1a
+  해시로 결정적 로테이션(1쿼리당 1개 아웃렛, 공유 Google News RSS 예산). `buildNewsOutletTask()`
+  — `site:<outlet> <query>` 구글 뉴스 RSS, maxResults 4 (커버리지 패치). all.ts 뉴스 브랜치에
+  연결. **버그 발견·수정**: FNV-1a의 `Math.imul`이 **부호 있는 32비트 정수**를 반환해
+  `hash % n`이 음수 인덱스 → `group[-1]` undefined (CJK 쿼리에서 실발동 — 단위 테스트로
+  포착, `>>> 0`으로 수정). 시뮬레이션(sim-news-outlet.ts): rank-2 삽입 기준 **Δ+16.78 누적
+  (93건)** — 최대 상한이며 실측은 eval:median 재실행 필요.
+- **G — academic 태그 0.1414 근본 원인 (probe-academic-backends.ts 저장 run 실측)**:
+  ① **arxiv 미발동은 라우팅이 아니라 팬아웃 ceiling 경쟁** — arxiv는 26/26 gold 1순위
+  도메인이고 발동 시 goldHit 100%지만, XML 엔드포인트가 450ms~2.9s (평가식 연속 로드 실측
+  2865ms)라 **fanout의 2500ms 타이머가 응답 전에 task를 rejected 처리 → 2/3 run에서 결과
+  폐기** (en-acad-06~17 + ds-11 해당 run NDCG 0.000). `BACKEND_TIMEOUT_MS['arxiv'] = 2500 →
+  4500` + waitFor 기존 배선이 실제로 동작 (wikipedia/yahoo-finance와 동일 패턴). ceiling을
+  테스트에서 단언 (≥4000ms).
+  ② **google-scholar는 파서 버그가 아니라 Google 봇 차단** — 라이브 실측: scholar.google.com이
+  모바일/데스크톱 UA 모두 **200 + captcha/anomaly 페이지**(결과 블록 0개) 반환 → `scholar=N`
+  78/78 run. `searchGoogleScholar`에 captcha/recaptcha/unusual-traffic 페이지 fail-fast 추가
+  (빈 배열 + 로그, 2000ms ceiling 낭비 방지). **scholar.google.com 단독 gold는 0건** — 전부
+  arxiv.org와 공존하므로 G①으로 커버. OpenAlex는 주석만 있고 미구현 (향후 키리스 학술 백엔드
+  후보).
+- **테스트**: fanout.test.ts +1 (arxiv ceiling ≥4000ms + 3s slow task가 waitFor로 회수),
+  google-scholar.test.ts 신규 4건 (captcha 2경로, 정상 페이지 파싱, 비-ok), news-outlet-task
+  (이전 턴 43건 — determinism/로테이션/ja·ko·zh 언어 그룹 포함). 유닛 전체 **1,709건 통과
+  (91파일)**, typecheck 0, ESLint 0, format 0
+- **효과**: F는 0 손해로 뉴스 풀 순위 개선, E는 뉴스 커버리지 갭 93건에 site: 레버 (시뮬
+  +16.78 상한), G는 academic gold drop의 지배 원인(arxiv ceiling) 제거 — **다음 eval:median
+  재실행에서 academic 태그와 en-acad-06~17/ds-11 회복 실측이 관문**
+- **실측 확정 (eval:median:save 2026-08-11T00:49Z, run-1..3 + latest.json 갱신)**:
+  ① **academic 태그 NDCG@10 0.1414 → 0.2849 (+0.1435, 2배 회복)** — zero 16건 → 5건.
+  probe-academic-backends.ts 재실행: arxiv 미발동 65→42, gold 미회수 44→21. **en-acad-01/04/05/
+  06/07이 3/3 run 0.469 안정** (이전 0/3 run NDCG 0.000), ds-01 0.617, ds-11 0/3→2/3 run
+  0.613, en-acad-02/03 0.296. G①(arxiv ceiling)이 의도대로 발동 — 발동 시 goldHit 100% 계약
+  유지. ② **전체 NDCG@10 0.2813 → 0.2797 (Δ-0.0016, 노이즈 범위)** — MRR +0.0055,
+  P@10 +0.0143, p50 857→843ms, p95 3503ms 동일. ③ 회귀 게이트 경고(157건, baseline 비교)는
+  S37 loss 리포트 경고(weighted 10.090 > 5)와 함께 **wikipedia 429 가용성 노이즈로 판별** —
+  대형 하락 쿼리(lt-06/13, en-tech-13, zh-general-01, ja-fact-11, en-fact-29 등) 전수 확인:
+  wikipedia 429 창에서 backend/폴백이 run 간 갈림 (run 1 wikipedia→0.469, run 2/3
+  dbpedia 폴백→0.000 등 — S95 변경 쿼리 아님). ④ en-news-11(0.469→0.000)은 E 회귀가 아닌
+  **뉴스 피드 run 간 변동** — news-outlet 태스크는 발동(backends에 news-outlet 포함)했지만
+  site:techcrunch 결과가 run 2/3 풀 상위에 안 든 것 (run 1은 techcrunch 1위로 0.469).
+- **잔여**: ① 잔여 zero 5건(ds-07/08/10/13/15)은 **arxiv 미배선 라우팅 갭** — ds-* 쿼리가
+  detectQueryType에서 general로 분류되어 arxiv 태스크가 애초에 생성되지 않음 (E/G와 무관한
+  별개 문제 — S87 ②의 "ds-* → general" 그대로) ② E(뉴스 아웃렛 site:)의 개별 쿼리 효과는
+  피드 run 변동이 커 실측 승인 보류 — site: 결과가 풀에 들어온 run(예: en-news-11 run 1)은
+  회수 확인 ③ OpenAlex 학술 백엔드 구현 후보 ④ scholar.google.com IP 차단 지속 — gold
+  매칭 arxiv 중심 유지 ⑤ 전체 NDCG 0.2797은 wikipedia 429 창의 영향 — 다음 eval은 손실
+  리포트와 함께 해석
+
+### S96: OpenAlex 키리스 학술 백엔드 구현 — captcha-dead google-scholar 대체 (2026-08-11)
+
+- **요청**: scholar.google.com이 IP 차단(캡차)으로 78/78 run dead인 상황에서, 키리스
+  OpenAlex API 기반 학술 백엔드를 구현하고 gold 도메인 매칭을 테스트.
+- **구현 (src/lib/openalex.ts 신규, ~200줄)**:
+  - `openalexSearch()` — `GET api.openalex.org/works?search=Q&per-page=N`, 키리스·ToS-safe.
+    fetchWithTimeout(6s) + rate-limiter/회로차단기 경유(기존 백엔드 공통 경로). 비-200/429/
+    malformed/fetch 예외 전부 `[]` 반환(팬아웃 우아한 저하). `select=` 필드로 응답 축소.
+  - `pickWorkUrl()` — **골드 도메인 우선 URL 선택** 순수 함수. 후보 = primary → best_oa →
+    doi → ids.paperswithcode → ids.semantic_scholar (openalex.org/api.* 제외, dedup, http→https).
+    `preferredDomains` 순위로 후보를 재랭크 — **arxiv best-oa가 doi.org primary를 이김**
+    (후보 순서가 아니라 선호 순위 기준). 매칭은 eval label-suffix 규칙과 동일
+    (D===G || D.endsWith('.'+G)) — `ieeexplore.ieee.org`→gold `ieee.org`,
+    `api.semanticscholar.org`→`semanticscholar.org` 동작.
+  - `ACADEMIC_PREFERRED_DOMAINS` — arxiv.org > openreview.net > aclanthology.org > jmlr.org >
+    nature.com > ieeexplore.ieee.org > acm.org > semanticscholar.org > paperswithcode.com >
+    doi.org (gold 빈도 + 가독성 순).
+  - `openAlexWorkToResult()` — title/url/domain/content(저자·venue·연도)/published_date/author
+    + computeScore+0.12(arxiv와 동일한 학술 authority 부스트).
+- **배선**: `useGoogleScholar` → **`useOpenAlex`** (specialized.ts getSourcesForQueryType),
+  `buildGoogleScholarTask` → `buildOpenAlexTask` (backend-tasks.ts), AcademicStrategy(명시적
+  focus=academic)에도 추가, fanout ceiling `openalex: 4500` (arxiv/wikipedia 패턴). **삭제**:
+  `src/lib/google-scholar.ts` + `google-scholar.test.ts` (S95 G-② captcha fail-fast는
+  OpenAlex 교체로 무의미 — git 이력에 보존, S96에서 대체 선언).
+- **테스트 (tests/unit/openalex.test.ts 신규 18건)**: pickWorkUrl — openreview 우선/arxiv
+  best-oa 우선/primary 폴백/doi 폴백/openalex.org 제외/dedup/label-suffix(ieee, s2)/null.
+  openAlexWorkToResult 매핑. openalexSearch(fetch mock) — gold 셋 label-suffix 히트
+  (openreview/aclanthology/nature/jmlr), maxResults, 500/429/malformed/throw → `[]`.
+- **라이브 실측 (scripts/probe-openalex.ts 신규, `probe:openalex` npm 등록)**:
+  학술 eval 쿼리 6건 전부 **goldHit 6/6** — arxiv.org 랜딩(primary/best_oa) 회수.
+  arxivSearch와 **중복 회수 경로**가 되어 arxiv 팬아웃 drop 시 대체 gold 공급.
+- **게이트**: 유닛 **1,723건**(+18) · tsc 0 · eslint 0 · format 0.
+- **잔여**: ① gold `scholar.google.com`(7쿼리)은 OpenAlex로 미회수 — 전부 arxiv.org와 공존
+  하므로 커버리지 무영향 ② ds-07/08/10/13/15 zero 5건의 general 분류 갭(S95 잔여 ①)은
+  여전 — OpenAlex도 arxiv 미발동 쿼리엔 무효 ③ 실측 NDCG 반영은 다음 eval:median 필요.

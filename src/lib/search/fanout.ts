@@ -48,7 +48,8 @@ const PHASES = [
 // silently dropped the quote whenever the v1-search + v8-chart chain needed a
 // retry — the en-stock-06 "0.000" availability noise. 4.5s + waitFor lets the
 // retry chain finish inside the fanout window.
-const BACKEND_TIMEOUT_MS: Record<string, number> = {
+/** Per-backend max wait (ms). Exported for tests (P1-G ceiling assertions). */
+export const BACKEND_TIMEOUT_MS: Record<string, number> = {
   'self-index': 2500,
   bing: 2000,
   'bing-news': 2000,
@@ -74,8 +75,22 @@ const BACKEND_TIMEOUT_MS: Record<string, number> = {
   github: 2000,
   hackernews: 1800,
   reddit: 2000,
-  arxiv: 2500,
-  'google-scholar': 2000,
+  // P1-G (2026-08-10): arxiv's Atom XML endpoint is variable (450ms–2.9s
+  // measured under eval-style sequential load — one probe hit 2865ms) and the
+  // OLD 2500ms ceiling fired the per-backend timer before the response
+  // arrived, marking the task rejected and silently dropping arxiv.org gold
+  // (academic tag: arxiv absent in 2/3 median runs, en-acad-06..17 + ds-11
+  // all NDCG 0.000 on those runs; when arxiv DID fire, goldHit was 100%).
+  // Same pattern as wikipedia/yahoo-finance — slow authoritative backend +
+  // waitFor already in orchestrator.ts. 4500ms lets the XML round-trip finish.
+  arxiv: 4500,
+  // S96: OpenAlex works API (keyless academic backend, replaces the captcha-
+  // dead google-scholar scraper). JSON endpoint is usually fast (~200ms–1s)
+  // but can stretch under eval-style sequential load; same slow-authoritative-
+  // backend pattern as arxiv/wikipedia. 4500ms keeps the round-trip inside the
+  // fanout window so openreview/aclanthology/jmlr landing pages are not
+  // dropped by the per-backend timer.
+  openalex: 4500,
   searxng: 3000,
   duckduckgo: 2000,
   brave: 2000,

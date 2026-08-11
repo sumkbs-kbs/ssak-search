@@ -96,7 +96,7 @@
 | 백엔드 | 파일 | 소스 | 특징 |
 |--------|------|------|------|
 | **Free Image Search** | `src/lib/free-image-search.ts` | Flickr + Unsplash + Bing | 멀티소스 이미지 검색 |
-| **Google Scholar** | `src/lib/google-scholar.ts` | Google Scholar | 논문 검색, 인용 카운트 |
+| **OpenAlex** | `src/lib/openalex.ts` | OpenAlex API | 키리스 학술 논문 검색 (S96 — captcha-dead Google Scholar 대체) |
 | **SearXNG** | `src/lib/searxng-search.ts` | SearXNG | 자체 호스팅 검색 |
 | **Yahoo Finance** | `src/lib/yahoo-finance-search.ts` | Yahoo Finance | 실시간 주가, 뉴스, 차트 |
 | **YouTube** | `src/lib/youtube-search.ts` | YouTube | 동영상 검색 + 트랜스크립트 |

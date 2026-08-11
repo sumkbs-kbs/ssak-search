@@ -514,6 +514,57 @@ describe('ranking — query-context-aware domain authority (S2/S3)', () => {
     expect(b.score).toBeGreaterThan(c.score)
   })
 
+  it('S95: msn.com syndication items are demoted below real outlet articles', () => {
+    // P1 diagnosis: msn.com re-hosts outlet articles with MSN transport URLs,
+    // saturating news pools (100/109 news-gold queries) and burying the gold
+    // OUTLET domain. sim-msn-penalty.ts (-0.2): full Δ+0.0002, affected-query
+    // Δ+0.0136, ZERO losses across 9 affected queries. Identical text — the
+    // only difference is the -0.20 LOW_QUALITY demotion on the msn URL host.
+    const ctx = makeCtx({ korean: false, chinese: false, isNews: true, query: 'EU AI regulation 2025' })
+    const msn = makeResult(
+      'https://www.msn.com/en-us/money/eu-ai-regulation',
+      'EU AI regulation 2025 — MSN coverage',
+      'EU AI regulation 2025: aggregated coverage from various outlets.',
+    )
+    const outlet = makeResult(
+      'https://www.reuters.com/technology/eu-ai-act',
+      'EU AI regulation 2025 — Reuters',
+      'EU AI regulation 2025: European Union reaches agreement.',
+    )
+
+    const both = recomputeScores([msn, outlet], ctx)
+    const msnRanked = both.find((r) => r.url === msn.url)
+    const outletRanked = both.find((r) => r.url === outlet.url)
+    if (!msnRanked || !outletRanked) throw new Error('ranked msn/outlet missing')
+
+    expect(outletRanked.score).toBeGreaterThan(msnRanked.score)
+    expect(msnRanked.score).toBeLessThan(0.9)
+  })
+
+  it('S95: msn.com penalty is not gated to news context (global syndication demotion)', () => {
+    // msn.com syndication floods GENERAL pools too (en-general-05 msn=1 in the
+    // sim). LOW_QUALITY_DOMAINS is context-free by design, so the demotion
+    // must apply in non-news contexts as well — identical text, msn loses.
+    const ctx = makeCtx({ korean: false, chinese: false, isNews: false, query: 'electric vehicle market' })
+    const msn = makeResult(
+      'https://www.msn.com/en-us/autos/ev-market',
+      'Electric vehicle market growth trends',
+      'Electric vehicle market growth trends and forecasts.',
+    )
+    const plain = makeResult(
+      'https://example.com/ev-market',
+      'Electric vehicle market growth trends',
+      'Electric vehicle market growth trends and forecasts.',
+    )
+
+    const both = recomputeScores([msn, plain], ctx)
+    const msnRanked = both.find((r) => r.url === msn.url)
+    const plainRanked = both.find((r) => r.url === plain.url)
+    if (!msnRanked || !plainRanked) throw new Error('ranked msn/plain missing')
+
+    expect(plainRanked.score).toBeGreaterThan(msnRanked.score)
+  })
+
   it('S20: capSourceResults keeps at most max results from one source', () => {
     const hn1 = makeResult('https://news.ycombinator.com/item?id=1', 'story 1', 'x')
     const hn2 = makeResult('https://news.ycombinator.com/item?id=2', 'story 2', 'x')

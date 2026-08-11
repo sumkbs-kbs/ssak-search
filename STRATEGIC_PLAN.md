@@ -3002,3 +3002,30 @@
 - **잔여**: ① 실측 NDCG 반영은 다음 eval:median 필요 (academic 라우팅 +30쿼리, arxiv/
   openalex 태스크 신규 배선 — en-acad 계열과 동일한 +0.1435급 회복 기대) ② 기존 academic
   쿼리 24건은 변경 없음(회귀 리스크 최소).
+
+### S98: 학술 전략 + 영어 Stack Exchange 태스크 — 저장 풀 시뮬레이션 평가 (2026-08-11)
+
+- **요청**: academic 라우팅이 github-issues/stackexchange를 쓰지 않아, ds-08(빌드·사용법
+  의도)처럼 실사용에서 커뮤니티 답변이 필요한 혼합 쿼리를 위해 학술 전략에 영어 SO 태스크
+  추가 방안을 저장 풀 시뮬레이션으로 평가.
+- **시뮬레이션 (scripts/sim-academic-stackexchange.ts 신규, `sim:academic-so` 등록)**:
+  저장 풀(run-1..3)에 "stackoverflow.com 결과 1건이 rank R 진입"을 삽입, S54 실시간
+  computeNdcg로 Δ 측정. **SO-gold academic 쿼리는 30건 중 en-tech-40 1건뿐** (전체
+  SO-gold 54건 중 49건은 이미 technical 전략이 SO 태스크 보유, KR은 언어 게이트 제외).
+- **결과 — en-tech-40 'machine learning model deployment' (NDCG 0.000, 3 run 전수)**:
+  - gold 9도메인(github/stackoverflow/MDN/dev.to/medium/freecodecamp/digitalocean/
+    mlflow/tensorflow) — **풀에 gold 0건**: arxiv×8 + wikipedia×2 도배 (arxiv 80% 점유).
+  - SO rank 1/2/3 삽입 Δ: **+0.2350 / +0.1483 / +0.1175** — 합산(rank 2 보수) +0.1483.
+- **부수 발견 — arxiv 플러드가 근본 원인**: academic 쿼리 30건 중 **17건이 arxiv ≥50%
+  점유** (en-acad 80%대 다수). 'machine learning' 어휘가 isAcademicSignal을 쳐서
+  deployment/usage 의도 쿼리(en-tech-40)가 academic으로 잘못 라우팅 — SO 태스크 추가는
+  gold 1개만 살리지만, **technical 재라우팅은 gold 9개 전부**(github/SO/MDN/dev.to/
+  mlflow/tensorflow — 전부 technical 전략 태스크 도메인)를 회수 가능.
+- **판정**: ① SO 태스크 추가는 eval 가치 제한적(Δ+0.1483, 1/500쿼리)이나 실사용 커뮤니티
+  가치 있음 — SO 쿼터(300/day) 부담도 작음(academic 30/500쿼리). ② **더 강한 레버는
+  deployment/usage 의도 가드** — ML 어휘 + deployment/usage 어휘 동시 시 technical
+  라우팅 (S22 problem-intent 패턴과 동형). ③ 실행은 ② 우선, ①은 ②로 흡수되는지 확인 후
+  결정.
+- **잔여**: ① en-tech-40 technical 재라우팅의 실측 Δ는 저장 풀에 technical 풀이 없어
+  시뮬 불가 — 라이브 검증 필요 ② 실사용 관점의 ds-08류(빌드·사용법)도 ②의 usage 가드로
+  기술 라우팅될 가능성 — 어휘 스코프 정밀화 필요.

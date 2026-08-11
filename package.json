@@ -58,6 +58,7 @@
     "eval:zero": "npx tsx scripts/probe-p1-zero.ts",
     "probe:academic": "npx tsx scripts/probe-academic-backends.ts",
     "probe:ds": "npx tsx scripts/probe-ds-routing.ts",
+    "sim:academic-so": "npx tsx scripts/sim-academic-stackexchange.ts",
     "probe:ds-vocab": "npx tsx scripts/probe-ds-vocab.ts",
     "probe:openalex": "npx tsx scripts/probe-openalex.ts",
     "eval:s95delta": "npx tsx scripts/probe-s95-delta.ts",

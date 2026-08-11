@@ -165,6 +165,30 @@ describe('detectQueryType', () => {
     expect(detectQueryType('GPT-4 architecture paper')).toBe('academic')
   })
 
+  it('detects IR/data-science queries as academic (S97 — ds-03/06/07/08/10/13/15 fix)', () => {
+    // Each carries arxiv.org gold but used to classify 'general'/'technical',
+    // so the arxiv/openalex tasks were never created (NDCG 0.000 — S95/S96
+    // residual). See the collision probe (scripts/probe-ds-vocab.ts): every
+    // term hits ONLY ds-*/academic queries.
+    expect(detectQueryType('RAG retrieval augmented generation architecture')).toBe('academic')
+    expect(detectQueryType('semantic search ranking techniques')).toBe('academic')
+    expect(detectQueryType('hybrid search BM25 vector')).toBe('academic')
+    expect(detectQueryType('reranking models cross-encoder')).toBe('academic')
+    expect(detectQueryType('search relevance evaluation offline')).toBe('academic')
+    expect(detectQueryType('knowledge graph construction pipeline')).toBe('academic')
+    expect(detectQueryType('personalized search ranking')).toBe('academic')
+  })
+
+  it('does NOT flip technical vector/pipeline queries to academic (S97 guards)', () => {
+    // Bare 'vector'/'ranking'/'pipeline' are deliberately NOT in the DS signal:
+    // these must keep their technical/general routing.
+    expect(detectQueryType('pgvector vs Pinecone vector database')).toBe('technical')
+    expect(detectQueryType('vector database similarity search')).toBe('technical')
+    expect(detectQueryType('CI/CD pipeline GitHub Actions')).toBe('technical')
+    expect(detectQueryType('CI/CD pipeline best practices')).toBe('general')
+    expect(detectQueryType('BERT vs GPT comparison')).toBe('general')
+  })
+
   it('detects short question forms as factual before technical keywords (gk-04 fix)', () => {
     expect(detectQueryType('what is serverless architecture')).toBe('factual')
     expect(detectQueryType('what is a CDN')).toBe('factual')

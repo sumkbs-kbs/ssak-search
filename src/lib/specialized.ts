@@ -1719,6 +1719,24 @@ export function detectQueryType(
       query,
     )
 
+  // S97: IR/data-science ML vocabulary. ds-07/08/10/13/15 ('hybrid search BM25
+  // vector', 'reranking models cross-encoder', 'search relevance evaluation
+  // offline', 'knowledge graph construction pipeline', 'personalized search
+  // ranking') — plus ds-03/06 — carry arxiv.org gold but fell through to
+  // 'general' (ds-03: 'technical') because none of the vocab above matched, so
+  // the arxiv/openalex tasks were never created (NDCG 0.000, S95/S96 residual).
+  // Each term is scoped by a full 500-query collision probe (probe-ds-vocab.ts):
+  // it hits ONLY ds-*/academic queries. BARE 'vector'/'ranking'/'pipeline' are
+  // deliberately EXCLUDED — they would flip 'pgvector vs Pinecone vector
+  // database' (lt-08) and 'CI/CD pipeline best practices' (en-tech-45) to
+  // academic and drop their technical backends. 'retrieval augmented' flips
+  // ds-03 ('RAG retrieval augmented generation architecture', arxiv gold) from
+  // technical to academic — a fix, since en-acad-10 is already academic.
+  const isDsAcademicSignal =
+    /\b(embedding|embeddings|semantic\s+search|hybrid\s+search|bm25|rerank(?:ing)?|cross-encoder|knowledge\s+graph|search\s+ranking|search\s+relevance|personalized\s+search|offline\s+evaluation|retrieval\s+augmented)\b/i.test(
+      query,
+    )
+
   // Pure question forms ('what is X', 'how does X work') are factual lookups
   // even when X contains a technology keyword — 'what is serverless
   // architecture' used to hit the technical branch (serverless) and drop
@@ -1743,7 +1761,7 @@ export function detectQueryType(
       query,
     )
 
-  if (isAcademicSignal) {
+  if (isAcademicSignal || isDsAcademicSignal) {
     return 'academic'
   }
 

@@ -2972,3 +2972,33 @@
 - **잔여**: ① gold `scholar.google.com`(7쿼리)은 OpenAlex로 미회수 — 전부 arxiv.org와 공존
   하므로 커버리지 무영향 ② ds-07/08/10/13/15 zero 5건의 general 분류 갭(S95 잔여 ①)은
   여전 — OpenAlex도 arxiv 미발동 쿼리엔 무효 ③ 실측 NDCG 반영은 다음 eval:median 필요.
+
+### S97: ds-* 라우팅 갭 해결 — IR/데이터사이언스 어휘 isAcademicSignal 추가 (2026-08-11)
+
+- **요청**: 잔여 zero 5건(ds-07/08/10/13/15 — weaviate/opensearch/huggingface/neo4j/
+  dl.acm gold)이 detectQueryType에서 general로 분류되어 arxiv가 미배선되는 문제를
+  진단하고, 데이터 사이언스 어휘(embedding/vector database/retrieval 등)를 isAcademicSignal에
+  추가해 기술+학술 혼합 라우팅을 구현.
+- **진단 (probe-ds-routing.ts / probe-ds-vocab.ts 신규, `probe:ds`·`probe:ds-vocab` 등록)**:
+  gold 실측으로 **6건**(사용자 지정 5건 + ds-06 'semantic search ranking techniques' 동일 갭)
+  확인 — 전부 arxiv.org gold + general 분류. ds-03 'RAG retrieval augmented generation
+  architecture'는 arxiv gold인데 **technical** 분류로 동일하게 미배선. 후보 어휘를 500쿼리
+  전체에서 전수 충돌 스캔.
+- **구현 (specialized.ts)**: `isDsAcademicSignal` 신규 — `embedding(s)`, `semantic search`,
+  `hybrid search`, `bm25`, `rerank(ing)`, `cross-encoder`, `knowledge graph`,
+  `search ranking`, `search relevance`, `personalized search`, `offline evaluation`,
+  `retrieval augmented`. `isAcademicSignal || isDsAcademicSignal` → 'academic' (hasTech보다
+  우선 — ds-01 패턴과 동일).
+- **충돌 스캔 기반 제외 (핵심)**: **bare 'vector'/'ranking'/'pipeline'은 의도적으로 미포함** —
+  포함 시 'pgvector vs Pinecone vector database'(lt-08)와 'CI/CD pipeline best
+  practices'(en-tech-45)가 academic으로 뒤집혀 technical 백엔드(github-issues/
+  stackexchange)를 잃음. probe-ds-vocab.ts가 각 어휘가 **ds-*/academic 쿼리만** hit함을
+  증명. `retrieval augmented`는 ds-03을 technical→academic으로 **수정** (en-acad-10은 이미
+  academic — 충돌 없음).
+- **테스트 (specialized.test.ts +2건, 135건)**: ds-* 7건 전부 academic + 가드 5건
+  (lt-08/ds-02/en-tech-10 → technical, en-tech-45/xl-01 → general) 고정. 전체 500쿼리
+  재스캔: UNEXPECTED academic **0건** — 의도된 6건만 변경.
+- **게이트**: 유닛 **1,725건** · tsc 0 · eslint 0 · format 0.
+- **잔여**: ① 실측 NDCG 반영은 다음 eval:median 필요 (academic 라우팅 +30쿼리, arxiv/
+  openalex 태스크 신규 배선 — en-acad 계열과 동일한 +0.1435급 회복 기대) ② 기존 academic
+  쿼리 24건은 변경 없음(회귀 리스크 최소).

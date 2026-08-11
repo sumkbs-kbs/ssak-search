@@ -3076,6 +3076,77 @@
   (stack-exchange.ts 로그+스킵)로 보호 ② 실측 NDCG는 다음 eval:median (en-acad/ds 풀에
   SO 결과 추가가 arxiv gold를 밀어내지 않는지 확인 필요 — 도메인 캡·랭킹 authority로
   보호됨).
+
+### S101: S99+S100 포함 eval:median:save 실측 (2026-08-11T08:56Z)
+
+- **요청**: S99(라우팅 가드) + S100(academic SO 태스크) 포함 상태에서 eval:median:save
+  (~60분) 실행 — en-tech-40 회복과 academic/ds 태그 유지·개선을 latest.json에 기록.
+- **실행**: 데몬 --runs 3 --json --save (07:53Z 시작 → 08:56Z 완료). latest.json/
+  run-1..3/baselines 갱신.
+- **전체**: **NDCG@10 0.2797 → 0.2892 (+0.0095)** · MRR 0.5059→0.5273 · P@10 0.3008→0.3272
+  · p50 843→837ms · p95 3503ms 동일.
+- **태그 (S54 실시간 재계산, 쿼리별 median)**:
+  - **academic 0.2849 → 0.4067 (+0.1218)** — en-acad 회복 유지 + ds-* 신규 회수
+  - **en-tech-40: 0.000 → 0.3526** (0.24/0.35/0.35) — gold github+medium 회수
+  - **ds-01 0.6173, ds-03 0.4693, ds-06 0.4693, ds-08 0.4693, ds-10 0.6131,
+    ds-13 0.6131, ds-15 0.6131** — S97 대상 전부 0.000에서 회복, ds-07 0.1672
+    (weaviate/opensearch bing 커버리지 부분)
+- **제약 발견 — SO 쿼터 바닥**: eval 중 **"Stack Exchange API quota floor reached —
+  skipping" 356회** — 300/day/IP 키리스 쿼터가 S100의 SO 태스크(500×3 쿼리)를 중반부터
+  막아 stackoverflow.com gold가 en-tech-40 풀에서 누락 (github/medium만 회수).
+  S100 이점이 eval에서 쿼터로 부분 무효화됨.
+
+### S102: en-tech-40 라이브 풀 실측 — technical 라우팅 + SO 태스크 검증 (2026-08-11)
+
+- **요청**: en-tech-40이 technical 라우팅 + SO 태스크로 실제 풀에 stackoverflow.com이
+  들어오는지 라이브 검색으로 확인하고 github/SO/MDN gold 회복 폭 정량화.
+- **라이브 실측 (scripts/probe-en-tech-40-live.ts 신규, `probe:en-tech-40` 등록)**:
+  오케스트레이터 executeSearch 라이브 호출(env 없음) 4회.
+  - **stackExchangeSearch 단독: stackoverflow.com 5건 반환** — 백엔드 정상 동작 확인.
+  - **풀 진입: 4회 중 1회 stackoverflow.com 포함** ("Trying to Create a Virtual
+    Machine Deployment in Azure..." — NDCG 0.3100). 나머지 run은 bing/DDG/HN
+    피드 노이즈가 10슬롯을 차지해 SO가 top-10 밖 (NDCG 0.074~0.146, github만).
+  - **github.com: 전 run gold 히트** (HN/github 태스크), **medium.com: 일부 run**.
+  - **developer.mozilla.org: 미회수** — ddg-site-mdn이 doc-regex 게이트(docs/reference/
+    guide/tutorial/how-to)라 'deployment'엔 미발동. en-tech-40 MDN gold는 현 게이트로
+    회수 불가 (별도 레버 필요).
+- **종합 회복 (S95 → S101 eval → 라이브)**:
+  | 시점 | NDCG | gold 히트 |
+  |---|---|---|
+  | S95 (arxiv 플러드) | 0.000 | 0건 |
+  | S101 eval (SO 쿼터 소진) | 0.3526 | github, medium |
+  | 라이브 (쿼터 여유, SO 진입 run) | 0.3100 | github, medium, **stackoverflow** |
+- **판정**: ① S99 라우팅 + S100 SO 태스크가 SO gold 진입 경로를 확보 (라이브 확정) —
+  eval에서 빠진 건 쿼터 바닥이지 라우팅 문제 아님 ② **SO 쿼터(300/day)가 S100의 실효
+  상한** — eval 500×3 규모에선 SO 이점이 제한적. 다음 레버: SO 쿼터를 아끼는 게이트
+  (maxResults 축소·쿼리별 1회) 또는 동일 gold 도메인 대체 백엔드 ③ MDN gold는 doc 게이트
+  확장이 필요.
+- **잔여**: ① SO 쿼터 예산 관리 (eval 도중 소진 방지) ② MDN 회수 레버 ③ p95 3503ms
+  (wikipedia 429 창) 유지 — 노이즈 성격.
+
+### S103: academic 풀 SO 삽입 회귀 스캔 — arxiv gold 밀려남 정량화 (2026-08-11)
+
+- **요청**: S100으로 academic 풀에 SO 결과가 추가됐으니, 저장 run에서 en-acad/ds 쿼리 풀의
+  도메인 구성 변화를 시뮬레이션해 arxiv gold가 밀려나는 쿼리가 있는지 회귀 스캔.
+- **스캔 (scripts/sim-academic-so-regression.ts 신규, `sim:academic-so-regression` 등록)**:
+  S101 저장 run(87 풀)에 SO 결과 삽입 시나리오 4종(S1 rank1 / S2 rank2 / S3 rank3 /
+  S8 8건 끝)별 NDCG@10 Δ (S54 실시간 재계산) + arxiv gold top-10 잔존.
+- **결과**:
+  | 시나리오 | median Δ | 하락 | -0.05↑ |
+  |---|---|---|---|
+  | S1 (SO rank 1) | **-0.1252** | 80/87 | 68 |
+  | S2 (SO rank 2) | 0.0000 | 22/87 | 8 |
+  | S3 (SO rank 3) | 0.0000 | 13/87 | 1 |
+  | S8 (SO 8건 끝) | 0.0000 | 0/87 | 0 |
+- **판정**: ① **arxiv gold top-10 이탈 0건** — arxiv 플러드(풀당 8슬롯)가 SO 침입으로부터
+  gold 보존 (recall 안전). ② 실질 피해는 **SO가 rank 1~2로 arxiv 위 진입 시에만** — 권위
+  맵 동일(SO=arxiv=0.1)이라 랭킹은 relevance가 결정, 논문 쿼리에서 SO@1은 비현실적.
+  ③ S8(8건 끝 삽입)은 피해 0 — SO가 rank 10 밖이라 아무것도 밀지 않음. ④ 라이브 SO 진입
+  자체가 드묾(4회 중 1회, S102) + eval 쿼터 스킵(S101) — 실질 회귀 확률 낮음.
+- **권고**: 리스크는 낮지만 제로가 아님 — 저비용 완화로 **academic 라우팅의 stackexchange
+  maxResults 8→4** (SO-gold 커버리지는 유지, 상위 진입 표면 절반 축소). 실측은 다음
+  eval:median.
+- **게이트**: tsc 0 · lint 0 · format 0 (스크립트만 추가, 소스 무변경).
 ### S104: Production-Readiness 마스터 플랜 반영 — Phase 0 구현 + Phase 1~3 갭 매트릭스 (2026-08-11)
 
 사용자 제공 마스터 플랜("기능은 개인용으로, 구조/안정성/확장성은 엔터프라이즈급")을 코드베이스 실측과 대조해 갭을 진단하고 Phase 0(Critical) 3건을 구현했습니다.

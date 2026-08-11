@@ -5,12 +5,14 @@
  * was reported as `down` and flipped the GLOBAL status to `partial_outage` —
  * a false-positive outage for a backend the deployment isn't even using.
  */
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, vi, afterEach } from 'vitest'
 import {
   computeOverallStatus,
   shouldProbeBackend,
   resolveRateLimiterSource,
   buildRateLimiterSourceMetricLines,
+  buildLightHealthData,
+  healthRoute,
 } from '../../src/routes/health'
 import type { AppBindings } from '../../src/types'
 
@@ -126,5 +128,75 @@ describe('shouldProbeBackend', () => {
 
   it('probes brave when BRAVE_API_KEY is configured', () => {
     expect(shouldProbeBackend('brave', env({ BRAVE_API_KEY: 'test-key' }))).toBe(true)
+  })
+})
+
+describe('buildLightHealthData (P0-1 zero-subrequest liveness)', () => {
+  afterEach(() => vi.restoreAllMocks())
+
+  it('performs ZERO network fetches — a fetch stub that throws on call proves it', async () => {
+    const fetchSpy = vi.fn().mockImplementation(() => {
+      throw new Error('network call in light mode! (P0-1 regression)')
+    })
+    vi.stubGlobal('fetch', fetchSpy)
+
+    const data = await buildLightHealthData({} as AppBindings)
+
+    expect(fetchSpy).not.toHaveBeenCalled()
+    expect(data.status).toBe('ok')
+    expect(data.features.rate_limiter_do).toBe(false)
+    expect(data.rate_limiter!.source).toBe('local')
+    expect(data.rate_limiter!.hosts_tracked).toBe(0)
+  })
+
+  it('reports binding presence without probing — workers_ai/self_index/answer', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockImplementation(() => {
+        throw new Error('no network in light mode')
+      }),
+    )
+
+    const data = await buildLightHealthData({
+      AI: {} as AppBindings['AI'],
+      VECTORIZE_INDEX: {} as AppBindings['VECTORIZE_INDEX'],
+      SEARCH_INDEX_DB: {} as AppBindings['SEARCH_INDEX_DB'],
+    } as AppBindings)
+
+    expect(data.backends.workers_ai).toEqual({ status: 'operational', latency_ms: 0 })
+    expect(data.features.answer).toBe(true)
+    expect(data.features.self_index).toBe(true)
+    expect(data.index!.configured).toBe(true)
+    expect(data.index!.total_documents).toBe(0) // corpus query is full-mode only
+  })
+
+  it('GET /api/health returns 200 with zero subrequests by default (light)', async () => {
+    const fetchSpy = vi.fn().mockImplementation(() => {
+      throw new Error('network call in default health! (P0-1 regression)')
+    })
+    vi.stubGlobal('fetch', fetchSpy)
+
+    const res = await healthRoute.request('/', {}, {} as AppBindings)
+    const body = (await res.json()) as { status: string; cached?: boolean; rate_limiter: { source: string } }
+
+    expect(res.status).toBe(200)
+    expect(fetchSpy).not.toHaveBeenCalled()
+    expect(body.status).toBe('ok')
+    expect(body.cached).toBeUndefined() // light mode is always fresh — never the 30s probe cache
+    expect(body.rate_limiter.source).toBe('local')
+  })
+
+  it('explicit depth=light behaves identically to the default', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockImplementation(() => {
+        throw new Error('no network in light mode')
+      }),
+    )
+
+    const res = await healthRoute.request('/?depth=light', {}, {} as AppBindings)
+    expect(res.status).toBe(200)
+    const body = (await res.json()) as { features: Record<string, boolean> }
+    expect(body.features.search).toBe(true)
   })
 })

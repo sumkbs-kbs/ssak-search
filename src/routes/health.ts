@@ -1,8 +1,16 @@
 /**
  * API Routes: /api/health and /api/metrics
  *
- * /api/health — Live backend probing + circuit breaker status (cached 30s)
+ * /api/health — Liveness by default (zero subrequests), deep probes opt-in
  * /api/metrics — Prometheus-format metrics for monitoring
+ *
+ * P0-1 (production-readiness): /api/health must NEVER burn the free-tier
+ * subrequest quota. Default `depth=light` performs zero outbound fetches —
+ * status/backends come from the circuit-breaker state (in-memory or DO), the
+ * index section from binding presence only. Deep probes (live backend fetches
+ * + D1 corpus stats + Slack alerts, cached 30s) are opt-in via `depth=full`
+ * for operators / verify-do-binding.sh. The scheduled /api/monitor endpoint
+ * remains the deep SLO/alert source (success-rate based, zero probes).
  *
  * Two separate Hono apps so they can be mounted at distinct top-level paths
  * (/api/health and /api/metrics) without route-shadowing each other.
@@ -29,6 +37,11 @@ interface HealthData {
   features: Record<string, boolean>
   auth_required: boolean
   index?: IndexHealthInfo
+  rate_limiter?: {
+    mode: 'durable_object' | 'in_memory_fallback'
+    source: 'local' | 'durable'
+    hosts_tracked: number
+  }
 }
 
 /** Index layer observability — surfaces Vectorize/D1 binding + corpus status. */
@@ -115,6 +128,73 @@ export function buildRateLimiterSourceMetricLines(source: 'local' | 'durable'): 
     '# TYPE search_rate_limiter_source gauge',
     `search_rate_limiter_source{source="${source}"} 1`,
   ]
+}
+
+/**
+ * P0-1: zero-subrequest liveness payload.
+ *
+ * No network fetches, no D1 queries. Backend status is derived from the
+ * circuit-breaker state (which reflects REAL traffic success rates, unlike
+ * synthetic probes) and the index section reports binding presence only.
+ * Response target: < 50ms. Pure-ish (getBackendHealth is in-memory/DO RPC —
+ * never a fetch) — unit-testable with a fetch stub that throws on call.
+ */
+export async function buildLightHealthData(env: AppBindings): Promise<HealthData> {
+  const circuitHealth = await getBackendHealth(env)
+
+  const backends: Record<string, unknown> = {}
+  const probedStatuses: Array<{ status: 'operational' | 'degraded' | 'down' }> = []
+
+  for (const [host, state] of Object.entries(circuitHealth)) {
+    const status: 'operational' | 'degraded' | 'down' =
+      state.status === 'healthy' ? 'operational' : state.status === 'degraded' ? 'degraded' : 'down'
+    backends[host] = { status, circuit: state }
+    probedStatuses.push({ status })
+  }
+
+  // Workers AI availability — binding presence check only (no probe).
+  backends.workers_ai = {
+    status: env.AI ? 'operational' : 'disabled',
+    latency_ms: 0,
+  }
+
+  const status = computeOverallStatus(probedStatuses)
+  const rateLimiterSource = resolveRateLimiterSource(circuitHealth, !!env.RATE_LIMITER)
+
+  return {
+    status,
+    version: '2.0.0',
+    timestamp: new Date().toISOString(),
+    backends,
+    features: {
+      search: true,
+      extract: true,
+      answer: !!env.AI,
+      news: true,
+      multilingual: true,
+      korean_optimized: true,
+      caching: true,
+      rate_limiting: true,
+      rate_limiter_do: !!env.RATE_LIMITER,
+      analytics_engine: !!env.ANALYTICS,
+      // Binding presence only — the D1 corpus query is a full-mode concern.
+      self_index: !!(env.VECTORIZE_INDEX && env.SEARCH_INDEX_DB),
+    },
+    auth_required: !!env.SEARCH_API_KEY,
+    index: {
+      configured: !!(env.VECTORIZE_INDEX && env.SEARCH_INDEX_DB),
+      vectorize_bound: !!env.VECTORIZE_INDEX,
+      d1_bound: !!env.SEARCH_INDEX_DB,
+      total_documents: 0,
+      total_chunks: 0,
+      index_health: 'empty',
+    },
+    rate_limiter: {
+      mode: (env.RATE_LIMITER ? 'durable_object' : 'in_memory_fallback') as 'durable_object' | 'in_memory_fallback',
+      source: rateLimiterSource,
+      hosts_tracked: Object.keys(circuitHealth).length,
+    },
+  }
 }
 
 /**
@@ -246,24 +326,40 @@ export async function probeIndexHealth(env: AppBindings): Promise<IndexHealthInf
   }
 }
 
-// GET /api/health — live status with backend probing (cached 30s)
+// GET /api/health — liveness by default, deep probes opt-in
+//
+// depth=light (default): zero-subrequest payload from circuit state — see
+//   buildLightHealthData. Always fresh (<50ms), never cached.
+// depth=full: live backend probes + D1 corpus stats + Slack alerts, cached 30s.
+//   `full=1` is accepted as an alias for backward compatibility.
 healthRoute.get('/', async (c) => {
-  // Return cached result if fresh enough
+  const depth = c.req.query('depth') ?? (c.req.query('full') === '1' ? 'full' : 'light')
+  if (depth !== 'full') {
+    return c.json(await buildLightHealthData(c.env))
+  }
+
+  // --- Full (deep) mode: live probes, cached 30s ---
   const now = Date.now()
   if (cachedHealth && now - cachedHealth.timestamp < HEALTH_CACHE_TTL) {
     return c.json({ ...cachedHealth.data, cached: true })
   }
+
+  // P0-1: the ONLY quota-burning path in this file — live backend fetches +
+  // D1 corpus stats + Slack alerts. Runs inline here (depth=full opt-in);
+  // S104-③ extracts this into a scheduled-worker-shared probe.
+  const env = c.env
+  const executionCtx = c.executionCtx
 
   // Probe only enabled backends — optional backends without their key
   // (e.g. brave without BRAVE_API_KEY) are reported as `unconfigured` below
   // and excluded from the global status rollup.
   const probeResults = await Promise.all(
     Object.entries(BACKEND_PROBES)
-      .filter(([name]) => shouldProbeBackend(name, c.env))
+      .filter(([name]) => shouldProbeBackend(name, env))
       .map(async ([name, config]) => {
         // Brave requires auth header — use dedicated health check
         if (name === 'brave') {
-          const result = await braveHealthCheck(c.env.BRAVE_API_KEY ?? '')
+          const result = await braveHealthCheck(env.BRAVE_API_KEY ?? '')
           return [name, result] as const
         }
         const result = await probeBackend(name, config)
@@ -274,7 +370,7 @@ healthRoute.get('/', async (c) => {
   const backends: Record<string, unknown> = {}
 
   // Fetch circuit breaker state ONCE (used by the loop AND the rate_limiter field)
-  const circuitHealth = await getBackendHealth(c.env)
+  const circuitHealth = await getBackendHealth(env)
 
   const probedStatuses: Array<{ status: 'operational' | 'degraded' | 'down' }> = []
 
@@ -292,9 +388,11 @@ healthRoute.get('/', async (c) => {
     probedStatuses.push({ status: result.status })
     if (result.status === 'down') {
       // Fire-and-forget Slack alert for backend failures
-      const webhookUrl = c.env.SLACK_WEBHOOK
+      const webhookUrl = env.SLACK_WEBHOOK
       if (webhookUrl) {
-        c.executionCtx.waitUntil(alertBackendDown(webhookUrl, name, result.latency_ms, result.status))
+        const alertPromise = alertBackendDown(webhookUrl, name, result.latency_ms, result.status)
+        if (executionCtx) executionCtx.waitUntil(alertPromise)
+        else void alertPromise.catch(() => {})
       }
     }
   }
@@ -302,7 +400,7 @@ healthRoute.get('/', async (c) => {
   // Surface optional backends that are intentionally not probed (missing key)
   // so operators can still see they exist — without affecting global status.
   for (const [name, isConfigured] of Object.entries(OPTIONAL_BACKENDS)) {
-    if (!isConfigured(c.env) && !(name in backends)) {
+    if (!isConfigured(env) && !(name in backends)) {
       backends[name] = { status: 'unconfigured', latency_ms: 0 }
     }
   }
@@ -312,7 +410,7 @@ healthRoute.get('/', async (c) => {
   // unified with every other backends entry — no probe runs for a binding
   // presence check, so latency_ms stays 0.
   backends.workers_ai = {
-    status: c.env.AI ? 'operational' : 'disabled',
+    status: env.AI ? 'operational' : 'disabled',
     latency_ms: 0,
   }
 
@@ -322,13 +420,13 @@ healthRoute.get('/', async (c) => {
   // Probes binding presence + corpus size. Capped by INDEX_STATS_TIMEOUT_MS.
   // Runs after the parallel backend probe batch so a slow D1 never delays the
   // backend status. Failure is non-fatal — index section degrades gracefully.
-  const indexInfo = await probeIndexHealth(c.env)
+  const indexInfo = await probeIndexHealth(env)
 
   // S88 evidence surfacing: every host in circuitHealth is stamped with its
   // state source ('local' = per-isolate in-memory maps, 'durable' = DO storage).
-  const rateLimiterSource = resolveRateLimiterSource(circuitHealth, !!c.env.RATE_LIMITER)
+  const rateLimiterSource = resolveRateLimiterSource(circuitHealth, !!env.RATE_LIMITER)
 
-  const healthData = {
+  const healthData: HealthData = {
     status,
     version: '2.0.0',
     timestamp: new Date().toISOString(),
@@ -336,20 +434,20 @@ healthRoute.get('/', async (c) => {
     features: {
       search: true,
       extract: true,
-      answer: !!c.env.AI,
+      answer: !!env.AI,
       news: true,
       multilingual: true,
       korean_optimized: true,
       caching: true,
       rate_limiting: true,
-      rate_limiter_do: !!c.env.RATE_LIMITER,
-      analytics_engine: !!c.env.ANALYTICS,
+      rate_limiter_do: !!env.RATE_LIMITER,
+      analytics_engine: !!env.ANALYTICS,
       self_index: indexInfo.configured,
     },
-    auth_required: !!c.env.SEARCH_API_KEY,
+    auth_required: !!env.SEARCH_API_KEY,
     index: indexInfo,
     rate_limiter: {
-      mode: c.env.RATE_LIMITER ? 'durable_object' : 'in_memory_fallback',
+      mode: (env.RATE_LIMITER ? 'durable_object' : 'in_memory_fallback') as 'durable_object' | 'in_memory_fallback',
       // Where the reported hosts_tracked state actually lives:
       // - 'durable': DO storage (cross-isolate, monotonically stable)
       // - 'local': this isolate's in-memory maps only (fluctuates across
@@ -359,7 +457,7 @@ healthRoute.get('/', async (c) => {
     },
   }
 
-  // Cache for 30 seconds
+  // Cache for 30 seconds (consumed by ?depth=full and /api/metrics index section)
   cachedHealth = { data: healthData, timestamp: now }
 
   return c.json(healthData)

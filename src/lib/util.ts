@@ -851,6 +851,63 @@ export async function fetchWithTimeout(
   throw new Error(`Rate limiter rejected (capacity race): ${url}`)
 }
 
+/**
+ * SSRF-safe fetch for USER-SUPPLIED URLs: re-validates every redirect hop.
+ *
+ * Cloudflare Workers' `fetch` follows redirects internally (up to 20 hops)
+ * WITHOUT re-running our SSRF guard on the Location targets — a classic
+ * redirect-pivot / DNS-rebinding vector: hop 0 passes `assertSafeFetchUrl`
+ * but hop 1 can point at 127.0.0.1 or an internal host. This wrapper sets
+ * `redirect: 'manual'` and runs the full guard (scheme + hostname string
+ * check + DoH IP validation) on EVERY hop before following.
+ *
+ * Only for user-controlled URLs (extract/crawl). Trusted backend fetches
+ * (bing/wikipedia/...) should keep using plain fetchWithTimeout — per-hop DoH
+ * re-validation there would add latency without security value.
+ *
+ * `validate` is injectable for hermetic unit tests (default: real guard).
+ */
+export async function safeFetchWithRedirects(
+  env: Env | undefined,
+  url: string,
+  init: RequestInit = {},
+  opts: {
+    timeoutMs?: number
+    maxRedirects?: number
+    validate?: (u: string) => Promise<void>
+    /** Injectable fetcher — defaults to the rate-limited fetchWithTimeout. */
+    fetcher?: (u: string, requestInit: RequestInit) => Promise<Response>
+  } = {},
+): Promise<Response> {
+  const timeoutMs = opts.timeoutMs ?? 15_000
+  const maxRedirects = opts.maxRedirects ?? 5
+  const validate = opts.validate ?? assertSafeFetchUrl
+  const fetcher =
+    opts.fetcher ?? ((u: string, requestInit: RequestInit) => fetchWithTimeout(env, u, requestInit, timeoutMs))
+
+  let currentUrl = url
+  for (let hops = 0; ; hops++) {
+    // Guard this hop BEFORE fetching — hop 0 included (cheap when the DoH
+    // 30s cache is warm, and callers may not have pre-validated).
+    await validate(currentUrl)
+
+    const response = await fetcher(currentUrl, { ...init, redirect: 'manual' })
+
+    // Non-redirect: return as-is (fetchWithTimeout already surfaces upstream
+    // circuit-open as a thrown error, consistent with every other caller).
+    if (response.status < 300 || response.status >= 400) return response
+
+    const location = response.headers.get('location')
+    if (!location) return response // 3xx without a Location — nothing to follow
+
+    if (hops >= maxRedirects) {
+      throw new Error(`SSRF redirect limit exceeded (${maxRedirects} hops): ${url}`)
+    }
+
+    currentUrl = new URL(location, currentUrl).toString()
+  }
+}
+
 /** Generate enhanced related queries from the original query and results */
 export function generateRelatedQueries(query: string, resultTitles: string[]): string[] {
   const related = new Set<string>()

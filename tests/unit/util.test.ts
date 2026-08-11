@@ -7,6 +7,7 @@ import {
   computeScore,
   generateRelatedQueries,
   getDomainAuthority,
+  safeFetchWithRedirects,
 } from '../../src/lib/util'
 
 describe('normalizeUrl', () => {
@@ -203,5 +204,77 @@ describe('assertSafeFetchUrl — SSRF DNS-rebinding guards (P0-6 hardening)', ()
     await expect(assertSafeFetchUrl('http://evil.attacker.com/admin')).rejects.toThrow(
       /private\/internal IP: 127\.0\.0\.1/,
     )
+  })
+})
+
+describe('safeFetchWithRedirects (P0-2 SSRF redirect-pivot defense)', () => {
+  afterEach(() => vi.restoreAllMocks())
+
+  function stubFetchChain(statuses: Array<{ status: number; location?: string }>) {
+    const calls: string[] = []
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockImplementation(async (input: RequestInfo | URL) => {
+        calls.push(String(input))
+        const step = statuses.shift()
+        if (!step) throw new Error('unexpected extra fetch call')
+        if (step.status >= 300 && step.status < 400) {
+          return new Response(null, { status: step.status, headers: { location: step.location ?? '' } })
+        }
+        return new Response('ok', { status: step.status })
+      }),
+    )
+    return calls
+  }
+
+  it('re-validates every redirect hop and follows with redirect:manual', async () => {
+    const calls = stubFetchChain([{ status: 301, location: 'https://public.example/next' }, { status: 200 }])
+    const validated: string[] = []
+    const validate = vi.fn().mockImplementation(async (u: string) => {
+      validated.push(u)
+    })
+
+    const resp = await safeFetchWithRedirects(undefined, 'https://example.com/start', {}, { validate })
+
+    expect(resp.status).toBe(200)
+    expect(validated).toEqual(['https://example.com/start', 'https://public.example/next'])
+    // Every hop is fetched with manual redirect handling — never internal follow.
+    expect(calls).toEqual(['https://example.com/start', 'https://public.example/next'])
+  })
+
+  it('aborts the chain when a redirect target fails the SSRF guard (private IP hop)', async () => {
+    stubFetchChain([{ status: 302, location: 'http://127.0.0.1/admin' }])
+    const validate = vi.fn().mockImplementation(async (u: string) => {
+      if (u.includes('127.0.0.1')) throw new Error(`Blocked hostname (SSRF guard): 127.0.0.1`)
+    })
+
+    await expect(safeFetchWithRedirects(undefined, 'https://example.com/start', {}, { validate })).rejects.toThrow(
+      /Blocked hostname/,
+    )
+    // The private hop must never be fetched.
+    expect(vi.mocked(fetch).mock.calls.map((c) => String(c[0]))).toEqual(['https://example.com/start'])
+  })
+
+  it('enforces the redirect hop limit', async () => {
+    stubFetchChain([
+      { status: 301, location: 'https://a.example/1' },
+      { status: 301, location: 'https://b.example/2' },
+      { status: 301, location: 'https://c.example/3' },
+      { status: 301, location: 'https://d.example/4' },
+      { status: 301, location: 'https://e.example/5' },
+      { status: 301, location: 'https://f.example/6' },
+    ])
+    const validate = vi.fn().mockResolvedValue(undefined)
+
+    await expect(
+      safeFetchWithRedirects(undefined, 'https://example.com/start', {}, { maxRedirects: 5, validate }),
+    ).rejects.toThrow(/redirect limit exceeded \(5 hops\)/)
+  })
+
+  it('returns 3xx as-is when no Location header is present', async () => {
+    stubFetchChain([{ status: 304 }])
+    const validate = vi.fn().mockResolvedValue(undefined)
+    const resp = await safeFetchWithRedirects(undefined, 'https://example.com/start', {}, { validate })
+    expect(resp.status).toBe(304)
   })
 })

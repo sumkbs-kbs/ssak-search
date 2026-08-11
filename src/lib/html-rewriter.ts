@@ -10,7 +10,7 @@
 
 import type { Env } from '../types'
 import { logger, toError } from './logger'
-import { fetchWithTimeout, extractDomain, decodeEntities, truncateToTokens } from './util'
+import { safeFetchWithRedirects, extractDomain, decodeEntities, truncateToTokens } from './util'
 import {
   captureSignature,
   findElementsInHtml,
@@ -42,7 +42,12 @@ export async function extractWithHtmlRewriter(
 ): Promise<{ title: string; content: string; images?: string[]; rawHtml?: string }> {
   const { includeImages = false, maxTokens = 8000, timeoutMs = 15000 } = opts
 
-  const response = await fetchWithTimeout(
+  // P0-2 (SSRF): user-supplied URLs must be re-validated on EVERY redirect
+  // hop — plain `redirect: 'follow'` would let Workers follow a 3xx to a
+  // private/internal target without re-running the guard (redirect-pivot /
+  // DNS-rebinding vector). safeFetchWithRedirects validates hop 0 (defense
+  // in depth — extractor already called assertSafeFetchUrl) and every hop.
+  const response = await safeFetchWithRedirects(
     env,
     url,
     {
@@ -51,9 +56,8 @@ export async function extractWithHtmlRewriter(
         Accept: 'text/html,application/xhtml+xml',
         'Accept-Language': 'en-US,en;q=0.9,ko;q=0.8',
       },
-      redirect: 'follow',
     },
-    timeoutMs,
+    { timeoutMs, maxRedirects: 5 },
   )
 
   if (!response.ok) {

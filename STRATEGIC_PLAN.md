@@ -3076,3 +3076,50 @@
   (stack-exchange.ts 로그+스킵)로 보호 ② 실측 NDCG는 다음 eval:median (en-acad/ds 풀에
   SO 결과 추가가 arxiv gold를 밀어내지 않는지 확인 필요 — 도메인 캡·랭킹 authority로
   보호됨).
+### S104: Production-Readiness 마스터 플랜 반영 — Phase 0 구현 + Phase 1~3 갭 매트릭스 (2026-08-11)
+
+사용자 제공 마스터 플랜("기능은 개인용으로, 구조/안정성/확장성은 엔터프라이즈급")을 코드베이스 실측과 대조해 갭을 진단하고 Phase 0(Critical) 3건을 구현했습니다.
+
+#### Phase 0.1 — /api/health 쿼터 누수 제거 (구현)
+
+- **기존 상태**: executeSearch 카나리 쿼리는 이미 제거돼 있었으나(S10 후속), 기본 핸들러가 7개 백엔드에 **robots.txt 프로브 7회 + D1 통계 쿼리**를 30초마다 실행 → 무료 티어 subrequest 할당량 소모.
+- **변경**:
+  - **기본(`depth=light`) = zero-subrequest 라이브니스**: 백엔드 상태를 회로차단기 상태(`getBackendHealth` — 인메모리/DO RPC, fetch 아님)에서 도출, index는 바인딩 존재만 보고, D1 쿼리·Slack 알림·네트워크 프로브 전부 제외. 응답 < 50ms, 항상 신선(캐시 없음).
+  - **`?depth=full`(구 `full=1` 별칭) = 기존 딥 모드**: 라이브 프로브 + D1 코퍼스 + Slack 알림, 30s 캐시 유지 — 운영자/verify-do-binding.sh용.
+  - `HealthData` 인터페이스에 `rate_limiter` 필드 명시, `buildLightHealthData` 순수 함수로 분리(테스트 가능).
+- **테스트 (+4)**: fetch stub이 throw하도록 해 **네트워크 호출 0건 증명** — `buildLightHealthData` 단독, 바인딩 존재 보고, `GET /api/health` 기본 200 + `cached` 없음, `?depth=light` 명시 동일 동작. 기존 routes.test.ts 2건(백엔드 상태/캐시)을 라이트 계약으로 갱신, 통합 테스트는 `?depth=full`로 딥 커버리지 유지.
+- **호환성**: monitor.yml의 `.backends[] | select(. == "down")`는 기존에도 객체 비교로 항상 0이었음 — 실질 알림은 /api/monitor(SLO, 성공률 기반)가 담당하므로 회귀 없음.
+
+#### Phase 0.2 — SSRF 방어 강화: 리다이렉트 홉 재검증 (구현)
+
+- **기존 상태**: `assertSafeFetchUrl`(DoH 1.1.1.1 DNS 리바인딩 방어, 30s 캐시, NXDOMAIN fail-closed)가 extract/crawler/sitemap에서 fetch 전 적용돼 있었으나, **`redirect: 'follow'`는 Workers가 내부적으로 20홉까지 따라가며 Location 타깃을 재검증하지 않음** — 리다이렉트 피벗/2차 DNS 리바인딩 벡터 잔존.
+- **변경**:
+  - `safeFetchWithRedirects(env, url, init, {timeoutMs, maxRedirects, validate, fetcher})` 신규 — `redirect: 'manual'` + **매 홉 `assertSafeFetchUrl` 재검증**(홉 0 포함), 홉 한도 5, 3xx Location 없으면 그대로 반환. fetcher 주입 가능(테스트 격리 + 크롤러 raw-fetch 의미론 보존).
+  - `html-rewriter.ts`(extract 주경로): `fetchWithTimeout` + `redirect:'follow'` → `safeFetchWithRedirects`.
+  - `crawler-do.ts` 페이지 fetch: raw fetch + `redirect:'follow'` → `safeFetchWithRedirects`(자체 타임아웃 signal 유지).
+- **테스트 (+4)**: 매 홉 재검증 + `redirect:manual` 단언, 사설 IP 홉에서 체인 중단(해당 홉 미fetch), 홉 한도 초과 throw, Location 없는 3xx 그대로 반환.
+
+#### Phase 0.3 — 캐시 키 변수 커버리지 (검증 — 추가 수정 불필요)
+
+- **실측**: `include_answer`는 이미 키 포함(`ia=`) + 전용 테스트(cache.test.ts:74), GET/POST 기본값 모두 **false** 확인. 캐시 키는 실제 요청 파라미터 전부 커버(max_results/search_depth/topic/time_range/sort_by/page/include_answer/include_raw_content/include_fact_check/도메인 필터/focus/variant/country/language/location).
+- **판정**: `model_id`/`user_agent`는 검색 API 요청 파라미터가 **아님**(답변 모델은 내부 멀티모델 폴백 체인이 요청 시 자동 선택, 스트리밍 응답의 `model` 필드는 출력 전용) — 키 충돌 소지 없음. 계획서의 해당 우려는 N/A로 종결.
+
+#### Phase 1~3 갭 매트릭스 (실측 기반)
+
+| 플랜 항목 | 상태 | 근거 |
+|---|---|---|
+| 1.1 구조화 로깅/트레이싱 | ✅ 이미 구현 | logger.ts(JSON, traceId/spanId/requestId, Datadog/oTel 호환 필드) + `createLoggingMiddleware`가 매 요청 x-request-id 부여·로그에 requestId 첨부(index.tsx 최우선 미들웨어) |
+| 1.2 회로차단기/Retry | ✅ 이미 구현 | rate-limiter.ts — per-host circuit(Closed→Open→probe 반자동), `getBackoffMs(tripCount)` 지수 백오프, DO(RATE_LIMITER) 크로스-아이솔레이트 상태, `forceOpenBackend` 카나리 |
+| 1.3 메트릭/대시보드 | ✅ 이미 구현 | metrics.ts + ANALYTICS 바인딩, /api/metrics Prometheus(백엔드 상태·rate-limiter source 게이지·인덱스), /api/monitor SLO·버짓·알림, monitor.yml 15분 스케줄 Slack |
+| 2.1 하이브리드 검색/재랭킹 | ⚠️ 부분 | BM25(retrieval/bm25.ts)·Vectorize+D1 셀프인덱스(index/)·랭킹(ranking.ts) 존재, **RRF 퓨전/크로스-인코더 재랭킹은 미구현** — 다음 우선순위 후보 |
+| 2.2 에이전틱 플래닝/퀄리티 게이트 | ✅ 이미 구현 | agentic/(planner·executor·synthesizer·quality-gate·search-tools·classifier) |
+| 2.3 한국어 특화 | ✅ 대부분 | Naver 프라이머리, 카드뉴스/주식카드 파서, CJK 빅램, 형태소 분석(KoNLPy)은 Workers 비적합 — 사이드카 제안만 |
+| 3.1 SDK/OpenAPI | ⚠️ 부분 | openapi.yaml(2,689줄) 존재, **SDK(sdk/ 디렉토리)·v1 라우트 버전 명시·API키 인증은 미구현** — 상용화 전 항목 |
+| 3.2 CI/CD | ✅ 이미 구현 | ci.yml(lint/typecheck/format/unit/build) + eval.yml(회귀 게이트 G2) + integration-tests.yml + monitor.yml + canary DO |
+| 3.3 문서화 | ✅ 대부분 | docs/ 01~14 + README + DEPLOYMENT_CHECKLIST + CLOUDFLARE_BINDINGS_GUIDE, VitePress 포털만 미구현 |
+
+#### 검증
+
+유닛 **1,738건 / 91파일** (+8) · tsc 0 · eslint 0 · format 0. 크롤러 단위 테스트 17건 유지. 변경: `src/routes/health.ts`·`src/lib/util.ts`·`src/lib/html-rewriter.ts`·`src/lib/crawler-do.ts` + 테스트 3파일(util·health-status·routes) + 통합 api.test.ts.
+
+**잔여(다음 우선순위)**: ① 2.1 RRF/크로스-인코더 하이브리드 랭커 ② 3.1 TypeScript/Python SDK + API 키 인증 ③ 딥 프로브의 주기 실행(모니터 스케줄로 전환) — Phase 2/3는 작업 규모가 커 별도 라운드로 분리 권장.

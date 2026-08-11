@@ -31,7 +31,7 @@ import {
   type CrawlerConfig,
   type IndexQueueMessage,
 } from '../types'
-import { normalizeUrl, assertSafeFetchUrl } from './util'
+import { normalizeUrl, assertSafeFetchUrl, safeFetchWithRedirects } from './util'
 import { discoverAndParseSitemaps } from './sitemap'
 
 // ============================================================
@@ -640,16 +640,27 @@ export class CrawlerDO extends DurableObject<Env> {
         }
       }
 
-      // 2. Fetch the page
-      const response = await fetch(url, {
-        headers: {
-          'User-Agent': 'Mozilla/5.0 (compatible; SearchEngineCrawler/1.0; +https://webapp.pages.dev)',
-          Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-          'Accept-Language': 'en-US,en;q=0.9,ko;q=0.8',
+      // 2. Fetch the page — P0-2 SSRF: `redirect: 'follow'` would let Workers
+      // follow a 3xx to a private/internal target WITHOUT re-running the guard
+      // (redirect-pivot vector). safeFetchWithRedirects re-validates every hop.
+      // The injectable fetcher keeps the crawler's raw fetch semantics (own
+      // timeout signal, no rate-limiter routing — crawler paces itself).
+      const response = await safeFetchWithRedirects(
+        undefined,
+        url,
+        {
+          headers: {
+            'User-Agent': 'Mozilla/5.0 (compatible; SearchEngineCrawler/1.0; +https://webapp.pages.dev)',
+            Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+            'Accept-Language': 'en-US,en;q=0.9,ko;q=0.8',
+          },
         },
-        redirect: 'follow',
-        signal: AbortSignal.timeout(this.config.request_timeout_ms),
-      })
+        {
+          timeoutMs: this.config.request_timeout_ms,
+          fetcher: (u, requestInit) =>
+            fetch(u, { ...requestInit, signal: AbortSignal.timeout(this.config.request_timeout_ms) }),
+        },
+      )
 
       if (!response.ok) {
         // Don't retry 4xx errors

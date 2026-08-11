@@ -80,8 +80,19 @@ vi.mock('../../src/lib/metrics', () => ({
   getPrometheusMetrics: vi.fn().mockReturnValue(''),
 }))
 
+// P0-1: /api/health is LIGHT by default — backend status now comes from the
+// circuit-breaker state (getBackendHealth) instead of live network probes, so
+// the mock supplies a realistic circuit view for the 7 core backends.
 vi.mock('../../src/lib/rate-limiter', () => ({
-  getBackendHealth: vi.fn().mockResolvedValue({}),
+  getBackendHealth: vi.fn().mockResolvedValue({
+    bing: { status: 'healthy', failures: 0, inflight: 0, tripped: false, source: 'local' },
+    naver: { status: 'healthy', failures: 0, inflight: 0, tripped: false, source: 'local' },
+    wikipedia: { status: 'healthy', failures: 0, inflight: 0, tripped: false, source: 'local' },
+    github: { status: 'healthy', failures: 0, inflight: 0, tripped: false, source: 'local' },
+    hackernews: { status: 'healthy', failures: 0, inflight: 0, tripped: false, source: 'local' },
+    reddit: { status: 'healthy', failures: 0, inflight: 0, tripped: false, source: 'local' },
+    duckduckgo: { status: 'healthy', failures: 0, inflight: 0, tripped: false, source: 'local' },
+  }),
 }))
 
 vi.mock('../../src/lib/auth', () => ({
@@ -517,15 +528,16 @@ describe('/api/health', () => {
       expect(body.features.rate_limiting).toBe(true)
     })
 
-    it('returns cached result on subsequent calls', async () => {
-      // First call refreshes the cache (or hits existing one from previous test)
+    it('light mode (default) is always fresh — never the 30s probe cache', async () => {
+      // P0-1 contract: the default /api/health performs zero network probes and
+      // is cheap enough to serve fresh on every call. The `cached: true` flag
+      // (and the 30s cache) belongs to the opt-in depth=full deep-probe mode.
       const res1 = await requestWithEnv(app, '/api/health')
       expect(res1.status).toBe(200)
-      // Second call should use the cache (cached: true)
       const res2 = await requestWithEnv(app, '/api/health')
       expect(res2.status).toBe(200)
       const body2 = (await res2.json()) as any
-      expect(body2.cached).toBe(true)
+      expect(body2.cached).toBeUndefined()
     })
   })
 

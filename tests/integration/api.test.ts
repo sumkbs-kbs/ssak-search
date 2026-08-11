@@ -100,8 +100,20 @@ describe('GET /api/health', () => {
     expect(typeof data.version).toBe('string')
   })
 
-  it('includes all expected backend keys', async () => {
+  // P0-1: the DEFAULT /api/health is LIGHT — zero network probes; backend
+  // status comes from circuit-breaker state (empty until real traffic flows).
+  // The full 7-backend set is guaranteed by the opt-in DEEP probe mode
+  // (?depth=full), which is what this assertion originally exercised.
+  it('light mode returns circuit-derived backends with workers_ai always present', async () => {
     const { body } = await fetchJson('/api/health')
+    const data = body as Record<string, unknown>
+    const backends = data.backends as Record<string, unknown>
+    expect(backends).toHaveProperty('workers_ai')
+    expect(data).not.toHaveProperty('cached') // light is always fresh
+  })
+
+  it('depth=full returns all expected backend keys', async () => {
+    const { body } = await fetchJson('/api/health?depth=full')
     const data = body as Record<string, unknown>
     const backends = data.backends as Record<string, unknown>
     expect(backends).toHaveProperty('bing')

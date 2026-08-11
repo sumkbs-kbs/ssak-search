@@ -3123,3 +3123,32 @@
 유닛 **1,738건 / 91파일** (+8) · tsc 0 · eslint 0 · format 0. 크롤러 단위 테스트 17건 유지. 변경: `src/routes/health.ts`·`src/lib/util.ts`·`src/lib/html-rewriter.ts`·`src/lib/crawler-do.ts` + 테스트 3파일(util·health-status·routes) + 통합 api.test.ts.
 
 **잔여(다음 우선순위)**: ① 2.1 RRF/크로스-인코더 하이브리드 랭커 ② 3.1 TypeScript/Python SDK + API 키 인증 ③ 딥 프로브의 주기 실행(모니터 스케줄로 전환) — Phase 2/3는 작업 규모가 커 별도 라운드로 분리 권장.
+### S104-③: /api/health 딥 프로브의 scheduled 워커 전환 — 쿼터 절감 확정 (2026-08-11)
+
+#### ① 배경 (S104 잔여 ③)
+
+S104에서 기본 `/api/health`를 zero-subrequest 라이트 모드로 전환하고 딥 프로브는 `?depth=full` 옵트인으로 남겼다. 그러나 딥 프로브(7개 백엔드 robots.txt 프로브 + D1 통계 + Slack 알림)는 여전히 **수동 호출에 의존**해 주기적 가용성 감시가 공백이었다. 이를 **scheduled 워커**로 승격해 라이트 기본값의 쿼터 절감을 유지하면서 운영 감시를 자동화한다.
+
+#### ② 구현
+
+| 파일 | 변경 |
+|---|---|
+| `src/routes/health.ts` | `runDeepHealthProbe(env, ctx)` 공용 함수 추출 — `?depth=full` 라우트와 scheduled 핸들러가 **동일 코드 경로** 공유 (Slack 알림·waitUntil 포함) |
+| `src/scheduled.ts` (신규) | `scheduled(event, env, ctx)` 핸들러 — 매 크론 틱마다 `runDeepHealthProbe` 실행, **절대 throw하지 않음**, 구조화 요약 로그(status/down_backends/latency/cron/rate_limiter_mode) |
+| `src/index.tsx` | export default에 `scheduled` 배선 (fetch와 병렬) |
+| `wrangler.jsonc` | `triggers.crons: ["*/15 * * * *"]` — 15분 간격 크론 트리거 |
+| `tests/unit/scheduled.test.ts` (신규, +5) | ① 전 백엔드 정상 시 `status: ok` + 프로브 fetch 호출 ② github 다운 시 `alertBackendDown` 1회 + waitUntil fire-and-forget ③ SLACK_WEBHOOK 미설정 시 알림 없음 ④ 크론 틱에서 프로브 실행·미throw ⑤ 전체 프로브 실패에서도 unhandled rejection 없음 |
+
+#### ③ 쿼터 절감 확정 (라이트 기본값 유지)
+
+- **외부 호출자**: `/api/health` 기본 응답은 여전히 fetch 0회 (health-status.test.ts가 fetch stub throw로 증명) — 무료 티어 Subrequest 소진 경로 **1곳뿐** (scheduled 크론, 15분×1회)
+- **운영 감시**: 15분 간격 딥 프로브가 백엔드 가용성 + Slack 알림을 자동 수행 — 수동 `?depth=full` 호출 불필요
+- 크론 미구성 환경(wrangler 로컬 등)에서는 scheduled가 절대 실행되지 않아 no-op 안전
+
+#### ④ 검증
+
+- 유닛 **1,790건 / 95파일** (+5) · tsc 0 · eslint 0 · format 0 (wrangler.jsonc 포함 prettier 정렬)
+- scheduled.test.ts 단독 5건 통과 — 라이트/딥 계약, Slack 알림, 크론 no-op 안전 모두 고정
+- 배포 후 실측: `wrangler deploy` 시 크론 트리거가 Pages/Workers 대시보드에 등록되며, 15분마다 `[scheduled] deep health probe complete` 로그 확인 가능
+
+**잔여**: ① 실제 배포 후 크론 트리거 등록·로그 확인 ② 다운 백엔드 Slack 알림의 실제 수신 검증 ③ `verify-do-binding.sh`가 scheduled 로그를 읽도록 확장(선택).

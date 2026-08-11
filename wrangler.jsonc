@@ -3,9 +3,16 @@
   "name": "search-engine-api",
   "compatibility_date": "2026-07-10",
   "pages_build_output_dir": "./dist",
-  "compatibility_flags": [
-    "nodejs_compat"
-  ],
+  "compatibility_flags": ["nodejs_compat"],
+  // S104-③: scheduled deep health probe — the ONLY quota-burning consumer of
+  // the live backend probes + Slack alerts. /api/health itself stays light
+  // (zero subrequests) for every caller. Every 15 min = 96 deep runs/day
+  // (~672 subrequests), replacing the old behavior where EVERY /api/health
+  // call (uptime monitors etc.) burned 7 subrequests.
+  // Provision with: npx wrangler deploy (or Dashboard → Triggers → Cron).
+  "triggers": {
+    "crons": ["*/15 * * * *"],
+  },
   // Workers AI binding — free, auto-provisioned on all Cloudflare accounts.
   // Enables: answer generation (LLM), embedding generation (bge-base-en-v1.5),
   // and LLM reranking. Without this, all three fall back to degraded modes
@@ -51,7 +58,10 @@
   // "semantic-cache-dense" → Add binding → name: SEMANTIC_CACHE_INDEX).
   // Without this binding, semanticCacheLookup()/semanticCacheStore() no-op —
   // the exact-match tiers keep working unchanged.
-  "vectorize": [ { "binding": "VECTORIZE_INDEX", "index_name": "search-engine-dense", "remote": true }, { "binding": "SEMANTIC_CACHE_INDEX", "index_name": "semantic-cache-dense", "remote": true } ],
+  "vectorize": [
+    { "binding": "VECTORIZE_INDEX", "index_name": "search-engine-dense", "remote": true },
+    { "binding": "SEMANTIC_CACHE_INDEX", "index_name": "semantic-cache-dense", "remote": true },
+  ],
   // D1 database — create via Dashboard or CLI and set the real UUID:
   //   npx wrangler d1 create search-engine-index
   //   npx wrangler d1 list   (to look up the id)
@@ -63,45 +73,52 @@
   // Vectorize (remote) returns chunk IDs that the local D1 doesn't know about,
   // and every search silently returns 0 results. Production deploys are
   // unaffected (always remote).
-  "d1_databases": [ { "binding": "SEARCH_INDEX_DB", "database_name": "search-engine-index", "database_id": "74e4966f-2496-491f-afbc-f26ffd109f25", "remote": true } ],
+  "d1_databases": [
+    {
+      "binding": "SEARCH_INDEX_DB",
+      "database_name": "search-engine-index",
+      "database_id": "74e4966f-2496-491f-afbc-f26ffd109f25",
+      "remote": true,
+    },
+  ],
   // Queue binding for async indexing (Phase 2.2):
   // Cloudflare Dashboard → Workers & Pages → Queues → Create queue
   // (name: search-index-queue)
   // "queues": [ { "binding": "INDEX_QUEUE", "queue": "search-index-queue" } ],
-// Durable Object bindings — P2 ④ (2026-08-10). Cloudflare Pages CANNOT
-// create Durable Objects within a Pages project, so the 11 DO classes are
-// deployed as a SEPARATE Workers script (wrangler.do.jsonc →
-// `ssak-do-worker`) and bound here via script_name. Deploy order:
-//   1. npx wrangler deploy --config wrangler.do.jsonc
-//   2. npx wrangler pages deploy   (this file)
-// Local dev: DO bindings are declared in wrangler.dev.jsonc instead
-// (resolved from the Pages entrypoint's exports — no script_name needed).
-"durable_objects": {
-  // ⚠️ The 11-DO list lives in FOUR places — keep in sync when adding a DO:
-  //    1. this file (script_name bindings)
-  //    2. wrangler.do.jsonc (bindings + migrations)
-  //    3. wrangler.dev.jsonc (exports + bindings)
-  //    4. scripts/verify-do-binding.ts REQUIRED_DO_BINDINGS
-  "bindings": [
-    { "name": "RATE_LIMITER", "class_name": "RateLimiterDO", "script_name": "ssak-do-worker" },
-    { "name": "THREAD_DO", "class_name": "ThreadDO", "script_name": "ssak-do-worker" },
-    { "name": "PAGES_DO", "class_name": "PagesDO", "script_name": "ssak-do-worker" },
-    { "name": "LIBRARY_DO", "class_name": "LibraryDO", "script_name": "ssak-do-worker" },
-    { "name": "USER_PROFILE_DO", "class_name": "UserProfileDO", "script_name": "ssak-do-worker" },
-    { "name": "SPACE_DO", "class_name": "SpaceDO", "script_name": "ssak-do-worker" },
-    { "name": "API_KEY_DO", "class_name": "ApiKeyDO", "script_name": "ssak-do-worker" },
-    { "name": "CRAWLER_DO", "class_name": "CrawlerDO", "script_name": "ssak-do-worker" },
-    { "name": "CLICK_LOG_DO", "class_name": "ClickLogDO", "script_name": "ssak-do-worker" },
-    { "name": "EXPERIMENT_DO", "class_name": "ExperimentDO", "script_name": "ssak-do-worker" },
-    { "name": "CANARY_DO", "class_name": "CanaryOrchestratorDO", "script_name": "ssak-do-worker" }
-  ]
-},
-// KV namespace for cross-restart cache persistence (Phase 5):
-// Hot queries persist across isolates and restarts (30 min TTL).
-// Cache.ts tier 2: Cache API miss → KV lookup → KV miss → live search.
-// Without this binding, cache is Cache API + in-memory only (per-isolate).
+  // Durable Object bindings — P2 ④ (2026-08-10). Cloudflare Pages CANNOT
+  // create Durable Objects within a Pages project, so the 11 DO classes are
+  // deployed as a SEPARATE Workers script (wrangler.do.jsonc →
+  // `ssak-do-worker`) and bound here via script_name. Deploy order:
+  //   1. npx wrangler deploy --config wrangler.do.jsonc
+  //   2. npx wrangler pages deploy   (this file)
+  // Local dev: DO bindings are declared in wrangler.dev.jsonc instead
+  // (resolved from the Pages entrypoint's exports — no script_name needed).
+  "durable_objects": {
+    // ⚠️ The 11-DO list lives in FOUR places — keep in sync when adding a DO:
+    //    1. this file (script_name bindings)
+    //    2. wrangler.do.jsonc (bindings + migrations)
+    //    3. wrangler.dev.jsonc (exports + bindings)
+    //    4. scripts/verify-do-binding.ts REQUIRED_DO_BINDINGS
+    "bindings": [
+      { "name": "RATE_LIMITER", "class_name": "RateLimiterDO", "script_name": "ssak-do-worker" },
+      { "name": "THREAD_DO", "class_name": "ThreadDO", "script_name": "ssak-do-worker" },
+      { "name": "PAGES_DO", "class_name": "PagesDO", "script_name": "ssak-do-worker" },
+      { "name": "LIBRARY_DO", "class_name": "LibraryDO", "script_name": "ssak-do-worker" },
+      { "name": "USER_PROFILE_DO", "class_name": "UserProfileDO", "script_name": "ssak-do-worker" },
+      { "name": "SPACE_DO", "class_name": "SpaceDO", "script_name": "ssak-do-worker" },
+      { "name": "API_KEY_DO", "class_name": "ApiKeyDO", "script_name": "ssak-do-worker" },
+      { "name": "CRAWLER_DO", "class_name": "CrawlerDO", "script_name": "ssak-do-worker" },
+      { "name": "CLICK_LOG_DO", "class_name": "ClickLogDO", "script_name": "ssak-do-worker" },
+      { "name": "EXPERIMENT_DO", "class_name": "ExperimentDO", "script_name": "ssak-do-worker" },
+      { "name": "CANARY_DO", "class_name": "CanaryOrchestratorDO", "script_name": "ssak-do-worker" },
+    ],
+  },
+  // KV namespace for cross-restart cache persistence (Phase 5):
+  // Hot queries persist across isolates and restarts (30 min TTL).
+  // Cache.ts tier 2: Cache API miss → KV lookup → KV miss → live search.
+  // Without this binding, cache is Cache API + in-memory only (per-isolate).
   //
-  "kv_namespaces": [ { "binding": "CACHE_KV", "id": "1f5b3825e6a240a5b500d0f2faed15a8" } ],
+  "kv_namespaces": [{ "binding": "CACHE_KV", "id": "1f5b3825e6a240a5b500d0f2faed15a8" }],
 
   // Workers Analytics Engine binding — persists metrics across isolate restarts.
   // Each record() in src/lib/metrics.ts calls ANALYTICS.writeDataPoint() so
@@ -122,9 +139,7 @@
   // NOTE (2026-08-04): Analytics Engine enabled on account; dataset names must
   // use underscores only (hyphen "ssak-search" was rejected by deploy as
   // "Invalid dataset name"). Binding name ANALYTICS matches src/lib/metrics.ts.
-  "analytics_engine_datasets": [
-    { "binding": "ANALYTICS", "dataset": "ssak_search" }
-  ],
+  "analytics_engine_datasets": [{ "binding": "ANALYTICS", "dataset": "ssak_search" }],
 
   //
   // Sentry DSN (Phase 0.5) — error tracking and APM:
@@ -135,7 +150,7 @@
   //    npx wrangler pages secret put SENTRY_DSN
   // Without SENTRY_DSN, Sentry is a no-op (no errors, no traces).
   // tracesSampleRate=0.1 by default (10% of requests get performance traces).
-  // 
+  //
   // Scrapling Sidecar URL (Python FastAPI + Scrapling service for dynamic pages):
   // - Local dev: SIDECAR_URL=http://localhost:8000
   // - Production: npx wrangler pages secret put SIDECAR_URL

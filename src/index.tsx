@@ -2,6 +2,7 @@ import { Hono } from 'hono'
 import { cors } from 'hono/cors'
 import { serveStatic } from 'hono/cloudflare-workers'
 import { searchRoute } from './routes/search'
+import { scheduled } from './scheduled'
 import { extractRoute } from './routes/extract'
 import { healthRoute, metricsRoute } from './routes/health'
 import { usageRoute } from './routes/usage'
@@ -315,6 +316,15 @@ app.get('/openapi.yaml', (_c) => {
 // Wrap with Sentry APM for error tracking and performance monitoring.
 // SENTRY_DSN must be configured via Cloudflare Pages secret.
 // Without SENTRY_DSN, Sentry is a no-op (no errors, no traces).
-export default wrapApp(app, {
+const worker = wrapApp(app, {
   tracesSampleRate: 0.1, // 10% sampling for performance traces
 })
+
+// S104-③: scheduled deep health probe — runs on the cron trigger declared in
+// wrangler.jsonc (`triggers.crons`). Keeps live-probe Slack alerts firing on a
+// fixed cadence while the default /api/health stays light (zero subrequests).
+// The scheduled handler is a no-op unless a cron trigger fires it.
+export default {
+  ...worker,
+  scheduled,
+} as { fetch: typeof worker.fetch; scheduled: typeof scheduled }

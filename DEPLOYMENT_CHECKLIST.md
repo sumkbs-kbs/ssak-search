@@ -119,6 +119,10 @@ project"). 따라서 11개 DO 클래스는 **별도 Workers(`ssak-do-worker`, `w
 **배포 순서 (반드시 이 순서)**:
 1. `npx wrangler deploy --config wrangler.do.jsonc` — DO 클래스 호스트 워커 배포
 2. `npm run build && npx wrangler pages deploy` — Pages 워커 배포 (script_name 바인딩)
+3. `npx wrangler deploy --config wrangler.cron.jsonc` — **딥 프로브 스케줄러 워커** 배포 (S104-③-fix)
+   - Pages는 크론 트리거를 **지원하지 않음** (Workers ✅ / Pages ❌ — wrangler도 Pages config의 `triggers`를 거부해 배포 차단).
+   - 15분 간격 딥 프로브는 별도 Workers 스크립트 `ssak-probe-scheduler`가 소유하며, `PROBE_URL`(기본 `https://search-engine-api.pages.dev`)의 `/api/health?depth=full`을 주기 호출한다 (2026-08-11 실측: 11:30/11:45 틱 모두 발동 확인).
+   - CI: `.github/workflows/deploy.yml`에 staging/production 양쪽 스텝 포함.
 
 > 과거 버전의 "Dashboard에서 DO 바인딩 추가" 방식은 Pages가 DO를 직접 소유할 수 없어
 > 동작하지 않았습니다 (P2 실측). project 레벨 바인딩은 git 연결 빌드에만 적용됩니다.

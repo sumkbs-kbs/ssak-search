@@ -75,6 +75,16 @@ jobs:
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           command: pages deploy dist/ --project-name=${{ env.PROJECT_NAME }} --branch=staging
 
+      - name: Deploy probe-scheduler (Staging)
+        # S104-③-fix (2026-08-11): Pages cannot host cron triggers, so the
+        # 15-min deep-probe scheduler is a separate Workers script. Deploy
+        # AFTER Pages so its PROBE_URL var points at the newest bundle.
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: deploy --config=wrangler.cron.jsonc
+
   deploy-production:
     name: Deploy to Cloudflare Pages (Production)
     if: github.event_name == 'workflow_dispatch' && inputs.environment == 'production'
@@ -122,3 +132,12 @@ jobs:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           command: pages deploy dist/ --project-name=${{ env.PROJECT_NAME }} --branch=main
+
+      - name: Deploy probe-scheduler (Production)
+        # S104-③-fix (2026-08-11): same scheduler as staging — Workers cron
+        # that triggers the Pages deep probe every 15 min.
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: deploy --config=wrangler.cron.jsonc

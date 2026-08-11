@@ -331,6 +331,57 @@ export async function runDeepHealthProbe(
 }
 
 /**
+ * S104-③-③: structured summary of a deep probe — shared by the scheduled
+ * cron handler AND the `?depth=full` route so both emit the SAME field shape.
+ * `scripts/verify-do-binding.sh` parses `down_backends` from either source's
+ * log line (the cron fires every 15 min; an operator `?depth=full` call
+ * produces the identical line on demand).
+ * Pure function — unit-testable without any network/mocks.
+ */
+export function buildDeepProbeSummary(
+  data: HealthData,
+  latencyMs: number,
+): {
+  status: string
+  down_backends: string
+  latency_ms: number
+  rate_limiter_mode?: string
+  hosts_tracked?: number
+} {
+  const downBackends = Object.entries(data.backends)
+    .filter(([, b]) => (b as { status?: string }).status === 'down')
+    .map(([name]) => name)
+
+  return {
+    status: data.status,
+    down_backends: downBackends.length > 0 ? downBackends.join(',') : 'none',
+    latency_ms: latencyMs,
+    rate_limiter_mode: data.rate_limiter?.mode,
+    hosts_tracked: data.rate_limiter?.hosts_tracked,
+  }
+}
+
+/**
+ * S104-③-③: emit the structured `[<source>] deep health probe complete` log
+ * line — the single summary format consumed by verify-do-binding.sh (and any
+ * Logpush/alert query) for both the scheduled cron and the opt-in route.
+ * `cached` is set only by the route (a within-TTL response reuses the last
+ * probe — still a valid availability snapshot, at most 30s old).
+ */
+export function logDeepProbeComplete(
+  source: 'scheduled' | 'health',
+  data: HealthData,
+  latencyMs: number,
+  extra: { cron?: string; cached?: boolean } = {},
+): void {
+  logger.info(`[${source}] deep health probe complete`, {
+    ...buildDeepProbeSummary(data, latencyMs),
+    ...(extra.cron !== undefined ? { cron: extra.cron } : {}),
+    ...(extra.cached !== undefined ? { cached: extra.cached } : {}),
+  })
+}
+
+/**
  * Aggregate per-backend probe results into the global health status.
  *
  * Unconfigured optional backends are excluded BEFORE this call (see
@@ -474,9 +525,26 @@ healthRoute.get('/', async (c) => {
   // --- Full (deep) mode: live probes, cached 30s ---
   const now = Date.now()
   if (cachedHealth && now - cachedHealth.timestamp < HEALTH_CACHE_TTL) {
+    // Cached data is still a valid availability snapshot (≤30s old) — emit
+    // the same structured line with `cached: true` so verify-do-binding.sh's
+    // log capture is deterministic regardless of cache timing.
+    logDeepProbeComplete('health', cachedHealth.data, now - cachedHealth.timestamp, { cached: true })
     return c.json({ ...cachedHealth.data, cached: true })
   }
-  return c.json(await runDeepHealthProbe(c.env, c.executionCtx))
+  const start = Date.now()
+  // Hono's c.executionCtx getter THROWS when the app runs without an
+  // ExecutionContext (e.g. app.request() in unit tests). Production requests
+  // always carry one, but guard so the route degrades to runDeepHealthProbe's
+  // documented inline-alert fallback instead of 500ing in embedded contexts.
+  let executionCtx: { waitUntil(p: Promise<unknown>): void } | undefined
+  try {
+    executionCtx = c.executionCtx
+  } catch {
+    executionCtx = undefined
+  }
+  const data = await runDeepHealthProbe(c.env, executionCtx)
+  logDeepProbeComplete('health', data, Date.now() - start, { cached: false })
+  return c.json(data)
 })
 
 // GET /api/metrics — Prometheus-format metrics

@@ -14,6 +14,7 @@ import {
   buildLightHealthData,
   healthRoute,
 } from '../../src/routes/health'
+import { logger } from '../../src/lib/logger'
 import type { AppBindings } from '../../src/types'
 
 type ProbeStatus = 'operational' | 'degraded' | 'down'
@@ -198,5 +199,44 @@ describe('buildLightHealthData (P0-1 zero-subrequest liveness)', () => {
     expect(res.status).toBe(200)
     const body = (await res.json()) as { features: Record<string, boolean> }
     expect(body.features.search).toBe(true)
+  })
+})
+
+describe('?depth=full emits the shared deep-probe summary log (S104-③-③)', () => {
+  it('logs [health] deep health probe complete with down_backends on a fresh probe', async () => {
+    const infoSpy = vi.spyOn(logger, 'info').mockImplementation(() => {})
+    try {
+      // All probes healthy + no down alerts (no SLACK_WEBHOOK) + no index
+      // bindings (probeIndexHealth short-circuits without D1/Vectorize).
+      vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response('ok', { status: 200 })))
+
+      const res = await healthRoute.request('/?depth=full', {}, {} as AppBindings)
+      expect(res.status).toBe(200)
+
+      expect(infoSpy).toHaveBeenCalledWith(
+        '[health] deep health probe complete',
+        expect.objectContaining({ status: 'ok', down_backends: 'none', cached: false }),
+      )
+    } finally {
+      infoSpy.mockRestore()
+    }
+  })
+
+  it('emits the same line with cached: true when served from the 30s probe cache', async () => {
+    const infoSpy = vi.spyOn(logger, 'info').mockImplementation(() => {})
+    try {
+      vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response('ok', { status: 200 })))
+
+      // First call populates the module-level 30s cache; the second (within
+      // TTL) is served from it and must STILL emit the summary line.
+      await healthRoute.request('/?depth=full', {}, {} as AppBindings)
+      await healthRoute.request('/?depth=full', {}, {} as AppBindings)
+
+      const calls = infoSpy.mock.calls.filter(([m]) => String(m).includes('deep health probe complete'))
+      expect(calls.length).toBeGreaterThanOrEqual(2)
+      expect(calls[calls.length - 1][1]).toMatchObject({ cached: true, down_backends: 'none' })
+    } finally {
+      infoSpy.mockRestore()
+    }
   })
 })

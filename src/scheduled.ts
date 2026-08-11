@@ -15,7 +15,7 @@
  */
 import type { AppBindings } from './types'
 import { logger, toError } from './lib/logger'
-import { runDeepHealthProbe } from './routes/health'
+import { logDeepProbeComplete, runDeepHealthProbe } from './routes/health'
 
 export interface ScheduledEvent {
   /** Cron expression string that triggered this run (Workers provides it). */
@@ -31,18 +31,11 @@ export async function scheduled(
   try {
     const data = await runDeepHealthProbe(env, ctx)
 
-    const downBackends = Object.entries(data.backends)
-      .filter(([, b]) => (b as { status?: string }).status === 'down')
-      .map(([name]) => name)
-
-    logger.info('[scheduled] deep health probe complete', {
-      status: data.status,
-      down_backends: downBackends.length > 0 ? downBackends.join(',') : 'none',
-      latency_ms: Date.now() - start,
-      cron: event.cron ?? 'unknown',
-      rate_limiter_mode: data.rate_limiter?.mode,
-      hosts_tracked: data.rate_limiter?.hosts_tracked,
-    })
+    // S104-③-③: same structured line the ?depth=full route emits — the field
+    // shape (down_backends/status/latency_ms/rate_limiter_mode/hosts_tracked)
+    // lives in ONE place (buildDeepProbeSummary) so verify-do-binding.sh can
+    // parse either source interchangeably.
+    logDeepProbeComplete('scheduled', data, Date.now() - start, { cron: event.cron })
   } catch (err) {
     // The scheduled tick must never crash the isolate — surface and move on.
     logger.error('[scheduled] deep health probe failed', { error: toError(err), latency_ms: Date.now() - start })

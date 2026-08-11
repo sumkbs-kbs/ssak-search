@@ -4,15 +4,16 @@
   "compatibility_date": "2026-07-10",
   "pages_build_output_dir": "./dist",
   "compatibility_flags": ["nodejs_compat"],
-  // S104-③: scheduled deep health probe — the ONLY quota-burning consumer of
-  // the live backend probes + Slack alerts. /api/health itself stays light
-  // (zero subrequests) for every caller. Every 15 min = 96 deep runs/day
-  // (~672 subrequests), replacing the old behavior where EVERY /api/health
-  // call (uptime monitors etc.) burned 7 subrequests.
-  // Provision with: npx wrangler deploy (or Dashboard → Triggers → Cron).
-  "triggers": {
-    "crons": ["*/15 * * * *"],
-  },
+  // S104-③-fix (2026-08-11): NO `triggers.crons` here — Cloudflare Pages does
+  // NOT support cron triggers (Pages compatibility matrix: Cron Triggers
+  // Workers ✅ / Pages ❌) and wrangler REJECTS the key for Pages config
+  // ("Configuration file for Pages projects does not support \"triggers\""),
+  // which BLOCKED `wrangler pages deploy`. The deep health probe is instead
+  // scheduled by the separate Workers script `ssak-probe-scheduler`
+  // (wrangler.cron.jsonc — a Workers config where triggers ARE valid), which
+  // every 15 min invokes /api/health?depth=full on this deployment. That
+  // route runs the shared deep probe (quota-burning) + Slack alerts and emits
+  // the `[health] deep health probe complete` structured log.
   // Workers AI binding — free, auto-provisioned on all Cloudflare accounts.
   // Enables: answer generation (LLM), embedding generation (bge-base-en-v1.5),
   // and LLM reranking. Without this, all three fall back to degraded modes

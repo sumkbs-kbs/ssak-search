@@ -1,0 +1,26 @@
+// S104-③-fix (2026-08-11): cron scheduler Workers script for the deep health
+// probe. Cloudflare Pages cannot host cron triggers, so a plain Workers script
+// owns the `*/15 * * * *` trigger and invokes the Pages deployment's
+// /api/health?depth=full every 15 minutes (the route runs the shared deep
+// probe + Slack alerts and logs `[health] deep health probe complete`).
+//
+// Deploy (after the Pages deploy so PROBE_URL points at the newest bundle):
+//   npx wrangler deploy --config wrangler.cron.jsonc
+// Tail its logs:
+//   npx wrangler tail ssak-probe-scheduler
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "ssak-probe-scheduler",
+  "main": "src/cron-probe.ts",
+  "compatibility_date": "2026-07-10",
+  "compatibility_flags": ["nodejs_compat"],
+  // Workers DO support cron triggers (Pages does not) — every 15 min.
+  "triggers": {
+    "crons": ["*/15 * * * *"],
+  },
+  "vars": {
+    // The Pages deployment this scheduler probes. Not a secret (public URL);
+    // override per environment if needed.
+    "PROBE_URL": "https://search-engine-api.pages.dev",
+  },
+}

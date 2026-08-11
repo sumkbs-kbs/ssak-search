@@ -3151,7 +3151,7 @@ S104에서 기본 `/api/health`를 zero-subrequest 라이트 모드로 전환하
 - scheduled.test.ts 단독 5건 통과 — 라이트/딥 계약, Slack 알림, 크론 no-op 안전 모두 고정
 - 배포 후 실측: `wrangler deploy` 시 크론 트리거가 Pages/Workers 대시보드에 등록되며, 15분마다 `[scheduled] deep health probe complete` 로그 확인 가능
 
-**잔여**: ① 실제 배포 후 크론 트리거 등록·로그 확인 ② 다운 백엔드 Slack 알림의 실제 수신 검증 ③ `verify-do-binding.sh`가 scheduled 로그를 읽도록 확장(선택).
+**잔여 (2026-08-11 실측으로 갱신 — 상세는 S104-③-fix 절)**: ~~① 크론 트리거 등록·로그 확인~~ → **완료** (Pages 크론 미지원 → Workers 스케줄러 `ssak-probe-scheduler`로 재설계 후 2회 틱 실측) ② 다운 백엔드 Slack 알림의 실제 수신 검증 → **일부** (로직 테스트 고정, 실제 웹훅 수신 미확인) ③ ~~verify-do-binding.sh가 scheduled 로그를 읽도록 확장~~ → **완료** (S104-③-③ + 라이브 검증).
 ### S105: Phase 2.1 하이브리드 랭커 — RRF 순수 프리미티브 + 저장 풀 NDCG 실측 (2026-08-11)
 
 #### ① 현황 진단 — 하이브리드 엔진은 이미 존재, RRF 코어만 미테스트
@@ -3225,3 +3225,69 @@ console.log(res.results)                     // 3줄
 
 **잔여**: ① npm/pypi publish 단계(`npm publish`, `twine upload` — 패키지 메타데이터 준비 완료) ② LangChain/LlamaIndex Tool 래퍼 예제 ③ v1 라우트 버전 명시는 API 변경 시 적용 예정.
 
+### S104-③-③: verify-do-binding.sh 확장 — scheduled 딥 프로브 로그의 down_backends 회귀 감지 (2026-08-11)
+
+#### ① 목적 (S104-③ 잔여 ③)
+
+scheduled 크론(15분)이 남기는 `[scheduled] deep health probe complete` 로그의 `down_backends`를 verify-do-binding.sh가 읽어, DO 바인딩 검증과 함께 **백엔드 가용성 회귀**를 감지한다.
+
+#### ② 구현
+
+| 파일 | 변경 |
+|---|---|
+| `src/routes/health.ts` | `buildDeepProbeSummary`(순수, down_backends 추출) + `logDeepProbeComplete(source, data, ms, {cron,cached})` 공유 헬퍼 신규. `?depth=full` 라우트가 **같은 구조화 로그**를 발행 (fresh `cached:false`, 캐시히트 `cached:true` — 캐시 타이밍과 무관하게 캡처 결정적). Hono `c.executionCtx` getter가 ExecutionContext 없이 throw하는 엣지 가드 추가 (기존 잠재 500 수정) |
+| `src/scheduled.ts` | 인라인 요약을 `logDeepProbeComplete('scheduled', ...)`로 교체 — 필드 형태 단일 소스 (scheduled/route 양쪽 동일) |
+| `scripts/verify-do-binding.sh` | ① `parse_tail()` — wrangler `--format json` envelope(logs[].message) + bare logger JSON 모두 처리, 마지막 `deep health probe complete` 줄의 `down_backends` 추출 ② `--self-test` 모드 (픽스처 파싱 검증, 네트워크 불필요) ③ **check [6]** — `?depth=full` 강제 프로브 → `wrangler pages deployment tail`(TAIL_SECONDS, macOS-safe bg+kill) → 파싱 → 상태 파일(`~/.cache/ssak-verify-do-state.json`)과 비교해 **새 하락 = REGRESSION / 회복 = RECOVERED** 구분, `FAIL_ON_REGRESSION=1` 시 exit 1 (기본 warn) |
+| `tests/unit/scheduled.test.ts` (+4) | logger spy — healthy 틱 `down_backends: none` + cron 필드, github 다운 시 `down_backends: 'github'`, `buildDeepProbeSummary` 순수 함수 2건 |
+| `tests/unit/health-status.test.ts` (+2) | `?depth=full` fresh 프로브 `[health] ... cached:false` 로그, 캐시히트 `cached:true` 로그 |
+
+#### ③ 검증
+
+- 유닛 **1,796건 / 95파일** (+6) · tsc 0 · eslint 0 · format 0
+- `bash scripts/verify-do-binding.sh --self-test` → **PASS** (파서: wrangler envelope → down_backends=wikipedia,bing)
+- 회귀 비교 픽스처: prev={bing,wikipedia}/cur={wikipedia} → `recovered: [bing]` · prev=none/cur={wikipedia} → `new_down: [wikipedia]` · 첫 실행 → 전부 new
+- 라이브 캡처는 배포 후 확인 필요 (wrangler 로그인 + 크론/프로브 로그)
+
+#### ④ 잔여
+
+- 배포 후 `verify-do-binding.sh` 전 체크 실측 (DO 11건 + check [6] 로그 캡처)
+- Logpush/알림 쿼리에서 `down_backends != none` 감시 규칙 (선택)
+
+### S104-③-fix: Pages 크론 미지원 발견 → 별도 Workers 스케줄러로 재설계 + 실측 (2026-08-11)
+
+#### ① 실측으로 발견한 치명적 설계 결함
+
+"wrangler deploy 후 크론 트리거 등록 실측"을 실행하자 두 가지 문제가 드러났다:
+1. **Pages는 크론 트리거를 지원하지 않음** (공식 compatibility matrix: Cron Triggers Workers ✅ / Pages ❌). S104-③의 `triggers.crons`가 Pages 설정에서 유효하지 않아 **`wrangler pages deploy`가 설정 검증 단계에서 거부 → 배포 자체가 차단**됐다 (`[ERROR] Configuration file for Pages projects does not support "triggers"`).
+2. 설령 통과해도 Pages scheduled 핸들러는 절대 발동하지 않는다 — S104-③의 "15분 크론"은 실재하지 않는 가정이었다.
+
+#### ② 재설계 — Workers 스케줄러 + Pages 프로브 (Cloudflare 공식 권장 패턴)
+
+| 파일 | 변경 |
+|---|---|
+| `wrangler.jsonc` | `triggers.crons` **제거** — Pages 배포 차단 해제 (주석으로 사유 기록) |
+| `src/cron-probe.ts` (신규) | thin Workers `scheduled` 핸들러 — 15분마다 `{PROBE_URL}/api/health?depth=full` 호출, 응답에서 down_backends 파싱, `[cron-probe] deep health probe triggered` 구조화 로그. **절대 throw 없음** |
+| `wrangler.cron.jsonc` (신규) | Workers 설정 — `name: ssak-probe-scheduler`, `triggers.crons: ["*/15 * * * *"]` (Workers에선 유효), `vars.PROBE_URL` |
+| `.github/workflows/deploy.yml` | staging/production 양쪽에 "Deploy probe-scheduler" 스텝 추가 (Pages 배포 후) |
+| `scripts/verify-do-binding.sh` | ① deployment URL 동적 해석(`pages deployment list --json` → Production Deployment URL) ② tail 명령에 URL positional + `--project-name` (비대화형 필수) ③ `parse_tail`을 **스트리밍 JSONDecoder.raw_decode**로 전면 교체 — wrangler tail이 **pretty-printed 멀티라인 JSON + message 배열**(`["{...}"]`)을 방출하는 실측 형태 대응 ④ 프로브 강제를 tail 연결 **후**로 이동 (연결 전 로그 유실 방지) + TAIL_SECONDS 40 |
+| `tests/unit/cron-probe.test.ts` (신규, +4) | URL 호출+요약 로그, down_backends 파싱, 실패 시 미throw, 비200 응답 처리 |
+
+#### ③ 실측 (2026-08-11, 프로덕션)
+
+- **배포**: Pages `29f6bb06` (triggers 제거 후 성공) + `ssak-probe-scheduler` 배포 — deploy 출력에 **`schedule: */15 * * * *` 등록 확인**
+- **verify-do-binding.sh 전 체크**: DO 11건 중 9 bound / 0 missing / 1 skipped (EXPERIMENT 401) · check [6] **라이브 캡처 성공** — "✅ No down backends (down_backends: none)" + "✅ No new backend regressions"
+- **크론 사이클 실측 (11:45:55 UTC)**:
+  - 스케줄러: `[cron-probe] deep health probe triggered` — http 200 · probe_status: degraded · **down_backends: none** · 1070ms · cron `*/15 * * * *`
+  - Pages: `[health] deep health probe complete` — status: degraded · **down_backends: none** · cached: false · 839ms
+  - 11:30 틱도 동일 확인 (Pages [health] 로그 캡처) — **크론이 실제로 발동해 딥 프로브를 실행함을 2회 틱으로 검증**
+
+#### ④ S104-③ 잔여 항목 갱신
+
+- ~~① 크론 트리거 등록·로그 확인~~ → **완료** (단, Pages→Workers 스케줄러 재설계 경유 — 위 ②③)
+- ② 다운 백엔드 Slack 알림 수신 검증 → **일부** — alertBackendDown 로직은 기존 테스트로 고정, 실제 Slack 수신은 웹훅 환경 필요 (다운 백엔드 실측 시)
+- ~~③ verify-do-binding.sh가 scheduled 로그를 읽도록 확장~~ → **완료** (S104-③-③ + 라이브 검증)
+
+#### ⑤ 잔여
+
+- 크론 트리거 전파는 최대 ~15분 — 배포 직후 첫 틱까지 지연 가능 (실측: 배포 11:21 → 첫 틱 11:30 정상)
+- `PROBE_URL`은 env별 오버라이드 가능 (staging 배포 시 staging URL 필요 — 선택)

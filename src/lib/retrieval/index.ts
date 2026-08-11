@@ -55,3 +55,5 @@ export {
   type DiversityOptions,
   type DiversityStats,
 } from './diversity'
+
+export { rrfFuse, rrfContribution, DEFAULT_RRF_K, type RankedList, type RRFConfig } from './rrf'

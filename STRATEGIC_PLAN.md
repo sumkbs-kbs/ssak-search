@@ -3152,3 +3152,35 @@ S104에서 기본 `/api/health`를 zero-subrequest 라이트 모드로 전환하
 - 배포 후 실측: `wrangler deploy` 시 크론 트리거가 Pages/Workers 대시보드에 등록되며, 15분마다 `[scheduled] deep health probe complete` 로그 확인 가능
 
 **잔여**: ① 실제 배포 후 크론 트리거 등록·로그 확인 ② 다운 백엔드 Slack 알림의 실제 수신 검증 ③ `verify-do-binding.sh`가 scheduled 로그를 읽도록 확장(선택).
+### S105: Phase 2.1 하이브리드 랭커 — RRF 순수 프리미티브 + 저장 풀 NDCG 실측 (2026-08-11)
+
+#### ① 현황 진단 — 하이브리드 엔진은 이미 존재, RRF 코어만 미테스트
+
+셀프인덱스 하이브리드 검색(`src/lib/retrieval/hybrid-search.ts`)은 **BM25(FTS5/D1) + Vectorize 임베딩 → RRF 퓨전 → 크로스-인코더 재랭킹 → MMR 다양성** 파이프라인으로 이미 구현·배선돼 있음(orchestrator:528, fallback:60). 그러나 RRF 퓨전 로직(`computeRRFScore`/`fuseResults`)은 **private 메서드로 단위 테스트가 전무** — 재사용 불가능한 블랙박스였음.
+
+#### ② 구현 — `src/lib/retrieval/rrf.ts` 순수 프리미티브
+
+- **`rrfFuse<T>(lists, {k, getId})`** — `RRFscore(d) = Σ w_l/(k + rank_l(d))`, k 기본 60, 리스트별 가중치, id 기준 dedup, 첫 등장 순 안정적 tie-break(결정적). 단일 리스트는 그대로 통과, 빈 입력 안전.
+- `rrfContribution(rank, k, weight)` — 정확한 수학 단위 테스트용 export.
+- `HybridSearchEngine.fuseResults`를 rrfFuse 위로 리팩터 — **score = 퓨전 RRF 점수** 계약 보존(재랭커 휴리스틱이 doc.score 가중), componentScores 의미론 유지. retrieval/index.ts에 export.
+- **단위 테스트 +12** (tests/unit/rrf.test.ts): RRF 수학 정확도, 교차 리스트 승격, dedup, 가중치, k 민감도, 결정성, 빈/단일 리스트, id/url 기본 식별자.
+
+#### ③ 저장 풀 NDCG 실측 — 판정: 웹 파이프라인에 RRF 단독 추가는 **회귀**
+
+`scripts/sim-rrf-ndcg.ts`(신규, `sim:rrf-ndcg` 등록) — 500쿼리 × 3 run, S54 실시간 computeNdcg:
+
+| 순위 전략 | 평균 NDCG@10 | Δ vs baseline |
+|---|---|---|
+| baseline(프로덕션 랭킹) | **0.2892** | — |
+| 순수 BM25 단독 재정렬 | 0.2626 | -0.0266 |
+| **RRF 퓨전 (k=30/60/120)** | **0.2752** | **-0.0140** (개선 35 / 회귀 91, 최악 Δ-0.5000) |
+
+- **k 무관(30/60/120 동일)**: 상관된 두 순서(position 퓨전)에선 k가 결과를 바꾸지 않음.
+- **원인**: 두 신호(프로덕션 hybridScore의 70%가 BM25 + 휴리스틱/권위/최신성 vs 순수 BM25)는 **동일 recall 집합의 상관 순서**라 RRF가 조정된 프로덕션 순위를 오히려 희석. RRF의 가치는 **recall 집합이 다른** 퓨전(셀프인덱스의 FTS5 vs Vectorize — 서로 다른 문서 반환)에서만 발휘됨.
+- **판정**: ① 웹 스코어-머지 파이프라인에 RRF를 추가로 얹지 말 것(데이터가 반대) ② RRF의 정당한 사용처 = per-retriever 퓨전(셀프인덱스 — 이미 배선) ③ **per-백엔드 RRF의 정확한 실측은 eval 러너가 결과별 백엔드 태그를 저장해야 가능** — 저장 풀에는 source_backend가 없어 재구성 불가(데이터 한계 명시).
+
+#### ④ 검증
+
+유닛 **1,750건 / 92파일** (+12) · tsc 0 · lint 0 · format 0 · 기존 retrieval 테스트(79건) 유지.
+
+**잔여 레버**: ① eval 러너에 결과별 `source_backend` 태그 추가 → per-백엔드 RRF 시뮬레이션 가능 ② 셀프인덱스 하이브리드의 RRF k 튜닝(현재 60 — k 무관성 실측으로 조정 불필요 확인).

@@ -37,6 +37,7 @@ import { searchIndex } from '../index/pipeline'
 import type { IndexSearchResult } from '../index/types'
 import { CrossEncoderReranker, type RerankDocument } from './reranker'
 import { mmrDiversityFilter } from './diversity'
+import { rrfFuse } from './rrf'
 
 // ============================================================
 // Types
@@ -112,39 +113,9 @@ export const DEFAULT_HYBRID_CONFIG: HybridSearchConfig = {
 // ============================================================
 // RRF Fusion
 // ============================================================
-
-/**
- * Compute RRF score for a single document across multiple ranked lists.
- *
- * @param docId - Document identifier
- * @param ranks - Map of list name → rank position (1-based)
- * @param k - RRF constant
- * @returns RRF score
- */
-function computeRRFScore(
-  docId: string,
-  ranks: Map<string, Map<string, number>>,
-  listWeights: Map<string, number>,
-  k: number,
-): { rrfScore: number; bm25?: number; vector?: number } {
-  let rrfScore = 0
-  let bm25Score: number | undefined
-  let vectorScore: number | undefined
-
-  for (const [listName, rankMap] of ranks) {
-    const rank = rankMap.get(docId)
-    if (rank !== undefined) {
-      const weight = listWeights.get(listName) ?? 1.0
-      rrfScore += weight / (k + rank)
-
-      // Track individual component scores
-      if (listName === 'bm25') bm25Score = 1 - (rank - 1) / (rankMap.size || 1)
-      if (listName === 'vector') vectorScore = 1 - (rank - 1) / (rankMap.size || 1)
-    }
-  }
-
-  return { rrfScore, bm25: bm25Score, vector: vectorScore }
-}
+// The fusion math lives in ./rrf (rrfFuse) — a pure, unit-tested primitive
+// shared with scripts/sim-rrf-ndcg.ts. This file keeps only the mapping that
+// re-attaches HybridSearchResult component scores after fusion.
 
 // ============================================================
 // Hybrid Search Engine
@@ -313,62 +284,54 @@ export class HybridSearchEngine {
   }
 
   /**
-   * Fuse BM25 and Vector results using RRF.
+   * Fuse BM25 and Vector results using RRF (pure primitive: ./rrf#rrfFuse).
    */
   private fuseResults(
     bm25Results: HybridSearchResult[],
     vectorResults: HybridSearchResult[],
     maxResults: number,
   ): HybridSearchResult[] {
-    // Build rank maps (1-based)
+    // Build rank maps (1-based) for component-score normalization (informational).
     const bm25Ranks = new Map<string, number>()
     bm25Results.forEach((r, i) => bm25Ranks.set(r.id, i + 1))
-
     const vectorRanks = new Map<string, number>()
     vectorResults.forEach((r, i) => vectorRanks.set(r.id, i + 1))
 
-    // Collect all unique document IDs
-    const allIds = new Set([...bm25Ranks.keys(), ...vectorRanks.keys()])
+    const fused = rrfFuse<HybridSearchResult>(
+      [
+        { items: bm25Results, weight: this.config.bm25Weight },
+        { items: vectorResults, weight: this.config.vectorWeight },
+      ],
+      { k: this.config.rrfK, getId: (r) => r.id },
+    )
 
-    // Build list weights
-    const listWeights = new Map<string, number>()
-    listWeights.set('bm25', this.config.bm25Weight)
-    listWeights.set('vector', this.config.vectorWeight)
+    return fused.slice(0, maxResults).map((item) => {
+      const bm25Item = bm25Results.find((r) => r.id === item.id)
+      const vectorItem = vectorResults.find((r) => r.id === item.id)
+      const bm25Rank = bm25Ranks.get(item.id)
+      const vectorRank = vectorRanks.get(item.id)
+      const bm25Component =
+        bm25Item?.componentScores.bm25 ?? (bm25Rank ? 1 - (bm25Rank - 1) / (bm25Ranks.size || 1) : undefined)
+      const vectorComponent =
+        vectorItem?.componentScores.vector ?? (vectorRank ? 1 - (vectorRank - 1) / (vectorRanks.size || 1) : undefined)
 
-    // Per-list rank maps grouped by list name
-    const rankMaps = new Map<string, Map<string, number>>()
-    rankMaps.set('bm25', bm25Ranks)
-    rankMaps.set('vector', vectorRanks)
-
-    // Compute RRF scores for all documents
-    const scored = Array.from(allIds).map((id) => {
-      const bm25Item = bm25Results.find((r) => r.id === id)
-      const vectorItem = vectorResults.find((r) => r.id === id)
-      // allIds is the UNION of bm25+vector ids, so exactly one lookup hits.
-      const item = bm25Item ?? vectorItem
-      if (!item) throw new Error(`Hybrid search: id ${id} in neither list`)
-
-      const {
-        rrfScore,
-        bm25: bm25Score,
-        vector: vectorScore,
-      } = computeRRFScore(id, rankMaps, listWeights, this.config.rrfK)
+      // Preserve the previous contract: `score` is the FUSED RRF score (not a
+      // component score) — the reranker's heuristic pass weights doc.score.
+      const rrfScore =
+        (bm25Rank ? this.config.bm25Weight / (this.config.rrfK + bm25Rank) : 0) +
+        (vectorRank ? this.config.vectorWeight / (this.config.rrfK + vectorRank) : 0)
 
       return {
         ...item,
         score: rrfScore,
         source: (bm25Item && vectorItem ? 'hybrid' : bm25Item ? 'bm25' : 'vector') as 'hybrid' | 'bm25' | 'vector',
         componentScores: {
-          bm25: bm25Item?.componentScores.bm25 ?? bm25Score,
-          vector: vectorItem?.componentScores.vector ?? vectorScore,
+          bm25: bm25Component,
+          vector: vectorComponent,
           rrfScore,
         },
       }
     })
-
-    // Sort by RRF score descending and take top results
-    scored.sort((a, b) => b.score - a.score)
-    return scored.slice(0, maxResults)
   }
 
   /**

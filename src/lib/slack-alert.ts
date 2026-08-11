@@ -18,6 +18,20 @@ import { logger } from './logger'
 // Types
 // ============================================================
 
+/**
+ * Resolve the Slack webhook URL from either env name.
+ *
+ * The worker code historically reads `SLACK_WEBHOOK`, while README.md /
+ * CLOUDFLARE_BINDINGS_GUIDE.md instruct configuring `ALERT_SLACK_WEBHOOK`
+ * (S104-③-② naming mismatch — following the docs alone never delivered an
+ * alert). Accept both so either configuration path works; explicit
+ * SLACK_WEBHOOK wins when both are set.
+ * Pure function — unit-testable without any network/mocks.
+ */
+export function resolveWebhookUrl(env: { SLACK_WEBHOOK?: string; ALERT_SLACK_WEBHOOK?: string }): string | undefined {
+  return env.SLACK_WEBHOOK || env.ALERT_SLACK_WEBHOOK || undefined
+}
+
 export interface SlackAlertOptions {
   /** Alert title / header */
   title: string

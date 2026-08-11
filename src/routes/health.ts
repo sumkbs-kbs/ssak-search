@@ -24,7 +24,7 @@ import { getBackendHealth } from '../lib/rate-limiter'
 import { getPrometheusMetrics, setMetricsEnv } from '../lib/metrics'
 import { getActiveClientCount } from '../lib/auth'
 import { braveHealthCheck } from '../lib/brave-search'
-import { alertBackendDown } from '../lib/slack-alert'
+import { alertBackendDown, resolveWebhookUrl } from '../lib/slack-alert'
 import { IndexingPipeline } from '../lib/index/pipeline'
 
 // Cache health probe results for 30 seconds to prevent self-DoS.
@@ -254,8 +254,9 @@ export async function runDeepHealthProbe(
     }
     probedStatuses.push({ status: result.status })
     if (result.status === 'down') {
-      // Fire-and-forget Slack alert for backend failures
-      const webhookUrl = env.SLACK_WEBHOOK
+      // Fire-and-forget Slack alert for backend failures (S104-③-②: accept
+      // both SLACK_WEBHOOK and ALERT_SLACK_WEBHOOK — docs use the latter).
+      const webhookUrl = resolveWebhookUrl(env)
       if (webhookUrl) {
         const alertPromise = alertBackendDown(webhookUrl, name, result.latency_ms, result.status)
         if (executionCtx) executionCtx.waitUntil(alertPromise)

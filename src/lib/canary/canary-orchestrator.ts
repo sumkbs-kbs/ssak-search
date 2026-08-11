@@ -14,7 +14,7 @@
 
 import { DurableObject } from 'cloudflare:workers'
 import { logger, toError } from '../logger'
-import { sendSlackAlert } from '../slack-alert'
+import { resolveWebhookUrl, sendSlackAlert } from '../slack-alert'
 import { forceOpenBackend } from '../rate-limiter'
 import type { Env } from '../../types'
 import { bingSearch, bingNewsSearch } from '../bing-search'
@@ -311,8 +311,8 @@ export class CanaryOrchestratorDO extends DurableObject<Env> {
       ? `Previous run: ${snapshot.results_count} results (${snapshot.status}).`
       : 'No previous snapshot.'
 
-    // Slack alert
-    await sendSlackAlert(this.env.SLACK_WEBHOOK, {
+    // Slack alert — S104-③-②: accept SLACK_WEBHOOK or ALERT_SLACK_WEBHOOK
+    await sendSlackAlert(resolveWebhookUrl(this.env), {
       title: `🐛 Parser Regression: ${backend}`,
       message: `Backend *${backend}* stopped returning expected results — parser may have broken due to markup changes. ${detail}`,
       color: 'danger',

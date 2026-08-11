@@ -28,12 +28,20 @@
 #
 # Env overrides for check [6]:
 #   TAIL_CMD         full tail command; when unset it is built from the
-#                    latest Production deployment URL (resolved via
-#                    `wrangler pages deployment list --json`) + --project-name
+#                    resolved deployment URL (see ENVIRONMENT) + --project-name
 #   TAIL_SECONDS     log-capture window (default 25)
 #   PROJECT_NAME     Pages project name (default search-engine-api)
+#   ENVIRONMENT      production (default) | staging — selects the deployment
+#                    used for the log tail AND the default WORKER_URL
+#                    (production → main branch, search-engine-api.pages.dev;
+#                    staging → staging branch, staging.search-engine-api.pages.dev).
+#   EXPECTED_COMMIT  commit the resolved deployment is compared against
+#                    (default: local git HEAD). check [6] warns when they
+#                    differ (deployment behind/ahead of the committed state).
+#   FAIL_ON_COMMIT_DRIFT=1  exit 1 when the deployment commit ≠ expected
+#                    (default: warn only — DO bindings are the gate)
 #   VERIFY_DO_STATE_FILE  regression-state JSON path
-#                    (default ${HOME}/.cache/ssak-verify-do-state.json)
+#                    (default ${HOME}/.cache/ssak-verify-do-state[-<env>].json)
 #   FAIL_ON_REGRESSION=1  exit 1 when a NEW down backend is detected
 #                    (default: warn only — DO bindings are the gate)
 #
@@ -43,7 +51,55 @@
 
 set -euo pipefail
 
-WORKER_URL="${WORKER_URL:-https://search-engine-api.pages.dev}"
+# Environment selection — controls the default WORKER_URL, the deployment
+# branch filter in check [6], and the per-environment regression state file.
+ENVIRONMENT="${ENVIRONMENT:-production}"
+case "${ENVIRONMENT}" in
+  production)
+    WORKER_URL="${WORKER_URL:-https://search-engine-api.pages.dev}"
+    ;;
+  staging)
+    WORKER_URL="${WORKER_URL:-https://staging.search-engine-api.pages.dev}"
+    ;;
+  *)
+    echo " ❌ Unknown ENVIRONMENT: ${ENVIRONMENT} (expected production|staging)" >&2
+    exit 2
+    ;;
+esac
+
+# resolve_deployment — read `wrangler pages deployment list --json` on stdin,
+# emit ONE JSON line {"url": ..., "commit": ..., "id": ...} for the target
+# environment. The ID is what `wrangler pages deployment tail` actually needs:
+# URL-based tailing filters deployments by d8.environment === "production" in
+# wrangler (S104-③-④ live finding), so a staging URL is rejected with "Could
+# not find deployment match url" — the ID path skips that filter entirely.
+#   production: first entry with Environment == "Production" (fallback: d[0])
+#   staging:    first entry with Branch == "staging" (fallback: empty — no
+#               staging deployment exists yet → check [6] skips the tail)
+# The commit is the deployment's `Source` field (git SHA recorded at deploy
+# time) — this is what the commit-match check compares against git HEAD.
+resolve_deployment() {
+  python3 -c '
+import sys, json
+env = sys.argv[1]
+try:
+    d = json.load(sys.stdin)
+except Exception:
+    print(json.dumps({"url": "", "commit": "", "id": ""}))
+    sys.exit(0)
+if not isinstance(d, list) or not d:
+    print(json.dumps({"url": "", "commit": "", "id": ""}))
+    sys.exit(0)
+if env == "staging":
+    match = next((x for x in d if x.get("Branch") == "staging"), None)
+else:
+    match = next((x for x in d if x.get("Environment") == "Production"), d[0])
+if match is None:
+    print(json.dumps({"url": "", "commit": "", "id": ""}))
+else:
+    print(json.dumps({"url": match.get("Deployment", ""), "commit": match.get("Source", ""), "id": match.get("Id", "")}))
+' "${1}"
+}
 
 # parse_tail — read raw `wrangler tail` lines on stdin, emit ONE JSON line:
 #   {"found": bool, "down_backends": str|null, "raw": str|null}
@@ -174,7 +230,34 @@ PRETTYFIXTURE
     echo " ❌ Parser self-test FAIL (pretty multi-line fixture: down_backends=${DOWN3})"
     exit 1
   fi
-  echo " ✅ Parser self-test PASS (string + array + pretty multi-line fixtures)"
+  # Fixture 4: deployment-list resolver — environment-aware URL + commit
+  # (Source) selection. Guards check [6] against resolving the WRONG
+  # deployment (e.g. a newer staging deploy shadowing production) or a
+  # deployment that does not match the committed state.
+  DEPFIX='[{"Id":"a","Environment":"Production","Branch":"main","Source":"abc1234","Deployment":"https://prod-a.pages.dev"},{"Id":"b","Environment":"Preview","Branch":"staging","Source":"def5678","Deployment":"https://stg-b.pages.dev"},{"Id":"c","Environment":"Preview","Branch":"feature","Source":"ghi9012","Deployment":"https://feat-c.pages.dev"}]'
+  OUTP=$(printf '%s' "$DEPFIX" | resolve_deployment production)
+  URLA=$(echo "$OUTP" | python3 -c 'import sys,json;print(json.load(sys.stdin)["url"])')
+  CMTA=$(echo "$OUTP" | python3 -c 'import sys,json;print(json.load(sys.stdin)["commit"])')
+  IDA=$(echo "$OUTP" | python3 -c 'import sys,json;print(json.load(sys.stdin)["id"])')
+  if [ "${URLA}" != "https://prod-a.pages.dev" ] || [ "${CMTA}" != "abc1234" ] || [ "${IDA}" != "a" ]; then
+    echo " ❌ Deployment resolver self-test FAIL (production: url=${URLA} commit=${CMTA} id=${IDA})"
+    exit 1
+  fi
+  OUTS=$(printf '%s' "$DEPFIX" | resolve_deployment staging)
+  URLB=$(echo "$OUTS" | python3 -c 'import sys,json;print(json.load(sys.stdin)["url"])')
+  CMTB=$(echo "$OUTS" | python3 -c 'import sys,json;print(json.load(sys.stdin)["commit"])')
+  IDB=$(echo "$OUTS" | python3 -c 'import sys,json;print(json.load(sys.stdin)["id"])')
+  if [ "${URLB}" != "https://stg-b.pages.dev" ] || [ "${CMTB}" != "def5678" ] || [ "${IDB}" != "b" ]; then
+    echo " ❌ Deployment resolver self-test FAIL (staging: url=${URLB} commit=${CMTB} id=${IDB})"
+    exit 1
+  fi
+  OUTN=$(printf '%s' '[{"Id":"a","Environment":"Production","Branch":"main","Source":"abc1234","Deployment":"https://prod-a.pages.dev"}]' | resolve_deployment staging)
+  URLC=$(echo "$OUTN" | python3 -c 'import sys,json;print(json.load(sys.stdin)["url"])')
+  if [ -n "${URLC}" ]; then
+    echo " ❌ Deployment resolver self-test FAIL (empty staging must resolve to '' got: ${URLC})"
+    exit 1
+  fi
+  echo " ✅ Parser self-test PASS (string + array + pretty multi-line + deployment-resolver fixtures)"
   exit 0
 fi
 
@@ -182,6 +265,7 @@ echo "━━━━━━━━━━━━━━━━━━━━━━━━�
 echo " Verifying ALL Durable Object Bindings"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo " Worker URL:    ${WORKER_URL}"
+echo " Environment:   ${ENVIRONMENT}"
 echo ""
 
 # ---- Check: Health endpoint ------------------------------------------------
@@ -282,7 +366,7 @@ for i in "${!DO_BINDINGS[@]}"; do
   if [ "${status}" = "501" ]; then
     echo " ⚠️  ${bind_pad} → ${route_pad} HTTP 501 (DO not bound)"
     FAIL_COUNT=$((FAIL_COUNT + 1))
-  elif [ "${status}" = "200" ] || [ "${status}" = "400" ] || [ "${status}" = "404" ] || [ "${status}" = "405" ]; then
+  elif [ "${status}" = "200" ] || [ "${status}" = "400" ] || [ "${status}" = "401" ] || [ "${status}" = "404" ] || [ "${status}" = "405" ]; then
     echo " ✅ ${bind_pad} → ${route_pad} HTTP ${status} (DO bound)"
     PASS_COUNT=$((PASS_COUNT + 1))
   elif [ "${status}" = "000" ]; then
@@ -325,22 +409,75 @@ echo " [6] Checking backend availability from deep-probe logs (S104-③-③)..."
 echo "     Will force /api/health?depth=full while tailing (emits the same"
 echo "     structured line the scheduled cron logs every 15 min)..."
 
-# Resolve the latest production deployment URL — `wrangler pages deployment
-# tail` requires the deployment ID/URL as a positional arg in non-interactive
-# mode (--environment alone is not enough), and the URL changes every deploy.
+# Resolve the deployment URL + its recorded commit — `wrangler pages
+# deployment tail` requires the deployment ID/URL as a positional arg in
+# non-interactive mode (--environment alone is not enough), the URL changes
+# every deploy, and the deployment's `Source` commit must match the committed
+# state (S104-③-④: the previous resolver picked any first Production entry
+# without ever checking the commit — a stale deployment passed silently).
 PROJECT_NAME="${PROJECT_NAME:-search-engine-api}"
-DEPLOY_URL="$(npx wrangler pages deployment list --project-name "${PROJECT_NAME}" --json 2>/dev/null | python3 -c 'import sys,json;d=json.load(sys.stdin);print(next((x["Deployment"] for x in d if x.get("Environment")=="Production"), d[0]["Deployment"]))' 2>/dev/null || echo "")"
+DEPLOY_INFO="$(npx wrangler pages deployment list --project-name "${PROJECT_NAME}" --json 2>/dev/null | resolve_deployment "${ENVIRONMENT}" 2>/dev/null || echo '{"url":"","commit":"","id":""}')"
+DEPLOY_URL="$(echo "${DEPLOY_INFO}" | python3 -c 'import sys,json;print(json.load(sys.stdin)["url"])' 2>/dev/null || echo "")"
+DEPLOY_COMMIT="$(echo "${DEPLOY_INFO}" | python3 -c 'import sys,json;print(json.load(sys.stdin)["commit"])' 2>/dev/null || echo "")"
+DEPLOY_ID="$(echo "${DEPLOY_INFO}" | python3 -c 'import sys,json;print(json.load(sys.stdin)["id"])' 2>/dev/null || echo "")"
 if [ -z "${DEPLOY_URL}" ]; then
-  echo " ⚠️  Could not resolve the latest production deployment URL — skipping log tail."
-  echo "    (override TAIL_CMD with the full tail command + deployment URL)"
+  echo " ⚠️  Could not resolve a ${ENVIRONMENT} deployment URL — skipping log tail."
+  echo "    (staging: run the deploy-staging workflow or wrangler pages deploy --branch=staging;"
+  echo "     override TAIL_CMD with the full tail command + deployment URL)"
 else
   echo "     Deployment: ${DEPLOY_URL}"
 fi
 
-# TAIL_CMD override wins; otherwise build it from the resolved deployment URL
-# (wrangler needs BOTH the URL positional AND --project-name in CI mode).
+# ── Commit-match check (S104-③-④): the resolved deployment's Source commit
+# must equal the expected commit (local HEAD by default). A mismatch means the
+# live bundle predates the committed code — surface it with a drift count so
+# a stale deployment can never pass silently.
+EXPECTED_COMMIT="${EXPECTED_COMMIT:-$(git rev-parse HEAD 2>/dev/null || echo "")}"
+if [ -n "${DEPLOY_COMMIT}" ] && [ -n "${EXPECTED_COMMIT}" ]; then
+  # Cloudflare truncates the deployment Source to a 7-char short SHA while
+  # git HEAD is 40 chars — normalize both via git rev-parse so the comparison
+  # is length-independent (S104-③-④: a length mismatch previously flagged
+  # the SAME commit as drift — 556d363 vs 556d3634... reported a false ⚠️).
+  FULL_DEPLOY="$(git rev-parse --verify "${DEPLOY_COMMIT}^{commit}" 2>/dev/null || echo "${DEPLOY_COMMIT}")"
+  DEPLOY_SHORT="${FULL_DEPLOY:0:7}"
+  EXPECTED_SHORT="${EXPECTED_COMMIT:0:7}"
+  echo "     Deployment commit: ${DEPLOY_SHORT} (expected ${EXPECTED_SHORT})"
+  if [ "${FULL_DEPLOY}" = "${EXPECTED_COMMIT}" ]; then
+    echo " ✅ Deployment commit matches the expected commit (${EXPECTED_SHORT})"
+    DIRTY="$(git status --porcelain 2>/dev/null | wc -l | tr -d ' ')"
+    if [ -n "${DIRTY}" ] && [ "${DIRTY}" -gt 0 ]; then
+      echo "    Note: worktree has ${DIRTY} uncommitted change(s) — if this deployment was made"
+      echo "    from this tree, Source records HEAD even though uncommitted code is live."
+    fi
+  else
+    BEHIND="$(git rev-list --count "${FULL_DEPLOY}..${EXPECTED_COMMIT}" 2>/dev/null || echo "?")"
+    AHEAD="$(git rev-list --count "${EXPECTED_COMMIT}..${FULL_DEPLOY}" 2>/dev/null || echo "?")"
+    echo " ⚠️  Deployment commit ${DEPLOY_SHORT} ≠ expected ${EXPECTED_SHORT}"
+    echo "    (deployment is ${BEHIND} behind / ${AHEAD} ahead of the expected commit)"
+    echo "    The deployed bundle may not include the latest committed code — redeploy to sync."
+    DIRTY="$(git status --porcelain 2>/dev/null | wc -l | tr -d ' ')"
+    if [ -n "${DIRTY}" ] && [ "${DIRTY}" -gt 0 ]; then
+      echo "    Note: worktree has ${DIRTY} uncommitted change(s) — a manual deploy from this"
+      echo "    tree records HEAD as Source even though uncommitted code is live."
+    fi
+    if [ "${FAIL_ON_COMMIT_DRIFT:-0}" = "1" ]; then
+      echo " ❌ FAIL_ON_COMMIT_DRIFT=1 → exiting 1 (deployment commit drift)"
+      exit 1
+    fi
+  fi
+elif [ -n "${DEPLOY_URL}" ]; then
+  echo " ⚠️  Commit-match check skipped (deployment commit or expected commit unavailable)"
+fi
+
+# TAIL_CMD override wins; otherwise build it from the resolved deployment ID
+# — URL-based tailing rejects staging deployments (wrangler filters by
+# environment === "production"; S104-③-④ live finding), the ID does not.
 if [ -z "${TAIL_CMD:-}" ]; then
-  TAIL_CMD="npx wrangler pages deployment tail ${DEPLOY_URL} --project-name ${PROJECT_NAME} --format json"
+  if [ -n "${DEPLOY_ID}" ]; then
+    TAIL_CMD="npx wrangler pages deployment tail ${DEPLOY_ID} --project-name ${PROJECT_NAME} --format json"
+  else
+    TAIL_CMD="npx wrangler pages deployment tail ${DEPLOY_URL} --project-name ${PROJECT_NAME} --format json"
+  fi
 fi
 TAIL_SECONDS="${TAIL_SECONDS:-40}"
 TAIL_LOG="$(mktemp -t verify-do-tail.XXXXXX 2>/dev/null || mktemp)"
@@ -385,8 +522,17 @@ elif [ "${FOUND}" = "true" ]; then
     echo " ⚠️  Down backends detected in latest deep-probe log: ${DOWN}"
   fi
 
-  # ── Regression vs last verification (state file) ──
-  STATE_FILE="${VERIFY_DO_STATE_FILE:-${HOME}/.cache/ssak-verify-do-state.json}"
+  # ── Regression vs last verification (state file, per environment so
+  # staging and production never clobber each other's baseline) ──
+  if [ -z "${VERIFY_DO_STATE_FILE:-}" ]; then
+    if [ "${ENVIRONMENT}" = "staging" ]; then
+      STATE_FILE="${HOME}/.cache/ssak-verify-do-state-staging.json"
+    else
+      STATE_FILE="${HOME}/.cache/ssak-verify-do-state.json"
+    fi
+  else
+    STATE_FILE="${VERIFY_DO_STATE_FILE}"
+  fi
   mkdir -p "$(dirname "${STATE_FILE}")"
 
   PREV_DOWN=""

@@ -39,9 +39,11 @@ vi.mock('../../src/lib/rate-limiter', () => ({
 }))
 
 const sendSlackAlert = vi.fn(async () => true)
-vi.mock('../../src/lib/slack-alert', () => ({
-  sendSlackAlert,
-}))
+vi.mock('../../src/lib/slack-alert', async (importOriginal) => {
+  // Keep the real resolveWebhookUrl (S104-③-②) — mock only the network sender.
+  const actual = await importOriginal<typeof import('../../src/lib/slack-alert')>()
+  return { ...actual, sendSlackAlert }
+})
 
 // ============================================================
 // DurableObject state mock factory

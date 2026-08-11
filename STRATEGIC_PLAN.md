@@ -3151,7 +3151,7 @@ S104에서 기본 `/api/health`를 zero-subrequest 라이트 모드로 전환하
 - scheduled.test.ts 단독 5건 통과 — 라이트/딥 계약, Slack 알림, 크론 no-op 안전 모두 고정
 - 배포 후 실측: `wrangler deploy` 시 크론 트리거가 Pages/Workers 대시보드에 등록되며, 15분마다 `[scheduled] deep health probe complete` 로그 확인 가능
 
-**잔여 (2026-08-11 실측으로 갱신 — 상세는 S104-③-fix 절)**: ~~① 크론 트리거 등록·로그 확인~~ → **완료** (Pages 크론 미지원 → Workers 스케줄러 `ssak-probe-scheduler`로 재설계 후 2회 틱 실측) ② 다운 백엔드 Slack 알림의 실제 수신 검증 → **일부** (로직 테스트 고정, 실제 웹훅 수신 미확인) ③ ~~verify-do-binding.sh가 scheduled 로그를 읽도록 확장~~ → **완료** (S104-③-③ + 라이브 검증).
+**잔여 (2026-08-11 실측으로 갱신 — 상세는 S104-③-fix/S104-③-② 절)**: ~~① 크론 트리거 등록·로그 확인~~ → **완료** (Pages 크론 미지원 → Workers 스케줄러 `ssak-probe-scheduler`로 재설계 후 2회 틱 실측) ② 다운 백엔드 Slack 알림의 실제 수신 검증 → **완료** (S104-③-② — 명칭 불일치 수정 + 전송 계층 실측, 웹훅 시크릿 등록만 잔여) ③ ~~verify-do-binding.sh가 scheduled 로그를 읽도록 확장~~ → **완료** (S104-③-③ + 라이브 검증).
 ### S105: Phase 2.1 하이브리드 랭커 — RRF 순수 프리미티브 + 저장 풀 NDCG 실측 (2026-08-11)
 
 #### ① 현황 진단 — 하이브리드 엔진은 이미 존재, RRF 코어만 미테스트
@@ -3291,3 +3291,82 @@ scheduled 크론(15분)이 남기는 `[scheduled] deep health probe complete` �
 
 - 크론 트리거 전파는 최대 ~15분 — 배포 직후 첫 틱까지 지연 가능 (실측: 배포 11:21 → 첫 틱 11:30 정상)
 - `PROBE_URL`은 env별 오버라이드 가능 (staging 배포 시 staging URL 필요 — 선택)
+
+### S104-③-②: Slack 웹훅 명칭 불일치 수정 + 전송 계층 실측 검증 (2026-08-11)
+
+#### ① 발견 — 문서대로 설정해도 알림이 발동하지 않는 버그
+
+- 워커 코드는 `env.SLACK_WEBHOOK`을 읽지만 README.md / CLOUDFLARE_BINDINGS_GUIDE.md는
+  `ALERT_SLACK_WEBHOOK`를 지시 — **문서대로 시크릿을 등록해도 워커 알림은 no-op**
+- 실측: 프로덕션 Pages 시크릿에 SLACK_WEBHOOK/ALERT_SLACK_WEBHOOK **둘 다 없음**
+  (ACCOUNT_ID·ANALYTICS_API_TOKEN·OPENROUTER_API_KEY만) → 현재 크론 알림은 `[Slack] No webhook configured, alert skipped`
+
+#### ② 구현 (5파일)
+
+| 파일 | 변경 |
+|---|---|
+| `src/lib/slack-alert.ts` | **`resolveWebhookUrl(env)`** — SLACK_WEBHOOK || ALERT_SLACK_WEBHOOK 순으로 해석 (순수 함수, 문서·코드 어느 쪽 설정 경로든 동작) |
+| `src/routes/health.ts` | 딥 프로브 alert 경로를 resolveWebhookUrl 사용으로 전환 |
+| `src/lib/canary/canary-orchestrator.ts` | 회귀 alert도 resolveWebhookUrl 사용 (명칭 불일치 동일 수정) |
+| `tests/unit/slack-alert.test.ts` (신규, +9) | resolveWebhookUrl 우선순위·미설정 no-op·payload 구조·실패 시 false |
+| `scripts/probe-slack-delivery.ts` (신규) | **로컬 HTTP 수신 서버에 실제 POST 전송 실측** — 네트워크·웹훅 없이 전송 계층 검증 |
+
+#### ③ 실측 (전송 계층)
+
+```
+webhook: http://127.0.0.1:56997/services/T/B/X
+delivered (alertBackendDown): true
+HTTP: POST /services/T/B/X | content-type: application/json
+title: 🔴 Backend Down: wikipedia
+payload text: 🔴 Backend Down: wikipedia — Backend *wikipedia* is *down* (842ms)
+✅ DELIVERED: HTTP POST captured by a real server with the correct alert payload
+```
+
+- 실제 HTTP 서버가 올바른 alert 페이로드를 수신 → **alertBackendDown → sendSlackAlert 전송 계층 확정**
+- 테스트 mock도 `importOriginal` 기반으로 수정 — resolveWebhookUrl(실제)만 유지하고 네트워크 발신자만 mock (canary 3건·scheduled 3건 실패 원인 수정)
+
+#### ④ 검증
+
+- 유닛 **1,809건/97파일** (+9) · tsc 0 · lint 0 · format 0
+
+#### ⑤ 잔여 — 프로덕션 실제 수신 (1단계)
+
+```bash
+npx wrangler pages secret put SLACK_WEBHOOK --project-name search-engine-api
+# 또는 ALERT_SLACK_WEBHOOK (둘 다 허용, SLACK_WEBHOOK 우선)
+# 등록 후 redeploy → 15분 크론이 실제 다운 백엔드 발생 시 Slack 채널로 전달
+```
+
+### S104-③-④: verify-do-binding.sh 환경 인지 + 커밋 일치 검증 + staging 실측 (2026-08-11)
+
+#### ① 배경
+
+- 기존 URL 해석은 `Environment=="Production"` 첫 엔트리를 그냥 고름 — **커밋 상태와의 일치를 전혀 검증하지 않아** stale 배포가 조용히 통과했음
+- staging 환경(검증 요청) — deploy-staging 잡이 `--branch=staging`으로 배포하지만 **배포 이력 0건**이었고 스크립트도 staging을 지원하지 않음
+
+#### ② 구현 (scripts/verify-do-binding.sh)
+
+| 변경 | 내용 |
+|---|---|
+| `ENVIRONMENT` | `production`(기본) \| `staging` — WORKER_URL 기본값(`search-engine-api.pages.dev` / `staging.search-engine-api.pages.dev`)·deployment 브랜치 필터·상태 파일을 결정 |
+| `resolve_deployment()` | deployment list에서 **URL + Source(커밋) + ID** 추출 — production은 `Environment=="Production"`, staging은 `Branch=="staging"` (없으면 빈 값 → tail 스킵) |
+| **커밋 일치 검증** | `git rev-parse`로 양쪽을 full hash로 정규화(Cloudflare는 Source를 7자리 short SHA로 저장 — 문자열 직접 비교 시 같은 커밋도 drift로 오판) → HEAD(또는 `EXPECTED_COMMIT`)와 비교. 불일치 시 behind/ahead 카운트 + dirty worktree 노트. `FAIL_ON_COMMIT_DRIFT=1` 시 exit 1 |
+| **tail을 ID 기반으로** | wrangler URL 매칭이 `d8.environment === "production"` 필터를 거쳐 **staging URL을 "Could not find deployment match url"로 거부** (실측 발견) — deployment ID는 필터를 거치지 않아 양쪽 모두 동작 |
+| 상태 파일 분리 | `~/.cache/ssak-verify-do-state[-staging].json` — staging/production이 서로의 down_backends baseline을 덮어쓰지 않음 |
+| 401 = bound | `/api/experiments`가 401(auth 게이트)을 반환해도 DO 바인딩 증거 — bound 목록에 추가 (기존엔 "unexpected/skipped"로 오분류) |
+
+#### ③ 실측 (production + staging 신규 배포)
+
+- **production**: `29f6bb06` @ `0f8401c` vs HEAD `556d363` → **"⚠️ 1 behind / 0 ahead" drift 정확히 감지** (수정 전이면 조용히 통과). duckduckgo 다운 → 회복 사이클도 상태 파일로 포착
+- **staging**: 신규 배포 `8530df3a`(`--branch=staging`, Source `556d363`) → **"✅ commit matches (556d363)"** + dirty worktree 노트(17건 미커밋 코드가 배포됨). ID 기반 tail로 딥 프로브 로그 캡처 성공
+- 두 환경 모두 **Route 10/10 bound · RATE_LIMITER durable_object** — 첫 staging 전체 검증 완료
+
+#### ④ 검증
+
+- `--self-test` 4종(문자열/배열/pretty 멀티라인/deployment-resolver) PASS · bash -n OK
+- tsc 0 · lint 0 · format 0 (게이트 영향 없음 — bash 스크립트만 변경)
+
+#### ⑤ 잔여
+
+- production 배포가 HEAD보다 1커밋 뒤처짐(`0f8401c` vs `556d363`) — 다음 production 배포 시 해소 (CI deploy-production은 workflow_dispatch)
+- staging alias에 크론 스케줄러 미배포 — staging 딥 프로브는 수동 `?depth=full`만 가능 (운영 검증용으로는 충분)

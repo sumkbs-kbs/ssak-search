@@ -60,6 +60,7 @@
     "probe:ds": "npx tsx scripts/probe-ds-routing.ts",
     "sim:academic-so": "npx tsx scripts/sim-academic-stackexchange.ts",
     "probe:ds-vocab": "npx tsx scripts/probe-ds-vocab.ts",
+    "probe:deploy-vocab": "npx tsx scripts/probe-deploy-vocab.ts",
     "probe:openalex": "npx tsx scripts/probe-openalex.ts",
     "eval:s95delta": "npx tsx scripts/probe-s95-delta.ts",
     "probe:inmemory": "npx tsx scripts/probe-inmemory-bypass.ts",

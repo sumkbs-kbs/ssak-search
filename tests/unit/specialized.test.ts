@@ -189,6 +189,28 @@ describe('detectQueryType', () => {
     expect(detectQueryType('BERT vs GPT comparison')).toBe('general')
   })
 
+  it('routes ML vocab + deployment/usage intent to technical (S99 — en-tech-40 fix)', () => {
+    // S98 sim: en-tech-40 'machine learning model deployment' had arxiv-flooded
+    // pools (arxiv 80%) and NDCG 0.000 despite 9 tutorial/deployment gold
+    // domains (github/stackoverflow/MDN/mlflow/tensorflow — all technical-
+    // strategy domains). ML vocab + deployment intent now route technical.
+    expect(detectQueryType('machine learning model deployment')).toBe('technical')
+    expect(detectQueryType('how to deploy machine learning models')).toBe('technical')
+    expect(detectQueryType('LLM deployment production monitoring guide')).toBe('technical')
+  })
+
+  it('keeps pure research/paper queries academic under the S99 guard', () => {
+    // No deployment/usage intent → academic routing preserved (S97 ds-* fixes
+    // and en-acad paper queries must NOT flip).
+    expect(detectQueryType('machine learning paper survey')).toBe('academic')
+    expect(detectQueryType('LLM fine-tuning techniques LoRA')).toBe('academic')
+    expect(detectQueryType('RAG retrieval augmented generation architecture')).toBe('academic')
+    expect(detectQueryType('knowledge graph construction pipeline')).toBe('academic')
+    expect(detectQueryType('transformer architecture paper')).toBe('academic')
+    // 'how does X work' is not 'how to' — stays out of the deployment guard.
+    expect(detectQueryType('how does machine learning work')).toBe('academic')
+  })
+
   it('detects short question forms as factual before technical keywords (gk-04 fix)', () => {
     expect(detectQueryType('what is serverless architecture')).toBe('factual')
     expect(detectQueryType('what is a CDN')).toBe('factual')

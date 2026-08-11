@@ -86,7 +86,7 @@ describe('Search Strategies — task composition', () => {
     it('produces bing + wikipedia + arxiv tasks', () => {
       const ctx = makeCtx({ focus: 'academic' })
       const tasks = getStrategy('academic').buildTasks(ctx)
-      expect(taskNames(tasks)).toEqual(['arxiv', 'bing', 'openalex', 'wikipedia'])
+      expect(taskNames(tasks)).toEqual(['arxiv', 'bing', 'openalex', 'stack-exchange', 'wikipedia'])
     })
   })
 
@@ -437,14 +437,15 @@ describe('Search Strategies — task composition', () => {
       expect(names).not.toContain('juejin')
     })
 
-    it('omits both docs tasks for academic queries (useGitHub fires but gate is technical)', () => {
-      // The real gate is queryType === 'technical', NOT useGitHub (which also
-      // fires for academic per getSourcesForQueryType). An academic query must
-      // keep its github task but never get the stack-exchange/ddg-site-mdn tasks.
+    it('gives academic queries github + stack-exchange but not MDN (S100 — SO gate widened)', () => {
+      // S100 (S98 ①): the stack-exchange gate is now (technical || academic)
+      // && English — academic queries keep github AND gain community Q&A
+      // (stackoverflow.com was gold in en-tech-40 pre-S99). ddg-site-mdn stays
+      // doc-regex-gated and 'transformers paper' carries no doc words.
       const ctx = makeCtx({ focus: 'all', queryType: 'academic', query: 'transformers paper' })
       const names = taskNames(getStrategy('all').buildTasks(ctx))
       expect(names).toContain('github')
-      expect(names).not.toContain('stack-exchange')
+      expect(names).toContain('stack-exchange')
       expect(names).not.toContain('ddg-site-mdn')
     })
 
@@ -499,13 +500,73 @@ describe('Search Strategies — task composition', () => {
     it('delegates to the correct strategy based on ctx.focus', () => {
       const ctxAcademic = makeCtx({ focus: 'academic' })
       const tasks = buildBackendTasks(ctxAcademic)
-      expect(taskNames(tasks)).toEqual(['arxiv', 'bing', 'openalex', 'wikipedia'])
+      expect(taskNames(tasks)).toEqual(['arxiv', 'bing', 'openalex', 'stack-exchange', 'wikipedia'])
     })
 
     it('falls back to all strategy for unknown focus', () => {
       const ctx = makeCtx({ focus: 'all' })
       const tasks = buildBackendTasks(ctx)
       expect(tasks.length).toBeGreaterThan(0)
+    })
+  })
+
+  describe('Stack Exchange in academic routing (S100 — S98 ①)', () => {
+    const ACAD_SOURCES = {
+      useWikipedia: true,
+      useGitHub: true,
+      useHackerNews: false,
+      useReddit: false,
+      useArxiv: true,
+      useOpenAlex: true,
+    } as never
+
+    it('adds stack-exchange for English academic queries (AllStrategy)', () => {
+      const ctx = makeCtx({
+        focus: 'all',
+        queryType: 'academic' as never,
+        query: 'transformer architecture paper',
+        sources: ACAD_SOURCES,
+      })
+      const names = taskNames(getStrategy('all').buildTasks(ctx))
+      expect(names).toContain('stack-exchange')
+      expect(names).toContain('arxiv')
+      expect(names).toContain('openalex')
+    })
+
+    it('skips stack-exchange for non-English academic queries (ko/zh/ja gate)', () => {
+      for (const lang of ['korean', 'chinese', 'japanese'] as const) {
+        const ctx = makeCtx({
+          focus: 'all',
+          queryType: 'academic' as never,
+          query: 'transformer architecture paper',
+          sources: ACAD_SOURCES,
+          [lang]: true,
+        })
+        expect(taskNames(getStrategy('all').buildTasks(ctx))).not.toContain('stack-exchange')
+      }
+    })
+
+    it('en-tech-40 (English technical) keeps stack-exchange so stackoverflow.com gold can enter its pool', () => {
+      // en-tech-40 'machine learning model deployment' routes technical (S99
+      // deployment/usage guard) — the technical stackexchange task must fire so
+      // stackoverflow.com (gold) reaches the pool instead of the pre-S99 arxiv
+      // flood (S98 sim: 3 runs NDCG 0.000).
+      const ctx = makeCtx({
+        focus: 'all',
+        queryType: 'technical' as never,
+        query: 'machine learning model deployment',
+        sources: {
+          useWikipedia: true,
+          useGitHub: true,
+          useHackerNews: true,
+          useReddit: false,
+          useArxiv: false,
+          useOpenAlex: false,
+        } as never,
+      })
+      const names = taskNames(getStrategy('all').buildTasks(ctx))
+      expect(names).toContain('stack-exchange')
+      expect(names).toContain('github')
     })
   })
 })

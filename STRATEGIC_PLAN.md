@@ -3029,3 +3029,50 @@
 - **잔여**: ① en-tech-40 technical 재라우팅의 실측 Δ는 저장 풀에 technical 풀이 없어
   시뮬 불가 — 라이브 검증 필요 ② 실사용 관점의 ds-08류(빌드·사용법)도 ②의 usage 가드로
   기술 라우팅될 가능성 — 어휘 스코프 정밀화 필요.
+
+### S99: deployment/usage 의도 라우팅 가드 구현 (S98 권고 ②, 2026-08-11)
+
+- **요청**: S98 권고 ② 구현 — ML 어휘 + deployment/usage 의도 동시 감지 시 technical
+  라우팅하는 가드를 detectQueryType에 추가하고, 500쿼리 충돌 스캔으로 en-tech-40만
+  뒤집히고 ds-*가 유지되는지 단위 테스트로 고정.
+- **어휘 스코프 (scripts/probe-deploy-vocab.ts 신규, `probe:deploy-vocab` 등록)**: 후보
+  usage 어휘를 500쿼리 전체에서 전수 스캔 — 통합 어휘
+  `deploy|deployment|setup|install|configure|configuration|configuring|use cases|how to|
+  tutorial|guide|best practices|production|monitoring|operational`이 뒤집는 academic
+  쿼리는 **en-tech-40 1건뿐**. bare 'use'/'build'/'pipeline'은 의도적 제외.
+- **구현 (specialized.ts)**: `isDeploymentIntent` 신규 — `(isAcademicSignal ||
+  isDsAcademicSignal) && isDeploymentIntent` → **'technical'** (academic return 앞,
+  S22 problem-intent 가드와 동형).
+- **검증**: 500쿼리 전수 재스캔 — academic→technical 뒤집힘 **1건 (en-tech-40)**.
+  ds-01/03/06/07/08/10/13/15·en-acad-*·en-fact-02 전부 academic 유지 (usage 어휘
+  없음), lt-08/en-tech-10 technical 유지, gk-04 factual 유지. 단위 테스트 +2건
+  (specialized 137건): S99 플립 3건 + 논문 유지 6건.
+- **기대 효과**: en-tech-40 technical 재라우팅 → github/SO/MDN/dev.to/mlflow/tensorflow
+  gold 전부 technical 전략 태스크 도메인이라 회수 가능 (S98 시뮬: SO만으로 +0.1483이던
+  것이 gold 9개 전체 회수로 확대). S98 ①(academic에 SO 태스크 추가)은 이 가드로
+  흡수되어 불필요해짐 — 실측은 다음 eval:median.
+- **게이트**: 유닛 **1,727건** (+2) · tsc 0 · eslint 0 · format 0.
+- **잔여**: ① 실측 NDCG 반영은 다음 eval:median 필요 ② 'how to deploy machine learning
+  models'류 실사용 혼합 쿼리도 동일 가드로 technical — 의도된 동작.
+
+### S100: academic 라우팅에 영어 Stack Exchange 태스크 추가 (S98 ①, 2026-08-11)
+
+- **요청**: S98 ① 구현 — academic 전략에 영어 스택오버플로우 태스크를 추가(영어 게이트),
+  en-tech-40 풀에 stackoverflow.com이 들어오는지 단위 테스트로 고정.
+- **구현**:
+  - `all.ts` — stackexchange 게이트를 `queryType === 'technical'` →
+    **`(technical || academic) && !ko && !zh && !ja`**로 확장 (github-issues는 technical
+    전용 유지, MDN은 자체 doc-regex 게이트 유지). academic은 useGitHub: true라 github
+    블록엔 이미 진입 — SO만 새로 배선.
+  - `academic.ts` — 명시적 focus=academic 전략에도 동일 영어 게이트로
+    `buildStackExchangeTask(ctx, 8)` 추가.
+- **테스트 (strategies.test.ts +3건, 47건)**: ① 영어 academic(AllStrategy) → stack-exchange
+  포함 ② ko/zh/ja academic → stack-exchange **제외** (언어 게이트) ③ **en-tech-40
+  (technical 영어) → stack-exchange 포함** — S99 라우팅 후 stackoverflow.com gold가 풀에
+  들어오는 경로 고정. 기존 "academic은 docs 태스크 제외" 테스트는 S100 의도 변경으로
+  갱신 (github + stack-exchange 포함, ddg-site-mdn 제외).
+- **게이트**: 유닛 **1,730건** (+3) · tsc 0 · eslint 0 · format 0.
+- **잔여**: ① SO 쿼터(300/day) 부담 — academic 30/500쿼리 추가분은 기존 quota 가드
+  (stack-exchange.ts 로그+스킵)로 보호 ② 실측 NDCG는 다음 eval:median (en-acad/ds 풀에
+  SO 결과 추가가 arxiv gold를 밀어내지 않는지 확인 필요 — 도메인 캡·랭킹 authority로
+  보호됨).

@@ -1737,6 +1737,22 @@ export function detectQueryType(
       query,
     )
 
+  // S99 (2026-08-11): deployment/usage intent guard — S98 권고 ② 구현.
+  // isAcademicSignal의 ML 어휘는 'machine learning'처럼 넓어서 deployment/usage
+  // 의도 쿼리를 잘못 academic으로 보낸다 — en-tech-40 'machine learning model
+  // deployment': gold 9도메인(github/stackoverflow/MDN/dev.to/medium/freecodecamp/
+  // digitalocean/mlflow/tensorflow — 전부 technical 전략 태스크 도메인)인데 풀이
+  // arxiv×8+wikipedia×2로 도배되어 NDCG 0.000 (3 run 전수, S98 저장 풀 시뮬
+  // 실측). academic 어휘 + deployment/usage 어휘 동시 → 'technical' (S22
+  // problem-intent 가드와 동형 — 가드 먼저, 라우팅 나중). 500쿼리 충돌 스캔
+  // (scripts/probe-deploy-vocab.ts): **en-tech-40 1건만 뒤집힘** — ds-*/en-acad-*
+  // 논문 쿼리는 usage 어휘를 갖지 않아 academic 유지. bare 'use'/'build'/
+  // 'pipeline'은 의도적으로 제외 (실사용 기술 쿼리를 technical으로 유지).
+  const isDeploymentIntent =
+    /\b(deploy|deployment|setup|install|configure|configuration|configuring|use\s+cases?|how\s+to|tutorial|guide|best\s+practices?|production|monitoring|operational)\b/i.test(
+      query,
+    )
+
   // Pure question forms ('what is X', 'how does X work') are factual lookups
   // even when X contains a technology keyword — 'what is serverless
   // architecture' used to hit the technical branch (serverless) and drop
@@ -1761,6 +1777,11 @@ export function detectQueryType(
       query,
     )
 
+  if ((isAcademicSignal || isDsAcademicSignal) && isDeploymentIntent) {
+    // S99: ML/DS 어휘 + deployment/usage 의도 → technical (커뮤니티 답변·문서
+    // 백엔드 보유). en-tech-40 회복 — S98 시뮬의 arxiv 플러드 근본 원인 해소.
+    return 'technical'
+  }
   if (isAcademicSignal || isDsAcademicSignal) {
     return 'academic'
   }

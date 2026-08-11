@@ -193,7 +193,19 @@ export class AllStrategy implements SearchStrategy {
         tasks.push(buildCsdnTask(ctx, 5))
       }
 
-      if (ctx.queryType === 'technical' && !ctx.korean && !ctx.chinese && !ctx.japanese) {
+      // S100 (S98 ①): English Stack Exchange for BOTH technical and academic
+      // routing. Academic used to skip it (github-issues stays technical-only),
+      // but stackoverflow.com is gold in academic-classified queries (en-tech-40
+      // 'machine learning model deployment' pre-S99) and community Q&A adds
+      // real-user value for hybrid usage-intent queries. English-only gate —
+      // zh/ja/ko academic gold is community sites (zhihu/juejin/qiita/zenn),
+      // same rule as the technical branch.
+      if (
+        (ctx.queryType === 'technical' || ctx.queryType === 'academic') &&
+        !ctx.korean &&
+        !ctx.chinese &&
+        !ctx.japanese
+      ) {
         tasks.push(buildStackExchangeTask(ctx, 8))
 
         // MDN official-doc routing. MDN's /api/v1/search is disallowed by

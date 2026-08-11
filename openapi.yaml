@@ -124,7 +124,7 @@ paths:
           in: query
           schema:
             type: boolean
-            default: true
+            default: false
         - name: answer
           in: query
           description: Alias for include_answer
@@ -168,6 +168,26 @@ paths:
         - name: exclude_domains
           in: query
           description: Comma-separated list of excluded domains (max 20)
+          schema:
+            type: string
+        - name: include_fact_check
+          in: query
+          schema:
+            type: boolean
+            default: false
+        - name: country
+          in: query
+          description: Country code for location-aware results
+          schema:
+            type: string
+        - name: language
+          in: query
+          description: Language code for results
+          schema:
+            type: string
+        - name: location
+          in: query
+          description: Location string (max 50 chars) for location-aware results
           schema:
             type: string
       responses:
@@ -731,11 +751,26 @@ paths:
     get:
       summary: Service health status
       description: |
-        Returns live health status of all backends with latency measurements.
-        Results are cached for 30 seconds.
+        Liveness by default (zero subrequests, < 50ms): status/backends come from
+        the circuit-breaker state, index from binding presence.
+        Opt-in deep probe mode (`depth=full`) runs live backend probes + D1
+        corpus stats + Slack alerts, cached for 30 seconds.
       operationId: healthCheck
       tags:
         - Monitoring
+      parameters:
+        - name: depth
+          in: query
+          description: light (default, zero subrequests) or full (live probes, cached 30s)
+          schema:
+            type: string
+            enum: [light, full]
+            default: light
+        - name: full
+          in: query
+          description: Backward-compatible alias for depth=full
+          schema:
+            type: boolean
       responses:
         "200":
           description: Health status
@@ -1120,7 +1155,7 @@ paths:
                   type: array
                   items:
                     type: string
-                  description: Specific models to query (default: all available)
+                  description: 'Specific models to query (default: all available)'
       responses:
         "200":
           description: Multi-model comparison results
@@ -1915,6 +1950,22 @@ components:
           minimum: 1
           maximum: 10
           default: 1
+        include_fact_check:
+          type: boolean
+          default: false
+        country:
+          type: string
+          description: Country code for location-aware results
+        language:
+          type: string
+          description: Language code for results
+        location:
+          type: string
+          description: Location string (max 50 chars)
+        user_id:
+          type: string
+          maxLength: 200
+          description: Optional client identifier for A/B experiment assignment
         max_tokens:
           type: integer
           default: 4000

@@ -3184,3 +3184,44 @@ S104에서 기본 `/api/health`를 zero-subrequest 라이트 모드로 전환하
 유닛 **1,750건 / 92파일** (+12) · tsc 0 · lint 0 · format 0 · 기존 retrieval 테스트(79건) 유지.
 
 **잔여 레버**: ① eval 러너에 결과별 `source_backend` 태그 추가 → per-백엔드 RRF 시뮬레이션 가능 ② 셀프인덱스 하이브리드의 RRF k 튜닝(현재 60 — k 무관성 실측으로 조정 불필요 확인).
+### S106: Phase 3.1 클라이언트 SDK — TypeScript + Python, openapi.yaml 100% 일치 (2026-08-11)
+
+#### ① 구현물
+
+- **`sdk/typescript/`** — `@ssak-search/sdk` (ESM, 런타임 의존성 0, Node≥18 전역 fetch). `SearchClient.search/searchGet/extract/extractGet/health` + `SearchApiError`(status/code/detail) + `searchOnce` 편의 함수. 인증 `Authorization: Bearer` 기본, `authHeader: 'x-api-key'` 옵션.
+- **`sdk/python/`** — `ssaksearch` 패키지 (stdlib 전용 `urllib`, Python 3.9+, 3rd-party 의존성 0). 동일 메서드 표면 + dataclass 응답 타입 + `SearchApiError`. `pyproject.toml` 포함.
+- **`sdk/typescript/src/spec.ts`** — SDK↔스펙 계약의 단일 진실 공급원: 연산 5종(GET/POST search, extract, health)의 path/method/operationId/파라미터 집합/required/기본값.
+
+#### ② 100% 일치성 강제 — openapi.yaml 파싱 게이트
+
+`tests/unit/sdk-spec-consistency.test.ts`(+22)가 **라이브 openapi.yaml을 yaml 파서로 읽어**:
+1. SDK 연산 5종의 path/method/operationId 존재
+2. **SDK 파라미터 집합 == 스펙 파라미터 집합 (양방향 전단사)** — GET은 query 파라미터, POST는 requestBody 스키마 프로퍼티
+3. required 일치 · 4. 문서화된 서버 기본값 양방향 일치 · 5. 스펙에 새 코어 연산 추가 시 SDK 미인지 실패
+
+Python 쪽에도 동일 검증(`test_spec_consistency.py`, PyYAML).
+
+#### ③ 발견·수정한 스펙 드리프트 (3건)
+
+- **YAML 파싱 버그 (기존)**: council 스키마 `description: Specific models to query (default: all available)` — 인용되지 않은 `(default: ...)`가 YAML 1.2에서 nested mapping으로 해석되어 **openapi.yaml 전체가 strict 파서로 파싱 불가**였음 → 인용 처리.
+- **검색 파라미터 누락**: GET search에 `include_fact_check/country/language/location`, POST SearchRequest에 동일 + `user_id` 미문서화 → 스펙에 추가 (구현과 일치).
+- **GET include_answer 기본값 불일치**: 스펙 `true` vs 구현 `false` → 스펙을 `false`로 교정.
+- **health S104 반영**: `depth`(light/full, 기본 light)·`full` 별칭 파라미터 + 설명을 라이트 기본/딥 옵트인으로 갱신.
+
+#### ④ 3줄 검색 호출 실측 검증
+
+로컬 스텁 HTTP 서버에 두 SDK를 실제로 연결해 **3줄 호출 왕복**을 확인 (TS `npx tsx` + Python `python3` 모두 동일 결과 출력):
+```
+client = SearchClient({ apiKey, baseUrl })   // 1줄
+res = await client.search({ query: '삼성전자 주가', topic: 'finance' })  // 2줄
+console.log(res.results)                     // 3줄
+```
+
+#### ⑤ 검증
+
+- 유닛 **1,785건 / 94파일** (+35: SDK 클라이언트 13 + 스펙 일치성 22) · tsc 0 (루트 + SDK 독립 tsconfig) · eslint 0 (sdk/typescript 게이트 포함) · format 0 · Python unittest 13건 통과
+- 게이트 배선: tsconfig include에 `sdk/typescript/**`, lint:eslint:ci·format:check에 sdk 추가, `test:sdk:ts`/`test:sdk:python` 스크립트
+- devDependency `yaml`(v2, MIT) 추가 — 스펙 일치성 테스트 전용
+
+**잔여**: ① npm/pypi publish 단계(`npm publish`, `twine upload` — 패키지 메타데이터 준비 완료) ② LangChain/LlamaIndex Tool 래퍼 예제 ③ v1 라우트 버전 명시는 API 변경 시 적용 예정.
+

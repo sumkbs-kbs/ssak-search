@@ -404,11 +404,26 @@ if [ "${COMMIT_CHECK_ONLY:-0}" = "1" ]; then
   echo " Commit-check-only mode (COMMIT_CHECK_ONLY=1) — deployment resolution + commit match only."
   check_deployment_commit
   if [ -z "${DEPLOY_URL}" ]; then
-    # S104-③-⑥-②: with ALLOW_BEHIND=1 a missing deployment is the extreme
-    # catch-up case (nothing deployed = nothing to clobber) — safe to create
-    # the FIRST deployment (fresh environment / brand-new staging branch).
+    # S104-③-⑥-④ (2026-08-12): "no deployment resolved" must NOT pass
+    # silently when the cause is a missing/empty CLOUDFLARE_API_TOKEN — the
+    # 2026-08-12 deploy-staging CI run proved this masking: an empty token
+    # made wrangler's deployment list fail (stderr swallowed), which fell into
+    # the ALLOW_BEHIND "nothing to clobber" path and the pre-deploy guard
+    # went GREEN with zero verification. An unverifiable guard must BLOCK.
+    # Note: `wrangler whoami` exits 0 even when unauthenticated, so probe the
+    # token env var directly instead (locally the OAuth flow sets no
+    # CLOUDFLARE_API_TOKEN, but COMMIT_CHECK_ONLY is only used by the CI
+    # gates, which must always authenticate via the API token secret).
+    if [ -z "${CLOUDFLARE_API_TOKEN:-}" ]; then
+      echo " ❌ Cannot resolve the ${ENVIRONMENT} deployment AND CLOUDFLARE_API_TOKEN is empty — refusing to pass a guard that cannot verify." >&2
+      echo "    Check CLOUDFLARE_API_TOKEN / CLOUDFLARE_ACCOUNT_ID secrets are set." >&2
+      exit 1
+    fi
+    # Token present but genuinely no deployment yet — the extreme catch-up
+    # case (nothing deployed = nothing to clobber), safe to create the FIRST
+    # deployment (fresh environment / brand-new staging branch).
     if [ "${ALLOW_BEHIND:-0}" = "1" ]; then
-      echo " ℹ️  No ${ENVIRONMENT} deployment resolved yet; ALLOW_BEHIND=1 (nothing to clobber) — proceeding."
+      echo " ℹ️  No ${ENVIRONMENT} deployment resolved yet (auth OK); ALLOW_BEHIND=1 (nothing to clobber) — proceeding."
       exit 0
     fi
     echo " ❌ COMMIT_CHECK_ONLY — could not resolve the ${ENVIRONMENT} deployment; cannot verify commit match."

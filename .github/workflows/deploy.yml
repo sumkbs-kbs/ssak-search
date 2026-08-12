@@ -60,25 +60,39 @@ jobs:
         run: bash scripts/verify-do-binding.sh
 
       - name: Download CI artifact
+        id: download
+        # S104-③-⑥-④ (2026-08-12): the worker-bundle artifact is uploaded by
+        # the CI run that TRIGGERED this workflow_run event, so it must be
+        # fetched with run-id pointing at that run — without run-id,
+        # download-artifact@v4 looks in the CURRENT (deploy) run and always
+        # fails. On workflow_dispatch there is no CI artifact; the fallback
+        # build steps below handle that. continue-on-error is kept so a failed
+        # download never aborts the job — the build fallback is gated on the
+        # step OUTCOME (failure), not the job-level failure() helper, because
+        # a continue-on-error step's conclusion is "success" and failure()
+        # would return false even though the download failed (the 2026-08-12
+        # CI run skipped the fallback build exactly this way).
+        if: github.event_name == 'workflow_run'
         uses: actions/download-artifact@v4
         with:
           name: worker-bundle
           path: dist/
+          run-id: ${{ github.event.workflow_run.id }}
         continue-on-error: true
 
       - name: Setup Node (if artifact not found)
-        if: failure()
+        if: github.event_name == 'workflow_dispatch' || steps.download.outcome == 'failure'
         uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: "npm"
 
       - name: Install dependencies (if artifact not found)
-        if: failure()
+        if: github.event_name == 'workflow_dispatch' || steps.download.outcome == 'failure'
         run: npm ci
 
       - name: Build (if artifact not found)
-        if: failure()
+        if: github.event_name == 'workflow_dispatch' || steps.download.outcome == 'failure'
         run: npm run build
 
       - name: Deploy do-worker (Staging)
@@ -176,25 +190,39 @@ jobs:
         run: bash scripts/verify-do-binding.sh
 
       - name: Download CI artifact
+        id: download
+        # S104-③-⑥-④ (2026-08-12): the worker-bundle artifact is uploaded by
+        # the CI run that TRIGGERED this workflow_run event, so it must be
+        # fetched with run-id pointing at that run — without run-id,
+        # download-artifact@v4 looks in the CURRENT (deploy) run and always
+        # fails. On workflow_dispatch there is no CI artifact; the fallback
+        # build steps below handle that. continue-on-error is kept so a failed
+        # download never aborts the job — the build fallback is gated on the
+        # step OUTCOME (failure), not the job-level failure() helper, because
+        # a continue-on-error step's conclusion is "success" and failure()
+        # would return false even though the download failed (the 2026-08-12
+        # CI run skipped the fallback build exactly this way).
+        if: github.event_name == 'workflow_run'
         uses: actions/download-artifact@v4
         with:
           name: worker-bundle
           path: dist/
+          run-id: ${{ github.event.workflow_run.id }}
         continue-on-error: true
 
       - name: Setup Node (if artifact not found)
-        if: failure()
+        if: github.event_name == 'workflow_dispatch' || steps.download.outcome == 'failure'
         uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: "npm"
 
       - name: Install dependencies (if artifact not found)
-        if: failure()
+        if: github.event_name == 'workflow_dispatch' || steps.download.outcome == 'failure'
         run: npm ci
 
       - name: Build (if artifact not found)
-        if: failure()
+        if: github.event_name == 'workflow_dispatch' || steps.download.outcome == 'failure'
         run: npm run build
 
       - name: Deploy do-worker (Production)

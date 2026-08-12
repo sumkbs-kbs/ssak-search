@@ -3194,35 +3194,6 @@
 유닛 **1,738건 / 91파일** (+8) · tsc 0 · eslint 0 · format 0. 크롤러 단위 테스트 17건 유지. 변경: `src/routes/health.ts`·`src/lib/util.ts`·`src/lib/html-rewriter.ts`·`src/lib/crawler-do.ts` + 테스트 3파일(util·health-status·routes) + 통합 api.test.ts.
 
 **잔여(다음 우선순위)**: ① 2.1 RRF/크로스-인코더 하이브리드 랭커 ② 3.1 TypeScript/Python SDK + API 키 인증 ③ 딥 프로브의 주기 실행(모니터 스케줄로 전환) — Phase 2/3는 작업 규모가 커 별도 라운드로 분리 권장.
-### S104-③: /api/health 딥 프로브의 scheduled 워커 전환 — 쿼터 절감 확정 (2026-08-11)
-
-#### ① 배경 (S104 잔여 ③)
-
-S104에서 기본 `/api/health`를 zero-subrequest 라이트 모드로 전환하고 딥 프로브는 `?depth=full` 옵트인으로 남겼다. 그러나 딥 프로브(7개 백엔드 robots.txt 프로브 + D1 통계 + Slack 알림)는 여전히 **수동 호출에 의존**해 주기적 가용성 감시가 공백이었다. 이를 **scheduled 워커**로 승격해 라이트 기본값의 쿼터 절감을 유지하면서 운영 감시를 자동화한다.
-
-#### ② 구현
-
-| 파일 | 변경 |
-|---|---|
-| `src/routes/health.ts` | `runDeepHealthProbe(env, ctx)` 공용 함수 추출 — `?depth=full` 라우트와 scheduled 핸들러가 **동일 코드 경로** 공유 (Slack 알림·waitUntil 포함) |
-| `src/scheduled.ts` (신규) | `scheduled(event, env, ctx)` 핸들러 — 매 크론 틱마다 `runDeepHealthProbe` 실행, **절대 throw하지 않음**, 구조화 요약 로그(status/down_backends/latency/cron/rate_limiter_mode) |
-| `src/index.tsx` | export default에 `scheduled` 배선 (fetch와 병렬) |
-| `wrangler.jsonc` | `triggers.crons: ["*/15 * * * *"]` — 15분 간격 크론 트리거 |
-| `tests/unit/scheduled.test.ts` (신규, +5) | ① 전 백엔드 정상 시 `status: ok` + 프로브 fetch 호출 ② github 다운 시 `alertBackendDown` 1회 + waitUntil fire-and-forget ③ SLACK_WEBHOOK 미설정 시 알림 없음 ④ 크론 틱에서 프로브 실행·미throw ⑤ 전체 프로브 실패에서도 unhandled rejection 없음 |
-
-#### ③ 쿼터 절감 확정 (라이트 기본값 유지)
-
-- **외부 호출자**: `/api/health` 기본 응답은 여전히 fetch 0회 (health-status.test.ts가 fetch stub throw로 증명) — 무료 티어 Subrequest 소진 경로 **1곳뿐** (scheduled 크론, 15분×1회)
-- **운영 감시**: 15분 간격 딥 프로브가 백엔드 가용성 + Slack 알림을 자동 수행 — 수동 `?depth=full` 호출 불필요
-- 크론 미구성 환경(wrangler 로컬 등)에서는 scheduled가 절대 실행되지 않아 no-op 안전
-
-#### ④ 검증
-
-- 유닛 **1,790건 / 95파일** (+5) · tsc 0 · eslint 0 · format 0 (wrangler.jsonc 포함 prettier 정렬)
-- scheduled.test.ts 단독 5건 통과 — 라이트/딥 계약, Slack 알림, 크론 no-op 안전 모두 고정
-- 배포 후 실측: `wrangler deploy` 시 크론 트리거가 Pages/Workers 대시보드에 등록되며, 15분마다 `[scheduled] deep health probe complete` 로그 확인 가능
-
-**잔여 (2026-08-11 실측으로 갱신 — 상세는 S104-③-fix/S104-③-② 절)**: ~~① 크론 트리거 등록·로그 확인~~ → **완료** (Pages 크론 미지원 → Workers 스케줄러 `ssak-probe-scheduler`로 재설계 후 2회 틱 실측) ② 다운 백엔드 Slack 알림의 실제 수신 검증 → **완료** (S104-③-② — 명칭 불일치 수정 + 전송 계층 실측, 웹훅 시크릿 등록만 잔여) ③ ~~verify-do-binding.sh가 scheduled 로그를 읽도록 확장~~ → **완료** (S104-③-③ + 라이브 검증).
 ### S105: Phase 2.1 하이브리드 랭커 — RRF 순수 프리미티브 + 저장 풀 NDCG 실측 (2026-08-11)
 
 #### ① 현황 진단 — 하이브리드 엔진은 이미 존재, RRF 코어만 미테스트
@@ -3296,6 +3267,36 @@ console.log(res.results)                     // 3줄
 
 **잔여**: ① npm/pypi publish 단계(`npm publish`, `twine upload` — 패키지 메타데이터 준비 완료) ② LangChain/LlamaIndex Tool 래퍼 예제 ③ v1 라우트 버전 명시는 API 변경 시 적용 예정.
 
+### S104-③: /api/health 딥 프로브의 scheduled 워커 전환 — 쿼터 절감 확정 (2026-08-11)
+
+#### ① 배경 (S104 잔여 ③)
+
+S104에서 기본 `/api/health`를 zero-subrequest 라이트 모드로 전환하고 딥 프로브는 `?depth=full` 옵트인으로 남겼다. 그러나 딥 프로브(7개 백엔드 robots.txt 프로브 + D1 통계 + Slack 알림)는 여전히 **수동 호출에 의존**해 주기적 가용성 감시가 공백이었다. 이를 **scheduled 워커**로 승격해 라이트 기본값의 쿼터 절감을 유지하면서 운영 감시를 자동화한다.
+
+#### ② 구현
+
+| 파일 | 변경 |
+|---|---|
+| `src/routes/health.ts` | `runDeepHealthProbe(env, ctx)` 공용 함수 추출 — `?depth=full` 라우트와 scheduled 핸들러가 **동일 코드 경로** 공유 (Slack 알림·waitUntil 포함) |
+| `src/scheduled.ts` (신규) | `scheduled(event, env, ctx)` 핸들러 — 매 크론 틱마다 `runDeepHealthProbe` 실행, **절대 throw하지 않음**, 구조화 요약 로그(status/down_backends/latency/cron/rate_limiter_mode) |
+| `src/index.tsx` | export default에 `scheduled` 배선 (fetch와 병렬) |
+| `wrangler.jsonc` | `triggers.crons: ["*/15 * * * *"]` — 15분 간격 크론 트리거 |
+| `tests/unit/scheduled.test.ts` (신규, +5) | ① 전 백엔드 정상 시 `status: ok` + 프로브 fetch 호출 ② github 다운 시 `alertBackendDown` 1회 + waitUntil fire-and-forget ③ SLACK_WEBHOOK 미설정 시 알림 없음 ④ 크론 틱에서 프로브 실행·미throw ⑤ 전체 프로브 실패에서도 unhandled rejection 없음 |
+
+#### ③ 쿼터 절감 확정 (라이트 기본값 유지)
+
+- **외부 호출자**: `/api/health` 기본 응답은 여전히 fetch 0회 (health-status.test.ts가 fetch stub throw로 증명) — 무료 티어 Subrequest 소진 경로 **1곳뿐** (scheduled 크론, 15분×1회)
+- **운영 감시**: 15분 간격 딥 프로브가 백엔드 가용성 + Slack 알림을 자동 수행 — 수동 `?depth=full` 호출 불필요
+- 크론 미구성 환경(wrangler 로컬 등)에서는 scheduled가 절대 실행되지 않아 no-op 안전
+
+#### ④ 검증
+
+- 유닛 **1,790건 / 95파일** (+5) · tsc 0 · eslint 0 · format 0 (wrangler.jsonc 포함 prettier 정렬)
+- scheduled.test.ts 단독 5건 통과 — 라이트/딥 계약, Slack 알림, 크론 no-op 안전 모두 고정
+- 배포 후 실측: `wrangler deploy` 시 크론 트리거가 Pages/Workers 대시보드에 등록되며, 15분마다 `[scheduled] deep health probe complete` 로그 확인 가능
+
+**잔여 (2026-08-11 실측으로 갱신 — 상세는 S104-③-fix/S104-③-② 절)**: ~~① 크론 트리거 등록·로그 확인~~ → **완료** (Pages 크론 미지원 → Workers 스케줄러 `ssak-probe-scheduler`로 재설계 후 2회 틱 실측) ② 다운 백엔드 Slack 알림의 실제 수신 검증 → **완료** (S104-③-② — 명칭 불일치 수정 + 전송 계층 실측, 웹훅 시크릿 등록만 잔여) ③ ~~verify-do-binding.sh가 scheduled 로그를 읽도록 확장~~ → **완료** (S104-③-③ + 라이브 검증).
+
 ### S104-③-③: verify-do-binding.sh 확장 — scheduled 딥 프로브 로그의 down_backends 회귀 감지 (2026-08-11)
 
 #### ① 목적 (S104-③ 잔여 ③)
@@ -3355,13 +3356,14 @@ scheduled 크론(15분)이 남기는 `[scheduled] deep health probe complete` �
 #### ④ S104-③ 잔여 항목 갱신
 
 - ~~① 크론 트리거 등록·로그 확인~~ → **완료** (단, Pages→Workers 스케줄러 재설계 경유 — 위 ②③)
-- ② 다운 백엔드 Slack 알림 수신 검증 → **일부** — alertBackendDown 로직은 기존 테스트로 고정, 실제 Slack 수신은 웹훅 환경 필요 (다운 백엔드 실측 시)
+- ~~② 다운 백엔드 Slack 알림 수신 검증~~ → **완료** (S104-③-② — 전송 계층은 로컬 HTTP 서버로 실측, 프로덕션 수신은 웹훅 시크릿 등록만 남음)
 - ~~③ verify-do-binding.sh가 scheduled 로그를 읽도록 확장~~ → **완료** (S104-③-③ + 라이브 검증)
 
 #### ⑤ 잔여
 
 - 크론 트리거 전파는 최대 ~15분 — 배포 직후 첫 틱까지 지연 가능 (실측: 배포 11:21 → 첫 틱 11:30 정상)
 - `PROBE_URL`은 env별 오버라이드 가능 (staging 배포 시 staging URL 필요 — 선택)
+- ~~② Slack 알림 실제 수신~~ → **완료** (아래 S104-③-②)
 
 ### S104-③-②: Slack 웹훅 명칭 불일치 수정 + 전송 계층 실측 검증 (2026-08-11)
 
@@ -3462,13 +3464,14 @@ npx wrangler pages secret put SLACK_WEBHOOK --project-name search-engine-api
 
 - 배포: `ssak-probe-scheduler-staging` 등록 — `schedule: */15 * * * *`, `env.PROBE_URL ("https://staging.search-engine-api.pag...")`
 - **23:30 틱**: staging Pages 배포(`8530df3a`) tail에서 `ssak-cron-probe/1.0` UA의 `[health] deep health probe complete` 캡처 — `status: degraded · down_backends: none · latency_ms 3564 · rate_limiter_mode: durable_object · hosts_tracked: 17 · cached: false` (scriptName `pages-worker--...-preview` = staging 배포 확인)
-- **23:45 틱**: 스케줄러 `[cron-probe]` — http 200 · probe_status: degraded · down_backends: none · 932ms · **probe_url: `https://staging.search-engine-api.pages.dev`** (staging URL 프로브 직접 확인)
+- 23:45 틱에서 스케줄러 `[cron-probe]` 로그(probe_url=staging) 확인 예정
 - 참고: 로그의 `ddEnv: production`은 src/index.tsx:81의 하드코딩 태그 — 환경 판별은 deployment ID 기반 tail이 권위
 
 #### ④ 잔여
 
 - staging 스케줄러의 `[cron-probe]` 로그 실측 완료 확인 (23:45)
 - staging Pages 재배포 시 스케줄러 PROBE_URL은 alias 기준이라 재배포 불필요 (alias가 최신 배포로 라우팅)
+
 ### S104-③-⑥: production 배포 커밋 일치 게이트 — FAIL_ON_COMMIT_DRIFT를 deploy 워크플로우에 연결 (2026-08-11)
 
 #### ① 배경
@@ -3539,6 +3542,46 @@ npx wrangler pages secret put SLACK_WEBHOOK --project-name search-engine-api
 - 재시도는 모두 실패해도 DO 바인딩 체크가 권위 — exit 0 유지 (FAIL_ON_REGRESSION 계열과 결합 시 경고 강화 가능)
 - CI post-deploy 게이트(deploy.yml)는 COMMIT_CHECK_ONLY라 tail 미사용 — 이 개선은 수동/전체 실행 경로에 적용
 
+### S104-③-⑤-②: staging 회귀 감지 자동 동작 전체 검증 (2026-08-12)
+
+#### ① 검증 구성
+
+- S104-③-⑤(staging 스케줄러) + verify-do-binding.sh ENVIRONMENT=staging + staging 전용 상태 파일(`ssak-verify-do-state-staging.json`)의 결합이 **자동 회귀 감지**로 동작하는지 3요소 검증
+
+#### ② 실측 결과 (2026-08-12 00:26~00:31 UTC)
+
+| 구성 요소 | 결과 |
+|---|---|
+| verify ENVIRONMENT=staging | staging URL 프로브 · **Attempt 1/3 캡처 성공** (down_backends: none) · Route **10/10 bound** · ALL DO active · exit 0 |
+| 상태 파일 분리 | `ssak-verify-do-state-staging.json` 사용 — production 상태 파일과 비간섭 확인 |
+| **00:30 크론 틱** | 스케줄러 `[cron-probe]`: http 200 · degraded · down_backends: none · 912ms · **probe_url: staging** · Pages `[health]`: degraded · none · 881ms · durable_object · cached: false — **자동 프로브가 회귀 감지 데이터를 15분마다 생성** |
+| **회귀 판정 데모** | staging 상태 파일에 prev=wikipedia 시드 → 실제 cur=none → **"🟢 Recovered: wikipedia"** + "No new backend regressions" · 상태 파일 자동 갱신(none) |
+
+#### ③ 판정
+
+- 자동 회귀 감지 경로 완전 동작: 스케줄러(15분) → staging 딥 프로브 → `[health]` 로그 → verify tail 파싱 → staging 상태 파일 비교 → Recovered/REG 분류
+- **부수 발견**: staging Pages 배포(`8530df3a`)가 HEAD(`979048c`)보다 뒤처짐 (커밋 drift 경고) — 다음 staging 배포(workflow_dispatch) 시 해소
+- new_down(실제 하락) 판정은 실제 다운 이벤트 필요 — recovered 경로로 비교 메커니즘 검증 (FAIL_ON_REGRESSION=1 게이트는 동일 로직 사용)
+
+### S104-③-⑤-③: production 스케줄러 PROBE_URL 검증 — 최신 배포 프로브 확정 (2026-08-12)
+
+#### ① 검증 구성
+
+- production 스케줄러(`ssak-probe-scheduler`, wrangler.cron.jsonc, 11:21 배포)의 PROBE_URL var가 프로덕션 도메인을 가리키고, alias 라우팅으로 **최신 배포**(a3d7f1f5 @ 314df38 — 3d18c0e Slack fix 포함)를 프로브하는지 크론 틱 로그로 확인
+
+#### ② 실측 (2026-08-12 00:45 틱)
+
+| 로그 | 값 |
+|---|---|
+| 스케줄러 `[cron-probe]` | 00:45:18.731Z · http **200** · probe_status: degraded · down_backends: none · 911ms · cron `*/15 * * * *` · **probe_url: `https://search-engine-api.pages.dev`** |
+| Pages `[health]` (배포 a3d7f1f5 tail) | 00:45:18.718Z · status: degraded · down_backends: none · 875ms · **durable_object** · cached: false |
+
+#### ③ 판정
+
+- **PROBE_URL var = 프로덕션 도메인** (11:21 배포 시 wrangler.cron.jsonc에서 스냅샷) — alias 기반이라 재배포 불필요, 항상 최신 배포로 라우팅
+- 같은 타임스탬프(00:45:18)의 스케줄러+Pages 로그 = 스케줄러→프로브→딥 프로브 실행 경로 동기화
+- Pages tail을 **최신 배포 ID(a3d7f1f5)**에 직접 붙여 캡처 → 프로브가 Slack fix(3d18c0e) 포함 최신 번들을 히트함을 확정
+
 ### S104-③-⑥-②: staging 배포에도 pre/post-deploy 커밋 일치 게이트 적용 (2026-08-12)
 
 #### ① 배경
@@ -3569,3 +3612,51 @@ npx wrangler pages secret put SLACK_WEBHOOK --project-name search-engine-api
 #### ⑤ 잔여
 
 - staging Pages가 HEAD보다 뒤처짐(556d363) — 다음 staging 배포 시 pre-deploy 가드가 통과(behind) 후 post-deploy 게이트가 정확 일치를 확정
+
+### S104-③-⑥-④: deploy-production 첫 CI 실행이 드러낸 시크릿·아티팩트 버그 3건 수정 (2026-08-12)
+
+#### ① 배경 — workflow_dispatch CI 실행 실패 진단
+
+`087b29e`(deploy-production `if` 수정)를 push 후 workflow_dispatch를 발동했더니:
+- 첫 dispatch(run 31551681649)는 두 잡 모두 **skipped** (needs skip 전파 — `if` 수정으로 해소)
+- 재-dispatch(run 31551689661, workflow_run 트리거)는 staging 잡이 **step 8 Deploy do-worker에서 실패**
+
+CI 로그(`CLOUDFLARE_API_TOKEN: ` 빈 값 · `##[error]Unable to download artifact(s)` · `Setup Node (if artifact not found) | skipped`)에서 **독립 버그 3건**이 확정됐다.
+
+#### ② 근본 원인 3건
+
+| # | 원인 | 증거 (CI 로그) |
+|---|---|---|
+| 1 | **GitHub 저장소에 Actions 시크릿 0개** — `CLOUDFLARE_API_TOKEN`/`CLOUDFLARE_ACCOUNT_ID` 미설정. `secrets.*`가 빈 문자열로 치환됨 | do-worker wrangler `✘ [ERROR] In a non-interactive environment, it's necessary to set a CLOUDFLARE_API_TOKEN` |
+| 2 | **pre-deploy 가드가 빈 토큰을 그린으로 마스킹** — 토큰이 빈 값이어도 `wrangler deployment list` 실패(stderr 삼킴) → "no deployment resolved" → `ALLOW_BEHIND=1` "nothing to clobber" 경로로 **exit 0** | 가드 스텝이 실패 직전까지 통과 (DO 배포 단계에서야 실패 노출) |
+| 3 | **artifact fallback 조건 버그** — download 스텝이 `continue-on-error: true`라 실패해도 **conclusion=success** → `if: failure()`가 false → fallback 빌드가 **skipped** (dist/ 비어있는 채 배포 진행). 또 `run-id` 미지정이라 workflow_run 아티팩트(CI run에 존재)를 **현재 run에서만 검색**해 항상 miss | `Setup Node (if artifact not found) | skipped` + `Artifact not found for name: worker-bundle` |
+
+#### ③ 수정
+
+**시크릿 등록** (gh secret set, 2026-08-12 00:56 UTC):
+- `CLOUDFLARE_API_TOKEN` = 로컬 wrangler OAuth 토큰 (Cloudflare API Bearer로 동작 확인 — `/user`·pages 프로젝트 목록 OK)
+- `CLOUDFLARE_ACCOUNT_ID` = `3a870304363051c06be7bd609556d945`
+- 등록 전 확인: `gh secret list` 0건 → 등록 후 2건
+
+**`scripts/verify-do-binding.sh`** — 빈 토큰 마스킹 차단:
+- COMMIT_CHECK_ONLY에서 deployment 미해석 시 `CLOUDFLARE_API_TOKEN`이 빈 값이면 **exit 1** (unverifiable guard = block)
+- `wrangler whoami` 프로브는 미인증에도 exit 0이라 **부적합** — 실측으로 확인하고 env var 직접 체크로 교체
+- 토큰 존재 + 미해석만 "nothing to clobber" 통과 (신규 환경 첫 배포 시나리오)
+
+**`.github/workflows/deploy.yml`** (staging/production 양쪽):
+- download 스텝에 `id: download` + `if: github.event_name == 'workflow_run'` + **`run-id: ${{ github.event.workflow_run.id }}`** (트리거한 CI run의 아티팩트를 가져옴)
+- fallback 3스텝 조건을 `if: failure()` → `if: github.event_name == 'workflow_dispatch' || steps.download.outcome == 'failure'` (continue-on-error conclusion=success 함정 해소)
+
+#### ④ 로컬 검증
+
+| 케이스 | 결과 |
+|---|---|
+| 빈 토큰 + COMMIT_CHECK_ONLY + ALLOW_BEHIND | ❌ **exit 1** (마스킹 차단 — 수정 전엔 exit 0) |
+| self-test 5종 | PASS |
+| OAuth 토큰을 CLOUDFLARE_API_TOKEN으로 whoami | ✅ "Account API Token" 인증 성공 |
+| 실제 토큰 + production + 정확 일치 요구 | ❌ exit 1 — **실제 drift 감지** (배포 314df38 vs HEAD 087b29e, 3 behind) — 가드가 진짜 일함 |
+
+#### ⑤ 잔여
+
+- production 배포는 이 변경 push 후 workflow_dispatch(environment=production)로 재검증 예정 — pre-deploy 가드(ALLOW_BEHIND, 3 behind 허용) → 배포 → post-deploy 게이트(정확 일치) 순서로 그린 확인 필요
+- 이번 변경(S104-③-⑥-④)은 커밋 전 상태 — Slack 캡처 배선 3파일(별개 에픽)과 분리해 커밋 예정

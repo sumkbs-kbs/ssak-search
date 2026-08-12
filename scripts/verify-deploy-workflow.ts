@@ -1,0 +1,234 @@
+#!/usr/bin/env -S npx tsx
+/**
+ * verify-deploy-workflow.ts — static regression checks for the deploy CI
+ * workflow (pre-flight companion to scripts/verify-commits-ci.sh).
+ *
+ * The 2026-08-12 production workflow_dispatch run surfaced FIVE deploy CI
+ * bugs, all fixed in S104-③-⑥-④. This script makes each one a reproducible
+ * OFFLINE check against the files AT A COMMIT (no network, ~ms), so a future
+ * edit that reintroduces any of them fails the pre-flight:
+ *
+ *   1. secrets        — every cloudflare/wrangler-action step must wire
+ *                       apiToken/accountId from the GitHub secrets; every
+ *                       verify-do-binding.sh step must set both env vars from
+ *                       the secrets; no hardcoded token values.
+ *   2. guard masking  — scripts/verify-do-binding.sh must keep the
+ *                       empty-CLOUDFLARE_API_TOKEN refusal guard. Before the
+ *                       fix, an empty token made the deployment-list call
+ *                       fail (stderr swallowed), fell into the ALLOW_BEHIND
+ *                       "nothing to clobber" path, and the pre-deploy guard
+ *                       went GREEN with zero verification.
+ *   3. artifact       — the download-artifact step must carry an id and
+ *                       run-id pointing at the TRIGGERING CI run (without it
+ *                       the artifact is looked up in the deploy run and
+ *                       always missed), and the fallback build steps must
+ *                       gate on steps.download.outcome — `if: failure()`
+ *                       after a continue-on-error step never fires because
+ *                       that step's conclusion is "success".
+ *   4. Node           — wrangler 4.x requires Node >= 22; env.NODE_VERSION
+ *                       below 22 makes every wrangler-action step fail.
+ *   5. needs          — GitHub skip-propagation skips a dependent job when
+ *                       its needs job is skipped EVEN IF the dependent's
+ *                       if-condition allows it; the deploy jobs must be
+ *                       independent (routed by `if` alone).
+ *
+ * Exit codes (CI-gate contract for verify-commits-ci.sh):
+ *   0  PASS
+ *   1  FAIL — at least one check violated
+ *   2  SKIP — no .github/workflows/deploy.yml in this commit (predates the
+ *             deploy workflow; not a failure)
+ *   3  ERROR — deploy.yml present but unparseable
+ *
+ * Usage (from anywhere; the directory must be a checkout of the commit):
+ *   npx tsx scripts/verify-deploy-workflow.ts <repo-dir>
+ */
+import { existsSync, readFileSync } from 'node:fs'
+import { join, resolve } from 'node:path'
+import { parse } from 'yaml'
+
+export interface GateOutcome {
+  status: 'PASS' | 'FAIL' | 'SKIP' | 'ERROR'
+  detail: string
+}
+
+interface WorkflowStep {
+  name?: string
+  id?: string
+  uses?: string
+  if?: string
+  run?: string
+  with?: Record<string, unknown>
+  env?: Record<string, unknown>
+  'continue-on-error'?: unknown
+}
+
+interface WorkflowJob {
+  needs?: string | string[]
+  steps?: WorkflowStep[]
+}
+
+interface WorkflowDoc {
+  env?: Record<string, unknown>
+  jobs?: Record<string, WorkflowJob>
+}
+
+const DEPLOY_WF = '.github/workflows/deploy.yml'
+const GUARD_SCRIPT = 'scripts/verify-do-binding.sh'
+
+/** The exact refusal message introduced by the S104-③-⑥-④ guard-masking fix. */
+const GUARD_MARKER_1 = 'CLOUDFLARE_API_TOKEN is empty'
+const GUARD_MARKER_2 = 'refusing to pass a guard that cannot verify'
+
+// GitHub Actions secret/expression references — plain strings (NOT template
+// literals) so the literal `${{ ... }}` survives verbatim in findings.
+const TOKEN_SECRET_REF = '${{ secrets.CLOUDFLARE_API_TOKEN }}'
+const ACCOUNT_SECRET_REF = '${{ secrets.CLOUDFLARE_ACCOUNT_ID }}'
+const WORKFLOW_RUN_ID_REF = '${{ github.event.workflow_run.id }}'
+
+export function verifyDeployWorkflow(repoDir: string): GateOutcome {
+  const wfPath = join(repoDir, DEPLOY_WF)
+  if (!existsSync(wfPath)) {
+    return { status: 'SKIP', detail: `no ${DEPLOY_WF} in this commit — nothing to check` }
+  }
+
+  let doc: WorkflowDoc
+  try {
+    doc = parse(readFileSync(wfPath, 'utf8')) as unknown as WorkflowDoc
+  } catch (err) {
+    return { status: 'ERROR', detail: `${DEPLOY_WF} is not parseable YAML: ${String(err)}` }
+  }
+
+  const findings: string[] = []
+  const jobs = doc.jobs ?? {}
+
+  // ── 1. secrets wiring ──────────────────────────────────────────────────
+  for (const [jobName, job] of Object.entries(jobs)) {
+    for (const [idx, step] of (job.steps ?? []).entries()) {
+      const label = `${jobName} step ${idx + 1} (${step.name ?? step.uses ?? step.run ?? '?'})`
+      const uses = step.uses ?? ''
+      if (uses.startsWith('cloudflare/wrangler-action')) {
+        const token = String(step.with?.apiToken ?? '')
+        const account = String(step.with?.accountId ?? '')
+        if (!token.includes(TOKEN_SECRET_REF)) {
+          if (token.trim() !== '' && !token.includes('${{')) {
+            findings.push(`${label}: apiToken looks HARDCODED — must reference ${TOKEN_SECRET_REF}`)
+          } else {
+            findings.push(
+              `${label}: wrangler-action must wire apiToken from ${TOKEN_SECRET_REF} (empty token = masked green guard)`,
+            )
+          }
+        }
+        if (!account.includes(ACCOUNT_SECRET_REF)) {
+          findings.push(`${label}: wrangler-action must wire accountId from ${ACCOUNT_SECRET_REF}`)
+        }
+      }
+      if ((step.run ?? '').includes('verify-do-binding.sh')) {
+        const envToken = String(step.env?.CLOUDFLARE_API_TOKEN ?? '')
+        const envAccount = String(step.env?.CLOUDFLARE_ACCOUNT_ID ?? '')
+        if (!envToken.includes('secrets.CLOUDFLARE_API_TOKEN')) {
+          findings.push(`${label}: verify-do-binding.sh step must set CLOUDFLARE_API_TOKEN from the secret`)
+        }
+        if (!envAccount.includes('secrets.CLOUDFLARE_ACCOUNT_ID')) {
+          findings.push(`${label}: verify-do-binding.sh step must set CLOUDFLARE_ACCOUNT_ID from the secret`)
+        }
+      }
+    }
+  }
+
+  // ── 2. guard masking ───────────────────────────────────────────────────
+  const referenced = Object.values(jobs).some((job) =>
+    (job.steps ?? []).some((s) => (s.run ?? '').includes('verify-do-binding.sh')),
+  )
+  const guardPath = join(repoDir, GUARD_SCRIPT)
+  if (referenced && !existsSync(guardPath)) {
+    findings.push(`${GUARD_SCRIPT} is referenced by deploy.yml but missing from the commit`)
+  } else if (existsSync(guardPath)) {
+    const script = readFileSync(guardPath, 'utf8')
+    if (!script.includes(GUARD_MARKER_1) || !script.includes(GUARD_MARKER_2)) {
+      findings.push(
+        `${GUARD_SCRIPT}: missing the empty-CLOUDFLARE_API_TOKEN refusal guard — an empty token must BLOCK, never pass green`,
+      )
+    }
+  }
+
+  // ── 3. artifact download + fallback gating ─────────────────────────────
+  for (const [jobName, job] of Object.entries(jobs)) {
+    const steps = job.steps ?? []
+    const hasContinueOnError = steps.some((s) => s['continue-on-error'] === true)
+    if (hasContinueOnError) {
+      for (const [idx, step] of steps.entries()) {
+        if ((step.if ?? '').includes('failure()')) {
+          findings.push(
+            `${jobName} step ${idx + 1}: 'if: failure()' after a continue-on-error step NEVER fires (its conclusion is "success") — gate the fallback on steps.download.outcome`,
+          )
+        }
+      }
+    }
+    const dl = steps.find((s) => (s.uses ?? '').startsWith('actions/download-artifact'))
+    if (dl) {
+      const dlIdx = steps.indexOf(dl)
+      if (!dl.id) {
+        findings.push(
+          `${jobName} step ${dlIdx + 1}: download-artifact must carry an id (fallback gates reference steps.<id>.outcome)`,
+        )
+      }
+      const runId = String(dl.with?.['run-id'] ?? '')
+      if (!runId.includes('workflow_run.id')) {
+        findings.push(
+          `${jobName} step ${dlIdx + 1}: download-artifact must set run-id: ${WORKFLOW_RUN_ID_REF} — the worker-bundle lives in the triggering CI run`,
+        )
+      }
+      for (const [idx, step] of steps.entries()) {
+        const run = step.run ?? ''
+        if (
+          (run.includes('npm ci') || run.includes('npm run build')) &&
+          !(step.if ?? '').includes('steps.download.outcome')
+        ) {
+          findings.push(
+            `${jobName} step ${idx + 1} (${step.name ?? run}): fallback build must gate on steps.download.outcome — 'if: failure()' after continue-on-error is a no-op`,
+          )
+        }
+      }
+    }
+  }
+
+  // ── 4. Node version (wrangler >= 22) ───────────────────────────────────
+  const nodeVersion = String(doc.env?.NODE_VERSION ?? '')
+  const nodeMajor = parseInt(nodeVersion, 10)
+  if (!/^\d+$/.test(nodeVersion) || nodeMajor < 22) {
+    findings.push(`env.NODE_VERSION must be >= 22 (wrangler 4.x requires Node 22; got '${nodeVersion || '<unset>'}')`)
+  }
+
+  // ── 5. needs skip-propagation ──────────────────────────────────────────
+  for (const [jobName, job] of Object.entries(jobs)) {
+    if (job.needs !== undefined && job.needs !== null) {
+      findings.push(
+        `${jobName}: must NOT declare 'needs' — GitHub skips a dependent job when its needs job is skipped even if the if-condition allows it`,
+      )
+    }
+  }
+
+  if (findings.length > 0) {
+    return {
+      status: 'FAIL',
+      detail: `${findings.length} deploy-workflow regression check(s) failed:\n- ${findings.join('\n- ')}`,
+    }
+  }
+  return {
+    status: 'PASS',
+    detail: `${DEPLOY_WF} + ${GUARD_SCRIPT} pass all 5 S104-③-⑥-④ regression checks (secrets / guard-masking / artifact / node / needs)`,
+  }
+}
+
+// ── CLI entry ─────────────────────────────────────────────────────────────
+// Only run as the entry point (import.meta.url guard keeps unit tests from
+// executing the CLI on import — same pattern as verify-commit-eval.ts).
+if (import.meta.url === 'file://' + resolve(process.argv[1] ?? '')) {
+  const repoDir = process.argv[2] ?? process.cwd()
+  const outcome = verifyDeployWorkflow(repoDir)
+  console.log(`[verify-deploy-workflow] ${outcome.status}: ${outcome.detail}`)
+  if (outcome.status === 'PASS') process.exit(0)
+  if (outcome.status === 'FAIL') process.exit(1)
+  if (outcome.status === 'SKIP') process.exit(2)
+  process.exit(3)
+}

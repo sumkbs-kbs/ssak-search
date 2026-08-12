@@ -25,6 +25,13 @@
 #                 SKIP and do not fail the pre-flight. Replaces build when
 #                 --eval is given (eval gate is the expensive-to-know one;
 #                 build is cheap and covered by the default gate set).
+#   workflow      static deploy-workflow regression checks — scripts/
+#                 verify-deploy-workflow.ts re-validates .github/workflows/
+#                 deploy.yml + scripts/verify-do-binding.sh AT THE COMMIT
+#                 against the 5 S104-③-⑥-④ CI bugs (secrets wiring / guard
+#                 masking / artifact run-id + outcome gating / Node >= 22 /
+#                 no needs skip-propagation). ~ms, no network. Commits that
+#                 predate deploy.yml report SKIP.
 #
 # node_modules: symlinked from the main checkout when (a) no commit in the
 # range touches package.json/package-lock.json AND (b) the working tree is
@@ -61,7 +68,7 @@ set -uo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 WORKTREE_BASE="${TMPDIR:-/tmp}/verify-commits-ci"
-GATES=(lint-ci eslint format unit build)
+GATES=(lint-ci eslint format unit build workflow)
 KEEP=0
 SKIP_BUILD=0
 EVAL_GATE=0
@@ -126,7 +133,7 @@ fi
 # Gate list: --eval swaps build for the offline eval replay. If both
 # --eval and --skip-build are given, --eval wins (build is replaced anyway).
 if [[ $EVAL_GATE -eq 1 ]]; then
-  GATES=(lint-ci eslint format unit eval)
+  GATES=(lint-ci eslint format unit eval workflow)
   if [[ $SKIP_BUILD -eq 1 ]]; then
     echo "Note: --eval implies skipping build — --skip-build is redundant." >&2
   fi
@@ -135,9 +142,9 @@ fi
 echo "═══ verify-commits-ci ═══"
 echo "Range: ${BASE}..${HEAD_REF} (${#COMMITS[@]} commits)"
 if [[ $EVAL_GATE -eq 1 ]]; then
-  echo "Gates: lint-ci eslint format unit eval (offline replay from saved artifacts; build skipped)"
+  echo "Gates: lint-ci eslint format unit eval workflow (offline replay from saved artifacts; build skipped)"
 elif [[ $SKIP_BUILD -eq 1 ]]; then
-  echo "Gates: lint-ci eslint format unit (build skipped)"
+  echo "Gates: lint-ci eslint format unit workflow (build skipped)"
 else
   echo "Gates: ${GATES[*]}"
 fi
@@ -199,6 +206,24 @@ run_gate() {
         # from FAIL (regressions). Note: no time file is written, mirroring
         # the SKIP branch (nothing was evaluated).
         echo "ERROR" > "$WORKTREE_BASE/results/$short.eval"
+        ALL_OK=0
+        return
+      fi
+      ;;
+    # Static deploy-workflow regression check (S104-③-⑥-④ 5 bugs: secrets /
+    # guard masking / artifact run-id + outcome gating / Node >= 22 / needs
+    # skip-propagation). verify-deploy-workflow.ts exits 0=PASS 1=FAIL
+    # 2=SKIP (no deploy.yml in this commit) 3=ERROR (unparseable). SKIP must
+    # not fail the pre-flight; ERROR is a distinct red state.
+    workflow)
+      (cd "$wt" && npx tsx "$ROOT/scripts/verify-deploy-workflow.ts" "$wt" > "$log" 2>&1)
+      rc=$?
+      if [[ $rc -eq 2 ]]; then
+        echo "SKIP" > "$WORKTREE_BASE/results/$short.workflow"
+        return
+      fi
+      if [[ $rc -eq 3 ]]; then
+        echo "ERROR" > "$WORKTREE_BASE/results/$short.workflow"
         ALL_OK=0
         return
       fi

@@ -88,6 +88,29 @@ jobs:
         run: npm run format:check
         timeout-minutes: 2
 
+      # S104-③-⑧-② (2026-08-12): deploy workflow regression gate. The same
+      # verify-deploy-workflow check that verify-commits-ci.sh runs per commit
+      # (S104 CI 5버그 재현 + eval baseline permission) must ALSO fire here:
+      # this workflow runs on push/PR/schedule/dispatch and is the only place
+      # some CI surfaces are exercised (e.g. dispatch-only deploys), so a
+      # deploy.yml edit that reintroduces the 2026-08-12 bugs (secret wiring,
+      # guard masking, artifact fallback, Node < 22, needs propagation, missing
+      # eval baseline permission) must fail BEFORE the ~35-75min eval step burns.
+      # Exit-code contract (same as verify-commits-ci.sh run_gate):
+      #   0 PASS · 1 FAIL · 2 SKIP (deploy.yml absent) · 3 ERROR (unparseable)
+      - name: Verify deploy workflow regressions
+        run: |
+          set +e
+          npx tsx scripts/verify-deploy-workflow.ts "${GITHUB_WORKSPACE}"
+          rc=$?
+          set -e
+          if [ "$rc" -eq 0 ] || [ "$rc" -eq 2 ]; then
+            echo "✅ Deploy workflow gate passed (exit $rc)"
+          else
+            echo "❌ Deploy workflow gate failed (exit $rc)"
+            exit 1
+          fi
+
       - name: Determine run mode
         id: config
         run: |

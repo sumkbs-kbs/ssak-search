@@ -29,13 +29,13 @@
 # Env overrides for check [6]:
 #   TAIL_CMD         full tail command; when unset it is built from the
 #                    resolved deployment URL (see ENVIRONMENT) + --project-name
-#   TAIL_SECONDS     log-capture window per attempt (default 40)
-#   TAIL_WARMUP       tail-connect wait before the probe (default 8)
+#   TAIL_SECONDS     log-capture window per attempt (default 15)
+#   TAIL_WARMUP       tail-connect wait before the probe (default 5)
 #   TAIL_RETRIES      capture attempts per run — a missed probe line (fresh
 #                    deploy log lag) is retried with a fresh tail+probe
 #                    (S104-③-⑦, default 3)
 #   TAIL_RETRY_DELAY  pause between attempts so a just-deployed version's
-#                    log pipeline warms up (default 10)
+#                    log pipeline warms up (default 5)
 #   PROJECT_NAME     Pages project name (default search-engine-api)
 #   ENVIRONMENT      production (default) | staging — selects the deployment
 #                    used for the log tail AND the default WORKER_URL
@@ -588,10 +588,16 @@ if [ -z "${TAIL_CMD:-}" ]; then
     TAIL_CMD="npx wrangler pages deployment tail ${DEPLOY_URL} --project-name ${PROJECT_NAME} --format json"
   fi
 fi
-TAIL_SECONDS="${TAIL_SECONDS:-40}"
-TAIL_WARMUP="${TAIL_WARMUP:-8}"
+# S104-③-⑦-② (2026-08-12): defaults re-measured (production, 2026-08-12
+# 09:01~09:05 UTC) — delivery lag with a connected tail is mean 1.64s / max
+# 2.25s, and the WebSocket connect occasionally exceeds 1s (1/4 probe lines
+# lost at warmup=1). TAIL_SECONDS=15 leaves a 10s post-probe window = 4.4x the
+# max observed lag; TAIL_WARMUP=5 covers the connect tail with margin. Happy
+# path: ~44s → ~20s per run.
+TAIL_SECONDS="${TAIL_SECONDS:-15}"
+TAIL_WARMUP="${TAIL_WARMUP:-5}"
 TAIL_RETRIES="${TAIL_RETRIES:-3}"
-TAIL_RETRY_DELAY="${TAIL_RETRY_DELAY:-10}"
+TAIL_RETRY_DELAY="${TAIL_RETRY_DELAY:-5}"
 TAIL_LOG="$(mktemp -t verify-do-tail.XXXXXX 2>/dev/null || mktemp)"
 
 # macOS has no `timeout` binary — background + sleep + kill is portable.

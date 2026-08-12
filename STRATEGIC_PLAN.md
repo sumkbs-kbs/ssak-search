@@ -3558,6 +3558,46 @@ production 실토큰으로 verify-do-binding.sh 전체 실행 3회 연속 (기�
 - 배포 직후 미캡처 시나리오는 이번 실측에서 자연 발생하지 않음 (안정 상태) — miss→재시도(시도마다 프로브 발사)와 tail 사망(프로브 0회, 쿼터 절감) 경로는 ②의 강제 픽스처로 별도 검증 완료
 - **관련 후속 실측** (2026-08-12 08:50~09:05 UTC): 강제 미캡처(`TAIL_CMD='sleep 60'`) 3연속 = **152/145/148s · rc=0 · 시도당 프로브 1회(3회 발사) · 소진은 경고 유지** · 캡처 지연 계측 = 전달 지연 mean **1.64s** (1.38~2.25s), 웜업 1s에서 1/4 라인 유실 → 파라미터 권고 **WARMUP=5 / SECONDS=15 / RETRY_DELAY=5** (happy path 20s로 2.2배 단축 실측)
 
+#### ⑥ 기본값 변경 8/40/10 → 5/15/5 (2026-08-12, 계측 기반 확정)
+
+⑤의 캡처 지연 계측(전달 지연 mean 1.64s · max 2.25s, 연결이 가끔 >1s)을 근거로 `verify-do-binding.sh` 기본값을 변경하고 재실측으로 확정:
+
+| 파라미터 | 기존 | 변경 | 근거 |
+|---|---|---|---|
+| `TAIL_WARMUP` | 8 | **5** | 연결은 대부분 <1s, 드물게 >1s (웜업 1s에서 1/4 유실) — 5s면 ~5배 마진 |
+| `TAIL_SECONDS` | 40 | **15** | 프로브 후 윈도우 10s = 관측 max 지연 2.25s 대비 4.4배 마진 |
+| `TAIL_RETRY_DELAY` | 10 | **5** | 연결만 되면 전달 ~1.6s — 재시도 대기는 fresh-deploy 웜업용 |
+
+**재실측 (production 실토큰, 새 기본값):**
+
+| 시나리오 | RUN 1 | RUN 2 | RUN 3 | (기존 기본값) |
+|---|---|---|---|---|
+| **happy path** (Attempt 1/3 캡처, rc=0) | 21s | 21s | 19s | (44/43/43s — **2.2배 단축**) |
+| **강제 미캡처** (`TAIL_CMD='sleep 60'`, rc=0) | 60s | 61s | 60s | (152/145/148s — **2.5배 단축**) |
+
+- 미캡처 의미론 보존 확인: 3회 시도 × 3회 프로브(HTTP 200) · 소진 경고 유지 · rc=0 (DO 체크 권위)
+- self-test 5종 PASS · bash -n OK — 기본값만 변경이라 TS/게이트 영향 없음
+
+#### ⑦ workflow_run 아티팩트 다운로드 실패 원인 규명 + 수정 (2026-08-12)
+
+**현상**: 매 workflow_run 배포에서 `Download CI artifact`가 "Artifact not found for name: worker-bundle"으로 실패 — 아티팩트는 트리거 CI run에 존재(API 확인 · PAT로 REST 다운로드 200/318KB)했고 폴백 빌드가 마스킹.
+
+**원인 ① — GITHUB_TOKEN에 `actions: read` 부재**: 저장소 기본 워크플로우 권한이 제한 세트(Contents/Metadata/Packages read만). 실패 run 로그의 `GITHUB_TOKEN Permissions`에서 확인 → download-artifact@v4가 아티팩트 목록조차 조회 불가.
+
+**원인 ② — 암묵적 러너 토큰은 현재 run 스코프**: `permissions: actions: read`만 추가해도 09:30Z run에서 동일 실패 재현 — download-artifact@v4의 기본(러너 컨텍스트) 토큰은 현재 run 아티팩트에만 접근. README 명시대로 cross-workflow 다운로드는 **명시적 `github-token` 입력 필수**.
+
+**수정 (2커밋)**: ① `8573da1` — deploy-staging/deploy-production 잡에 `permissions: actions: read + contents: read` (checkout 유지) ② `c7b06ca` — download 스텝에 `github-token: ${{ secrets.GITHUB_TOKEN }}` 추가. verify-deploy-workflow.ts에 재현 체크 2건 추가(actions:read 부재 FAIL · run-id 설정 시 github-token 부재 FAIL) + 테스트 2건.
+
+**실측 검증 (workflow_run run 31583636023 @ c7b06ca)**:
+
+| 스텝 | 이전(실패) | 수정 후 |
+|---|---|---|
+| Download CI artifact | ❌ Artifact not found (폴백이 은폐) | ✅ **다운로드 성공** (로그: Downloading single artifact → 에러 없음) |
+| Setup Node / Install / Build (폴백) | 실행됨 | ⏭️ **skipped** (아티팩트 발견 → outcome=success) |
+| do-worker / Pages / post-deploy 게이트 | ✅ | ✅ (run 전체 success) |
+
+아티팩트 재사용 경로가 실제로 동작 — CI 빌드 번들을 재사용하므로 배포 시간 단축(빌드 스킵).
+
 ### S104-③-⑤-②: staging 회귀 감지 자동 동작 전체 검증 (2026-08-12)
 
 #### ① 검증 구성

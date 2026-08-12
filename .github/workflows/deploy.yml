@@ -152,21 +152,23 @@ jobs:
 
   deploy-production:
     name: Deploy to Cloudflare Pages (Production)
-    # S104-③-⑥-③ (2026-08-12): a workflow_dispatch with environment=production
-    # SKIPS deploy-staging (its `if` requires staging), and a skipped needed
-    # job skips dependents by default — the very first dispatch run concluded
-    # "skipped" with zero jobs executed (run 31551613272). The explicit needs
-    # result check lets production run on success OR skip (but not failure/
-    # cancellation).
-    if: >
-      github.event_name == 'workflow_dispatch' && inputs.environment == 'production'
-      && (needs.deploy-staging.result == 'success' || needs.deploy-staging.result == 'skipped')
+    # S104-③-⑥-③/④ (2026-08-12): job is INDEPENDENT of deploy-staging (no
+    # needs) — a workflow_dispatch with environment=production skips
+    # deploy-staging, and GitHub's default skip-propagation then skips any
+    # job that `needs` it EVEN IF its if-condition allows skipped. Both the
+    # first dispatch (run 31551613272, concluded "skipped") and the
+    # production dispatches after the needs-result fix (runs 31552128466,
+    # 31552497675, both "skipped") proved the needs-based guard does not
+    # work: a skipped needed job skips the dependent regardless of the
+    # explicit result check. Since each job does its own checkout+build+
+    # deploy, the jobs are truly independent — the `if` alone routes the
+    # dispatch to exactly one of them.
+    if: github.event_name == 'workflow_dispatch' && inputs.environment == 'production'
     runs-on: ubuntu-latest
     timeout-minutes: 8
     environment:
       name: production
       url: https://search-engine-api.pages.dev
-    needs: [deploy-staging]
     steps:
       # Full history is REQUIRED: the pre/post-deploy commit-drift gates resolve
       # the CURRENT deployment's Source commit (an older SHA) against the

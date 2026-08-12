@@ -3542,6 +3542,22 @@ npx wrangler pages secret put SLACK_WEBHOOK --project-name search-engine-api
 - 재시도는 모두 실패해도 DO 바인딩 체크가 권위 — exit 0 유지 (FAIL_ON_REGRESSION 계열과 결합 시 경고 강화 가능)
 - CI post-deploy 게이트(deploy.yml)는 COMMIT_CHECK_ONLY라 tail 미사용 — 이 개선은 수동/전체 실행 경로에 적용
 
+#### ⑤ 3연속 반복 실측 — 정상 경로의 결정적 반복성 (2026-08-12 01:23~01:25 UTC)
+
+production 실토큰으로 verify-do-binding.sh 전체 실행 3회 연속 (기본값: RETRIES=3, WARMUP=8, SECONDS=40):
+
+| Run | 소요시간 | tail 캡처 | 커밋 일치 | DO | 백엔드 | exit |
+|---|---|---|---|---|---|---|
+| RUN 1 | **44s** | Attempt 1/3 성공 | ✅ 25bc72c == 25bc72c | 10/10 bound | none down | 0 |
+| RUN 2 | **43s** | Attempt 1/3 성공 | ✅ 동일 | 10/10 bound | none down | 0 |
+| RUN 3 | **43s** | Attempt 1/3 성공 | ✅ 동일 | 10/10 bound | none down | 0 |
+
+- **3/3 모두 rc=0 · 소요시간 편차 1초 (43~44s)** — tail 연결 → 프로브 → 윈도우 캡처 → 파싱 전 과정이 3회 연속 동일하게 동작
+- 전부 Attempt 1/3에서 캡처 — 정상 조건에서 재시도가 발동할 필요가 없었으며, "첫 시도 캡처"의 결정적 반복성을 확보
+- **RUN 2 부수 관찰**: `[5] rate-limited fetch` 단계에서 **HTTP 429** 관찰 (rate limiter 라이브 동작 증거) — 스크립트는 경고 처리 후 계속 진행, rc=0 유지 (실패 격리 정상)
+- 배포 직후 미캡처 시나리오는 이번 실측에서 자연 발생하지 않음 (안정 상태) — miss→재시도(시도마다 프로브 발사)와 tail 사망(프로브 0회, 쿼터 절감) 경로는 ②의 강제 픽스처로 별도 검증 완료
+- **관련 후속 실측** (2026-08-12 08:50~09:05 UTC): 강제 미캡처(`TAIL_CMD='sleep 60'`) 3연속 = **152/145/148s · rc=0 · 시도당 프로브 1회(3회 발사) · 소진은 경고 유지** · 캡처 지연 계측 = 전달 지연 mean **1.64s** (1.38~2.25s), 웜업 1s에서 1/4 라인 유실 → 파라미터 권고 **WARMUP=5 / SECONDS=15 / RETRY_DELAY=5** (happy path 20s로 2.2배 단축 실측)
+
 ### S104-③-⑤-②: staging 회귀 감지 자동 동작 전체 검증 (2026-08-12)
 
 #### ① 검증 구성

@@ -438,6 +438,73 @@ bash scripts/create-logpush-datadog.sh
 curl -s https://your-worker.pages.dev/api/monitor | python3 -m json.tool
 ```
 
+### 6.5 Slack Incoming Webhook 실수신 검증 (S104-③-②)
+
+> **목적**: production 딥 프로브가 백엔드 `down`을 감지하면 `src/routes/health.ts` →
+> `alertBackendDown()`(`src/lib/slack-alert.ts`)이 `SLACK_WEBHOOK`(또는 `ALERT_SLACK_WEBHOOK`)
+> 으로 fire-and-forget POST를 보냅니다. 실제 Slack 채널 도착까지 확정하는 절차.
+> 현재 `SLACK_WEBHOOK` 시크릿은 **임시 캡처 싱크**(`ssak-alert-capture`)를 가리키고
+> 있어 전달 홉까지만 검증된 상태 — 아래 체크리스트로 실수신으로 전환합니다.
+>
+> **트리거 조건**: `status === 'down'`인 백엔드만 알림 (`degraded`/`unconfigured`는 무시).
+> 전달 payload: `🔴 Backend Down: <name>` + attachment(Backend/Status/Latency 필드).
+
+#### 6.5.1 Slack 측 사전 준비 (웹훅 URL 생성)
+
+| # | 작업 | 명령/경로 | 완료 |
+|---|------|-----------|:----:|
+| A1 | Incoming Webhook 앱 설치 | Slack → 앱 관리 → 검색창 `incoming-webhook` → 앱 추가/설치 | ☐ |
+| A2 | 수신 채널 선택 + URL 복사 | 설치 시 채널 선택 → `https://hooks.slack.com/services/T…/B…/X…` 복사 | ☐ |
+| A3 | **URL 독립 검증** (Slack 측 먼저) | `curl -s -X POST -H 'Content-type: application/json' -d '{"text":"[TEST] webhook reachable"}' '<URL>'` → 응답 `ok` + 채널 도착 | ☐ |
+
+> A3이 실패하면 Slack 쪽 문제 — 앱 재설치/채널 권한 확인 후 진행 (앱 코드는 건드리지 않음).
+
+#### 6.5.2 시크릿 교체
+
+| # | 작업 | 명령/경로 | 완료 |
+|---|------|-----------|:----:|
+| B1 | Pages production 시크릿 교체 | `npx wrangler pages secret put SLACK_WEBHOOK --project-name search-engine-api` → URL 입력 (또는 Dashboard: Pages → search-engine-api → Settings → Variables and Secrets → Production → SLACK_WEBHOOK) | ☐ |
+| B2 | (선택) do-worker canary 알림 | `npx wrangler secret put ssak-do-worker SLACK_WEBHOOK` — `canary-orchestrator.ts`도 동일 웹훅 사용 (canary 알림 불필요 시 생략) | ☐ |
+| B3 | 시크릿 반영 확인 | Dashboard Variables and Secrets → Production에 `SLACK_WEBHOOK` 표시 확인 | ☐ |
+
+#### 6.5.3 재배포 + 커밋 일치 검증
+
+| # | 작업 | 명령/경로 | 완료 |
+|---|------|-----------|:----:|
+| C1 | 빌드 | `npm run build` | ☐ |
+| C2 | Pages production 배포 | `npx wrangler pages deploy dist/ --project-name=search-engine-api --branch=main` (시크릿은 배포 스냅샷에 반영) — 또는 deploy 워크플로우 `workflow_dispatch(environment=production)` 사용 | ☐ |
+| C3 | 커밋 일치 + DO 재검증 | `ENVIRONMENT=production EXPECTED_COMMIT=<배포 SHA> bash scripts/verify-do-binding.sh` → `Deployment commit matches` + Route 10/10 + exit 0 | ☐ |
+
+#### 6.5.4 전달 경로 검증 (웹훅 → Slack)
+
+| # | 작업 | 명령/경로 | 완료 |
+|---|------|-----------|:----:|
+| D1 | **실 payload 재현** (앱이 보내는 것과 동일 구조) | `curl -s -X POST -H 'Content-type: application/json' -d '{"text":"🔴 Backend Down: test — Backend *test* is *down* (1234ms)","attachments":[{"color":"danger","blocks":[{"type":"header","text":{"type":"plain_text","text":"🔴 Backend Down: test"}}]}]}' '<URL>'` → `ok` + 채널에 `🔴 Backend Down: test` 도착 | ☐ |
+| D2 | 현재 백엔드 상태 확인 | `curl -s 'https://search-engine-api.pages.dev/api/health?depth=full'` → `down_backends` 필드 확인 (현재 down 0건이면 6.5.5 대기) | ☐ |
+
+#### 6.5.5 실제 다운 이벤트에서 수신 확정
+
+| # | 작업 | 명령/경로 | 완료 |
+|---|------|-----------|:----:|
+| E1 | 다운 이벤트 모니터링 | `python3 scripts/run-alert-monitor.py` (240s 폴링, 최대 90분) — 다운 감지 시각 기록. wikipedia 429 창 / duckduckgo 사이클 등 자연 이벤트 대기 | ☐ |
+| E2 | production 로그에서 전송 확인 | `npx wrangler pages deployment tail <deploy-id> --project-name search-engine-api --format json` → 다운 감지 시각에 `[Slack] Alert sent` (성공) 또는 `[Slack] Webhook send failed` 로그 | ☐ |
+| E3 | **Slack 채널 도착 확정** | 다운 감지 시각 전후 Slack 채널에 `🔴 Backend Down: <backend>` 메시지 수신 확인 ← 최종 목표 | ☐ |
+| E4 | (선택) 회귀 게이트 교차 확인 | `FAIL_ON_REGRESSION=1 bash scripts/verify-do-binding.sh`가 같은 다운을 `new_down`으로 잡는지 대조 | ☐ |
+
+#### 6.5.6 실패 시 트러블슈팅
+
+| 증상 | 원인/조치 |
+|------|-----------|
+| `[Slack] Webhook send failed` + 4xx | URL 오타·앱 권한 — Slack에서 앱 재설치 후 A3 재검증 |
+| `[Slack] Webhook send failed` + 3xx | 구 웹훅 URL 폐기됨 — 새 URL로 B1 재실행 |
+| 알림 자체 미발생 | 트리거는 `down`만 — wikipedia 429 창이 `degraded`로 분류되면 알림 없음 (정상). `down_backends`가 비어있지 않은 tick을 기다려야 함 |
+| E1이 다운을 못 잡음 | 90분 내 자연 이벤트 부재 가능 — 모니터 재실행 또는 E2 tail을 15분 크론 틱과 병행 관찰 |
+
+#### 6.5.7 (전환 후) 임시 캡처 배선 정리
+
+- 실수신 확정 후 `ssak-alert-capture`(src/slack-capture.ts · wrangler.slack-capture.jsonc)와
+  `scripts/run-alert-monitor.py`는 더 이상 필요 없음 — 선택적 제거: `npx wrangler delete --config wrangler.slack-capture.jsonc ssak-alert-capture` + 커밋에서 파일 삭제
+
 ---
 
 ## 7. CI/CD 파이프라인

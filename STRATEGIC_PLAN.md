@@ -3441,3 +3441,31 @@ npx wrangler pages secret put SLACK_WEBHOOK --project-name search-engine-api
 
 - production 배포가 HEAD보다 1커밋 뒤처짐(`0f8401c` vs `556d363`) — 다음 production 배포 시 해소 (CI deploy-production은 workflow_dispatch)
 - staging alias에 크론 스케줄러 미배포 — staging 딥 프로브는 수동 `?depth=full`만 가능 (운영 검증용으로는 충분)
+
+### S104-③-⑤: staging 딥 프로브 자동화 — 환경별 크론 스케줄러 분리 (2026-08-11)
+
+#### ① 배경
+
+- S104-③-④에서 staging 검증 시 딥 프로브가 **수동 `?depth=full` 호출에만 의존**하던 잔여를 자동화
+- deploy.yml staging 잡이 `wrangler.cron.jsonc`(프로덕션 PROBE_URL)로 스케줄러를 배포 — **staging 배포의 스케줄러가 실제로는 production을 프로브하는 잘못된 배선**이었음
+
+#### ② 구현
+
+| 파일 | 내용 |
+|---|---|
+| `wrangler.cron.staging.jsonc` (신규) | `ssak-probe-scheduler-staging` — `triggers.crons: ["*/15 * * * *"]`, `PROBE_URL: https://staging.search-engine-api.pages.dev` (프로덕션 워커와 분리 — var 오염 없음) |
+| `.github/workflows/deploy.yml` | staging 잡의 스케줄러 스텝을 `deploy --config=wrangler.cron.staging.jsonc`로 전환 (production 잡은 기존 config 유지) |
+| `scripts/run-staging-cron-tail.py` (신규) | staging 스케줄러 + staging Pages 배포 tail double-fork 데몬 (크론 틱 실측용) |
+| `DEPLOYMENT_CHECKLIST.md` | 환경별 스케줄러 배포 절차 문서화 |
+
+#### ③ 실측 (2026-08-11, staging)
+
+- 배포: `ssak-probe-scheduler-staging` 등록 — `schedule: */15 * * * *`, `env.PROBE_URL ("https://staging.search-engine-api.pag...")`
+- **23:30 틱**: staging Pages 배포(`8530df3a`) tail에서 `ssak-cron-probe/1.0` UA의 `[health] deep health probe complete` 캡처 — `status: degraded · down_backends: none · latency_ms 3564 · rate_limiter_mode: durable_object · hosts_tracked: 17 · cached: false` (scriptName `pages-worker--...-preview` = staging 배포 확인)
+- **23:45 틱**: 스케줄러 `[cron-probe]` — http 200 · probe_status: degraded · down_backends: none · 932ms · **probe_url: `https://staging.search-engine-api.pages.dev`** (staging URL 프로브 직접 확인)
+- 참고: 로그의 `ddEnv: production`은 src/index.tsx:81의 하드코딩 태그 — 환경 판별은 deployment ID 기반 tail이 권위
+
+#### ④ 잔여
+
+- staging 스케줄러의 `[cron-probe]` 로그 실측 완료 확인 (23:45)
+- staging Pages 재배포 시 스케줄러 PROBE_URL은 alias 기준이라 재배포 불필요 (alias가 최신 배포로 라우팅)

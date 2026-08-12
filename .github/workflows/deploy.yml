@@ -79,11 +79,15 @@ jobs:
         # S104-③-fix (2026-08-11): Pages cannot host cron triggers, so the
         # 15-min deep-probe scheduler is a separate Workers script. Deploy
         # AFTER Pages so its PROBE_URL var points at the newest bundle.
+        # S104-③-⑤ (2026-08-11): the staging job deploys the STAGING scheduler
+        # (wrangler.cron.staging.jsonc, PROBE_URL=staging alias) instead of the
+        # production one — previously this step pointed the staging deploy's
+        # scheduler at the production URL, probing the wrong environment.
         uses: cloudflare/wrangler-action@v3
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          command: deploy --config=wrangler.cron.jsonc
+          command: deploy --config=wrangler.cron.staging.jsonc
 
   deploy-production:
     name: Deploy to Cloudflare Pages (Production)

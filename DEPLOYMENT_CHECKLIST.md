@@ -122,7 +122,8 @@ project"). 따라서 11개 DO 클래스는 **별도 Workers(`ssak-do-worker`, `w
 3. `npx wrangler deploy --config wrangler.cron.jsonc` — **딥 프로브 스케줄러 워커** 배포 (S104-③-fix)
    - Pages는 크론 트리거를 **지원하지 않음** (Workers ✅ / Pages ❌ — wrangler도 Pages config의 `triggers`를 거부해 배포 차단).
    - 15분 간격 딥 프로브는 별도 Workers 스크립트 `ssak-probe-scheduler`가 소유하며, `PROBE_URL`(기본 `https://search-engine-api.pages.dev`)의 `/api/health?depth=full`을 주기 호출한다 (2026-08-11 실측: 11:30/11:45 틱 모두 발동 확인).
-   - CI: `.github/workflows/deploy.yml`에 staging/production 양쪽 스텝 포함.
+   - **환경별 스케줄러 분리 (S104-③-⑤, 2026-08-11)**: staging은 `npx wrangler deploy --config wrangler.cron.staging.jsonc`로 **별도 워커 `ssak-probe-scheduler-staging`**(PROBE_URL=`https://staging.search-engine-api.pages.dev`)을 배포한다 — staging 딥 프로브가 자동화되고, 프로덕션 스케줄러의 PROBE_URL을 오염시키지 않는다. (수정 전 deploy.yml staging 잡이 프로덕션 config로 배포해 staging 스케줄러가 production을 프로브하던 배선 수정).
+   - CI: `.github/workflows/deploy.yml` — staging 잡은 `wrangler.cron.staging.jsonc`, production 잡은 `wrangler.cron.jsonc`.
 
 > 과거 버전의 "Dashboard에서 DO 바인딩 추가" 방식은 Pages가 DO를 직접 소유할 수 없어
 > 동작하지 않았습니다 (P2 실측). project 레벨 바인딩은 git 연결 빌드에만 적용됩니다.

@@ -3660,3 +3660,37 @@ CI 로그(`CLOUDFLARE_API_TOKEN: ` 빈 값 · `##[error]Unable to download artif
 
 - production 배포는 이 변경 push 후 workflow_dispatch(environment=production)로 재검증 예정 — pre-deploy 가드(ALLOW_BEHIND, 3 behind 허용) → 배포 → post-deploy 게이트(정확 일치) 순서로 그린 확인 필요
 - 이번 변경(S104-③-⑥-④)은 커밋 전 상태 — Slack 캡처 배선 3파일(별개 에픽)과 분리해 커밋 예정
+
+### S104-③-⑥-④-②: production 배포 CI 그린 달성 — workflow_dispatch 실측 확정 (2026-08-12)
+
+#### ① 최종 CI 실행 (run 31552623591 @ 25bc72c, workflow_dispatch environment=production)
+
+| 스텝 | 결과 |
+|---|---|
+| pre-deploy 가드 (commit baseline) | ✅ |
+| Node 22 setup + npm ci + build | ✅ (fallback — dispatch엔 CI 아티팩트 없음) |
+| Deploy do-worker | ✅ |
+| Deploy Pages production | ✅ |
+| Deploy probe-scheduler | ✅ |
+| **post-deploy 게이트 (정확 일치)** | ✅ **25bc72c == 25bc72c** |
+
+#### ② 추가로 잡힌 버그 2건 (needs 제거 시리즈)
+
+| 버그 | 실측 | 수정 |
+|---|---|---|
+| **Node 20 vs wrangler ≥22** | staging dispatch run 31552212422 — `Wrangler requires at least Node.js v22.0.0` | `NODE_VERSION: "22"` (engines >=20 호환) |
+| **needs skip 전파** | production dispatch 3회(31551613272/31552128466/31552497675) 모두 두 잡 "skipped" — GitHub 기본 동작: needs 잡이 skipped되면 dependent는 if 조건과 무관하게 skip. `needs.result == 'skipped'` 명시 체크도 우회 불가 | **needs 제거** — 각 잡 독립 checkout+build+deploy, `if`만으로 라우팅 (dispatch environment가 정확히 한 잡 선택) |
+
+#### ③ 최종 로컬 재검증 (verify-do-binding.sh production, 실토큰)
+
+- `Deployment commit: 25bc72c (expected 25bc72c)` → **✅ matches** (드리프트 0)
+- RATE_LIMITER durable_object · Route 10/10 bound · down_backends none · exit 0
+
+#### ④ 커밋
+
+`d81a306`(시크릿·가드·artifact) → `1ec5cb9`(Node 22) → `25bc72c`(needs 제거) — 모두 github main에 push됨.
+
+#### ⑤ 잔여
+
+- workflow_run 트리거(CI 성공 시 자동 staging 배포)는 이번 수정 후 미검증 — staging dispatch로 한 번 더 확인 가능
+- Slack alert 캡처 배선 3파일(src/slack-capture.ts, wrangler.slack-capture.jsonc, scripts/run-alert-monitor.py)은 별개 에픽으로 미커밋 유지

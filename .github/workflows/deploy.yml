@@ -30,6 +30,16 @@ env:
 jobs:
   deploy-staging:
     name: Deploy to Cloudflare Pages (Staging)
+    # S104-③-⑦-③ (2026-08-12): the repo default workflow permissions are the
+    # RESTRICTED set (Contents/Metadata/Packages read ONLY — no actions:read),
+    # so download-artifact@v4 could not list the triggering CI run's artifacts
+    # and failed with "Artifact not found for name: worker-bundle" on every
+    # workflow_run deploy (the fallback build then ran). Declare actions:read
+    # explicitly (with contents:read for checkout) to restore the documented
+    # workflow_run artifact path.
+    permissions:
+      actions: read
+      contents: read
     if: >
       (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success') ||
       (github.event_name == 'workflow_dispatch' && inputs.environment == 'staging')
@@ -163,6 +173,11 @@ jobs:
     # explicit result check. Since each job does its own checkout+build+
     # deploy, the jobs are truly independent — the `if` alone routes the
     # dispatch to exactly one of them.
+    # S104-③-⑦-③: permissions (actions:read for the artifact download,
+    # contents:read for checkout) — see deploy-staging for the rationale.
+    permissions:
+      actions: read
+      contents: read
     if: github.event_name == 'workflow_dispatch' && inputs.environment == 'production'
     runs-on: ubuntu-latest
     timeout-minutes: 8

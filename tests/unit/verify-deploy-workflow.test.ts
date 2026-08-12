@@ -16,6 +16,9 @@ env:
   NODE_VERSION: "22"
 jobs:
   deploy-production:
+    permissions:
+      actions: read
+      contents: read
     if: github.event_name == 'workflow_dispatch' && inputs.environment == 'production'
     runs-on: ubuntu-latest
     steps:
@@ -157,6 +160,16 @@ describe('verify-deploy-workflow — 5 S104-③-⑥-④ regression checks', () =
   })
 
   describe('3. artifact download + fallback gating', () => {
+    it('FAILs when the download job lacks permissions.actions: read (default token → Artifact not found)', () => {
+      // Remove the whole permissions block — job then inherits the repo's
+      // restricted default (Contents/Metadata/Packages only), the S104-③-⑦-③
+      // failure mode observed on every workflow_run deploy.
+      const workflow = GOOD_WORKFLOW.replace('    permissions:\n      actions: read\n      contents: read\n', '')
+      const outcome = verifyDeployWorkflow(writeRepo({ workflow }))
+      expectStatus(outcome, 'FAIL')
+      expect(outcome.detail).toContain('permissions.actions: read')
+    })
+
     it('FAILs when the download step has no id (outcome gates cannot reference it)', () => {
       const workflow = GOOD_WORKFLOW.replace('        id: download\n', '')
       const outcome = verifyDeployWorkflow(writeRepo({ workflow }))

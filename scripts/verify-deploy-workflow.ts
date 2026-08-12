@@ -65,11 +65,13 @@ interface WorkflowStep {
 interface WorkflowJob {
   needs?: string | string[]
   steps?: WorkflowStep[]
+  permissions?: Record<string, unknown>
 }
 
 interface WorkflowDoc {
   env?: Record<string, unknown>
   jobs?: Record<string, WorkflowJob>
+  permissions?: Record<string, unknown>
 }
 
 const DEPLOY_WF = '.github/workflows/deploy.yml'
@@ -167,6 +169,24 @@ export function verifyDeployWorkflow(repoDir: string): GateOutcome {
     const dl = steps.find((s) => (s.uses ?? '').startsWith('actions/download-artifact'))
     if (dl) {
       const dlIdx = steps.indexOf(dl)
+      // S104-③-⑦-③: the repo default workflow permissions are the RESTRICTED
+      // set (Contents/Metadata/Packages read ONLY — no actions:read), which
+      // makes download-artifact@v4 fail with "Artifact not found for name:
+      // worker-bundle" on workflow_run deploys (observed 2026-08-12 on every
+      // workflow_run run — the fallback build masked it). The job (or
+      // workflow) must declare actions:read for the download to work.
+      const jobPerms = job.permissions as Record<string, unknown> | undefined
+      const wfPerms = doc.permissions as Record<string, unknown> | undefined
+      const hasActionsRead =
+        jobPerms?.actions === 'read' ||
+        jobPerms?.actions === 'write' ||
+        wfPerms?.actions === 'read' ||
+        wfPerms?.actions === 'write'
+      if (!hasActionsRead) {
+        findings.push(
+          `${jobName}: download-artifact requires job/workflow permissions.actions: read — without it the GITHUB_TOKEN cannot list the triggering run's artifacts and the download fails with "Artifact not found"`,
+        )
+      }
       if (!dl.id) {
         findings.push(
           `${jobName} step ${dlIdx + 1}: download-artifact must carry an id (fallback gates reference steps.<id>.outcome)`,

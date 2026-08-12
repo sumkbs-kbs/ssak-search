@@ -75,6 +75,7 @@ interface WorkflowDoc {
 }
 
 const DEPLOY_WF = '.github/workflows/deploy.yml'
+const EVAL_WF = '.github/workflows/eval.yml'
 const GUARD_SCRIPT = 'scripts/verify-do-binding.sh'
 
 /** The exact refusal message introduced by the S104-③-⑥-④ guard-masking fix. */
@@ -238,6 +239,37 @@ export function verifyDeployWorkflow(repoDir: string): GateOutcome {
     }
   }
 
+  // ── 6. eval.yml baseline auto-commit permission ────────────────────────
+  // S104-③-⑧ (2026-08-12): the repo default workflow permission is read-only,
+  // and eval.yml declared no permissions:, so the plain `git push` in
+  // "Commit updated baseline" was denied to github-actions[bot]
+  // (run 31582039295 step 10, exit 128). The eval job must declare
+  // contents: write — required for both the baseline commit and the weekly
+  // README metrics update.
+  const evalPath = join(repoDir, EVAL_WF)
+  if (existsSync(evalPath)) {
+    try {
+      const evalDoc = parse(readFileSync(evalPath, 'utf8')) as unknown as WorkflowDoc
+      const evalJob = evalDoc.jobs?.eval
+      if (evalJob && (evalJob.steps ?? []).some((s) => (s.name ?? '').includes('Commit updated baseline'))) {
+        const jobPerms = evalJob.permissions as Record<string, unknown> | undefined
+        const wfPerms = evalDoc.permissions as Record<string, unknown> | undefined
+        const hasContentsWrite =
+          jobPerms?.contents === 'write' ||
+          wfPerms?.contents === 'write' ||
+          jobPerms?.contents === 'read-write' ||
+          wfPerms?.contents === 'read-write'
+        if (!hasContentsWrite) {
+          findings.push(
+            `${EVAL_WF}: the "Commit updated baseline" step pushes with the implicit GITHUB_TOKEN — the eval job must declare permissions.contents: write (the repo default is read-only, so the push is denied to github-actions[bot])`,
+          )
+        }
+      }
+    } catch (err) {
+      findings.push(`${EVAL_WF} is not parseable YAML: ${String(err)}`)
+    }
+  }
+
   if (findings.length > 0) {
     return {
       status: 'FAIL',
@@ -246,7 +278,7 @@ export function verifyDeployWorkflow(repoDir: string): GateOutcome {
   }
   return {
     status: 'PASS',
-    detail: `${DEPLOY_WF} + ${GUARD_SCRIPT} pass all 5 S104-③-⑥-④ regression checks (secrets / guard-masking / artifact / node / needs)`,
+    detail: `${DEPLOY_WF} + ${GUARD_SCRIPT} pass all 6 S104-③-⑥-④/⑧ regression checks (secrets / guard-masking / artifact / node / needs / eval-baseline-permission)`,
   }
 }
 

@@ -49,6 +49,13 @@ jobs:
   eval:
     name: Search Quality Evaluation
     runs-on: ubuntu-latest
+    # S104-③-⑧ (2026-08-12): the repo's default workflow permission is
+    # read-only, so the plain `git push` in "Commit updated baseline" was
+    # denied to github-actions[bot] (run 31582039295 step 10 failed with
+    # exit 128). contents: write is required for the baseline auto-commit
+    # and the weekly README metrics update.
+    permissions:
+      contents: write
     # S37 (2026-08-08): must cover median runs — runs=3 with 500 queries takes
     # ~60-75min (S31/S32 measured ~75min). The old 30min budget killed a
     # median workflow_dispatch before the step finished. Single runs finish

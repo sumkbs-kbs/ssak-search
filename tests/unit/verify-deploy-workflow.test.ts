@@ -74,11 +74,16 @@ fi
 
 const created: string[] = []
 
-function writeRepo(opts: { workflow?: string; guard?: string; skipGuard?: boolean } = {}): string {
+function writeRepo(
+  opts: { workflow?: string; guard?: string; skipGuard?: boolean; evalWorkflow?: string } = {},
+): string {
   const dir = mkdtempSync(join(tmpdir(), 'vdf-'))
   mkdirSync(join(dir, '.github', 'workflows'), { recursive: true })
   mkdirSync(join(dir, 'scripts'), { recursive: true })
   writeFileSync(join(dir, '.github', 'workflows', 'deploy.yml'), opts.workflow ?? GOOD_WORKFLOW, 'utf-8')
+  if (opts.evalWorkflow !== undefined) {
+    writeFileSync(join(dir, '.github', 'workflows', 'eval.yml'), opts.evalWorkflow, 'utf-8')
+  }
   if (!opts.skipGuard) {
     writeFileSync(join(dir, 'scripts', 'verify-do-binding.sh'), opts.guard ?? GOOD_GUARD, 'utf-8')
   }
@@ -96,7 +101,7 @@ function expectStatus(outcome: GateOutcome, status: GateOutcome['status']): void
   expect(outcome.status, outcome.detail).toBe(status)
 }
 
-describe('verify-deploy-workflow — 5 S104-③-⑥-④ regression checks', () => {
+describe('verify-deploy-workflow — 6 S104-③-⑥-④/⑧ regression checks', () => {
   it('PASSes the CURRENT repo deploy.yml (reproducible proof HEAD is green)', () => {
     // Repo root: tests/unit → ../.. (same resolution as analyze-429-loss tests).
     const outcome = verifyDeployWorkflow(join(__dirname, '..', '..'))
@@ -238,6 +243,51 @@ describe('verify-deploy-workflow — 5 S104-③-⑥-④ regression checks', () =
       const outcome = verifyDeployWorkflow(writeRepo({ workflow }))
       expectStatus(outcome, 'FAIL')
       expect(outcome.detail).toContain("must NOT declare 'needs'")
+    })
+  })
+
+  describe('6. eval.yml baseline auto-commit permission (S104-③-⑧)', () => {
+    const EVAL_NO_PERMS = `name: Evaluation
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+jobs:
+  eval:
+    name: Search Quality Evaluation
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Commit updated baseline
+        if: github.ref == 'refs/heads/main'
+        run: |
+          git config user.name "github-actions[bot]"
+          git add eval/baselines/latest.json
+          git commit -m "chore: update eval baseline [skip ci]" || true
+          git push
+`
+
+    const EVAL_WITH_WRITE = EVAL_NO_PERMS.replace(
+      '  eval:\n    name: Search Quality Evaluation\n    runs-on: ubuntu-latest',
+      '  eval:\n    name: Search Quality Evaluation\n    runs-on: ubuntu-latest\n    permissions:\n      contents: write',
+    )
+
+    it('PASSes when the eval job declares permissions.contents: write', () => {
+      const outcome = verifyDeployWorkflow(writeRepo({ evalWorkflow: EVAL_WITH_WRITE }))
+      expectStatus(outcome, 'PASS')
+    })
+
+    it('FAILs when eval.yml lacks contents: write (repo default is read-only → github-actions[bot] push denied)', () => {
+      const outcome = verifyDeployWorkflow(writeRepo({ evalWorkflow: EVAL_NO_PERMS }))
+      expectStatus(outcome, 'FAIL')
+      expect(outcome.detail).toContain('Commit updated baseline')
+      expect(outcome.detail).toContain('contents: write')
+    })
+
+    it('FAILs when eval.yml is unparseable', () => {
+      const outcome = verifyDeployWorkflow(writeRepo({ evalWorkflow: 'jobs: [unclosed' }))
+      expectStatus(outcome, 'FAIL')
+      expect(outcome.detail).toContain('not parseable YAML')
     })
   })
 })

@@ -18,7 +18,13 @@ on:
           - production
 
 env:
-  NODE_VERSION: "20"
+  # S104-③-⑥-④ (2026-08-12): wrangler 4.121.0 (installed by
+  # cloudflare/wrangler-action@v3) requires Node >= 22 — the previous
+  # NODE_VERSION 20 made the deploy-do-worker step fail with
+  # "Wrangler requires at least Node.js v22.0.0" (observed in the staging
+  # workflow_dispatch run 31552212422). package.json engines is >=20, so 22
+  # is compatible for the build fallback too. Local dev runs Node 22.
+  NODE_VERSION: "22"
   PROJECT_NAME: "search-engine-api"
 
 jobs:

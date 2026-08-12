@@ -43,6 +43,7 @@ jobs:
           name: worker-bundle
           path: dist/
           run-id: \${{ github.event.workflow_run.id }}
+          github-token: \${{ secrets.GITHUB_TOKEN }}
         continue-on-error: true
       - name: Setup Node (if artifact not found)
         if: github.event_name == 'workflow_dispatch' || steps.download.outcome == 'failure'
@@ -182,6 +183,13 @@ describe('verify-deploy-workflow — 5 S104-③-⑥-④ regression checks', () =
       const outcome = verifyDeployWorkflow(writeRepo({ workflow }))
       expectStatus(outcome, 'FAIL')
       expect(outcome.detail).toContain('run-id')
+    })
+
+    it('FAILs when a cross-workflow download omits github-token (implicit token is current-run scoped)', () => {
+      const workflow = GOOD_WORKFLOW.replace('          github-token: ${{ secrets.GITHUB_TOKEN }}\n', '')
+      const outcome = verifyDeployWorkflow(writeRepo({ workflow }))
+      expectStatus(outcome, 'FAIL')
+      expect(outcome.detail).toContain('github-token')
     })
 
     it("FAILs on the conclusion=success trap: 'if: failure()' after continue-on-error", () => {

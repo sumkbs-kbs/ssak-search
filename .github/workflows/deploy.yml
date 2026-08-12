@@ -88,12 +88,21 @@ jobs:
         # a continue-on-error step's conclusion is "success" and failure()
         # would return false even though the download failed (the 2026-08-12
         # CI run skipped the fallback build exactly this way).
+        # S104-③-⑦-③ (2026-08-12): TWO conditions are required for a
+        # cross-workflow download. (1) job permissions.actions: read (the repo
+        # default token is Contents/Metadata/Packages-only — without actions:read
+        # the action cannot even list the triggering run's artifacts), AND
+        # (2) an EXPLICIT github-token — download-artifact@v4's implicit runner
+        # token is scoped to the CURRENT run, so even with actions:read the
+        # default path fails "Artifact not found for name: worker-bundle"
+        # (observed on the 09:30Z run after the permissions fix alone).
         if: github.event_name == 'workflow_run'
         uses: actions/download-artifact@v4
         with:
           name: worker-bundle
           path: dist/
           run-id: ${{ github.event.workflow_run.id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
         continue-on-error: true
 
       - name: Setup Node (if artifact not found)
@@ -225,12 +234,21 @@ jobs:
         # a continue-on-error step's conclusion is "success" and failure()
         # would return false even though the download failed (the 2026-08-12
         # CI run skipped the fallback build exactly this way).
+        # S104-③-⑦-③ (2026-08-12): TWO conditions are required for a
+        # cross-workflow download. (1) job permissions.actions: read (the repo
+        # default token is Contents/Metadata/Packages-only — without actions:read
+        # the action cannot even list the triggering run's artifacts), AND
+        # (2) an EXPLICIT github-token — download-artifact@v4's implicit runner
+        # token is scoped to the CURRENT run, so even with actions:read the
+        # default path fails "Artifact not found for name: worker-bundle"
+        # (observed on the 09:30Z run after the permissions fix alone).
         if: github.event_name == 'workflow_run'
         uses: actions/download-artifact@v4
         with:
           name: worker-bundle
           path: dist/
           run-id: ${{ github.event.workflow_run.id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
         continue-on-error: true
 
       - name: Setup Node (if artifact not found)

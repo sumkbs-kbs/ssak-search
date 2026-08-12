@@ -85,6 +85,7 @@ const GUARD_MARKER_2 = 'refusing to pass a guard that cannot verify'
 // literals) so the literal `${{ ... }}` survives verbatim in findings.
 const TOKEN_SECRET_REF = '${{ secrets.CLOUDFLARE_API_TOKEN }}'
 const ACCOUNT_SECRET_REF = '${{ secrets.CLOUDFLARE_ACCOUNT_ID }}'
+const GITHUB_TOKEN_REF = '${{ secrets.GITHUB_TOKEN }}'
 const WORKFLOW_RUN_ID_REF = '${{ github.event.workflow_run.id }}'
 
 export function verifyDeployWorkflow(repoDir: string): GateOutcome {
@@ -196,6 +197,15 @@ export function verifyDeployWorkflow(repoDir: string): GateOutcome {
       if (!runId.includes('workflow_run.id')) {
         findings.push(
           `${jobName} step ${dlIdx + 1}: download-artifact must set run-id: ${WORKFLOW_RUN_ID_REF} — the worker-bundle lives in the triggering CI run`,
+        )
+      }
+      // S104-③-⑦-③: cross-workflow download (run-id set) ALSO requires an
+      // explicit github-token — download-artifact@v4's implicit runner token
+      // is scoped to the current run, so the download fails "Artifact not
+      // found" even with actions:read (observed 09:30Z 2026-08-12).
+      if (runId && !String(dl.with?.['github-token'] ?? '').includes('GITHUB_TOKEN')) {
+        findings.push(
+          `${jobName} step ${dlIdx + 1}: cross-workflow download must ALSO set github-token: ${GITHUB_TOKEN_REF} — the implicit runner token is scoped to the current run`,
         )
       }
       for (const [idx, step] of steps.entries()) {

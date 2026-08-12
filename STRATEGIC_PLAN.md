@@ -3469,3 +3469,103 @@ npx wrangler pages secret put SLACK_WEBHOOK --project-name search-engine-api
 
 - staging 스케줄러의 `[cron-probe]` 로그 실측 완료 확인 (23:45)
 - staging Pages 재배포 시 스케줄러 PROBE_URL은 alias 기준이라 재배포 불필요 (alias가 최신 배포로 라우팅)
+### S104-③-⑥: production 배포 커밋 일치 게이트 — FAIL_ON_COMMIT_DRIFT를 deploy 워크플로우에 연결 (2026-08-11)
+
+#### ① 배경
+
+- S104-③-④의 FAIL_ON_COMMIT_DRIFT는 수동 실행 전용이었다 — CI deploy 워크플로우가 production 배포 전/후에 커밋 일치를 강제하지 않아, stale/foreign 배포가 조용히 덮어써질 수 있었다
+- 설계 제약: **배포 전 "정확 일치" 강제는 자가당착** — production이 HEAD보다 뒤처진(behind) 경우가 배포의 정상 사유인데 exact match 게이트가 막으면 배포 자체가 불가능
+
+#### ② 구현 (scripts/verify-do-binding.sh + .github/workflows/deploy.yml)
+
+| 변경 | 내용 |
+|---|---|
+| `commit_drift_is_allowable()` (순수 함수) | `ALLOW_BEHIND=1` 시 deployment 커밋이 expected의 **조상(ancestor)** 일 때만 허용 — behind(정상 catch-up) 통과, ahead/diverged/foreign 차단. self-test 4케이스 고정 |
+| `check_deployment_commit()` (함수 추출) | deployment 해석(URL+Source+ID) + 커밋 매치 체크를 함수로 추출 — check [6]과 CI 게이트가 동일 로직 공유 |
+| `COMMIT_CHECK_ONLY=1` | health/DO/tail 체크 없이 해석+커밋 체크만 수행 (CI용 빠른 모드). deployment 미해석 시 **exit 1** (검증 불가 = 차단) |
+| **양쪽 SHA 정규화 버그 수정** | 기존엔 `FULL_DEPLOY`만 정규화하고 `EXPECTED_COMMIT`은 raw 비교 — short SHA 입력 시 같은 커밋도 drift 오탐 (Case 3 실측으로 발견) |
+| **deploy-production pre-deploy 가드** | checkout 직후: `FAIL_ON_COMMIT_DRIFT=1 + ALLOW_BEHIND=1 + COMMIT_CHECK_ONLY=1 + EXPECTED_COMMIT=${{ github.sha }}` — **현재 prod이 HEAD에 없는 커밋(ahead/foreign)이면 배포 차단** (새 코드를 덮어쓰는 사고 방지) |
+| **deploy-production post-deploy 게이트** | Pages+스케줄러 배포 후: `FAIL_ON_COMMIT_DRIFT=1 + COMMIT_CHECK_ONLY=1` (ALLOW_BEHIND 없음) — **새 배포의 Source가 checked-out 커밋과 정확 일치해야 통과** (stale/wrong 번들 배포 감지) |
+| `fetch-depth: 0` | shallow clone(depth=1)에선 현재 prod의 이전 Source SHA를 resolve 불가 → 드리프트 판정 오탐. 전체 history 필요 (CI 실측 전제) |
+
+#### ③ 실측 (로컬, production 실데이터)
+
+| 케이스 | 설정 | 결과 |
+|---|---|---|
+| pre-deploy 가드 | prod 556d363(behind) vs HEAD 3d18c0e, ALLOW_BEHIND=1 | ✅ PASS — catch-up 배포 허용 |
+| post-deploy 게이트 | 동일, ALLOW_BEHIND 없음 | ❌ FAIL(exit 1) — 정확 일치 요구 |
+| short-SHA 정확 일치 | EXPECTED=556d363 == prod Source | ✅ PASS (정규화 수정 후) |
+| 전체 검증 | 리팩터 후 ENVIRONMENT=production | Route 10/10 · no down backends · exit 0 |
+
+#### ④ 검증
+
+- self-test 5종(문자열/배열/pretty/해석기/커밋-드리프트) PASS · bash -n OK · deploy.yml YAML OK
+- tsc 0 · lint 0 · format 0 (bash/yaml만 변경 — TS 게이트 영향 없음)
+
+#### ⑤ 잔여
+
+- staging 잡에도 동일 가드 적용 가능 (staging도 workflow_dispatch/run으로 배포됨) — 현재는 production만
+- pre-deploy 가드는 `FAIL_ON_REGRESSION` 계열(백엔드 가용성)을 포함하지 않음 — 필요 시 check [6]의 상태 파일 비교와 결합 가능
+
+### S104-③-⑦: check [6] tail 미캡처 자동 복구 — 재시도/웜업 루프 (2026-08-11)
+
+#### ① 배경
+
+- check [6]의 단일 윈도우 캡처(40s×1회)는 **배포 직후 로그 전달 지연**(fresh deploy)이나 tail 연결 지연 시 프로브 로그를 놓치고 경고만 남겼다 — 수동 재실행으로 복구하던 flaky 지점
+- 실측: `wrangler pages deployment tail`은 연결 성공 시 stdout 배너를 **출력하지 않음**(6s tail 0줄) → 연결 상태는 프로세스 생존 여부로만 판별 가능
+
+#### ② 구현 (scripts/verify-do-binding.sh check [6])
+
+| 변경 | 내용 |
+|---|---|
+| `TAIL_RETRIES` (기본 3) | tail → 웜업 → **생존 확인** → 프로브 → 윈도우 → 파싱 사이클을 최대 N회. 각 시도는 **새 tail 연결 + 새 프로브**(`?depth=full` 재호출로 새 `[health]` 라인 발행) |
+| `TAIL_WARMUP` (기본 8) | tail WebSocket 연결 대기 시간 (기존 하드코딩 8s를 변수화) |
+| `TAIL_RETRY_DELAY` (기본 10) | 시도 간 대기 — 방금 배포된 버전의 로그 파이프라인 웜업 시간 확보 |
+| **tail 생존 확인** | 워밍업 후 `kill -0` — tail이 죽었으면(auth/연결 실패) **프로브를 발사하지 않고** 재시도 → 깨진 tail이 딥 프로브 서브리퀘스트를 낭비하지 않음. N회 연속 실패 시 "Tail never connected" + break |
+| 미캡처 메시지 | "N attempts (window s each)"로 갱신 — 재시도 소진을 명시 |
+
+#### ③ 실측 (production)
+
+| 케이스 | 설정 | 결과 |
+|---|---|---|
+| happy path | 기본값 (RETRIES=3, WARMUP=8, SECONDS=40) | **Attempt 1/3 캡처 성공** · down_backends: none · exit 0 |
+| miss→재시도 | TAIL_CMD='sleep 60' (연결형·무출력), RETRIES=2 | 시도마다 프로브 발사(HTTP 200) → 미캡처 → 재시도 → 소진 메시지 |
+| tail 사망 | TAIL_CMD='exit 1', RETRIES=2 | **프로브 0회 발사** (쿼터 절감) → "Tail never connected after 2 attempts" |
+
+- 게이트: self-test 5종 PASS · bash -n OK · tsc/lint/format 0
+
+#### ④ 잔여
+
+- 재시도는 모두 실패해도 DO 바인딩 체크가 권위 — exit 0 유지 (FAIL_ON_REGRESSION 계열과 결합 시 경고 강화 가능)
+- CI post-deploy 게이트(deploy.yml)는 COMMIT_CHECK_ONLY라 tail 미사용 — 이 개선은 수동/전체 실행 경로에 적용
+
+### S104-③-⑥-②: staging 배포에도 pre/post-deploy 커밋 일치 게이트 적용 (2026-08-12)
+
+#### ① 배경
+
+- S104-③-⑥의 커밋 일치 게이트가 production에만 적용 — staging 배포(workflow_dispatch/run)는 커밋 일치 미검증 상태로 남아 있었음
+- **첫 배포 시나리오 처리 필요**: staging 배포 이력 0건(신규 환경)이면 pre-deploy 가드가 "deployment 미해석"으로 막아 첫 배포가 불가능해짐
+
+#### ② 구현
+
+| 변경 | 내용 |
+|---|---|
+| `verify-do-binding.sh` COMMIT_CHECK_ONLY | deployment 미해석 시 **ALLOW_BEHIND=1이면 통과** (nothing to clobber — 첫 배포 안전), 아니면 exit 1 유지 |
+| `deploy.yml` deploy-staging | production과 동일: checkout `fetch-depth: 0` + **pre-deploy 가드**(FAIL_ON_COMMIT_DRIFT=1 + ALLOW_BEHIND=1 + COMMIT_CHECK_ONLY=1 + ENVIRONMENT=staging) + **post-deploy 게이트**(FAIL_ON_COMMIT_DRIFT=1, ALLOW_BEHIND 없음, sleep 5) |
+
+#### ③ 시뮬레이션 (라이브 실데이터, 4케이스)
+
+| 케이스 | 설정 | 결과 |
+|---|---|---|
+| A. staging behind (556d363 vs HEAD 979048c) + ALLOW_BEHIND | pre-deploy 가드 | ✅ PASS (catch-up) |
+| B. 동일, ALLOW_BEHIND 없음 | post-deploy 게이트 | ❌ FAIL (exit 1) |
+| C. staging 미배포(신규 환경) + ALLOW_BEHIND | 첫 배포 | ✅ PASS — "No staging deployment resolved yet; ALLOW_BEHIND=1 (nothing to clobber) — proceeding" |
+| D. 미배포, ALLOW_BEHIND 없음 | — | ❌ FAIL (exit 1) |
+
+#### ④ 검증
+
+- self-test 5종 PASS · bash -n OK · deploy.yml YAML OK (staging 10스텝 확인) · tsc/lint/format 0
+
+#### ⑤ 잔여
+
+- staging Pages가 HEAD보다 뒤처짐(556d363) — 다음 staging 배포 시 pre-deploy 가드가 통과(behind) 후 post-deploy 게이트가 정확 일치를 확정

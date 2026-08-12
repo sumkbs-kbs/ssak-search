@@ -29,7 +29,13 @@
 # Env overrides for check [6]:
 #   TAIL_CMD         full tail command; when unset it is built from the
 #                    resolved deployment URL (see ENVIRONMENT) + --project-name
-#   TAIL_SECONDS     log-capture window (default 25)
+#   TAIL_SECONDS     log-capture window per attempt (default 40)
+#   TAIL_WARMUP       tail-connect wait before the probe (default 8)
+#   TAIL_RETRIES      capture attempts per run — a missed probe line (fresh
+#                    deploy log lag) is retried with a fresh tail+probe
+#                    (S104-③-⑦, default 3)
+#   TAIL_RETRY_DELAY  pause between attempts so a just-deployed version's
+#                    log pipeline warms up (default 10)
 #   PROJECT_NAME     Pages project name (default search-engine-api)
 #   ENVIRONMENT      production (default) | staging — selects the deployment
 #                    used for the log tail AND the default WORKER_URL
@@ -40,6 +46,12 @@
 #                    differ (deployment behind/ahead of the committed state).
 #   FAIL_ON_COMMIT_DRIFT=1  exit 1 when the deployment commit ≠ expected
 #                    (default: warn only — DO bindings are the gate)
+#   ALLOW_BEHIND=1  with FAIL_ON_COMMIT_DRIFT, tolerate a mismatch when the
+#                    deployment is strictly BEHIND the expected commit (normal
+#                    catch-up before a new deploy); still fail on
+#                    ahead/diverged/unknown commits (S104-③-⑥ pre-deploy guard)
+#   COMMIT_CHECK_ONLY=1  run ONLY deployment resolution + commit-match check
+#                    (no health/DO/tail checks) — for CI deploy gates
 #   VERIFY_DO_STATE_FILE  regression-state JSON path
 #                    (default ${HOME}/.cache/ssak-verify-do-state[-<env>].json)
 #   FAIL_ON_REGRESSION=1  exit 1 when a NEW down backend is detected
@@ -185,6 +197,95 @@ print(json.dumps({"found": found, "down_backends": down, "raw": raw}))
 '
 }
 
+# commit_drift_is_allowable — with ALLOW_BEHIND=1, a commit mismatch is
+# tolerated ONLY when the deployment commit is an ancestor of the expected
+# commit (strictly behind or equal — the normal catch-up case before a new
+# deploy). Ahead / diverged / foreign commits are NOT allowable (deploying
+# would clobber code not present in the expected history). Pure function for
+# self-testability: echoes "yes" | "no".
+commit_drift_is_allowable() {
+  local full_deploy="$1" expected="$2"
+  if [ "${ALLOW_BEHIND:-0}" = "1" ] && git merge-base --is-ancestor "${full_deploy}" "${expected}" 2>/dev/null; then
+    echo "yes"
+  else
+    echo "no"
+  fi
+}
+
+# check_deployment_commit — resolve the target Pages deployment (URL + Source
+# commit + ID) and verify the deployment commit matches the expected commit
+# (S104-③-④). Sets DEPLOY_URL / DEPLOY_COMMIT / DEPLOY_ID as globals for the
+# caller (the tail step uses DEPLOY_ID). Env:
+#   EXPECTED_COMMIT       expected commit (default: local git HEAD)
+#   FAIL_ON_COMMIT_DRIFT=1  exit 1 on mismatch (default: warn only)
+#   ALLOW_BEHIND=1          with FAIL_ON_COMMIT_DRIFT, tolerate a mismatch when
+#                           the deployment is strictly BEHIND the expected
+#                           commit (normal catch-up before a new deploy); still
+#                           fail on ahead/diverged/unknown — deploying would
+#                           clobber code not present in the expected history
+#                           (S104-③-⑥ pre-deploy guard semantics).
+check_deployment_commit() {
+  PROJECT_NAME="${PROJECT_NAME:-search-engine-api}"
+  DEPLOY_INFO="$(npx wrangler pages deployment list --project-name "${PROJECT_NAME}" --json 2>/dev/null | resolve_deployment "${ENVIRONMENT}" 2>/dev/null || echo '{"url":"","commit":"","id":""}')"
+  DEPLOY_URL="$(echo "${DEPLOY_INFO}" | python3 -c 'import sys,json;print(json.load(sys.stdin)["url"])' 2>/dev/null || echo "")"
+  DEPLOY_COMMIT="$(echo "${DEPLOY_INFO}" | python3 -c 'import sys,json;print(json.load(sys.stdin)["commit"])' 2>/dev/null || echo "")"
+  DEPLOY_ID="$(echo "${DEPLOY_INFO}" | python3 -c 'import sys,json;print(json.load(sys.stdin)["id"])' 2>/dev/null || echo "")"
+  if [ -z "${DEPLOY_URL}" ]; then
+    echo " ⚠️  Could not resolve a ${ENVIRONMENT} deployment URL — skipping log tail."
+    echo "    (staging: run the deploy-staging workflow or wrangler pages deploy --branch=staging;"
+    echo "     override TAIL_CMD with the full tail command + deployment URL)"
+  else
+    echo "     Deployment: ${DEPLOY_URL}"
+  fi
+
+  # Commit-match check: the resolved deployment's Source commit must equal the
+  # expected commit (local HEAD by default). A mismatch means the live bundle
+  # predates the committed code — surface it with a drift count so a stale
+  # deployment can never pass silently.
+  EXPECTED_COMMIT="${EXPECTED_COMMIT:-$(git rev-parse HEAD 2>/dev/null || echo "")}"
+  if [ -n "${DEPLOY_COMMIT}" ] && [ -n "${EXPECTED_COMMIT}" ]; then
+    # Cloudflare truncates the deployment Source to a 7-char short SHA while
+    # git HEAD is 40 chars — normalize BOTH sides via git rev-parse so the
+    # comparison is length-independent (S104-③-④: a length mismatch previously
+    # flagged the SAME commit as drift — 556d363 vs 556d3634... reported a
+    # false ⚠️; S104-③-⑥: EXPECTED_COMMIT may also arrive short from CI).
+    FULL_DEPLOY="$(git rev-parse --verify "${DEPLOY_COMMIT}^{commit}" 2>/dev/null || echo "${DEPLOY_COMMIT}")"
+    EXPECTED_FULL="$(git rev-parse --verify "${EXPECTED_COMMIT}^{commit}" 2>/dev/null || echo "${EXPECTED_COMMIT}")"
+    DEPLOY_SHORT="${FULL_DEPLOY:0:7}"
+    EXPECTED_SHORT="${EXPECTED_FULL:0:7}"
+    echo "     Deployment commit: ${DEPLOY_SHORT} (expected ${EXPECTED_SHORT})"
+    if [ "${FULL_DEPLOY}" = "${EXPECTED_FULL}" ]; then
+      echo " ✅ Deployment commit matches the expected commit (${EXPECTED_SHORT})"
+      DIRTY="$(git status --porcelain 2>/dev/null | wc -l | tr -d ' ')"
+      if [ -n "${DIRTY}" ] && [ "${DIRTY}" -gt 0 ]; then
+        echo "    Note: worktree has ${DIRTY} uncommitted change(s) — if this deployment was made"
+        echo "    from this tree, Source records HEAD even though uncommitted code is live."
+      fi
+    else
+      BEHIND="$(git rev-list --count "${FULL_DEPLOY}..${EXPECTED_FULL}" 2>/dev/null || echo "?")"
+      AHEAD="$(git rev-list --count "${EXPECTED_FULL}..${FULL_DEPLOY}" 2>/dev/null || echo "?")"
+      echo " ⚠️  Deployment commit ${DEPLOY_SHORT} ≠ expected ${EXPECTED_SHORT}"
+      echo "    (deployment is ${BEHIND} behind / ${AHEAD} ahead of the expected commit)"
+      echo "    The deployed bundle may not include the latest committed code — redeploy to sync."
+      DIRTY="$(git status --porcelain 2>/dev/null | wc -l | tr -d ' ')"
+      if [ -n "${DIRTY}" ] && [ "${DIRTY}" -gt 0 ]; then
+        echo "    Note: worktree has ${DIRTY} uncommitted change(s) — a manual deploy from this"
+        echo "    tree records HEAD as Source even though uncommitted code is live."
+      fi
+      if [ "${FAIL_ON_COMMIT_DRIFT:-0}" = "1" ]; then
+        if [ "$(commit_drift_is_allowable "${FULL_DEPLOY}" "${EXPECTED_FULL}")" = "yes" ]; then
+          echo " ✅ ALLOW_BEHIND=1 — deployment is behind (catch-up), proceeding"
+        else
+          echo " ❌ FAIL_ON_COMMIT_DRIFT=1 → exiting 1 (deployment commit drift)"
+          exit 1
+        fi
+      fi
+    fi
+  elif [ -n "${DEPLOY_URL}" ]; then
+    echo " ⚠️  Commit-match check skipped (deployment commit or expected commit unavailable)"
+  fi
+}
+
 # Parser self-test — no network; feeds a wrangler-tail-style fixture through
 # parse_tail and asserts the expected down_backends extraction.
 if [ "${1:-}" = "--self-test" ]; then
@@ -257,7 +358,33 @@ PRETTYFIXTURE
     echo " ❌ Deployment resolver self-test FAIL (empty staging must resolve to '' got: ${URLC})"
     exit 1
   fi
-  echo " ✅ Parser self-test PASS (string + array + pretty multi-line + deployment-resolver fixtures)"
+  # Fixture 5: commit-drift allowance (S104-③-⑥) — ALLOW_BEHIND must tolerate
+  # a strictly-behind deployment (normal catch-up) and block ahead/foreign
+  # ones. Uses a throwaway git repo — no network or Cloudflare state needed.
+  TMPGIT="$(mktemp -d)"
+  (
+    cd "${TMPGIT}"
+    git init -q
+    git config user.email selftest@local
+    git config user.name selftest
+    echo a > f && git add f && git commit -qm A
+    echo b >> f && git add f && git commit -qm B
+  )
+  ALLOW_BEHIND=1
+  COMMIT_A="$(git -C "${TMPGIT}" rev-parse HEAD~1)"
+  COMMIT_B="$(git -C "${TMPGIT}" rev-parse HEAD)"
+  # The function runs `git` in the CURRENT directory — invoke it from inside
+  # the temp repo so the hashes resolve (the webapp repo has no such objects).
+  V_BEHIND="$(cd "${TMPGIT}" && commit_drift_is_allowable "${COMMIT_A}" "${COMMIT_B}")"
+  V_AHEAD="$(cd "${TMPGIT}" && commit_drift_is_allowable "${COMMIT_B}" "${COMMIT_A}")"
+  V_FOREIGN="$(cd "${TMPGIT}" && commit_drift_is_allowable "0000000000000000000000000000000000000000" "${COMMIT_B}")"
+  V_NOFLAG="$(cd "${TMPGIT}" && ALLOW_BEHIND=0 commit_drift_is_allowable "${COMMIT_A}" "${COMMIT_B}")"
+  rm -rf "${TMPGIT}"
+  if [ "${V_BEHIND}" != "yes" ] || [ "${V_AHEAD}" != "no" ] || [ "${V_FOREIGN}" != "no" ] || [ "${V_NOFLAG}" != "no" ]; then
+    echo " ❌ Commit-drift self-test FAIL (behind=${V_BEHIND} ahead=${V_AHEAD} foreign=${V_FOREIGN} noflag=${V_NOFLAG})"
+    exit 1
+  fi
+  echo " ✅ Parser self-test PASS (string + array + pretty multi-line + deployment-resolver + commit-drift fixtures)"
   exit 0
 fi
 
@@ -267,6 +394,28 @@ echo "━━━━━━━━━━━━━━━━━━━━━━━━�
 echo " Worker URL:    ${WORKER_URL}"
 echo " Environment:   ${ENVIRONMENT}"
 echo ""
+
+# S104-③-⑥: commit-check-only mode for CI gates — resolve the deployment and
+# verify the commit match WITHOUT the health/DO/tail checks (fast, no deep
+# probe). Used by the deploy workflow's pre-deploy guard and post-deploy
+# verification. An unresolvable deployment is fatal here: a guard that cannot
+# verify must block rather than pass silently.
+if [ "${COMMIT_CHECK_ONLY:-0}" = "1" ]; then
+  echo " Commit-check-only mode (COMMIT_CHECK_ONLY=1) — deployment resolution + commit match only."
+  check_deployment_commit
+  if [ -z "${DEPLOY_URL}" ]; then
+    # S104-③-⑥-②: with ALLOW_BEHIND=1 a missing deployment is the extreme
+    # catch-up case (nothing deployed = nothing to clobber) — safe to create
+    # the FIRST deployment (fresh environment / brand-new staging branch).
+    if [ "${ALLOW_BEHIND:-0}" = "1" ]; then
+      echo " ℹ️  No ${ENVIRONMENT} deployment resolved yet; ALLOW_BEHIND=1 (nothing to clobber) — proceeding."
+      exit 0
+    fi
+    echo " ❌ COMMIT_CHECK_ONLY — could not resolve the ${ENVIRONMENT} deployment; cannot verify commit match."
+    exit 1
+  fi
+  exit 0
+fi
 
 # ---- Check: Health endpoint ------------------------------------------------
 echo " [1] Checking /api/health endpoint..."
@@ -409,65 +558,10 @@ echo " [6] Checking backend availability from deep-probe logs (S104-③-③)..."
 echo "     Will force /api/health?depth=full while tailing (emits the same"
 echo "     structured line the scheduled cron logs every 15 min)..."
 
-# Resolve the deployment URL + its recorded commit — `wrangler pages
-# deployment tail` requires the deployment ID/URL as a positional arg in
-# non-interactive mode (--environment alone is not enough), the URL changes
-# every deploy, and the deployment's `Source` commit must match the committed
-# state (S104-③-④: the previous resolver picked any first Production entry
-# without ever checking the commit — a stale deployment passed silently).
-PROJECT_NAME="${PROJECT_NAME:-search-engine-api}"
-DEPLOY_INFO="$(npx wrangler pages deployment list --project-name "${PROJECT_NAME}" --json 2>/dev/null | resolve_deployment "${ENVIRONMENT}" 2>/dev/null || echo '{"url":"","commit":"","id":""}')"
-DEPLOY_URL="$(echo "${DEPLOY_INFO}" | python3 -c 'import sys,json;print(json.load(sys.stdin)["url"])' 2>/dev/null || echo "")"
-DEPLOY_COMMIT="$(echo "${DEPLOY_INFO}" | python3 -c 'import sys,json;print(json.load(sys.stdin)["commit"])' 2>/dev/null || echo "")"
-DEPLOY_ID="$(echo "${DEPLOY_INFO}" | python3 -c 'import sys,json;print(json.load(sys.stdin)["id"])' 2>/dev/null || echo "")"
-if [ -z "${DEPLOY_URL}" ]; then
-  echo " ⚠️  Could not resolve a ${ENVIRONMENT} deployment URL — skipping log tail."
-  echo "    (staging: run the deploy-staging workflow or wrangler pages deploy --branch=staging;"
-  echo "     override TAIL_CMD with the full tail command + deployment URL)"
-else
-  echo "     Deployment: ${DEPLOY_URL}"
-fi
-
-# ── Commit-match check (S104-③-④): the resolved deployment's Source commit
-# must equal the expected commit (local HEAD by default). A mismatch means the
-# live bundle predates the committed code — surface it with a drift count so
-# a stale deployment can never pass silently.
-EXPECTED_COMMIT="${EXPECTED_COMMIT:-$(git rev-parse HEAD 2>/dev/null || echo "")}"
-if [ -n "${DEPLOY_COMMIT}" ] && [ -n "${EXPECTED_COMMIT}" ]; then
-  # Cloudflare truncates the deployment Source to a 7-char short SHA while
-  # git HEAD is 40 chars — normalize both via git rev-parse so the comparison
-  # is length-independent (S104-③-④: a length mismatch previously flagged
-  # the SAME commit as drift — 556d363 vs 556d3634... reported a false ⚠️).
-  FULL_DEPLOY="$(git rev-parse --verify "${DEPLOY_COMMIT}^{commit}" 2>/dev/null || echo "${DEPLOY_COMMIT}")"
-  DEPLOY_SHORT="${FULL_DEPLOY:0:7}"
-  EXPECTED_SHORT="${EXPECTED_COMMIT:0:7}"
-  echo "     Deployment commit: ${DEPLOY_SHORT} (expected ${EXPECTED_SHORT})"
-  if [ "${FULL_DEPLOY}" = "${EXPECTED_COMMIT}" ]; then
-    echo " ✅ Deployment commit matches the expected commit (${EXPECTED_SHORT})"
-    DIRTY="$(git status --porcelain 2>/dev/null | wc -l | tr -d ' ')"
-    if [ -n "${DIRTY}" ] && [ "${DIRTY}" -gt 0 ]; then
-      echo "    Note: worktree has ${DIRTY} uncommitted change(s) — if this deployment was made"
-      echo "    from this tree, Source records HEAD even though uncommitted code is live."
-    fi
-  else
-    BEHIND="$(git rev-list --count "${FULL_DEPLOY}..${EXPECTED_COMMIT}" 2>/dev/null || echo "?")"
-    AHEAD="$(git rev-list --count "${EXPECTED_COMMIT}..${FULL_DEPLOY}" 2>/dev/null || echo "?")"
-    echo " ⚠️  Deployment commit ${DEPLOY_SHORT} ≠ expected ${EXPECTED_SHORT}"
-    echo "    (deployment is ${BEHIND} behind / ${AHEAD} ahead of the expected commit)"
-    echo "    The deployed bundle may not include the latest committed code — redeploy to sync."
-    DIRTY="$(git status --porcelain 2>/dev/null | wc -l | tr -d ' ')"
-    if [ -n "${DIRTY}" ] && [ "${DIRTY}" -gt 0 ]; then
-      echo "    Note: worktree has ${DIRTY} uncommitted change(s) — a manual deploy from this"
-      echo "    tree records HEAD as Source even though uncommitted code is live."
-    fi
-    if [ "${FAIL_ON_COMMIT_DRIFT:-0}" = "1" ]; then
-      echo " ❌ FAIL_ON_COMMIT_DRIFT=1 → exiting 1 (deployment commit drift)"
-      exit 1
-    fi
-  fi
-elif [ -n "${DEPLOY_URL}" ]; then
-  echo " ⚠️  Commit-match check skipped (deployment commit or expected commit unavailable)"
-fi
+# Resolve the deployment URL + its recorded commit + ID (S104-③-④: the
+# previous resolver picked any first Production entry without ever checking the
+# commit — a stale deployment passed silently) and run the commit-match check.
+check_deployment_commit
 
 # TAIL_CMD override wins; otherwise build it from the resolved deployment ID
 # — URL-based tailing rejects staging deployments (wrangler filters by
@@ -480,39 +574,89 @@ if [ -z "${TAIL_CMD:-}" ]; then
   fi
 fi
 TAIL_SECONDS="${TAIL_SECONDS:-40}"
+TAIL_WARMUP="${TAIL_WARMUP:-8}"
+TAIL_RETRIES="${TAIL_RETRIES:-3}"
+TAIL_RETRY_DELAY="${TAIL_RETRY_DELAY:-10}"
 TAIL_LOG="$(mktemp -t verify-do-tail.XXXXXX 2>/dev/null || mktemp)"
 
 # macOS has no `timeout` binary — background + sleep + kill is portable.
 # ORDER MATTERS: the probe must fire AFTER the tail has connected (Workers
 # log delivery lags seconds-to-tens-of-seconds), so: start tail → warmup →
 # force ?depth=full mid-window → wait out the window → kill.
-echo "     Tailing worker logs for the probe summary (${TAIL_SECONDS}s)..."
+#
+# S104-③-⑦: the single-window flow missed the probe line whenever log
+# delivery lagged (notably right after a fresh deploy) — that left check [6]
+# as a flaky warning and forced manual re-runs. Now the capture is retried:
+#   tail → warmup → liveness check → probe → window → parse
+# up to TAIL_RETRIES times. Each attempt uses a FRESH tail connection + FRESH
+# probe (a new /api/health?depth=full request emits a new [health] line), and
+# TAIL_RETRY_DELAY between attempts lets a just-deployed version's log
+# pipeline warm up. A tail that exits during warmup (auth/connect failure)
+# skips the probe so a broken tail never burns deep-probe subrequests.
+echo "     Tailing worker logs for the probe summary (${TAIL_SECONDS}s window × up to ${TAIL_RETRIES} attempts)..."
 echo "     Cmd: ${TAIL_CMD}"
-( eval "${TAIL_CMD}" > "${TAIL_LOG}" 2>&1 ) &
-tail_pid=$!
-# Warmup: let the tail WebSocket connect before emitting the probe log.
-sleep 8
 
-DEEP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" "${WORKER_URL}/api/health?depth=full" 2>&1)
-if [ "${DEEP_STATUS}" != "200" ]; then
-  echo " ❌ /api/health?depth=full returned HTTP ${DEEP_STATUS} (expected 200)"
-  exit 1
-fi
-echo " ✅ /api/health?depth=full returned HTTP 200 (deep probe route works)"
+FOUND=false
+DOWN=""
+RAW_SNIP=""
+attempt=0
+while [ "${attempt}" -lt "${TAIL_RETRIES}" ]; do
+  attempt=$((attempt + 1))
+  echo "     Attempt ${attempt}/${TAIL_RETRIES}: starting tail (warmup ${TAIL_WARMUP}s)..."
+  ( eval "${TAIL_CMD}" > "${TAIL_LOG}" 2>&1 ) &
+  tail_pid=$!
+  # Warmup: let the tail WebSocket connect before emitting the probe log.
+  sleep "${TAIL_WARMUP}"
 
-REMAINING=$((TAIL_SECONDS - 8))
-if [ "${REMAINING}" -gt 0 ]; then sleep "${REMAINING}"; fi
-kill "${tail_pid}" 2>/dev/null || true
-wait "${tail_pid}" 2>/dev/null || true
+  # Liveness check — `wrangler pages deployment tail` prints no banner, so a
+  # tail that failed to authenticate/connect exits silently: only fire the
+  # probe when the tail is still alive, otherwise retry without burning one.
+  if ! kill -0 "${tail_pid}" 2>/dev/null; then
+    echo " ⚠️  Tail process exited during warmup (attempt ${attempt}/${TAIL_RETRIES}):"
+    sed -n '1,4p' "${TAIL_LOG}" 2>/dev/null
+    rm -f "${TAIL_LOG}"
+    if [ "${attempt}" -ge "${TAIL_RETRIES}" ]; then
+      echo " ❌ Tail never connected after ${TAIL_RETRIES} attempts — fix the tail command/auth."
+      break
+    fi
+    echo "    Retrying with a fresh tail after ${TAIL_RETRY_DELAY}s..."
+    sleep "${TAIL_RETRY_DELAY}"
+    continue
+  fi
 
-PARSE_OUT="$(cat "${TAIL_LOG}" | parse_tail)"
-rm -f "${TAIL_LOG}"
+  DEEP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" "${WORKER_URL}/api/health?depth=full" 2>&1)
+  if [ "${DEEP_STATUS}" != "200" ]; then
+    echo " ❌ /api/health?depth=full returned HTTP ${DEEP_STATUS} (expected 200)"
+    kill "${tail_pid}" 2>/dev/null || true
+    wait "${tail_pid}" 2>/dev/null || true
+    rm -f "${TAIL_LOG}"
+    exit 1
+  fi
+  echo "     ✅ /api/health?depth=full returned HTTP 200 — waiting out the window..."
 
-FOUND=$(echo "${PARSE_OUT}" | python3 -c 'import sys,json;print(str(json.load(sys.stdin).get("found") or False).lower())' 2>/dev/null || echo "false")
-DOWN=$(echo "${PARSE_OUT}" | python3 -c 'import sys,json;print(json.load(sys.stdin).get("down_backends") or "")' 2>/dev/null || echo "")
+  REMAINING=$((TAIL_SECONDS - TAIL_WARMUP))
+  if [ "${REMAINING}" -gt 0 ]; then sleep "${REMAINING}"; fi
+  kill "${tail_pid}" 2>/dev/null || true
+  wait "${tail_pid}" 2>/dev/null || true
+
+  PARSE_OUT="$(cat "${TAIL_LOG}" | parse_tail)"
+  rm -f "${TAIL_LOG}"
+
+  FOUND=$(echo "${PARSE_OUT}" | python3 -c 'import sys,json;print(str(json.load(sys.stdin).get("found") or False).lower())' 2>/dev/null || echo "false")
+  DOWN=$(echo "${PARSE_OUT}" | python3 -c 'import sys,json;print(json.load(sys.stdin).get("down_backends") or "")' 2>/dev/null || echo "")
+  RAW_SNIP=$(echo "${PARSE_OUT}" | python3 -c 'import sys,json;print((json.load(sys.stdin).get("raw") or "")[:120])' 2>/dev/null || echo "")
+
+  if [ "${FOUND}" = "true" ]; then
+    break
+  fi
+  echo " ⚠️  Attempt ${attempt}/${TAIL_RETRIES}: no deep-probe log captured (delivery lag on a fresh deploy, or slow tail)."
+  if [ "${attempt}" -lt "${TAIL_RETRIES}" ]; then
+    echo "    Retrying with a fresh tail after ${TAIL_RETRY_DELAY}s..."
+    sleep "${TAIL_RETRY_DELAY}"
+  fi
+done
 
 if [ "${FOUND}" = "true" ] && [ -z "${DOWN}" ]; then
-  RAW_SNIP=$(echo "${PARSE_OUT}" | python3 -c 'import sys,json;print((json.load(sys.stdin).get("raw") or "")[:120])' 2>/dev/null || echo "")
   echo " ⚠️  Deep-probe log line captured but down_backends was not parseable —"
   echo "    is TAIL_CMD using --format json? (line: ${RAW_SNIP})"
 elif [ "${FOUND}" = "true" ]; then
@@ -576,11 +720,11 @@ PYEOF
     exit 1
   fi
 else
-  echo " ⚠️  No deep-probe log line captured in the ${TAIL_SECONDS}s window."
+  echo " ⚠️  No deep-probe log line captured after ${TAIL_RETRIES} attempts (${TAIL_SECONDS}s window each)."
   echo "    Causes: wrangler not authenticated (run: npx wrangler login), wrong"
-  echo "    project name, or the cron/cache timing. Override TAIL_CMD (e.g. for"
+  echo "    project name, or persistent log-delivery lag. Override TAIL_CMD (e.g. for"
   echo "    a Workers-style project: TAIL_CMD='npx wrangler tail <name> --format json')"
-  echo "    or raise TAIL_SECONDS. DO-binding checks above remain authoritative."
+  echo "    or raise TAIL_RETRIES/TAIL_SECONDS. DO-binding checks above remain authoritative."
 fi
 
 # ---- Summary ----------------------------------------------------------------

@@ -297,14 +297,15 @@
   },
   "en-tech-04": {
     "relevantDomains": [
-      "kubernetes.io",
+      "postgresql.org",
+      "mysql.com",
       "github.com"
     ]
   },
   "en-tech-05": {
     "relevantDomains": [
-      "nodejs.org",
-      "developer.mozilla.org"
+      "kubernetes.io",
+      "github.com"
     ]
   },
   "en-tech-06": {
@@ -316,32 +317,31 @@
   },
   "en-tech-07": {
     "relevantDomains": [
-      "python.org",
+      "docker.com",
       "github.com"
     ]
   },
   "en-tech-08": {
     "relevantDomains": [
-      "git-scm.com",
+      "python.org",
       "github.com"
     ]
   },
   "en-tech-09": {
     "relevantDomains": [
-      "postgresql.org",
+      "git-scm.com",
       "github.com"
     ]
   },
   "en-tech-10": {
     "relevantDomains": [
-      "redis.io",
       "github.com"
     ]
   },
   "en-tech-11": {
     "relevantDomains": [
-      "github.com",
-      "atlassian.com"
+      "redis.io",
+      "github.com"
     ]
   },
   "en-tech-12": {
@@ -2659,7 +2659,6 @@
     "relevantDomains": [
       "en.wikipedia.org",
       "britannica.com",
-      "nasa.gov",
       "howstuffworks.com",
       "scientificamerican.com",
       "nationalgeographic.com",
@@ -2683,7 +2682,6 @@
     "relevantDomains": [
       "en.wikipedia.org",
       "britannica.com",
-      "nasa.gov",
       "howstuffworks.com",
       "scientificamerican.com",
       "nationalgeographic.com",
@@ -2694,7 +2692,6 @@
     "relevantDomains": [
       "en.wikipedia.org",
       "britannica.com",
-      "nasa.gov",
       "howstuffworks.com",
       "scientificamerican.com",
       "nationalgeographic.com"
@@ -2704,7 +2701,6 @@
     "relevantDomains": [
       "en.wikipedia.org",
       "britannica.com",
-      "nasa.gov",
       "howstuffworks.com",
       "scientificamerican.com",
       "nationalgeographic.com",
@@ -2747,7 +2743,6 @@
     "relevantDomains": [
       "en.wikipedia.org",
       "britannica.com",
-      "nasa.gov",
       "howstuffworks.com",
       "scientificamerican.com",
       "nationalgeographic.com",
@@ -2781,7 +2776,6 @@
     "relevantDomains": [
       "en.wikipedia.org",
       "britannica.com",
-      "nasa.gov",
       "howstuffworks.com",
       "scientificamerican.com",
       "nationalgeographic.com",
@@ -2792,7 +2786,6 @@
     "relevantDomains": [
       "en.wikipedia.org",
       "britannica.com",
-      "nasa.gov",
       "howstuffworks.com",
       "scientificamerican.com",
       "nationalgeographic.com",
@@ -2803,7 +2796,6 @@
     "relevantDomains": [
       "en.wikipedia.org",
       "britannica.com",
-      "nasa.gov",
       "howstuffworks.com",
       "scientificamerican.com",
       "nationalgeographic.com",
@@ -2814,7 +2806,6 @@
     "relevantDomains": [
       "en.wikipedia.org",
       "britannica.com",
-      "nasa.gov",
       "howstuffworks.com",
       "scientificamerican.com",
       "nationalgeographic.com",
@@ -2825,7 +2816,6 @@
     "relevantDomains": [
       "en.wikipedia.org",
       "britannica.com",
-      "nasa.gov",
       "howstuffworks.com",
       "scientificamerican.com",
       "nationalgeographic.com",
@@ -2847,7 +2837,6 @@
     "relevantDomains": [
       "en.wikipedia.org",
       "britannica.com",
-      "nasa.gov",
       "howstuffworks.com",
       "scientificamerican.com",
       "nationalgeographic.com",
@@ -2880,7 +2869,6 @@
     "relevantDomains": [
       "en.wikipedia.org",
       "britannica.com",
-      "nasa.gov",
       "howstuffworks.com",
       "scientificamerican.com",
       "nationalgeographic.com",
@@ -2891,7 +2879,6 @@
     "relevantDomains": [
       "en.wikipedia.org",
       "britannica.com",
-      "nasa.gov",
       "howstuffworks.com",
       "scientificamerican.com",
       "nationalgeographic.com",
@@ -2913,7 +2900,6 @@
     "relevantDomains": [
       "en.wikipedia.org",
       "britannica.com",
-      "nasa.gov",
       "howstuffworks.com",
       "scientificamerican.com",
       "nationalgeographic.com",

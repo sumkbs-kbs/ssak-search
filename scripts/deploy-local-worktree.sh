@@ -25,6 +25,12 @@
 #   GOLD_FAIL_HARD_RETRIES      GOLD_FAIL_HARD=1 시 총 시도 횟수 (기본 3 — 일시적
 #                               업스트림 지연과 지속 실패를 구분)
 #   GOLD_FAIL_HARD_RETRY_WAIT   재시도 사이 대기 초 (기본 30)
+#   ISOLATED_BUILD=1  node_modules 심링크 대신 **worktree 내부에서 npm ci** 로
+#                     격리 빌드 (기본 0 = 심링크 공유). 대상 커밋의
+#                     package-lock.json 기준으로 정확히 설치되므로, main repo 의
+#                     미커밋 package*.json 변경·stale node_modules 와 무관하게
+#                     재현 가능한 빌드를 보장한다. 느리지만 안전 (기본 사용 권장은
+#                     심링크 — CI/일상 배포는 npm ci 를 이미 수행한 node_modules 사용)
 #
 # 예:
 #   scripts/deploy-local-worktree.sh                       # HEAD → production
@@ -41,7 +47,9 @@
 #     미커밋/staged 변경은 배포 내용에 절대 복사되지 않는다 (배포 무결성 보장).
 #   - ⚠️ node_modules 심링크: 워킹 트리에 미커밋 package.json/package-lock.json
 #     변경이 있으면, 과거 커밋 빌드가 새/누락 의존성과 섞일 수 있다 → 미커밋
-#     package*.json 감지 시 경고를 출력한다.
+#     package*.json 감지 시 경고를 출력한다. 완전한 재현성을 원하면
+#     ISOLATED_BUILD=1 (수정 42) — 심링크 대신 worktree 내부에서 npm ci 로
+#     대상 커밋의 lockfile 기준 격리 빌드 (의존성 혼합 위험 원천 제거, 느림).
 #   - ⚠️ /tmp/ssak-deploy-<sha>가 이미 존재하면 --force로 제거 후 재생성한다 —
 #     같은 SHA worktree를 직접 만들어 작업 중이었다면 유실될 수 있다.
 #
@@ -238,7 +246,10 @@ if [ "$DIRTY_FILES" != "0" ]; then
   if [ "$PKG_DIRTY" != "0" ]; then
     echo "    ⚠️  package.json/package-lock.json 미커밋 변경 감지 — worktree는 main repo의"
     echo "    node_modules를 공유하므로 의존성 상태가 대상 커밋과 다를 수 있습니다."
-    echo "    정확한 빌드를 원하면 main repo에서 'npm ci' 후 재실행하세요."
+    if [ "${ISOLATED_BUILD:-0}" != "1" ]; then
+      echo "    정확한 빌드를 원하면 main repo에서 'npm ci' 후 재실행하거나 ISOLATED_BUILD=1 로"
+      echo "    worktree 내부 격리 npm ci 를 사용하세요 (수정 42)."
+    fi
   fi
 fi
 
@@ -256,7 +267,11 @@ if [ "$DRY_RUN" = 1 ]; then
   echo ""
   echo " [DRY-RUN] 아래 계획을 실행하지 않습니다:"
   echo "   worktree : $WORKTREE_DIR (대상 커밋의 clean 체크아웃)"
-  echo "   build    : DEPLOY_ENV=$ENV_NAME npm run build (worktree 내부, node_modules는 main repo 심링크)"
+  if [ "${ISOLATED_BUILD:-0}" = "1" ]; then
+    echo "   build    : npm ci (worktree 내부 격리 — 대상 커밋 lockfile 기준) → DEPLOY_ENV=$ENV_NAME npm run build"
+  else
+    echo "   build    : DEPLOY_ENV=$ENV_NAME npm run build (worktree 내부, node_modules는 main repo 심링크)"
+  fi
   echo "             ⚠️  DO 인스턴스 키를 환경별로 분리 — staging 은 'staging', production 은 'production' 인스턴스 사용 (방안 B)"
   echo "   ① DO     : npx wrangler deploy --config=wrangler.do.jsonc"
   echo "   ② Pages  : npx wrangler pages deploy dist/ --project-name=search-engine-api --branch=$PAGES_BRANCH"
@@ -293,9 +308,16 @@ if [ -d "$WORKTREE_DIR" ]; then
 fi
 git worktree remove --force "$WORKTREE_DIR" 2>/dev/null || true
 git worktree add "$WORKTREE_DIR" "$FULL_SHA" >/dev/null 2>&1
-# node_modules 심링크 — main repo의 의존성을 공유해 npm ci 시간을 절약.
-# (worktree add는 node_modules를 만들지 않으므로 clean이 심링크를 지우는 문제 없음)
-ln -sfn "$REPO_ROOT/node_modules" "$WORKTREE_DIR/node_modules"
+# node_modules: 기본은 main repo 심링크 (npm ci 시간 절약 — worktree add 는
+# node_modules 를 만들지 않으므로 clean 체크아웃이 심링크를 지우는 문제 없음).
+# ISOLATED_BUILD=1 이면 심링크를 만들지 않고 [2/6] 에서 worktree 내부에 npm ci
+# 로 격리 설치한다 (대상 커밋 lockfile 기준 — main repo 의 미커밋 package*.json
+# 변경·stale node_modules 와 무관한 재현 가능 빌드, 수정 42).
+if [ "${ISOLATED_BUILD:-0}" != "1" ]; then
+  ln -sfn "$REPO_ROOT/node_modules" "$WORKTREE_DIR/node_modules"
+else
+  echo "   (ISOLATED_BUILD=1 — 심링크 없음, worktree 내부 npm ci 로 격리)"
+fi
 cd "$WORKTREE_DIR"
 
 # ── 빌드 ────────────────────────────────────────────────────────────────
@@ -308,6 +330,14 @@ if [ "${SELFTEST_TARGET_RUN:-0}" = "1" ]; then
   echo "   (셀프테스트 — 빌드 생략, 성공 처리)"
   BUILD_OK=0
 else
+  if [ "${ISOLATED_BUILD:-0}" = "1" ]; then
+    # 격리 빌드 — worktree 내부에서 대상 커밋의 lockfile 기준으로 정확히 설치
+    echo "   npm ci (격리 — worktree 내부, 대상 커밋 package-lock.json 기준)"
+    if ! npm ci 2>&1 | tail -5; then
+      echo " ❌ npm ci 실패 — 의존성 설치 오류 (네트워크/레지스트리 상태 확인)" >&2
+      exit 1
+    fi
+  fi
   DEPLOY_ENV="$ENV_NAME" npm run build 2>&1 | tail -2
   BUILD_OK=$?
 fi

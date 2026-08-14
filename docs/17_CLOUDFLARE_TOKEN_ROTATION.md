@@ -249,7 +249,16 @@ curl -s -H "Authorization: Bearer <PAT>" \
   드라이런이 배포로 진행하는 회귀는 whoami 외 호출이 실패해 즉시 적발) ② staging
   변형(branch/cron/헬스 URL/DEPLOY_ENV) ③ GOLD_FAIL_HARD=1 계획 라인 ④
   --auto-rollback 계획 라인 ⑤ 미지 옵션 exit 1 ⑥ 미존재 커밋 exit 1 ⑦ OAuth 실패 시
-  드라이런도 실패. npm test (vitest unit project) 에 자동 포함 — CI 에서도 실행.
+  드라이런도 실패.  npm test (vitest unit project) 에 자동 포함 — CI 에서도 실행.
+
+  **격리 빌드 (수정 42, 2026-08-14)**: `ISOLATED_BUILD=1` — node_modules 심링크
+  대신 **worktree 내부에서 `npm ci`** 로 대상 커밋의 package-lock.json 기준으로
+  정확히 설치 후 빌드한다. main repo 의 미커밋 package*.json 변경·stale
+  node_modules 와 무관한 재현 가능 빌드 (의존성 혼합 위험 원천 제거). 기본 0 =
+  심링크 공유 (빠름, CI/일상 배포용). 드라이런 계획에 격리 경로 표시, 미커밋
+  package*.json 경고가 ISOLATED_BUILD=1 일 때 안내 문구를 대체한다.
+  유닛 테스트(수정 41 파일)에 격리 계획 케이스 추가. 실측: worktree 에서 npm ci
+  → build 성공 (dist/_worker.js 1,094.21 kB).
 
   `scripts/deploy-local-worktree.sh`가 worktree 생성 → node_modules 심링크 → build →
   3단계 배포(DO → Pages → cron) → Source commit 검증 → 헬스 확인 → worktree 정리

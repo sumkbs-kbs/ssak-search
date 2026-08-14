@@ -129,6 +129,15 @@ describe.skipIf(!BASH_AVAILABLE)('deploy-local-worktree.sh --dry-run (오프라�
     expect(r.out).toContain('(--auto-rollback)')
   })
 
+  it('ISOLATED_BUILD=1 이면 심링크 대신 worktree 내부 npm ci 격리 계획을 출력한다', () => {
+    const r = runDryRun(['--dry-run'], { ISOLATED_BUILD: '1' })
+    expect(r.exit).toBe(0)
+    expect(r.out).toContain('npm ci (worktree 내부 격리')
+    expect(r.out).toContain('DEPLOY_ENV=production npm run build')
+    // 심링크 공유 문구가 아닌 격리 경로만 표시
+    expect(r.out).not.toContain('node_modules는 main repo 심링크')
+  })
+
   it('미지 옵션은 exit 1 + 알 수 없는 옵션 메시지', () => {
     const r = runDryRun(['--nope'])
     expect(r.exit).toBe(1)

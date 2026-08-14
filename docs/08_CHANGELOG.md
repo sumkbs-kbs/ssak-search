@@ -682,6 +682,14 @@
 - **케이스 7건**: ① 드라이런은 계획만 출력하고 **배포 명령을 실행하지 않음** — 가짜 npx 로그에 `whoami` 만 존재, `deploy/pages deploy/rollback` 없음. whoami 외 wrangler/npx 호출은 가짜 npx 가 **실패**시키므로 "드라이런이 배포 단계로 진행" 회귀는 즉시 적발 ② staging 변형 — DEPLOY_ENV=staging + `--branch=staging` + `wrangler.cron.staging.jsonc` + staging 헬스 URL ③ GOLD_FAIL_HARD=1 → fail-hard 재시도 계획 라인 ④ `--auto-rollback` → 자동 롤백 계획 라인 ⑤ 미지 옵션 → exit 1 ⑥ 미존재 커밋 → exit 1 (드라이런이어도 사전 확인 게이트) ⑦ OAuth 실패 → 드라이런도 exit 1 (읽기 전용 whoami 게이트가 계획을 막음 — 현행 동작 문서화)
 - **검증**: 신규 7건 통과 · 전체 유닛 **2,644건 / 131파일 통과 (+7)** · eslint 0 · prettier clean · tsc 0. `npm test`(vitest unit project)에 자동 포함 → CI unit-tests job 에서도 실행
 
+### 수정 42: node_modules 심링크 대신 worktree 내부 npm ci 격리 빌드 — ISOLATED_BUILD=1 (2026-08-14)
+- **작업 ID**: FIX-2026-08-14-25 (구현 + 실측)
+- **배경**: 배포 스크립트는 worktree 의 node_modules 를 **main repo 심링크로 공유** — 미커밋 package.json/package-lock.json 변경이나 stale node_modules 가 있으면 대상 커밋의 의존성 상태와 달라질 수 있다는 문서화된 위험 (스크립트가 경고만 출력)
+- **수정** (`scripts/deploy-local-worktree.sh`):
+  - `ISOLATED_BUILD=1` — 심링크 생략 + **worktree 내부에서 `npm ci`** (대상 커밋의 package-lock.json 기준 정확 설치) 후 빌드. npm ci 실패 시 exit 1 (빌드 전 중단)
+  - 기본 0 = 기존 심링크 공유 (빠름) — 하위 호환. 드라이런 계획에 격리 경로 표시, 미커밋 package*.json 경고 문구가 격리 모드에서 안내로 대체
+- **검증**: ① bash -n 클린 · `--self-test` 5/5 유지 ② 유닛 테스트(수정 41 파일)에 격리 계획 케이스 +1 — `npm ci (worktree 내부 격리` 표시 + 심링크 문구 부재 ③ **실배측**: worktree 에서 심링크 없이 npm ci → build 성공 (dist/_worker.js 1,094.21 kB) → worktree 정리 ④ 전체 유닛 **2,645건 통과 (+1)** · eslint 0 · prettier clean
+
 ### 수정 29: 배포 파이프라인 자동 검증 확장 — gold 회수 + staging↔production 동치 대조 (2026-08-14)
 - **작업 ID**: FIX-2026-08-14-12 (구현 + 실측)
 - **배경**: 로컬 worktree 배포 스크립트(수정 27)에 검증 단계 추가 — 배포 후 "동작하는가"를 자동 확인

@@ -258,6 +258,78 @@ describe('RateLimiterDO self-healing circuit breaker (D.2)', () => {
     expect(doState.storage.setAlarm).toHaveBeenCalled()
   })
 
+  // ── stackexchange 특수화 (방안 A, docs/18 — 400+502 alive + /2.3/info + 10분 간격) ──
+
+  const SE_HOST = 'api.stackexchange.com'
+
+  it('SE probe uses /2.3/info and treats 400+error_id:502 as alive (rate-limit = server alive)', async () => {
+    instantiate()
+    for (let i = 0; i < FAILURE_THRESHOLD; i++) await doInstance.release(SE_HOST, false)
+
+    // SE API rate-limit 응답 (실측 형식 — docs/18): 400 + error_id:502
+    fetchMock.mockResolvedValue({
+      ok: false,
+      status: 400,
+      text: async () =>
+        '{"error_id":502,"error_name":"throttle_violation","error_message":"too many requests from this IP, more requests available in 79048 seconds"}',
+    })
+    // SE 는 10분 간격 — backoff(30s)만 지나면 아직 안 됨
+    vi.advanceTimersByTime(600_000)
+    await doInstance.alarm()
+
+    expect(fetchMock).toHaveBeenCalledWith('https://api.stackexchange.com/2.3/info?site=stackoverflow', expect.anything())
+    const health = await doInstance.getAllHealth()
+    expect(health[SE_HOST].tripped).toBe(false) // 502 = alive → 서킷 닫힘 (상태 정직화)
+    expect(health[SE_HOST].failures).toBe(0)
+  })
+
+  it('SE probe 400 WITHOUT error_id:502 is NOT alive (real API error)', async () => {
+    instantiate()
+    for (let i = 0; i < FAILURE_THRESHOLD; i++) await doInstance.release(SE_HOST, false)
+
+    fetchMock.mockResolvedValue({
+      ok: false,
+      status: 400,
+      text: async () => '{"error_id":400,"error_name":"bad_parameter","error_message":"no site parameter"}',
+    })
+    vi.advanceTimersByTime(600_000)
+    await doInstance.alarm()
+
+    const health = await doInstance.getAllHealth()
+    expect(health[SE_HOST].tripped).toBe(true) // 실패 유지 + 에스컬레이션
+    expect(health[SE_HOST].tripCount).toBe(1)
+  })
+
+  it('SE probe is paced at 10 min — skipped at 30s backoff, fires only after the window', async () => {
+    instantiate()
+    for (let i = 0; i < FAILURE_THRESHOLD; i++) await doInstance.release(SE_HOST, false)
+    fetchMock.mockClear()
+
+    // backoff(30s)는 지났지만 SE 10분 간격 미경과 → 프로브 스킵
+    vi.advanceTimersByTime(30_000)
+    await doInstance.alarm()
+    expect(fetchMock).not.toHaveBeenCalled()
+
+    // 10분 경과 후 첫 프로브 발화
+    vi.advanceTimersByTime(570_000)
+    fetchMock.mockResolvedValue({ ok: true, status: 200, text: async () => '{"items":[]}' })
+    await doInstance.alarm()
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    expect(fetchMock).toHaveBeenCalledWith('https://api.stackexchange.com/2.3/info?site=stackoverflow', expect.anything())
+  })
+
+  it('non-SE hosts still probe on the normal backoff cadence (60s interval unaffected)', async () => {
+    instantiate()
+    for (let i = 0; i < FAILURE_THRESHOLD; i++) await doInstance.release(HOST, false)
+    fetchMock.mockClear()
+
+    // 일반 호스트는 backoff(30s) 경과 후 즉시 프로브
+    vi.advanceTimersByTime(30_000)
+    fetchMock.mockResolvedValue({ ok: false, status: 503, text: async () => 'down' })
+    await doInstance.alarm()
+    expect(fetchMock).toHaveBeenCalledWith('https://www.bing.com/robots.txt', expect.anything())
+  })
+
   // ── wikipedia suffix sharing (S9: ko/zh/ja share one upstream IP budget) ──
 
   it('shares ONE rate window across all wikipedia language subdomains', async () => {

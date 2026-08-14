@@ -110,6 +110,11 @@ export const HOST_CONFIGS: Record<string, HostConfig> = {
 export const BACKOFF_STAGES_MS = [30_000, 300_000, 1_800_000]
 // Periodic health-check interval while a circuit is open (1 min)
 export const CIRCUIT_PROBE_INTERVAL_MS = 60_000
+// 방안 A (docs/18, 2026-08-14): api.stackexchange.com 전용 프로브 최소 간격.
+// alarm 은 60s 주기로 돌지만 SE 는 10분에 1회만 프로브한다 — 60s 마다의
+// 프로브가 SE egress IP rate-limit(하루 ~300 쿼터와 공유)을 갱신·연장해
+// 회복을 방해하는 것을 막는다 (실측: 60s robots.txt 프로브 → 502 상태 유지).
+export const STACKEXCHANGE_PROBE_INTERVAL_MS = 600_000
 // S73 후속 (2026-08-14): 하프오픈 프로브 임대 TTL. 프로브는 실제 fetch 체인
 // (REST 3s + Action 1.5s 최악 ≈ 4.5s, fanout 천장)보다 훨씬 짧게 끝나는데,
 // release RPC 유실/DO 재시작으로 프로브가 영영 완료되지 않으면 probeInFlight가
@@ -243,6 +248,14 @@ export class RateLimiterDO extends DurableObject<Env> {
   /** True for any Wikipedia language subdomain — they share one upstream IP budget. */
   private isWikipediaHost(host: string): boolean {
     return host === 'wikipedia.org' || host.endsWith('.wikipedia.org')
+  }
+
+  /**
+   * 방안 A (docs/18): api.stackexchange.com — 프로브 경로/판정/간격이 특수화된다
+   * (robots.txt 는 API 가 아니라 400 JSON 이 왜곡 응답; 502 = egress rate-limit).
+   */
+  private isStackExchangeHost(host: string): boolean {
+    return host === 'api.stackexchange.com'
   }
 
   private getConfig(host: string): HostConfig {
@@ -526,11 +539,17 @@ export class RateLimiterDO extends DurableObject<Env> {
 
       const elapsed = now - circuit.openedAt
       const backoff = getBackoffMs(circuit.tripCount)
+      // 방안 A (docs/18, 2026-08-14): SE 프로브는 backoff 와 무관하게 10분
+      // 최소 간격을 둔다 — 60s 프로브가 SE egress rate-limit 을 갱신·연장하는
+      // 것을 방지. 리셋 후엔 다음 10분 틱에서 502→alive 로 닫힌다.
+      const minWait = this.isStackExchangeHost(host)
+        ? Math.max(backoff, STACKEXCHANGE_PROBE_INTERVAL_MS)
+        : backoff
       // Probe only after the current backoff window has elapsed
-      if (elapsed < backoff) {
+      if (elapsed < minWait) {
         // S73d 진단: backoff 창 미경과로 프로브를 건너뜀 — alarm이 실제 도는지와
         // openedAt/backoff 관계를 로그로 남겨 회복 지연 원인을 확정한다.
-        logger.debug(`[DO-rate-limiter] Alarm tick — skipping ${host}: elapsed=${elapsed}ms < backoff=${backoff}ms (tripCount=${circuit.tripCount})`)
+        logger.debug(`[DO-rate-limiter] Alarm tick — skipping ${host}: elapsed=${elapsed}ms < minWait=${minWait}ms (backoff=${backoff}ms, tripCount=${circuit.tripCount})`)
         continue
       }
 
@@ -567,19 +586,34 @@ export class RateLimiterDO extends DurableObject<Env> {
    * fetches with HTTP 403 "Please set a user-agent", which failed every wikipedia/
    * wikidata probe (실측: en/ko/wikidata 403 UA-less vs 200/429 with UA) and kept
    * healthy circuits open forever. The UA mirrors the production search fetch UA.
+   *
+   * 방안 A (docs/18, 2026-08-14): api.stackexchange.com 은 robots.txt 가 API 가
+   * 아니라 400 JSON 이 왜곡 응답이라, 실제 API 헬스 경로
+   * /2.3/info?site=stackoverflow 로 프로브한다. 400 + error_id:502 ("too many
+   * requests from this IP") 는 서버가 살아있는 일시적 egress rate-limit 이므로
+   * alive 로 인정 — 서킷을 down 이 아니라 실제 상태로 정직화하고, rate-limit
+   * 리셋 후 자동으로 닫히게 한다. (실측: egress /2.3/search → error_id:502.)
    */
   private async probeHost(host: string): Promise<{ alive: boolean; status: number; snippet: string }> {
     try {
       const controller = new AbortController()
       const timer = setTimeout(() => controller.abort(), CIRCUIT_PROBE_TIMEOUT_MS)
-      const resp = await fetch(`https://${host}/robots.txt`, {
+      const url = this.isStackExchangeHost(host)
+        ? 'https://api.stackexchange.com/2.3/info?site=stackoverflow'
+        : `https://${host}/robots.txt`
+      const resp = await fetch(url, {
         signal: controller.signal,
         headers: { 'User-Agent': 'SearchAPI/1.0 (https://search-engine-api.pages.dev; contact: admin@example.com)' },
       })
       clearTimeout(timer)
       const text = await resp.text().catch(() => '')
+      let alive = resp.ok || resp.status === 429 || resp.status === 301 || resp.status === 302
+      if (this.isStackExchangeHost(host) && resp.status === 400) {
+        // SE API: 400 + error_id 502 = egress IP rate-limit (throttle_violation).
+        alive = /error_id["']?\s*[:=]\s*502/.test(text)
+      }
       return {
-        alive: resp.ok || resp.status === 429 || resp.status === 301 || resp.status === 302,
+        alive,
         status: resp.status,
         snippet: text.replace(/\s+/g, ' ').slice(0, 60),
       }

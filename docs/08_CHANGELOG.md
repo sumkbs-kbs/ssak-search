@@ -630,6 +630,17 @@
 - **검증**: YAML 파싱 OK (11단계, 타임아웃 12분), SKIP_COMMIT=1 경로 로컬 실측 — 커밋 생략 분기 정상 + **실제 신호 검출 확인**: 내 테스트 부하가 staging 인스턴스의 en.wikipedia 를 down 으로 트립 → 게이트가 "down vs operational" 실패로 정확히 잡음 (production 무영향 = 방안 B 독립성 재확인, alarm 프로브 자가회복 예정)
 - **참고**: CI 종단 검증은 CLOUDFLARE_API_TOKEN 시크릿 교체(docs/17 2~3단계) 후 staging 디스패치로 가능 (현재는 사전 guard 가 무효 토큰을 BLOCK)
 
+### 수정 36: stackexchange 서킷 상태 정직화 — 방안 A 구현 (SE 프로브 특수화) (2026-08-14)
+- **작업 ID**: FIX-2026-08-14-19 (구현 + 테스트) · 설계: docs/18
+- **배경**: api.stackexchange.com 서킷이 영원히 down — alarm 프로브가 robots.txt(400 JSON, API 아님)를 alive 로 인정하지 않았고, 60s 프로브가 SE egress rate-limit(502)을 갱신·연장 (docs/18 실측)
+- **수정** (`src/lib/rate-limiter-do.ts`):
+  - `isStackExchangeHost()` (wikipedia 특수화와 동일 패턴)
+  - probeHost SE 분기 — 경로를 `https://api.stackexchange.com/2.3/info?site=stackoverflow` 로 변경, **400 + body `error_id:502`(throttle_violation, egress rate-limit)를 alive 로 인정** (서버는 정상, 일시적 제한)
+  - SE 전용 프로브 최소 간격 `STACKEXCHANGE_PROBE_INTERVAL_MS = 10분` — alarm 60s 틱에서 SE 는 backoff 와 무관하게 10분 경과 후에만 프로브 (rate-limit 갱신/연장 방지)
+- **테스트** (tests/unit/rate-limiter-do.test.ts, +4건): ① 400+error_id:502 → alive → 서킷 닫힘 + `/2.3/info` URL 확인 ② 400+non-502 → alive 아님 → 에스컬레이션 ③ 30s에선 스킵, 10분 후 첫 프로브 ④ 일반 호스트는 기존 60s 캐던스 유지
+- **검증**: tsc 0 · 전체 2,637건 통과 · eslint 0
+- **효과**: 서킷이 down → healthy 로 정직화 (health 정확성), SE egress rate-limit 리셋 후 다음 10분 틱에서 자동 회복. 실제 검색은 쿼터 가드가 계속 통제 (rate-limit 중엔 어차피 결과 없음) — 서킷 닫힘 무해
+
 ### 수정 29: 배포 파이프라인 자동 검증 확장 — gold 회수 + staging↔production 동치 대조 (2026-08-14)
 - **작업 ID**: FIX-2026-08-14-12 (구현 + 실측)
 - **배경**: 로컬 worktree 배포 스크립트(수정 27)에 검증 단계 추가 — 배포 후 "동작하는가"를 자동 확인

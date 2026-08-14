@@ -22,6 +22,7 @@ import {
   resetSharedCooldownLocal,
   __resetRateLimiterStateForTests,
 } from '../../src/lib/rate-limiter'
+import { rateLimiterInstanceName } from '../../src/lib/deploy-env'
 import type { AppBindings } from '../../src/types'
 
 const mockEnv: AppBindings = {} as AppBindings
@@ -440,5 +441,32 @@ describe('DO-client acquire failure — compensating cancelAcquire (S105 후속 
     } finally {
       vi.unstubAllGlobals()
     }
+  })
+})
+
+describe('DO 인스턴스 분리 (방안 B — DEPLOY_ENV 주입)', () => {
+  beforeEach(() => {
+    __resetRateLimiterStateForTests()
+  })
+
+  it('getDOClient 는 rateLimiterInstanceName() 을 인스턴스 키로 사용한다', async () => {
+    // production/staging 이 서로 다른 DO 인스턴스를 쓰도록, 인스턴스 키는
+    // 빌드 타임 주입(DEPLOY_ENV)에 의해 결정된다. vitest 는 vite.config.ts 를
+    // 쓰지 않으므로 폴백('global')이 되며, 여기서는 getDOClient 가 하드코딩
+    // 대신 동일 헬퍼를 통해 키를 전달하는지가 핵심이다.
+    const idFromName = vi.fn(() => 'id')
+    const getAllHealth = vi.fn(async () => ({}))
+    const env = {
+      RATE_LIMITER: {
+        idFromName,
+        get: vi.fn(() => ({ getAllHealth })),
+      },
+    } as unknown as AppBindings
+
+    await getBackendHealth(env)
+
+    expect(idFromName).toHaveBeenCalledTimes(1)
+    expect(idFromName).toHaveBeenCalledWith(rateLimiterInstanceName())
+    expect(rateLimiterInstanceName()).toBe('global') // define 없는 컨텍스트 폴백
   })
 })

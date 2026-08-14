@@ -11,6 +11,7 @@
 
 import type { AppBindings } from '../types'
 
+import { rateLimiterInstanceName } from './deploy-env'
 import { logger, toError } from './logger'
 // ============================================================
 // Types (kept compatible with old API)
@@ -193,8 +194,11 @@ function getDOClient(env: AppBindings): RateLimiterDOClient | null {
     return null
   }
   try {
-    // Single DO instance named "global" coordinates all hosts
-    const id = env.RATE_LIMITER.idFromName('global')
+    // 단일 DO 인스턴스가 모든 호스트를 조정한다. 인스턴스 키는 배포 환경별로
+    // 분리된다 (방안 B — DEPLOY_ENV 주입, src/lib/deploy-env.ts): production 은
+    // 'production', staging 은 'staging' 인스턴스를 사용해 서킷을 독립화한다.
+    // 테스트/define 없는 컨텍스트는 'global' 폴백.
+    const id = env.RATE_LIMITER.idFromName(rateLimiterInstanceName())
     const stub = env.RATE_LIMITER.get(id)
     return stub as unknown as RateLimiterDOClient
   } catch (e) {

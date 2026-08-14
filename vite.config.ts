@@ -4,6 +4,15 @@ import adapter from '@hono/vite-dev-server/cloudflare'
 import { defineConfig } from 'vite'
 
 export default defineConfig({
+  // 방안 B (2026-08-14): 배포 환경별 DO 인스턴스 키를 빌드 타임에 주입한다.
+  // staging/production 은 같은 DO 워커를 공유하지만 인스턴스('staging'/'production')
+  // 를 분리해 서킷·rate window·cooldown 을 독립화한다 (src/lib/deploy-env.ts).
+  // CI(ci.yml)는 두 아티팩트를 각각 빌드하고, deploy.yml 폴백 빌드도 환경 변수를
+  // 설정한다. 미설정 시 production 이 기본값. 테스트(vitest.config.ts)는 이
+  // config 를 쓰지 않아 define 이 적용되지 않는다 — 코드 쪽 typeof 가드로 폴백.
+  define: {
+    __DEPLOY_ENV__: JSON.stringify(process.env.DEPLOY_ENV || 'production'),
+  },
   plugins: [
     build({
       entry: './src/index.tsx',

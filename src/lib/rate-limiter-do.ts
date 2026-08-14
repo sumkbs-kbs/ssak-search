@@ -14,6 +14,7 @@
 import { DurableObject } from 'cloudflare:workers'
 import { logger } from './logger'
 import type { Env } from '../types'
+import { rateLimiterInstanceName } from './deploy-env'
 
 // ============================================================
 // Types
@@ -719,8 +720,11 @@ export interface RateLimiterRPC {
  */
 export function getRateLimiter(env: Env): RateLimiterRPC {
   if (!env.RATE_LIMITER) throw new Error('RATE_LIMITER binding missing — configure the Durable Object binding first')
-  // Single DO instance named "global" - all hosts coordinated through it
-  const id = env.RATE_LIMITER.idFromName('global')
+  // 배포 환경별 인스턴스 키 (방안 B — staging/production 서킷 독립화).
+  // DO 워커 빌드(wrangler esbuild)에는 define 이 없으므로 'global' 폴백이다 —
+  // 이 헬퍼는 현재 호출처가 없으며, 실제 경로는 Pages 번들의 rate-limiter.ts
+  // getDOClient() 가 사용한다.
+  const id = env.RATE_LIMITER.idFromName(rateLimiterInstanceName())
   return env.RATE_LIMITER.get(id) as unknown as RateLimiterRPC
 }
 

@@ -1,0 +1,215 @@
+# 17. GitHub Actions `CLOUDFLARE_API_TOKEN` 시크릿 교체 절차
+
+> 작성일: 2026-08-14 · 대상: `sumkbs-kbs/ssak-search` · 배포 워크플로우: `.github/workflows/deploy.yml`
+> 근거: 2026-08-12 마지막 성공 배포 이후 모든 GitHub Actions 기반 배포가 아래 오류로 실패
+> ```
+> ✘ Authentication error [code: 10000] — /workers/services/ssak-do-worker
+> ✘ Max auth failures reached [code: 9109]
+> ```
+
+---
+
+## 0. 증상 요약 (왜 필요한가)
+
+| 항목 | 값 |
+|---|---|
+| 실패 워크플로우 | Deploy (workflow_dispatch + workflow_run 자동 staging) |
+| 실패 단계 | `Deploy do-worker` — 첫 Cloudflare 호출에서 즉시 실패 |
+| 에러 코드 | `10000` (Authentication error) → `9109` (Max auth failures) |
+| 영향 | staging/production 자동 배포 전부 중단 · CI 통과해도 배포 안 됨 |
+| 완화 경로 | 로컬 `wrangler` OAuth(`sumkbs@gmail.com`, 프로젝트 소유자)로 수동 배포 — 정상 |
+
+**원인 판정**: GitHub Actions에 저장된 `CLOUDFLARE_API_TOKEN` 시크릿이 만료/무효화됨.
+Cloudflare API 토큰은 만료일이 있거나(최대 1년) 삭제/재발급 시 즉시 무효화된다.
+`CLOUDFLARE_ACCOUNT_ID`는 계정의 불변 식별자라 깨지지 않는다 — 갱신 대상은 **토큰뿐**이다.
+
+---
+
+## 1. 사전 확인 (30초)
+
+토큰이 실제로 깨졌는지 로컬에서 무해한 호출로 확인한다 (토큰 값이 필요하므로
+GitHub Actions 로그가 아닌 **대시보드**에서 시크릿을 열어야 확인 가능 — 아니면
+아래 2단계로 바로 진행).
+
+```bash
+# GitHub Actions 로그 (최근 실패 run)에서 확인:
+#   https://github.com/sumkbs-kbs/ssak-search/actions → Deploy → 실패 run
+#   "Deploy do-worker" 단계 로그: Authentication error [code: 10000]
+```
+
+로컬 wrangler OAuth는 별개 인증이므로 그대로 유효하다 (이 문서의 절차와 무관).
+
+---
+
+## 2. Cloudflare 대시보드에서 새 API 토큰 발급 (5분)
+
+1. https://dash.cloudflare.com/profile/api-tokens 에 로그인 (계정: `sumkbs@gmail.com` — 프로젝트 소유자)
+2. **Create Token** → 템플릿 **"Edit Cloudflare Workers"** 선택 (최소 권한 템플릿)
+3. 템플릿 기본 권한 확인/조정:
+   - `Account - Cloudflare Workers Scripts - Edit`
+   - `Account - Cloudflare Pages - Edit` (템플릿에 없으면 **Add more**로 추가 — Pages 배포에 필수)
+   - `User - User Details - Read` (계정 ID 조회용, 선택)
+4. **Account Resources**: `ssak-search` 계정 (또는 전 계정 — 단일 계정이면 동일)
+5. **Zone Resources**: 포함 안 함 (이 프로젝트는 API/worker 호출만 사용 — 영역 권한 불필요, 최소화)
+6. **TTL**: 만료일 설정 (최대 1년). **재발급 주기를 다이어리/문서에 기록**:
+   - 토큰 이름에 만료일 포함 권장: `github-actions-deploy-2027-08`
+7. **Create Token** → 생성된 토큰을 **즉시 복사** (다시 볼 수 없음 — 유실 시 재생성)
+
+> ⚠️ 보안: 토큰을 절대 로그/커밋/채팅에 남기지 말 것. 아래 3단계에서 GitHub
+> 시크릿에 직접 붙여넣는다.
+
+---
+
+## 3. GitHub 시크릿 갱신 (2분)
+
+1. https://github.com/sumkbs-kbs/ssak-search/settings/secrets/actions
+2. `CLOUDFLARE_API_TOKEN` → **Update**
+3. 2단계에서 복사한 새 토큰을 **Value**에 붙여넣기 (공백/줄바꿈 없이)
+4. **Update secret**
+5. `CLOUDFLARE_ACCOUNT_ID`는 **변경 불필요** (계정 ID는 불변) — 단, 실수로 삭제됐다면
+   대시보드 우측 하단 "Account ID"에서 복사해 동일하게 갱신
+
+> GitHub Actions 캐시 주의: 시크릿 변경은 워크플로우 실행 시점에 반영된다.
+> 이미 실행 중인 run은 이전 값을 쓴다 — 교체 직후 새 디스패치가 곧 검증이다.
+
+---
+
+## 4. 교체 후 staging 파이프라인 검증 (10분)
+
+시크릿 교체 후 **staging 디스패치로 검증**한다 (production은 위험하므로 staging부터).
+
+### 4-1. workflow_dispatch 발사
+
+```bash
+# GitHub API로 staging 디스패치 (gh CLI 또는 저장된 git credential 사용)
+gh workflow run deploy.yml -f environment=staging
+# 또는
+curl -X POST https://api.github.com/repos/sumkbs-kbs/ssak-search/actions/workflows/deploy.yml/dispatches \
+  -H "Authorization: Bearer <PAT>" -H "Accept: application/vnd.github+json" \
+  -d '{"ref":"main","inputs":{"environment":"staging"}}'
+```
+
+### 4-2. run 모니터링
+
+```bash
+gh run list --workflow=deploy.yml --limit=1
+gh run watch <run-id>
+```
+
+### 4-2-1. 교체 여부 사전 확인 (30초 — 권장)
+
+GitHub API로 시크릿 갱신 시각을 확인한다 (시크릿 값 자체는 읽을 수 없지만
+`updated_at`으로 교체 여부를 판정):
+
+```bash
+curl -s -H "Authorization: Bearer <PAT>" \
+  https://api.github.com/repos/sumkbs-kbs/ssak-search/actions/secrets | \
+  python3 -c "import json,sys; [print(s['name'], s['updated_at']) for s in json.load(sys.stdin)['secrets'] if 'CLOUDFLARE' in s['name'].upper()]"
+```
+
+교체 직후라면 `updated_at`이 현재 시각 근처여야 한다. 여전히 08-12 같은 과거
+시각이면 교체가 안 된 것 — 2~3단계부터 다시 확인한다.
+
+> ✅ **허점 수정됨 (2026-08-14, 커밋 f5ef768)**: pre-deploy guard(`verify-do-binding.sh`)
+> 가 이제 COMMIT_CHECK_ONLY 시작 시 `/user/tokens/verify`로 토큰 **유효성**을
+> 검사한다 — 무효(만료) 토큰은 guard가 즉시 `❌ INVALID/EXPIRED (verify HTTP 401)`
+> 로 BLOCK (실측: run 31800422203 — guard fail-fast, 빌드도 안 돌고 즉시 중단).
+> 교체 성공 판정은 여전히 4-3의 **`Deploy do-worker (Staging)` green**이 기준이며,
+> guard green은 이제 "토큰 유효"를 전제로 하므로 신뢰할 수 있다.
+
+### 4-3. 통과 기준 (전부 확인)
+
+| 단계 | 성공 기준 |
+|---|---|
+| `Verify staging deployment commit baseline (pre-deploy guard)` | green (시크릿 유효 확인 — verify-do-binding.sh가 Pages API 호출) |
+| `Deploy do-worker (Staging)` | green — **여기서 10000 에러가 사라졌는지가 핵심** |
+| `Deploy to Pages (Staging)` | green → `https://staging.search-engine-api.pages.dev` 새 배포 |
+| `Deploy probe-scheduler (Staging)` | green |
+| `Verify deployed commit matches repo (post-deploy gate)` | green (Source commit == `github.sha`) |
+
+### 4-4. 실패 시 판정
+
+| 실패 양상 | 원인 | 조치 |
+|---|---|---|
+| 여전히 `code: 10000` | 토큰 복사 오류 / 권한 부족 | 2-3단계 재검토, **Account + Pages 권한 포함** 확인 |
+| `code: 10010` / `9109` 지속 | 새 토큰도 무효 | 토큰을 대시보드 API Tokens에서 삭제 후 재발급 |
+| 첫 단계(verify)부터 fail | `CLOUDFLARE_ACCOUNT_ID` 누락/오타 | 3단계 5번 확인 |
+| pre-deploy gate가 commit drift로 fail | 배포 시점 이슈 (시크릿과 무관) | `ALLOW_BEHIND=1` 확인 · `scripts/verify-do-binding.sh` 로그 참조 |
+
+---
+
+## 5. 유지보수 — 재발급 예방
+
+- **만료일 알림**: 토큰 TTL을 최대 1년으로 잡고, 대시보드의 "API Tokens" 목록에서
+  만료 전 2주 알림 확인
+- **교체 기록**: docs/08_CHANGELOG에 토큰 교체일을 기록 (이 문서 0단계 증상을 갱신)
+- **비상 대체 경로**: GitHub Actions가 깨진 동안에도 로컬 worktree 절차로 배포 가능
+  (S105/S106/S73 시리즈 실무 적용). **자동화 스크립트** (2026-08-14 추가):
+  ```bash
+  npm run deploy:local            # HEAD → production
+  npm run deploy:local -- staging # HEAD → staging
+  npm run deploy:local -- 41218df staging  # 특정 커밋 → staging
+  npm run deploy:local -- --dry-run staging  # 실행 계획만 확인 (미커밋/push 상태 경고 포함)
+  ```
+
+  **드라이런 (`--dry-run`, 순서 무관)**: 아무것도 배포하지 않고 사전 확인(커밋 존재 ·
+  push 여부 · 미커밋 변경 · OAuth) + 실행 계획을 출력한다. 미커밋 작업이 있어도
+  `git worktree add <sha>`가 대상 커밋의 clean 체크아웃을 만들므로 배포 내용은
+  오염되지 않는다 (⚠️ 단, node_modules 심링크 공유로 인해 미커밋 `package*.json`
+  변경 시 의존성 혼합 가능 — 스크립트가 경고를 출력하며, 정확성을 위해선 main repo에서
+  `npm ci` 후 실행).
+
+  **부분 배포 보고 (2026-08-14)**: DO → Pages → cron 각 단계의 성공/실패를 개별
+  추적해, 중간 실패 시에도 즉시 종료하지 않고 어디까지 배포됐는지를 명확히 보고한다.
+  DO 배포 전에 이전 DO 버전 ID를 캡처해 두므로, DO만 새 버전이고 Pages가 실패한
+  경우엔 `npx wrangler rollback --config=wrangler.do.jsonc` 롤백 명령을 함께 제시한다
+  (Pages는 자동 롤백 없이 이전 배포를 유지 — DO를 이전 버전으로 되돌리는 게 정합).
+  실패가 있으면 exit 1. 가짜 npx 래퍼로 3개 실패 시나리오 + 성공 시나리오를
+  실배포 검증 완료.
+
+  **배포 후 gold 회수 자동 검증 (2026-08-14)**: Pages 배포 성공 후
+  `scripts/verify-deployed-gold.sh`가 6개 대표 gold 쿼리(kr-stock/zh-travel/
+  en-fact/gk/en-tech/ja-news)를 배포 URL에 보내 top-10에서 gold 도메인 회수를
+  판정한다 (S49 label-suffix 규칙 — eval/metrics.ts 와 동일). 전체 500쿼리 eval
+  대신 빠른 스모크 테스트용.  `GOLD_CHECK=0`으로 생략 가능. 실측: production/staging
+  모두 6/6 통과. `GOLD_FAIL_HARD=1`이면 gold 미회수가 `GOLD_FAIL_HARD_RETRIES`
+  (기본 3회 — 일시적 업스트림 지연과 지속 실패 구분) 동안 지속될 때 배포를
+  **실패 처리**(exit 1)한다. 기본 0 = 경고만 출력. 재시도 간격은
+  `GOLD_FAIL_HARD_RETRY_WAIT`(기본 30s).
+
+  **DO 인스턴스 분리 (방안 B, 2026-08-14)**: staging/production 은 같은 DO
+  워커(ssak-do-worker)를 공유하지만, RATE_LIMITER 인스턴스 키를 환경별로 분리해
+  서킷·rate window·cooldown 을 독립화했다 (`src/lib/deploy-env.ts` — vite define
+  `__DEPLOY_ENV__` 주입). 이제 staging 부하(full-eval 등)가 production 서킷을
+  망가뜨릴 수 없다. 배포 경로마다 DEPLOY_ENV 가 자동 설정된다: ① 로컬 worktree
+  스크립트(빌드에 `DEPLOY_ENV=$ENV_NAME`) ② GitHub Actions ci.yml(환경별 아티팩트
+  worker-bundle-production/staging) ③ deploy.yml 폴백 빌드. ⚠️ 배포 스크립트는
+  **커밋의 clean 체크아웃**에서 빌드하므로 변경이 실배포되려면 먼저 커밋해야
+  한다 (미커밋 상태에서 배포하면 이전 코드가 배포됨 — 2026-08-14 실측). 구
+  'global' 인스턴스는 스토리지에 잔존하며 기존 alarm 프로브만 주기 실행(무해).
+
+  **--full-eval (2026-08-14)**: `bash scripts/verify-deployed-gold.sh --full-eval`
+  로 eval/queries.ts 전체 497쿼리를 배포 URL에 순차 전송해 gold 회수율을 집계한다.
+  결과는 JSONL 체크포인트(/tmp/gold-verify-out.jsonl)에 즉시 저장 — 중단돼도 재실행이
+  resume한다 (요청 실패분만 재시도). ⚠️ **주의 (실측)**: staging/production 은 같은
+  DO 를 공유하므로 페이싱 없이 500쿼리를 돌리면 wikipedia 공유 100/min 버짓을
+  폭주시켜 en/zh.wikipedia 서킷이 트립되고 B1 미러 체인을 거쳐 wikidata/news.google
+  까지 degrade 된다 (S73 재발). `GOLD_DELAY_MS`(기본 2500ms) 페이싱을 유지하고
+  비수요 시간에만 실행할 것 — 전량 회귀가 목적이면 로컬 eval 하네스(eval/index.ts)를
+  우선 사용한다.
+
+  **환경 동치 대조 (2026-08-14)**: `scripts/verify-env-equivalence.sh`가 staging 배포
+  후 staging ↔ production 의 4가지를 자동 비교한다: ① 배포 커밋(Source commit) ② 헬스
+  (백엔드별 status) ③ 검색 top-5 도메인 시퀀스 ④ gold 회수율. staging 배포 시
+  `deploy-local-worktree.sh` 가 자동 호출 (EQ_CHECK=0 으로 생략). production 이
+  아직 그 커밋이 아니면 커밋 항목만 실패로 표시된다 (정상 — production 배포 후 전체
+  green). 실측: staging/production 모두 f5ef768 로 맞춘 뒤 4/4 동치 확인.
+  `scripts/deploy-local-worktree.sh`가 worktree 생성 → node_modules 심링크 → build →
+  3단계 배포(DO → Pages → cron) → Source commit 검증 → 헬스 확인 → worktree 정리
+  (실패 시 trap 정리)를 자동 수행한다. 로컬 OAuth(`wrangler login`)가 살아있는 한
+  이 경로는 시크릿과 무관하게 동작한다. 수동 절차는 하단 참고:
+  1. `git worktree add /tmp/deploy <sha>` + `ln -s` node_modules
+  2. `npm run build`
+  3. `npx wrangler deploy --config=wrangler.do.jsonc`
+  4. `npx wrangler pages deploy dist/ --project-name=search-engine-api --branch=main`
+  5. `npx wrangler deploy --config=wrangler.cron.jsonc`

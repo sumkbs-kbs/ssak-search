@@ -186,8 +186,13 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Build
-        run: npm run build
+      # 방안 B (2026-08-14): DEPLOY_ENV 는 vite define 으로 번들에 빌드 타임
+      # 주입된다 (src/lib/deploy-env.ts) — DO 인스턴스 키를 환경별로 분리해
+      # staging/production 서킷을 독립화한다. 아티팩트는 공유할 수 없으므로
+      # (같은 번들을 두 환경이 쓰면 같은 인스턴스를 가리킨다) 환경별로 각각
+      # 빌드·업로드한다. deploy.yml 의 각 job 이 자기 환경 아티팩트를 내려받는다.
+      - name: Build (production bundle)
+        run: DEPLOY_ENV=production npm run build
 
       - name: Verify dist output
         run: |
@@ -199,10 +204,20 @@ jobs:
             exit 1
           fi
 
-      - name: Upload dist artifact
+      - name: Upload dist artifact (production)
         uses: actions/upload-artifact@v4
         with:
-          name: worker-bundle
+          name: worker-bundle-production
+          path: dist/
+          retention-days: 7
+
+      - name: Build (staging bundle)
+        run: DEPLOY_ENV=staging npm run build
+
+      - name: Upload dist artifact (staging)
+        uses: actions/upload-artifact@v4
+        with:
+          name: worker-bundle-staging
           path: dist/
           retention-days: 7
 

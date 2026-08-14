@@ -8,11 +8,14 @@
 # 반복 적용한 수동 절차를 스크립트화한 것 — docs/17 §5 참조.
 #
 # 사용법:
-#   scripts/deploy-local-worktree.sh [commit] [staging|production] [--dry-run] [--auto-rollback]
+#   scripts/deploy-local-worktree.sh [commit] [staging|production] [--dry-run] [--auto-rollback] [--self-test]
 #     commit   : 배포할 SHA (기본: 현재 HEAD)
-#     env      : production(기본) | staging#   --dry-run: 아무것도 실행하지 않고 실행 계획만 출력 (인자 순서 무관)
+#     env      : production(기본) | staging
+#   --dry-run: 아무것도 실행하지 않고 실행 계획만 출력 (인자 순서 무관)
 #   --auto-rollback: Pages 배포 실패로 DO 가 새 버전만 남은 정합 불일치가 되면,
 #                    DO 를 배포 직전 버전으로 자동 롤백한다 (부분 배포 방지).
+#   --self-test: 가짜 npx/curl 로 부분 배포 판정 + 자동 롤백 조건을 검증하는
+#                오프라인 회귀 테스트 (실제 배포 없음, node 불필요).
 #
 # Env:
 #   GOLD_CHECK=0  배포 후 라이브 gold 회수 검증 생략 (기본 1=수행)
@@ -52,12 +55,123 @@
 # 동작: 사전 확인(커밋/미커밋/push 상태) → worktree 생성 → node_modules 심링크 →
 #       build → 3단계 배포(각 단계 성공/실패 추적) → Pages Source commit 검증 →
 #       헬스 확인 → 부분 배포 상태 요약 → worktree 정리(실패 시에도 trap).
-#       --dry-run이면 계획 출력 후 종료.
+#       --dry-run이면 계획 출력 후 종료. --self-test면 가짜 npx/curl 시뮬레이션으로
+#       부분 배포 판정 + --auto-rollback 발동 조건을 검증하고 종료 (수정 40 —
+#       이전에 수동으로 돌리던 가짜 npx 래퍼 실측을 스크립트 자체에 정식화).
 # =============================================================================
 set -uo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$REPO_ROOT"
+
+# ── --self-test: 가짜 npx 시뮬레이션 정식화 (회귀 방지) ────────────────────
+# 실제 배포·네트워크 없이 부분 배포 판정 + --auto-rollback 발동 조건을 검증한다.
+# verify-do-binding.sh --self-test / parse-cron-health.py --self-test 와 같은
+# 컨벤션 — 모든 wrangler/curl 호출을 가짜 바이너리로 대체해 시나리오별로
+# DO/Pages/cron 성공·실패를 흉내낸다 (오프라인, node 불필요 — 빌드 생략).
+if [ "${1:-}" = "--self-test" ]; then
+  echo "━━━ deploy-local-worktree.sh self-test (가짜 npx 시뮬레이션) ━━━"
+  SELFTEST_TMP="$(mktemp -d /tmp/ssak-selftest.XXXXXX)"
+  FAKE_BIN="$SELFTEST_TMP/bin"
+  mkdir -p "$FAKE_BIN"
+  export FAKE_NPX_LOG="$SELFTEST_TMP/npx.log"
+  export REAL_NPX="$(command -v npx || echo /usr/bin/env)"
+
+  cat > "$FAKE_BIN/npx" <<'FAKEEOF'
+#!/usr/bin/env bash
+# 셀프테스트용 가짜 npx — wrangler 호출만 가로채고 나머지는 진짜 npx 로 통과.
+# 시나리오(FAKE_NPX_SCENARIO)에 따라 DO/Pages/cron 배포 성공·실패를 흉내낸다.
+echo "npx $*" >> "${FAKE_NPX_LOG:?}"
+if [ "${1:-}" != "wrangler" ]; then exec "$REAL_NPX" "$@"; fi
+shift
+case "${1:-}" in
+  whoami)
+    echo "sumkbs@users.noreply.cloudflare.com"; exit 0 ;;
+  deployments)
+    # deployments list --config=wrangler.do.jsonc → PREV_DO_VERSION (UUID)
+    echo "Version(s): 0532d4a2-1111-4222-8333-444455556666"; exit 0 ;;
+  pages)
+    if [ "${2:-}" = "deploy" ]; then
+      if [ "${FAKE_NPX_SCENARIO:-}" = "pages_fail" ]; then
+        echo "✗ Error: pages deploy failed (simulated)" >&2; exit 1
+      fi
+      echo "✨ Success! Deployment complete."; exit 0
+    fi
+    if [ "${2:-}" = "deployment" ]; then
+      # pages deployment list — Source 커밋 검증용 테이블 행 (컬럼 5 = SHA)
+      FULL="$(git rev-parse HEAD 2>/dev/null || echo 0000000000000000000000000000000000000000)"
+      echo "│ $(date +%F) │ abc │ main │ ${FULL:0:7} │"
+      exit 0
+    fi
+    echo "✗ unexpected wrangler pages: $*" >&2; exit 1 ;;
+  deploy)
+    # DO 배포(--config=wrangler.do.jsonc)와 cron 배포(그 외)를 구분
+    if [ "${FAKE_NPX_SCENARIO:-}" = "do_fail" ] && [[ "$*" == *"wrangler.do.jsonc"* ]]; then
+      echo "✗ Error: DO deploy failed (simulated)" >&2; exit 1
+    fi
+    if [ "${FAKE_NPX_SCENARIO:-}" = "cron_fail" ] && [[ "$*" != *"wrangler.do.jsonc"* ]]; then
+      echo "✗ Error: cron deploy failed (simulated)" >&2; exit 1
+    fi
+    echo "Uploaded ssak-do-worker (v0.0.0-selftest)"
+    echo "Current Version ID: abc12345-1111-4222-8333-444455556666"
+    exit 0 ;;
+  rollback)
+    echo "Success! Version rollback → ${2:-?}."; exit 0 ;;
+  *) echo "✗ unexpected wrangler subcommand: $*" >&2; exit 1 ;;
+esac
+FAKEEOF
+  chmod +x "$FAKE_BIN/npx"
+
+  cat > "$FAKE_BIN/curl" <<'FAKEEOF'
+#!/usr/bin/env bash
+# 셀프테스트용 가짜 curl — 헬스 확인(-w http_code)은 200, 그 외 no-op.
+echo "curl $*" >> "${FAKE_NPX_LOG:?}"
+if [[ "$*" == *"-w"* ]]; then echo "200"; fi
+exit 0
+FAKEEOF
+  chmod +x "$FAKE_BIN/curl"
+
+  FAILURES=0
+  run_scenario() {
+    local name="$1" opts="$2" expect_exit="$3" expect_rollback="$4"
+    : > "$FAKE_NPX_LOG"
+    local out="$SELFTEST_TMP/$name.out"
+    (
+      export PATH="$FAKE_BIN:$PATH" FAKE_NPX_SCENARIO="$name"
+      export GOLD_CHECK=0 EQ_CHECK=0 SELFTEST_TARGET_RUN=1
+      bash "$REPO_ROOT/scripts/deploy-local-worktree.sh" HEAD production $opts
+    ) > "$out" 2>&1
+    local got=$?
+    local ok=1
+    [ "$got" = "$expect_exit" ] || ok=0
+    if [ "$expect_rollback" = "yes" ]; then
+      grep -q "wrangler rollback 0532d4a2-1111-4222-8333-444455556666" "$FAKE_NPX_LOG" || ok=0
+    else
+      grep -q "wrangler rollback" "$FAKE_NPX_LOG" && ok=0
+    fi
+    if [ "$ok" = "1" ]; then
+      echo " ✅ $name: exit=$got rollback=$expect_rollback"
+    else
+      echo " ❌ $name: exit=$got (기대 $expect_exit) rollback=$(grep -c 'wrangler rollback' "$FAKE_NPX_LOG" || true)건 (기대 $expect_rollback)"
+      tail -30 "$out" >&2
+      FAILURES=$((FAILURES + 1))
+    fi
+  }
+
+  run_scenario pages_fail "--auto-rollback" 1 yes   # Pages 실패 → DO 자동 롤백 (PREV_DO_VERSION)
+  run_scenario pages_fail ""               1 no    # 플래그 없으면 롤백 안 함 (수동 안내만)
+  run_scenario cron_fail  ""               1 no    # DO+Pages 일치 — 롤백하면 오히려 틀림
+  run_scenario do_fail    ""               1 no    # 아무것도 배포 안 됨 — 롤백 대상 없음
+  run_scenario success    ""               0 no    # 전체 성공 — 롤백 없음, exit 0
+
+  rm -rf "$SELFTEST_TMP"
+  if [ "$FAILURES" != "0" ]; then
+    echo " ❌ deploy-local-worktree.sh self-test FAIL: $FAILURES case(s) 실패"
+    exit 1
+  fi
+  echo " ✅ deploy-local-worktree.sh self-test: all PASS (5/5)"
+  exit 0
+fi
 
 # ── 인자 파싱 (commit/env/--dry-run/--auto-rollback 순서 무관) ────────────
 DRY_RUN=0
@@ -69,7 +183,7 @@ for arg in "$@"; do
     --dry-run) DRY_RUN=1 ;;
     --auto-rollback) AUTO_ROLLBACK=1 ;;
     production|staging) ENV_NAME="$arg" ;;
-    -*) echo " ❌ 알 수 없는 옵션: $arg (지원: [commit] [production|staging] [--dry-run] [--auto-rollback])" >&2; exit 1 ;;
+    -*) echo " ❌ 알 수 없는 옵션: $arg (지원: [commit] [production|staging] [--dry-run] [--auto-rollback] [--self-test])" >&2; exit 1 ;;
     *) TARGET_COMMIT="$arg" ;;
   esac
 done
@@ -189,8 +303,14 @@ cd "$WORKTREE_DIR"
 # 환경별로 분리한다 (vite define → src/lib/deploy-env.ts). 같은 커밋이라도
 # staging 은 'staging', production 은 'production' 인스턴스를 가리킨다.
 echo " [2/6] 빌드 (vite build, DEPLOY_ENV=$ENV_NAME)"
-DEPLOY_ENV="$ENV_NAME" npm run build 2>&1 | tail -2
-BUILD_OK=$?
+if [ "${SELFTEST_TARGET_RUN:-0}" = "1" ]; then
+  # 셀프테스트 대상 실행 — 실제 빌드 없이 성공 처리 (오프라인 회귀 테스트)
+  echo "   (셀프테스트 — 빌드 생략, 성공 처리)"
+  BUILD_OK=0
+else
+  DEPLOY_ENV="$ENV_NAME" npm run build 2>&1 | tail -2
+  BUILD_OK=$?
+fi
 if [ "$BUILD_OK" != "0" ]; then
   echo " ❌ 빌드 실패 — 아무것도 배포하지 않았습니다." >&2
   exit 1

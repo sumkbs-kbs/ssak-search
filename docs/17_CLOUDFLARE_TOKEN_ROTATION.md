@@ -231,6 +231,17 @@ curl -s -H "Authorization: Bearer <PAT>" \
   Slack 알림(EQ_NOTIFY, ALERT_SLACK_WEBHOOK 시크릿 — 미설정 no-op). 실패 시 job
   실패 처리. workflow_run 에서 production 배포가 동시 진행될 수 있어 45s 간격 1회
   재시도. 배포 이전 단계가 실패하면 동치 대조는 실행되지 않는다.
+
+  **셀프테스트 (수정 40, 2026-08-14)**: `bash scripts/deploy-local-worktree.sh
+  --self-test` — 가짜 npx/curl 바이너리로 모든 wrangler/curl 호출을 스텁하고
+  (오프라인, node 불필요 — 빌드 생략 + git worktree 만 사용) 부분 배포 판정 +
+  --auto-rollback 발동 조건을 검증하는 회귀 테스트. 5개 시나리오: ① Pages 실패 +
+  --auto-rollback → 정확한 PREV_DO_VERSION 으로 롤백 + exit 1 ② Pages 실패
+  (플래그 없음) → 롤백 없음 ③ cron 실패 → 롤백 없음 (DO+Pages 일치) ④ DO 실패 →
+  롤백 없음 ⑤ 전체 성공 → exit 0. mutation 검증 완료 (롤백 조건을 뒤집자 ①이
+  정확히 실패). ci.yml 의 `deploy-selftest` job 으로 CI 에서도 자동 실행된다 —
+  이전에 수동으로 돌리던 가짜 npx 래퍼 실측을 정식화.
+
   `scripts/deploy-local-worktree.sh`가 worktree 생성 → node_modules 심링크 → build →
   3단계 배포(DO → Pages → cron) → Source commit 검증 → 헬스 확인 → worktree 정리
   (실패 시 trap 정리)를 자동 수행한다. 로컬 OAuth(`wrangler login`)가 살아있는 한

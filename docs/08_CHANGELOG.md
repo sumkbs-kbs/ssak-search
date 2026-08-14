@@ -666,6 +666,15 @@
   - 드라이런 계획 + 요약 문구에 auto-rollback 반영, exit 1 유지 (배포 실패는 여전히 실패)
 - **검증**: ① 가짜 npx 래퍼로 Pages 실패 시나리오 실측 — `wrangler rollback 0532d4a2-…(PREV_DO_VERSION) -m "…Pages deploy failed (63d0cca → staging)"` 정확 호출 + `✅ DO 롤백 완료` + exit 1 ② 조건 시뮬레이션 4케이스 — cron 실패/DO 실패/전체 성공 → 롤백 안 함, Pages 실패 → 롤백 실행 ③ 테스트 부작용(실 DO 배포)을 실제 rollback 으로 원상 복구 (DO 코드 = 63d0cca 유지)
 
+### 수정 40: 가짜 npx 시뮬레이션 정식화 — deploy-local-worktree.sh --self-test (2026-08-14)
+- **작업 ID**: FIX-2026-08-14-23 (구현 + mutation 검증)
+- **배경**: 수정 39 의 가짜 npx 래퍼 실측은 /tmp 에 임시 스크립트로 수동 실행한 1회성 검증 — 회귀 방지 장치가 없었다
+- **수정** (`scripts/deploy-local-worktree.sh` + `ci.yml`):
+  - `--self-test` 모드 추가 — 가짜 npx/curl 바이너리를 PATH 앞에 두고 모든 wrangler/curl 호출을 스텁 (verify-do-binding.sh --self-test 와 동일 컨벤션). 오프라인, node 불필요 (빌드 생략 — SELFTEST_TARGET_RUN=1 게이트)
+  - 5개 시나리오: ① `pages_fail --auto-rollback` → **정확한 PREV_DO_VERSION(`0532d4a2-…`)으로 롤백 호출** + exit 1 ② pages_fail(플래그 없음) → 롤백 없음 ③ cron_fail → 롤백 없음 (DO+Pages 일치) ④ do_fail → 롤백 없음 (아무것도 배포 안 됨) ⑤ success → exit 0
+  - ci.yml `deploy-selftest` job (신규) — push/PR 마다 자동 실행
+- **검증**: ① 로컬 5/5 PASS ② **mutation 테스트** — 롤백 조건을 `PAGES=0 → PAGES=1` 로 뒤집자 `pages_fail --auto-rollback` 케이스가 정확히 FAIL (exit 1) → 테스트가 실제 회귀를 감지함을 확인 후 원복 ③ bash -n 클린
+
 ### 수정 29: 배포 파이프라인 자동 검증 확장 — gold 회수 + staging↔production 동치 대조 (2026-08-14)
 - **작업 ID**: FIX-2026-08-14-12 (구현 + 실측)
 - **배경**: 로컬 worktree 배포 스크립트(수정 27)에 검증 단계 추가 — 배포 후 "동작하는가"를 자동 확인

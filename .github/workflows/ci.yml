@@ -137,6 +137,21 @@ jobs:
           fi
           echo "Snapshot integrity OK"
 
+  # 수정 40 (2026-08-14): deploy-local-worktree.sh --self-test — 가짜 npx/curl
+  # 로 부분 배포 판정 + --auto-rollback 발동 조건을 실제 배포 없이 검증하는
+  # 오프라인 회귀 테스트 (node 불필요 — 빌드 생략 + wrangler/curl 스텁,
+  # git worktree 만 사용). 이전에 수동으로 돌리던 가짜 npx 래퍼 실측을
+  # 스크립트 자체에 정식화해 --auto-rollback 회귀를 CI 에서 차단한다.
+  deploy-selftest:
+    name: Deploy script self-test (fake npx)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Deploy script self-test (fake npx simulation)
+        run: bash scripts/deploy-local-worktree.sh --self-test
+
   binding-verify:
     name: Binding Verification
     runs-on: ubuntu-latest

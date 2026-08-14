@@ -167,6 +167,13 @@ curl -s -H "Authorization: Bearer <PAT>" \
   실패가 있으면 exit 1. 가짜 npx 래퍼로 3개 실패 시나리오 + 성공 시나리오를
   실배포 검증 완료.
 
+  **--auto-rollback (2026-08-14)**: Pages 배포 실패로 "DO 는 새 버전, Pages 는
+  이전 버전" 정합 불일치가 되면, 배포 전에 캡처한 PREV_DO_VERSION 으로 DO 를
+  자동 롤백한다 (`npx wrangler rollback <version-id>` + 사유 메시지). cron 실패
+  (DO+Pages 일치)나 DO 실패(아무것도 배포 안 됨)에서는 롤백하지 않는다. 가짜
+  npx 래퍼로 Pages 실패 시나리오 실측 — 정확한 PREV_DO_VERSION 으로 롤백 호출
+  확인 (이후 실제 rollback 으로 테스트 부작용 원상 복구).
+
   **배포 후 gold 회수 자동 검증 (2026-08-14)**: Pages 배포 성공 후
   `scripts/verify-deployed-gold.sh`가 6개 대표 gold 쿼리(kr-stock/zh-travel/
   en-fact/gk/en-tech/ja-news)를 배포 URL에 보내 top-10에서 gold 도메인 회수를

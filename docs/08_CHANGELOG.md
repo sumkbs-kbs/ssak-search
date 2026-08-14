@@ -658,6 +658,14 @@
 - **실측**: 현재 상태 — 서킷 operational (방안 A 미배포라 프로브 판정 의미 없음 — rate-limit 리셋의 확증 아님), **gold 없음** (여전히 rate-limit 또는 전략 미회수). **gold 회복만이 리셋 확정 신호**
 - **참고**: 방안 A(af28f12) 배포 후에는 서킷 신호도 유효해짐 (프로브가 /2.3/info 200 → 닫힘)
 
+### 수정 39: 부분 배포 자동 DO 롤백 — --auto-rollback 플래그 (2026-08-14)
+- **작업 ID**: FIX-2026-08-14-22 (구현 + 실측)
+- **수정** (`scripts/deploy-local-worktree.sh`):
+  - `--auto-rollback` — Pages 배포 실패로 정합 불일치(DO=새 버전, Pages=이전)가 되면, 배포 전 캡처한 `PREV_DO_VERSION` 으로 DO 를 **자동 롤백** (`npx wrangler rollback <version-id> --config=wrangler.do.jsonc -m "auto-rollback: Pages deploy failed"`)
+  - 롤백 조건은 `DO=1 && PAGES=0` 단독 — cron 실패(DO+Pages 일치, 롤백하면 오히려 틀림)나 DO 실패(아무것도 배포 안 됨)에서는 롤백하지 않음
+  - 드라이런 계획 + 요약 문구에 auto-rollback 반영, exit 1 유지 (배포 실패는 여전히 실패)
+- **검증**: ① 가짜 npx 래퍼로 Pages 실패 시나리오 실측 — `wrangler rollback 0532d4a2-…(PREV_DO_VERSION) -m "…Pages deploy failed (63d0cca → staging)"` 정확 호출 + `✅ DO 롤백 완료` + exit 1 ② 조건 시뮬레이션 4케이스 — cron 실패/DO 실패/전체 성공 → 롤백 안 함, Pages 실패 → 롤백 실행 ③ 테스트 부작용(실 DO 배포)을 실제 rollback 으로 원상 복구 (DO 코드 = 63d0cca 유지)
+
 ### 수정 29: 배포 파이프라인 자동 검증 확장 — gold 회수 + staging↔production 동치 대조 (2026-08-14)
 - **작업 ID**: FIX-2026-08-14-12 (구현 + 실측)
 - **배경**: 로컬 worktree 배포 스크립트(수정 27)에 검증 단계 추가 — 배포 후 "동작하는가"를 자동 확인

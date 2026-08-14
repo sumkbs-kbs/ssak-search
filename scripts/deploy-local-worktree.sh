@@ -8,9 +8,11 @@
 # 반복 적용한 수동 절차를 스크립트화한 것 — docs/17 §5 참조.
 #
 # 사용법:
-#   scripts/deploy-local-worktree.sh [commit] [staging|production] [--dry-run]
+#   scripts/deploy-local-worktree.sh [commit] [staging|production] [--dry-run] [--auto-rollback]
 #     commit   : 배포할 SHA (기본: 현재 HEAD)
 #     env      : production(기본) | staging#   --dry-run: 아무것도 실행하지 않고 실행 계획만 출력 (인자 순서 무관)
+#   --auto-rollback: Pages 배포 실패로 DO 가 새 버전만 남은 정합 불일치가 되면,
+#                    DO 를 배포 직전 버전으로 자동 롤백한다 (부분 배포 방지).
 #
 # Env:
 #   GOLD_CHECK=0  배포 후 라이브 gold 회수 검증 생략 (기본 1=수행)
@@ -57,15 +59,17 @@ set -uo pipefail
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$REPO_ROOT"
 
-# ── 인자 파싱 (commit/env/--dry-run 순서 무관) ────────────────────────────
+# ── 인자 파싱 (commit/env/--dry-run/--auto-rollback 순서 무관) ────────────
 DRY_RUN=0
+AUTO_ROLLBACK=0
 TARGET_COMMIT="HEAD"
 ENV_NAME="production"
 for arg in "$@"; do
   case "$arg" in
     --dry-run) DRY_RUN=1 ;;
+    --auto-rollback) AUTO_ROLLBACK=1 ;;
     production|staging) ENV_NAME="$arg" ;;
-    -*) echo " ❌ 알 수 없는 옵션: $arg (지원: [commit] [production|staging] [--dry-run])" >&2; exit 1 ;;
+    -*) echo " ❌ 알 수 없는 옵션: $arg (지원: [commit] [production|staging] [--dry-run] [--auto-rollback])" >&2; exit 1 ;;
     *) TARGET_COMMIT="$arg" ;;
   esac
 done
@@ -149,6 +153,9 @@ if [ "$DRY_RUN" = 1 ]; then
     echo "   fail-hard: gold 미회수 시 ${GOLD_FAIL_HARD_RETRIES:-3}회 재시도 후 배포 실패 처리 (GOLD_FAIL_HARD=1)"
   fi
   echo "   부분배포 : 각 단계 성공/실패를 추적해 중간 실패 시 상태를 요약 (DO 롤백 명령 포함)"
+  if [ "$AUTO_ROLLBACK" = "1" ]; then
+    echo "   auto-rollback: Pages 실패 시 DO 를 이전 버전(${PREV_DO_VERSION:-알 수 없음})으로 자동 롤백 (--auto-rollback)"
+  fi
   echo "   정리     : trap으로 worktree 제거 (실패 시에도)"
   echo ""
   echo " ✅ 드라이런 완료 — 실제 배포를 원하면 --dry-run 없이 재실행하세요."
@@ -317,11 +324,16 @@ elif [ "$DO_DEPLOYED" = "1" ] && [ "$PAGES_DEPLOYED" = "1" ] && [ "$CRON_DEPLOYE
   echo "      (b) 전체 재시도:   bash scripts/deploy-local-worktree.sh $SHORT_SHA $ENV_NAME"
 elif [ "$DO_DEPLOYED" = "1" ] && [ "$PAGES_DEPLOYED" = "0" ]; then
   echo " ⚠️  부분 배포: DO 는 새 버전($SHORT_SHA), Pages 는 이전 버전 유지 — 정합 불일치!"
-  echo "    Pages 가 실패했으므로 DO 를 이전 버전으로 되돌리는 것을 권장합니다:"
-  if [ -n "${PREV_DO_VERSION:-}" ]; then
-    echo "      롤백: npx wrangler rollback --config=wrangler.do.jsonc  (이전 버전 $PREV_DO_VERSION)"
+  if [ "$AUTO_ROLLBACK" = "1" ]; then
+    echo "    → --auto-rollback 으로 DO 를 이전 버전으로 되돌립니다 (아래)"
   else
-    echo "      롤백: npx wrangler rollback --config=wrangler.do.jsonc"
+    echo "    Pages 가 실패했으므로 DO 를 이전 버전으로 되돌리는 것을 권장합니다:"
+    if [ -n "${PREV_DO_VERSION:-}" ]; then
+      echo "      롤백: npx wrangler rollback $PREV_DO_VERSION --config=wrangler.do.jsonc"
+    else
+      echo "      롤백: npx wrangler rollback --config=wrangler.do.jsonc"
+    fi
+    echo "      또는 --auto-rollback 플래그로 자동화 가능"
   fi
   echo "      또는 Pages 재시도: bash scripts/deploy-local-worktree.sh $SHORT_SHA $ENV_NAME (DO 재배포 포함)"
 else
@@ -329,6 +341,27 @@ else
   echo "    원인 확인 후 재시도: bash scripts/deploy-local-worktree.sh $SHORT_SHA $ENV_NAME"
 fi
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+
+# ── --auto-rollback: Pages 실패 시 DO 를 이전 버전으로 자동 롤백 ────────────
+# 정합 불일치(DO=새 버전, Pages=이전)일 때만 롤백이 옳다 — cron 실패(DO+Pages
+# 일치)나 DO 실패(아무것도 배포 안 됨)에서는 롤백하지 않는다. 롤백 대상은
+# 배포 전에 캡처한 PREV_DO_VERSION (배포 직전 최신 = 이번 배포의 '이전').
+DO_ROLLED_BACK=0
+if [ "$AUTO_ROLLBACK" = "1" ] && [ "$DO_DEPLOYED" = "1" ] && [ "$PAGES_DEPLOYED" = "0" ]; then
+  echo ""
+  echo " [자동 롤백] Pages 배포 실패 → DO 를 이전 버전으로 되돌립니다"
+  if [ -n "${PREV_DO_VERSION:-}" ]; then
+    if npx wrangler rollback "$PREV_DO_VERSION" --config=wrangler.do.jsonc \
+      -m "auto-rollback by deploy-local-worktree.sh: Pages deploy failed ($SHORT_SHA → $ENV_NAME)" 2>&1 | tail -3; then
+      DO_ROLLED_BACK=1
+      echo " ✅ DO 롤백 완료 → ${PREV_DO_VERSION}"
+    else
+      echo " ❌ DO 롤백 실패 — 수동 롤백 필요: npx wrangler rollback $PREV_DO_VERSION --config=wrangler.do.jsonc" >&2
+    fi
+  else
+    echo " ⚠️  이전 DO 버전을 확인하지 못해 자동 롤백 생략 — 수동: npx wrangler rollback --config=wrangler.do.jsonc" >&2
+  fi
+fi
 
 # ── GOLD_FAIL_HARD=1 이고 gold 미회수가 지속된 경우 최종 보고 ─────────────
 if [ "${GOLD_FAIL_HARD_FAILED:-0}" = "1" ]; then

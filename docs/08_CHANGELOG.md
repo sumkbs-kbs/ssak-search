@@ -601,6 +601,16 @@
 - **디버깅 실측**: 첫 staging 배포가 새 인스턴스로 안 바뀐 원인 = 배포 스크립트가 **커밋의 clean 체크아웃**에서 빌드하는데 변경이 미커밋 상태였음 (vite define 없음 → 'global' 폴백) → 커밋 후 재배포로 해결. docs/17 에 경고 문구 추가
 - **참고**: 구 'global' 인스턴스는 스토리지에 잔존하며 기존 stackexchange alarm 프로브만 주기 실행 (무해 — 정리하려면 reset RPC 별도 필요). ci.yml/deploy.yml 변경은 push 후 GitHub Actions 에 반영 (로컬 worktree 배포는 push 불필요)
 
+### 수정 33: 환경 동치 대조 실패 Slack 알림 — EQ_NOTIFY (2026-08-14)
+- **작업 ID**: FIX-2026-08-14-16 (구현 + 실측 검증)
+- **수정** (`scripts/verify-env-equivalence.sh`):
+  - 실패 항목별 플래그(커밋/헬스/검색/gold) 추적 + 검색 diff 상세 누적
+  - **런타임 동치(헬스/검색/gold) 실패 시 Slack 알림** — `EQ_NOTIFY`(기본 1). 페이로드는 monitor.yml 과 동일한 Slack blocks 형식 (danger 색상, 환경 A/B URL·커밋·실패 건수·항목별 상세 포함)
+  - **커밋 불일치 단독은 알림 생략** — staging 배포 직후 production 미배포는 정상 상태 (EQ_NOTIFY_COMMIT=1 로 강제 시 warning 색상)
+  - Webhook 미설정(SLACK_WEBHOOK/ALERT_SLACK_WEBHOOK) 시 no-op — 코드베이스 resolveWebhookUrl 컨벤션
+- **검증** (로컬 캡처 서버 실측): ① fake 환경 vs production → 헬스/검색/gold 3건 실패 → **danger 페이로드 POST 캡처 성공** (상세 블록 포함) ② webhook 미설정 → no-op 안내 + exit 1 유지 ③ 커밋 단독 분기 → 알림 생략 / EQ_NOTIFY_COMMIT=1 시 warning
+- **참고**: 알림 수신에는 Pages 프로젝트의 `ALERT_SLACK_WEBHOOK`(또는 SLACK_WEBHOOK) 시크릿 설정이 필요 — 현재 미설정 상태라 로컬/배포 시 no-op (probe-slack-delivery.ts 확인)
+
 ### 수정 29: 배포 파이프라인 자동 검증 확장 — gold 회수 + staging↔production 동치 대조 (2026-08-14)
 - **작업 ID**: FIX-2026-08-14-12 (구현 + 실측)
 - **배경**: 로컬 worktree 배포 스크립트(수정 27)에 검증 단계 추가 — 배포 후 "동작하는가"를 자동 확인

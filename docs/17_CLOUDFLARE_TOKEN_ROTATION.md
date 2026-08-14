@@ -204,6 +204,13 @@ curl -s -H "Authorization: Bearer <PAT>" \
   `deploy-local-worktree.sh` 가 자동 호출 (EQ_CHECK=0 으로 생략). production 이
   아직 그 커밋이 아니면 커밋 항목만 실패로 표시된다 (정상 — production 배포 후 전체
   green). 실측: staging/production 모두 f5ef768 로 맞춘 뒤 4/4 동치 확인.
+
+  **실패 알림 (2026-08-14)**: 런타임 동치(헬스/검색/gold) 실패 시 Slack webhook
+  알림을 보낸다 (`EQ_NOTIFY`, 기본 1; webhook 미설정 시 no-op — SLACK_WEBHOOK 또는
+  ALERT_SLACK_WEBHOOK). 커밋 불일치 단독은 staging 배포 직후 production 미배포의
+  정상 상태라 알림에서 제외 (EQ_NOTIFY_COMMIT=1 로 강제 가능). 페이로드는 monitor.yml
+  과 같은 Slack blocks 형식 — 실패 항목별 상세(헬스 diff/검색 diff/gold 회수율) 포함,
+  런타임 실패는 danger, 커밋 단독은 warning 색상.
   `scripts/deploy-local-worktree.sh`가 worktree 생성 → node_modules 심링크 → build →
   3단계 배포(DO → Pages → cron) → Source commit 검증 → 헬스 확인 → worktree 정리
   (실패 시 trap 정리)를 자동 수행한다. 로컬 OAuth(`wrangler login`)가 살아있는 한

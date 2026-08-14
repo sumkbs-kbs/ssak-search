@@ -21,6 +21,15 @@
 #   EXPECTED_COMMIT  배포 커밋 동치 검증 시 기대 커밋 (기본: 양쪽이 서로 같아야 함)
 #   SKIP_COMMIT      배포 커밋 비교 생략 (기본 0)
 #   QUERIES          검색 결과 대조 쿼리 목록 (기본: EN/zh/기술 3종)
+#   EQ_NOTIFY        1이면 런타임 동치(헬스/검색/gold) 실패 시 Slack 알림 (기본 1).
+#                    Webhook 미설정(SLACK_WEBHOOK/ALERT_SLACK_WEBHOOK 없음)이면 no-op.
+#   EQ_NOTIFY_COMMIT 1이면 배포 커밋 불일치 단독으로도 알림 (기본 0 — staging
+#                    배포 직후 production 이 아직 이전 커밋인 건 정상 상태이므로).
+#   SLACK_WEBHOOK / ALERT_SLACK_WEBHOOK — Slack Incoming Webhook URL (코드베이스
+#                    resolveWebhookUrl 컨벤션 — SLACK_WEBHOOK 우선).
+#
+# 알림 규칙 (2026-08-14): 헬스/검색/gold 중 하나라도 다르면 danger 알림.
+# 커밋 불일치만 있는 경우는 알림 생략(정상 상태) — EQ_NOTIFY_COMMIT=1 로 강제 가능.
 # =============================================================================
 set -uo pipefail
 
@@ -45,6 +54,7 @@ echo "   배포 커밋: A=$COMMIT_A  B=$COMMIT_B"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 
 FAIL=0
+COMMIT_FAIL=0; HEALTH_FAIL=0; SEARCH_FAIL=0; GOLD_FAIL=0
 
 # ── 1. 배포 커밋 동치 ─────────────────────────────────────────────────────
 echo ""
@@ -53,13 +63,13 @@ if [ "${SKIP_COMMIT:-0}" = "1" ] || [ -z "$COMMIT_A" ] || [ -z "$COMMIT_B" ]; th
   echo "   ⚠️  배포 커밋 비교 생략 (SKIP_COMMIT=1 또는 커밋 미확인)"
   if [ -z "$COMMIT_A" ] || [ -z "$COMMIT_B" ]; then
     echo "      (A=$COMMIT_A, B=$COMMIT_B — deployment list 파싱 실패일 수 있음)" >&2
-    FAIL=1
+    FAIL=1; COMMIT_FAIL=1
   fi
 elif [ "$COMMIT_A" = "$COMMIT_B" ]; then
   echo "   ✅ 동치 ($COMMIT_A)"
 else
   echo "   ❌ 불일치: staging=$COMMIT_A  production=$COMMIT_B" >&2
-  FAIL=1
+  FAIL=1; COMMIT_FAIL=1
 fi
 
 # ── 2. 헬스 동치 ──────────────────────────────────────────────────────────
@@ -95,10 +105,10 @@ if echo "$HEALTH_DIFF" | grep -q '^OK$'; then
   echo "   ✅ 백엔드 status 전부 동치"
 elif echo "$HEALTH_DIFF" | grep -q '^DIFF:'; then
   echo "   ❌ ${HEALTH_DIFF#DIFF: }" >&2
-  FAIL=1
+  FAIL=1; HEALTH_FAIL=1
 else
   echo "   ⚠️  헬스 비교 실패: $HEALTH_DIFF" >&2
-  FAIL=1
+  FAIL=1; HEALTH_FAIL=1
 fi
 
 # ── 3. 검색 결과 동치 (top-5 도메인 시퀀스) ──────────────────────────────
@@ -107,6 +117,7 @@ echo " [3/4] 검색 결과 동치 (top-5 도메인 시퀀스)"
 QUERIES="${QUERIES:-how to sort a list in python|张家界旅游攻略|quantum computing explained}"
 echo "   쿼리: ${QUERIES//|/ , }"
 SEARCH_DIFFS=0
+SEARCH_DETAIL=""
 OLDIFS="$IFS"
 IFS='|'
 for q in $QUERIES; do
@@ -121,12 +132,13 @@ for q in $QUERIES; do
     echo "   ❌ '$q' → A: $DOMS_A" >&2
     echo "                    B: $DOMS_B" >&2
     SEARCH_DIFFS=1
+    SEARCH_DETAIL="${SEARCH_DETAIL}쿼리 '$q':\n  A: $DOMS_A\n  B: $DOMS_B\n"
   fi
   IFS='|'
 done
 IFS="$OLDIFS"
 if [ "$SEARCH_DIFFS" = "1" ]; then
-  FAIL=1
+  FAIL=1; SEARCH_FAIL=1
 fi
 
 # ── 4. gold 회수 동치 ─────────────────────────────────────────────────────
@@ -139,7 +151,7 @@ if [ "$GOLD_A" = "$GOLD_B" ] && [ -n "$GOLD_A" ] && [[ "$GOLD_A" != *"/0"* ]]; t
   echo "   ✅ gold 회수 동치 ($GOLD_A)"
 else
   echo "   ❌ gold 회수 불일치 또는 0회수: A=${GOLD_A:-?}  B=${GOLD_B:-?}" >&2
-  FAIL=1
+  FAIL=1; GOLD_FAIL=1
 fi
 
 # ── 요약 ──────────────────────────────────────────────────────────────────
@@ -152,4 +164,58 @@ else
   echo " ❌ 환경 동치 불일치 — 위 항목 중 하나 이상 다릅니다" >&2
 fi
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+
+# ── 실패 알림 (Slack webhook) ────────────────────────────────────────────
+# 2026-08-14: 런타임 동치(헬스/검색/gold) 실패 시 Slack 알림. 커밋 불일치
+# 단독은 staging 배포 직후 production 미배포의 정상 상태이므로 알림 생략
+# (EQ_NOTIFY_COMMIT=1 로 강제 가능). Webhook 미설정이면 no-op — 코드베이스의
+# "webhook 없으면 조용히 skip" 컨벤션을 따른다 (src/lib/slack-alert.ts 참고).
+if [ "$FAIL" = "1" ] && [ "${EQ_NOTIFY:-1}" = "1" ]; then
+  RUNTIME_FAIL=$((HEALTH_FAIL + SEARCH_FAIL + GOLD_FAIL))
+  if [ "$RUNTIME_FAIL" -gt 0 ] || [ "${EQ_NOTIFY_COMMIT:-0}" = "1" ]; then
+    WEBHOOK="${SLACK_WEBHOOK:-${ALERT_SLACK_WEBHOOK:-}}"
+    if [ -n "$WEBHOOK" ]; then
+      SEVERITY="danger"
+      [ "$RUNTIME_FAIL" = "0" ] && SEVERITY="warning"  # 커밋 불일치 단독
+      DETAILS=""
+      [ "$COMMIT_FAIL" = "1" ] && DETAILS="${DETAILS}- 배포 커밋 불일치: A=$COMMIT_A  B=$COMMIT_B\n"
+      [ "$HEALTH_FAIL" = "1" ] && DETAILS="${DETAILS}- 헬스 불일치: ${HEALTH_DIFF#DIFF: }\n"
+      [ "$SEARCH_FAIL" = "1" ] && DETAILS="${DETAILS}${SEARCH_DETAIL}"
+      [ "$GOLD_FAIL" = "1" ] && DETAILS="${DETAILS}- gold 회수 불일치: $LABEL_A=${GOLD_A:-?}  $LABEL_B=${GOLD_B:-?}\n"
+      export LABEL_A LABEL_B ENV_A ENV_B SEVERITY COMMIT_A COMMIT_B DETAILS RUNTIME_FAIL
+      PAYLOAD="$(python3 <<'PYEOF'
+import json, os
+severity = os.environ.get('SEVERITY', 'danger')
+fields = [
+    {'type': 'mrkdwn', 'text': f"*A*: {os.environ.get('LABEL_A')}  <{os.environ.get('ENV_A')}>"},
+    {'type': 'mrkdwn', 'text': f"*B*: {os.environ.get('LABEL_B')}  <{os.environ.get('ENV_B')}>"},
+    {'type': 'mrkdwn', 'text': f"*커밋*: A={os.environ.get('COMMIT_A') or '?'}  B={os.environ.get('COMMIT_B') or '?'}"},
+    {'type': 'mrkdwn', 'text': f"*실패*: 런타임 {os.environ.get('RUNTIME_FAIL')}건"},
+]
+print(json.dumps({
+    'text': f"[{severity}] 환경 동치 대조 실패 — {os.environ.get('LABEL_A')} ↔ {os.environ.get('LABEL_B')}",
+    'attachments': [{
+        'color': severity,
+        'blocks': [
+            {'type': 'section', 'text': {'type': 'mrkdwn', 'text': f"*환경 동치 대조 실패* — {os.environ.get('LABEL_A')} ↔ {os.environ.get('LABEL_B')} (deploy 검증)"}},
+            {'type': 'section', 'fields': fields},
+            {'type': 'section', 'text': {'type': 'mrkdwn', 'text': '*상세*\n' + os.environ.get('DETAILS', '')}},
+            {'type': 'context', 'elements': [{'type': 'mrkdwn', 'text': f"run: {os.environ.get('LABEL_A')} ↔ {os.environ.get('LABEL_B')} · {os.popen('date -u +%Y-%m-%dT%H:%M:%SZ').read().strip()}"}]},
+        ],
+    }],
+}))
+PYEOF
+)"
+      if curl -sf -m 10 -X POST -H 'Content-Type: application/json' -d "$PAYLOAD" "$WEBHOOK"; then
+        echo " ✅ Slack 알림 전송됨 ($SEVERITY)"
+      else
+        echo " ⚠️  Slack 알림 전송 실패 (webhook 응답 오류) — 로그로만 남깁니다" >&2
+      fi
+    else
+      echo " ℹ️  동치 실패 알림 생략 — SLACK_WEBHOOK/ALERT_SLACK_WEBHOOK 미설정 (no-op)" >&2
+    fi
+  else
+    echo " ℹ️  커밋 불일치만 존재 — 알림 생략 (production 미배포의 정상 상태, EQ_NOTIFY_COMMIT=1 로 강제 가능)" >&2
+  fi
+fi
 exit $FAIL

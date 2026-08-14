@@ -65,6 +65,22 @@ async function handle(request: Request): Promise<Response> {
       tryFetch('https://www.wikidata.org/w/api.php?action=wbsearchentities&search=quantum&language=en&format=json', {
         headers: { 'User-Agent': UA },
       }),
+    en_robots: () =>
+      tryFetch('https://en.wikipedia.org/robots.txt', {
+        headers: { 'User-Agent': UA },
+      }),
+    zh_robots: () =>
+      tryFetch('https://zh.wikipedia.org/robots.txt', {
+        headers: { 'User-Agent': UA },
+      }),
+    wiki_robots: () =>
+      tryFetch('https://www.wikidata.org/robots.txt', {
+        headers: { 'User-Agent': UA },
+      }),
+    se_robots: () =>
+      tryFetch('https://stackoverflow.com/robots.txt', {
+        headers: { 'User-Agent': UA },
+      }),
   }
 
   const fn = cases[c] ?? cases.en_rest

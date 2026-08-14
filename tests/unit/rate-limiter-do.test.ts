@@ -213,7 +213,7 @@ describe('RateLimiterDO self-healing circuit breaker (D.2)', () => {
     for (let i = 0; i < FAILURE_THRESHOLD; i++) await doInstance.release(HOST, false)
 
     // Health probe returns 200 → alarm closes circuit
-    fetchMock.mockResolvedValue({ ok: true, status: 200 })
+    fetchMock.mockResolvedValue({ ok: true, status: 200, text: async () => 'ok' })
     vi.advanceTimersByTime(30_000)
     await doInstance.alarm()
 
@@ -226,7 +226,7 @@ describe('RateLimiterDO self-healing circuit breaker (D.2)', () => {
     instantiate()
     for (let i = 0; i < FAILURE_THRESHOLD; i++) await doInstance.release(HOST, false)
 
-    fetchMock.mockResolvedValue({ ok: false, status: 503 })
+    fetchMock.mockResolvedValue({ ok: false, status: 503, text: async () => 'Service Unavailable' })
     vi.advanceTimersByTime(30_000)
     await doInstance.alarm()
 
@@ -240,7 +240,7 @@ describe('RateLimiterDO self-healing circuit breaker (D.2)', () => {
     instantiate()
     for (let i = 0; i < FAILURE_THRESHOLD; i++) await doInstance.release(HOST, false)
 
-    fetchMock.mockResolvedValue({ ok: false, status: 429 })
+    fetchMock.mockResolvedValue({ ok: false, status: 429, text: async () => 'rate limited' })
     vi.advanceTimersByTime(30_000)
     await doInstance.alarm()
 

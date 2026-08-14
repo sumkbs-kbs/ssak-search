@@ -526,21 +526,26 @@ export class RateLimiterDO extends DurableObject<Env> {
       const elapsed = now - circuit.openedAt
       const backoff = getBackoffMs(circuit.tripCount)
       // Probe only after the current backoff window has elapsed
-      if (elapsed < backoff) continue
+      if (elapsed < backoff) {
+        // S73d 진단: backoff 창 미경과로 프로브를 건너뜀 — alarm이 실제 도는지와
+        // openedAt/backoff 관계를 로그로 남겨 회복 지연 원인을 확정한다.
+        logger.debug(`[DO-rate-limiter] Alarm tick — skipping ${host}: elapsed=${elapsed}ms < backoff=${backoff}ms (tripCount=${circuit.tripCount})`)
+        continue
+      }
 
-      const alive = await this.probeHost(host)
-      if (alive) {
+      const probe = await this.probeHost(host)
+      if (probe.alive) {
         circuit.tripped = false
         circuit.failures = 0
         circuit.tripCount = 0
         circuit.openedAt = 0
         circuit.probeInFlight = false
         circuit.probeStartedAt = 0
-        logger.info(`[DO-rate-limiter] Health probe OK — circuit auto-closed for ${host}`)
+        logger.info(`[DO-rate-limiter] Health probe OK (HTTP ${probe.status}) — circuit auto-closed for ${host}`)
       } else {
         circuit.tripCount = Math.min(circuit.tripCount + 1, BACKOFF_STAGES_MS.length - 1)
         circuit.openedAt = now
-        logger.warn(`[DO-rate-limiter] Health probe failed for ${host} — escalating to stage ${circuit.tripCount}`)
+        logger.warn(`[DO-rate-limiter] Health probe failed for ${host} — upstream HTTP ${probe.status} (${probe.snippet}) — escalating to stage ${circuit.tripCount}`)
       }
     }
 
@@ -553,16 +558,24 @@ export class RateLimiterDO extends DurableObject<Env> {
   /**
    * Lightweight liveness probe: GET /robots.txt with a short timeout.
    * 429 (rate-limited) still counts as alive — the server is responding.
+   * Returns status + body snippet so the alarm log records WHY a probe failed
+   * (S73d: e.g. 403 Cloudflare challenge vs timeout vs 5xx) — without this,
+   * "probe failed" leaves the upstream response unobservable.
    */
-  private async probeHost(host: string): Promise<boolean> {
+  private async probeHost(host: string): Promise<{ alive: boolean; status: number; snippet: string }> {
     try {
       const controller = new AbortController()
       const timer = setTimeout(() => controller.abort(), CIRCUIT_PROBE_TIMEOUT_MS)
       const resp = await fetch(`https://${host}/robots.txt`, { signal: controller.signal })
       clearTimeout(timer)
-      return resp.ok || resp.status === 429 || resp.status === 301 || resp.status === 302
+      const text = await resp.text().catch(() => '')
+      return {
+        alive: resp.ok || resp.status === 429 || resp.status === 301 || resp.status === 302,
+        status: resp.status,
+        snippet: text.replace(/\s+/g, ' ').slice(0, 60),
+      }
     } catch {
-      return false
+      return { alive: false, status: -1, snippet: 'fetch timeout/throw' }
     }
   }
 

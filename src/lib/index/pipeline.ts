@@ -694,8 +694,14 @@ export async function searchIndex(env: Env, options: IndexSearchOptions): Promis
   // ============================================================
   let vectorMatches: Array<{ id: string; score: number; metadata?: Record<string, unknown> }> = []
   if (queryEmbedding) {
-    // Request more results for better RRF pool
-    const vectorTopK = Math.max(topK * 3, 30)
+    // Request more results for better RRF pool.
+    // S105 (2026-08-14): Vectorize는 returnValues=true + returnMetadata=true일 때
+    // topK 상한이 50이다 (40025: "max top K is 50 ... retry with returnValues=false
+    // and returnMetadata=indexed"). 기존 vectorTopK = max(topK*3, 30)은 overFetch
+    // ≥ 6이면 무조건 초과 → self-index emergency fallback이 프로덕션에서 100%
+    // 실패 (하이브리드 검색이 전부 [] → 폴백 체인 붕괴, partial_outage 가담).
+    // 50 클램프는 RRF 풀을 약간 축소하지만 (30 → 50 후보) self-index를 복구한다.
+    const vectorTopK = Math.min(Math.max(topK * 3, 30), 50)
     const vectorizeResults = await env.VECTORIZE_INDEX.query(queryEmbedding, {
       topK: vectorTopK,
       returnValues: true,

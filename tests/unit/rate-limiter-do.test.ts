@@ -246,3 +246,158 @@ describe('RateLimiterDO self-healing circuit breaker (D.2)', () => {
     expect(res.allowed).toBe(true)
   })
 })
+
+describe('RateLimiterDO shared cooldowns (cross-isolate 429 pacing guards)', () => {
+  let RateLimiterDOClass: any
+  let doState: any
+  let doInstance: any
+
+  beforeEach(async () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-08-04T00:00:00Z'))
+
+    vi.mock('cloudflare:workers', () => ({
+      DurableObject: class MockDurableObject {
+        ctx: any
+        env: any
+        constructor(ctx: any, env: any) {
+          this.ctx = ctx
+          this.env = env
+        }
+      },
+    }))
+
+    const mod = await import('../../src/lib/rate-limiter-do')
+    RateLimiterDOClass = mod.RateLimiterDO
+    doState = createMockDOState()
+    doInstance = new RateLimiterDOClass(doState, { RATE_LIMITER: {} })
+  })
+
+  afterEach(() => {
+    vi.unstubAllGlobals()
+    vi.restoreAllMocks()
+    vi.useRealTimers()
+  })
+
+  it('arms and reads a cooldown window', async () => {
+    const untilMs = Date.now() + 30_000
+    await doInstance.setCooldown('cooldown:wikipedia', untilMs)
+    expect(await doInstance.getCooldown('cooldown:wikipedia')).toBe(untilMs)
+  })
+
+  it('persists cooldowns across re-instantiation (DO storage)', async () => {
+    const untilMs = Date.now() + 60_000
+    await doInstance.setCooldown('cooldown:github-search', untilMs)
+    // A NEW instance loads the same persisted state from mock storage. The
+    // mock's blockConcurrencyWhile is un-awaited (real DOs guarantee the load
+    // finishes before RPC handlers run), so yield a microtask turn first.
+    const reloaded = new RateLimiterDOClass(doState, { RATE_LIMITER: {} })
+    await Promise.resolve()
+    await Promise.resolve()
+    expect(await reloaded.getCooldown('cooldown:github-search')).toBe(untilMs)
+  })
+
+  it('clears the window when setCooldown receives an expired deadline', async () => {
+    await doInstance.setCooldown('cooldown:wikipedia', Date.now() + 10_000)
+    await doInstance.setCooldown('cooldown:wikipedia', Date.now() - 1)
+    expect(await doInstance.getCooldown('cooldown:wikipedia')).toBe(0)
+  })
+
+  it('prunes an expired window on read and returns 0', async () => {
+    await doInstance.setCooldown('cooldown:wikipedia', Date.now() + 10_000)
+    vi.advanceTimersByTime(11_000)
+    expect(await doInstance.getCooldown('cooldown:wikipedia')).toBe(0)
+  })
+
+  it('reset() clears cooldowns', async () => {
+    await doInstance.setCooldown('cooldown:wikipedia', Date.now() + 30_000)
+    await doInstance.reset()
+    expect(await doInstance.getCooldown('cooldown:wikipedia')).toBe(0)
+  })
+})
+
+describe('RateLimiterDO inflight slot lease reaper (S105)', () => {
+  let RateLimiterDOClass: any
+  let doState: any
+  let doInstance: any
+
+  beforeEach(async () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-08-14T00:00:00Z'))
+
+    vi.mock('cloudflare:workers', () => ({
+      DurableObject: class MockDurableObject {
+        ctx: any
+        env: any
+        constructor(ctx: any, env: any) {
+          this.ctx = ctx
+          this.env = env
+        }
+      },
+    }))
+
+    const mod = await import('../../src/lib/rate-limiter-do')
+    RateLimiterDOClass = mod.RateLimiterDO
+    doState = createMockDOState()
+    doInstance = new RateLimiterDOClass(doState, { RATE_LIMITER: {} })
+  })
+
+  afterEach(() => {
+    vi.unstubAllGlobals()
+    vi.restoreAllMocks()
+    vi.useRealTimers()
+  })
+
+  it('recovers a saturated host when leaked slots exceed the 60s lease (bing 3/3 → partial_outage 근본 원인)', async () => {
+    // isolate가 fetch 도중 죽어 release가 오지 않은 시나리오: acquire 3회 (release 0)
+    await doInstance.acquire(HOST)
+    await doInstance.acquire(HOST)
+    await doInstance.acquire(HOST)
+    expect((await doInstance.canRequest(HOST)).allowed).toBe(false) // concurrency_limit
+
+    // 임대 만료 후 최초 canRequest에서 리핑 → 포화 해소
+    vi.advanceTimersByTime(61_000)
+    expect((await doInstance.canRequest(HOST)).allowed).toBe(true)
+    expect((await doInstance.getAllHealth())[HOST].inflight).toBe(0)
+  })
+
+  it('does not reap fresh slots within the lease (no false positive)', async () => {
+    await doInstance.acquire(HOST)
+    await doInstance.acquire(HOST)
+    await doInstance.acquire(HOST) // 3/3 포화
+    expect((await doInstance.canRequest(HOST)).allowed).toBe(false) // concurrency_limit
+    vi.advanceTimersByTime(59_000) // 59s — 임대(60s) 내, 리핑 없음
+    expect((await doInstance.canRequest(HOST)).allowed).toBe(false) // 아직 3/3
+    expect((await doInstance.getAllHealth())[HOST].inflight).toBe(3)
+  })
+
+  it('release is FIFO and stays consistent across reaping', async () => {
+    await doInstance.acquire(HOST) // t0 (정상 진행 중)
+    await doInstance.acquire(HOST) // t0 (누수)
+    vi.advanceTimersByTime(61_000) // 둘 다 만료 → 리핑되어 0
+    await doInstance.acquire(HOST) // 새 슬롯 1개 (t=61s)
+    // canRequest가 circuit 엔트리를 만들며 동시에 1개 슬롯(신선) 유지 확인
+    expect((await doInstance.canRequest(HOST)).allowed).toBe(true) // 1/3 — 여유
+    expect((await doInstance.getAllHealth())[HOST].inflight).toBe(1)
+    await doInstance.release(HOST, true) // FIFO로 정상 슬롯 제거
+    expect((await doInstance.getAllHealth())[HOST].inflight).toBe(0)
+  })
+
+  it('migrates a legacy persisted state (inflight without inflightSlots) — leaked counters become reclaimable', async () => {
+    // 이전 배포의 persisted state 재현: inflight=3, inflightSlots 필드 없음.
+    const legacy = {
+      inflight: { 'www.bing.com': 3 },
+      circuits: {},
+      rateLimitWindows: {},
+      stats: {},
+    }
+    await doState.storage.put('state', legacy)
+    const reloaded = new RateLimiterDOClass(doState, { RATE_LIMITER: {} })
+    await Promise.resolve()
+    await Promise.resolve()
+
+    // 첫 진입점(레거시 카운터는 슬롯 기록이 없으므로 즉시 0으로 정규화)
+    expect((await reloaded.canRequest(HOST)).allowed).toBe(true)
+    expect((await reloaded.getAllHealth())[HOST].inflight).toBe(0)
+  })
+})

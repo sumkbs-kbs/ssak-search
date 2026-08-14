@@ -119,9 +119,23 @@ export function getBackoffMs(tripCount: number): number {
  */
 interface DOState {
   inflight: Map<string, number>
+  /**
+   * acquire() 호출 시각 (host → 오름차순 배열) — 누수 슬롯 리핑의 진실 원본.
+   * S105 (2026-08-14): isolate가 fetch 도중 죽거나 acquire RPC가 DO-측 증분
+   * 이후 실패하면 release가 영영 오지 않아 inflight가 영구 누수된다 (프로덕션
+   * bing 3/3 포화 → 전 fetch "circuit open or at capacity" 거부 → partial_outage).
+   * inflight 카운터는 persist()로 DO 스토리지에 저장되어 재시작에도 남으므로,
+   * 만료 임대가 없으면 영구 포화다.
+   */
+  inflightSlots: Map<string, number[]>
   circuits: Map<string, CircuitState>
   rateLimitWindows: Map<string, number[]> // host -> array of timestamps
   stats: Map<string, { totalRequests: number; totalFailures: number; rateLimitedCount: number }>
+  // Shared cooldown windows (cross-isolate 429 pacing guards, e.g.
+  // 'cooldown:wikipedia') — key -> epoch-ms deadline until which the window
+  // is armed. Lets every isolate observe the SAME upstream 429 window that
+  // the wikipedia/github module-level guards (specialized.ts) track locally.
+  cooldowns: Map<string, number>
 }
 
 export class RateLimiterDO extends DurableObject<Env> {
@@ -131,9 +145,11 @@ export class RateLimiterDO extends DurableObject<Env> {
     super(ctx, env)
     this.state = {
       inflight: new Map(),
+      inflightSlots: new Map(),
       circuits: new Map(),
       rateLimitWindows: new Map(),
       stats: new Map(),
+      cooldowns: new Map(),
     }
     // Load persisted state
     this.ctx.blockConcurrencyWhile(async () => {
@@ -141,9 +157,13 @@ export class RateLimiterDO extends DurableObject<Env> {
       if (stored) {
         this.state = {
           inflight: new Map(Object.entries(stored.inflight)),
+          // S105: 이전 배포는 inflightSlots 필드가 없음 — 누수된 카운터는 빈
+          // 슬롯으로 취급해 즉시 리핑 대상이 된다 (최초 canRequest에서 복구).
+          inflightSlots: new Map(Object.entries(stored.inflightSlots ?? {})),
           circuits: new Map(Object.entries(stored.circuits)),
           rateLimitWindows: new Map(Object.entries(stored.rateLimitWindows)),
           stats: new Map(Object.entries(stored.stats)),
+          cooldowns: new Map(Object.entries(stored.cooldowns ?? {})),
         }
       }
     })
@@ -152,10 +172,48 @@ export class RateLimiterDO extends DurableObject<Env> {
   private async persist(): Promise<void> {
     await this.ctx.storage.put('state', {
       inflight: Object.fromEntries(this.state.inflight),
+      inflightSlots: Object.fromEntries(this.state.inflightSlots),
       circuits: Object.fromEntries(this.state.circuits),
       rateLimitWindows: Object.fromEntries(this.state.rateLimitWindows),
       stats: Object.fromEntries(this.state.stats),
+      cooldowns: Object.fromEntries(this.state.cooldowns),
     })
+  }
+
+  /**
+   * 인플라이트 슬롯 임대 TTL — 가장 긴 정당 fetch(백엔드 천장 4.5s + 인리치
+   * ~15s)보다 훨씬 여유 있게 60s. 이보다 오래된 슬롯은 정의상 고아다
+   * (isolate 사망 / acquire RPC 유실 후 release 미도착).
+   */
+  private static readonly INFLIGHT_LEASE_MS = 60_000
+
+  /**
+   * 만료된 inflight 슬롯을 회수한다 (S105, 2026-08-14).
+   *
+   * 프로덕션 partial_outage 근본 원인: worker isolate가 fetch 도중 종료되거나
+   * acquire RPC가 DO-측 증분 뒤 실패하면 release가 오지 않아 슬롯이 영구 누수
+   * (실측 bing inflight 3/3 · html.duckduckgo 2/1 — maxConcurrent 초과 상태),
+   * 이후 모든 fetch가 "Upstream unavailable (circuit open or at capacity)"로
+   * 거부 → bing이 전 쿼리에 0건 → partial_outage. 만료 슬롯은 모든 진입점
+   * (canRequest/acquire/release/getAllHealth)에서 지연 회수되어 포화가 자가치유
+   * 된다. persist()에 저장되므로 재시작에도 잔존했던 누수가 여기서 해소된다.
+   */
+  private reapInflight(host: string, now: number): void {
+    const slots = this.state.inflightSlots.get(host) ?? []
+    const cutoff = now - RateLimiterDO.INFLIGHT_LEASE_MS
+    const fresh = slots.filter((ts) => ts > cutoff)
+    const persistedCount = this.state.inflight.get(host) ?? 0
+    // 슬롯이 변했거나 카운터와 불일치할 때만 갱신. 불일치 케이스가 곧 레거시
+    // 마이그레이션이다: 이전 배포의 persisted state는 inflightSlots가 없어
+    // slots=[]인데 inflight=3 — 최초 진입점에서 카운터를 0으로 정규화해
+    // 프로덕션의 영구 누수를 즉시 해소한다 (배포 직후 첫 요청에서 복구).
+    if (fresh.length === slots.length && fresh.length === persistedCount) return
+    const reaped = slots.length - fresh.length
+    this.state.inflightSlots.set(host, fresh)
+    this.state.inflight.set(host, fresh.length)
+    logger.warn(
+      `[DO-rate-limiter] Reaped ${reaped} stale inflight slot(s) for ${host} (lease ${RateLimiterDO.INFLIGHT_LEASE_MS}ms; ${fresh.length} fresh)`,
+    )
   }
 
   /**
@@ -216,6 +274,10 @@ export class RateLimiterDO extends DurableObject<Env> {
     const circuit = this.getCircuit(host)
     const now = Date.now()
 
+    // S105: 만료 슬롯 회수 — 누수된 슬롯이 maxConcurrent를 영구 점유하지 않도록
+    // (concurrency 검사 이전에 실행해 포화 상태에서도 자가치유되게 한다).
+    this.reapInflight(host, now)
+
     // Circuit breaker check
     if (circuit.tripped) {
       const elapsed = now - circuit.openedAt
@@ -265,8 +327,12 @@ export class RateLimiterDO extends DurableObject<Env> {
    * Mark request as started (increment inflight).
    */
   async acquire(host: string): Promise<void> {
-    const current = this.state.inflight.get(host) ?? 0
-    this.state.inflight.set(host, current + 1)
+    const now = Date.now()
+    this.reapInflight(host, now)
+    const slots = this.state.inflightSlots.get(host) ?? []
+    slots.push(now)
+    this.state.inflightSlots.set(host, slots)
+    this.state.inflight.set(host, slots.length)
     this.getStats(host).totalRequests++
     await this.persist()
   }
@@ -275,8 +341,13 @@ export class RateLimiterDO extends DurableObject<Env> {
    * Mark request as completed (decrement inflight, update circuit).
    */
   async release(host: string, success: boolean): Promise<void> {
-    const current = this.state.inflight.get(host) ?? 0
-    this.state.inflight.set(host, Math.max(0, current - 1))
+    const now = Date.now()
+    this.reapInflight(host, now)
+    // FIFO: 가장 오래된 슬롯 제거 (리핑 후 남은 최고령 = 이 요청의 슬롯).
+    const slots = this.state.inflightSlots.get(host) ?? []
+    if (slots.length > 0) slots.shift()
+    this.state.inflightSlots.set(host, slots)
+    this.state.inflight.set(host, slots.length)
 
     const config = this.getConfig(host)
     const circuit = this.getCircuit(host)
@@ -406,8 +477,11 @@ export class RateLimiterDO extends DurableObject<Env> {
    * Get health status for all tracked hosts (for /api/health).
    */
   async getAllHealth(): Promise<Record<string, HostHealth>> {
+    const now = Date.now()
     const result: Record<string, HostHealth> = {}
     for (const [host, circuit] of this.state.circuits) {
+      // S105: 헬스 보고 전 만료 슬롯 회수 — 누수가 실시간 표시되지 않게.
+      this.reapInflight(host, now)
       const inflight = this.state.inflight.get(host) ?? 0
       const stats = this.state.stats.get(host) ?? { totalRequests: 0, totalFailures: 0, rateLimitedCount: 0 }
       result[host] = {
@@ -430,6 +504,33 @@ export class RateLimiterDO extends DurableObject<Env> {
   }
 
   /**
+   * Arm or clear a shared cooldown window (cross-isolate 429 pacing guards,
+   * e.g. the wikipedia/github module-level guards in specialized.ts). `untilMs`
+   * is an epoch-ms deadline; values ≤ now clear the entry. Mirrored from every
+   * isolate so all of them observe the SAME upstream 429 window instead of
+   * each discovering it independently with its own request burst.
+   */
+  async setCooldown(key: string, untilMs: number): Promise<void> {
+    if (untilMs > Date.now()) this.state.cooldowns.set(key, untilMs)
+    else this.state.cooldowns.delete(key)
+    await this.persist()
+  }
+
+  /**
+   * Current cooldown deadline for a key (epoch ms; 0 = none). Expired entries
+   * are pruned so a long-lived DO doesn't accumulate stale windows.
+   */
+  async getCooldown(key: string): Promise<number> {
+    const untilMs = this.state.cooldowns.get(key) ?? 0
+    if (untilMs <= Date.now()) {
+      this.state.cooldowns.delete(key)
+      await this.persist()
+      return 0
+    }
+    return untilMs
+  }
+
+  /**
    * Get rate limit status for a specific host (for headers).
    */
   async getRateLimitStatus(host: string): Promise<RateLimitResult> {
@@ -449,9 +550,11 @@ export class RateLimiterDO extends DurableObject<Env> {
   async reset(): Promise<void> {
     this.state = {
       inflight: new Map(),
+      inflightSlots: new Map(),
       circuits: new Map(),
       rateLimitWindows: new Map(),
       stats: new Map(),
+      cooldowns: new Map(),
     }
     await this.ctx.storage.deleteAll()
   }
@@ -468,6 +571,8 @@ export interface RateLimiterRPC {
   getAllHealth(): Promise<Record<string, HostHealth>>
   getRateLimitStatus(host: string): Promise<RateLimitResult>
   forceOpen(host: string): Promise<void>
+  setCooldown(key: string, untilMs: number): Promise<void>
+  getCooldown(key: string): Promise<number>
   reset(): Promise<void>
 }
 

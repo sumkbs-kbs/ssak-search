@@ -56,6 +56,20 @@
 #                    (default ${HOME}/.cache/ssak-verify-do-state[-<env>].json)
 #   FAIL_ON_REGRESSION=1  exit 1 when a NEW down backend is detected
 #                    (default: warn only — DO bindings are the gate)
+#   FAIL_ON_CAPTURE_MISS=1  exit 1 when the deep-probe log could NOT be
+#                    captured after TAIL_RETRIES attempts AND the cron-bridge
+#                    state is absent/stale (backend availability unverifiable).
+#                    Combine with FAIL_ON_REGRESSION for a hard
+#                    "regression + unverified both fail" gate. Default: warn
+#                    only — capture miss is a tail/delivery issue, not a
+#                    backend finding, so it must not block a deploy by default.
+#   CRON_HEALTH_STATE  cron-bridge state JSON written by
+#                    scripts/parse-cron-health.py (via run-prod-cron-tail.py's
+#                    15-min capture of the scheduled deep probe). Read on tail
+#                    capture exhaustion so a delivery miss never blinds
+#                    backend availability (default /tmp/ssak-cron-health.json)
+#   CRON_HEALTH_MAX_AGE_SECONDS  max age of the cron-bridge state to be
+#                    considered usable (default 2400 = 40 min, ~2.6 ticks)
 #
 # Parser self-test (no network):
 #   bash scripts/verify-do-binding.sh --self-test
@@ -718,18 +732,11 @@ while [ "${attempt}" -lt "${TAIL_RETRIES}" ]; do
   fi
 done
 
-if [ "${FOUND}" = "true" ] && [ -z "${DOWN}" ]; then
-  echo " ⚠️  Deep-probe log line captured but down_backends was not parseable —"
-  echo "    is TAIL_CMD using --format json? (line: ${RAW_SNIP})"
-elif [ "${FOUND}" = "true" ]; then
-  if [ "${DOWN}" = "none" ]; then
-    echo " ✅ No down backends in latest deep-probe log (down_backends: none)"
-  else
-    echo " ⚠️  Down backends detected in latest deep-probe log: ${DOWN}"
-  fi
-
-  # ── Regression vs last verification (state file, per environment so
-  # staging and production never clobber each other's baseline) ──
+# ── Regression vs last verification (shared by the tail-found and
+# cron-bridge paths). Reads ${DOWN} (global), compares against the per-env
+# state file, persists ${DOWN} as the new baseline, and honors
+# FAIL_ON_REGRESSION. ──
+compare_and_persist() {
   if [ -z "${VERIFY_DO_STATE_FILE:-}" ]; then
     if [ "${ENVIRONMENT}" = "staging" ]; then
       STATE_FILE="${HOME}/.cache/ssak-verify-do-state-staging.json"
@@ -781,12 +788,83 @@ PYEOF
     echo " ❌ FAIL_ON_REGRESSION=1 → exiting 1 (backend availability regression)"
     exit 1
   fi
+}
+
+if [ "${FOUND}" = "true" ] && [ -z "${DOWN}" ]; then
+  echo " ⚠️  Deep-probe log line captured but down_backends was not parseable —"
+  echo "    is TAIL_CMD using --format json? (line: ${RAW_SNIP})"
+elif [ "${FOUND}" = "true" ]; then
+  if [ "${DOWN}" = "none" ]; then
+    echo " ✅ No down backends in latest deep-probe log (down_backends: none)"
+  else
+    echo " ⚠️  Down backends detected in latest deep-probe log: ${DOWN}"
+  fi
+  compare_and_persist
 else
   echo " ⚠️  No deep-probe log line captured after ${TAIL_RETRIES} attempts (${TAIL_SECONDS}s window each)."
   echo "    Causes: wrangler not authenticated (run: npx wrangler login), wrong"
   echo "    project name, or persistent log-delivery lag. Override TAIL_CMD (e.g. for"
   echo "    a Workers-style project: TAIL_CMD='npx wrangler tail <name> --format json')"
   echo "    or raise TAIL_RETRIES/TAIL_SECONDS. DO-binding checks above remain authoritative."
+
+  # ── Cron bridge (S104-③-⑦-③): the 15-min scheduled probe
+  # (ssak-probe-scheduler) keeps recording down_backends; run-prod-cron-tail.py
+  # parses its captured log into CRON_HEALTH_STATE. Read that instead of
+  # reporting UNVERIFIED — a tail capture miss is a delivery problem, not a
+  # backend finding. ──
+  CRON_HEALTH_STATE="${CRON_HEALTH_STATE:-/tmp/ssak-cron-health.json}"
+  CRON_HEALTH_MAX_AGE_SECONDS="${CRON_HEALTH_MAX_AGE_SECONDS:-2400}"
+  BRIDGE_USED=false
+  if [ -f "${CRON_HEALTH_STATE}" ]; then
+    BRIDGE_OUT="$(python3 - "${CRON_HEALTH_STATE}" "${CRON_HEALTH_MAX_AGE_SECONDS}" <<'PYEOF' || echo '{"usable": false, "reason": "read-error"}'
+import json, sys, time
+path, max_age = sys.argv[1], int(sys.argv[2])
+try:
+    with open(path) as f:
+        st = json.load(f)
+except Exception:
+    print(json.dumps({"usable": False, "reason": "unreadable"}))
+    sys.exit(0)
+if not st.get("found"):
+    print(json.dumps({"usable": False, "reason": "no health line in cron capture"}))
+    sys.exit(0)
+age = time.time() - float(st.get("updated_epoch", 0))
+usable = age <= max_age
+print(json.dumps({"usable": usable,
+                  "reason": ("" if usable else "stale (%ds > %ds max)" % (int(age), max_age)),
+                  "age_s": int(age),
+                  "down_backends": st.get("down_backends", ""),
+                  "updated": st.get("updated", "")}))
+PYEOF
+)"
+    BRIDGE_USABLE="$(echo "${BRIDGE_OUT}" | python3 -c 'import sys,json;print(str(json.load(sys.stdin).get("usable") or False).lower())' 2>/dev/null || echo "false")"
+    if [ "${BRIDGE_USABLE}" = "true" ]; then
+      BRIDGE_DOWN="$(echo "${BRIDGE_OUT}" | python3 -c 'import sys,json;print(json.load(sys.stdin).get("down_backends") or "")' 2>/dev/null || echo "")"
+      BRIDGE_AGE="$(echo "${BRIDGE_OUT}" | python3 -c 'import sys,json;print(int(json.load(sys.stdin).get("age_s") or 0))' 2>/dev/null || echo "0")"
+      BRIDGE_UPDATED="$(echo "${BRIDGE_OUT}" | python3 -c 'import sys,json;print(json.load(sys.stdin).get("updated") or "")' 2>/dev/null || echo "")"
+      echo " ℹ️  [cron-bridge] tail capture missed → using last scheduled deep-probe state"
+      echo "     (updated ${BRIDGE_UPDATED}, ${BRIDGE_AGE}s old): down_backends = ${BRIDGE_DOWN:-none}"
+      DOWN="${BRIDGE_DOWN}"
+      BRIDGE_USED=true
+      if [ "${DOWN}" = "none" ]; then
+        echo " ✅ No down backends in last scheduled probe (cron bridge)"
+      else
+        echo " ⚠️  Down backends in last scheduled probe (cron bridge): ${DOWN}"
+      fi
+      compare_and_persist
+    else
+      BRIDGE_REASON="$(echo "${BRIDGE_OUT}" | python3 -c 'import sys,json;print(json.load(sys.stdin).get("reason") or "unknown")' 2>/dev/null || echo "unknown")"
+      echo " ℹ️  [cron-bridge] state unusable: ${BRIDGE_REASON}"
+    fi
+  else
+    echo " ℹ️  [cron-bridge] no state file at ${CRON_HEALTH_STATE} — run"
+    echo "     scripts/run-prod-cron-tail.py to populate it (15-min cron capture)."
+  fi
+  if [ "${FAIL_ON_CAPTURE_MISS:-0}" = "1" ] && [ "${BRIDGE_USED}" != "true" ]; then
+    echo " ❌ FAIL_ON_CAPTURE_MISS=1 → exiting 1 (backend availability unverifiable —"
+    echo "    log capture missed after ${TAIL_RETRIES} attempts and no usable cron-bridge state)"
+    exit 1
+  fi
 fi
 
 # ---- Summary ----------------------------------------------------------------
@@ -809,8 +887,17 @@ if [ "${FOUND:-false}" = "true" ]; then
   else
     echo " ⚠️  Backend availability: DOWN = ${DOWN}"
   fi
+elif [ "${BRIDGE_USED:-false}" = "true" ]; then
+  if [ "${DOWN:-}" = "none" ] || [ -z "${DOWN:-}" ]; then
+    echo " ✅ Backend availability: no down backends (cron bridge)"
+  else
+    echo " ⚠️  Backend availability: DOWN = ${DOWN} (cron bridge)"
+  fi
 else
-  echo " ⚠️  Backend availability: log not captured (see check [6])"
+  echo " ⚠️  Backend availability: UNVERIFIED — log not captured (see check [6])"
+  if [ "${FAIL_ON_CAPTURE_MISS:-0}" = "1" ]; then
+    echo "         (FAIL_ON_CAPTURE_MISS=1 → this run exits 1)"
+  fi
 fi
 
 if [ "${FAIL_COUNT}" -eq 0 ] && [ "${DO_ACTIVE}" = "true" ]; then

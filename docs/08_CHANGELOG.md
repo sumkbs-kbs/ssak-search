@@ -744,6 +744,18 @@
 - **검증**: ① 유닛 테스트 7건 (가짜 curl URL별 응답 주입 + 가짜 git) — 베이스라인 / 교체→디스패치(POST 본문 `{"ref":"main","inputs":{"environment":"staging"}}` + run id) / 재폴링 no-op / dry-run / production 가드 exit 2 / API 오류 / 실패→재시도 ② 실환경: 실제 GitHub API dry-run 2회 — 베이스라인(updated_at=2026-08-12T08:45:24Z) → 재실행 no-op ③ 전체 유닛 **2,662건 / 134파일 통과 (+7)** · eslint 0 · prettier clean · tsc 0
 - **사용법**: `bash scripts/watch-secret-rotation.sh --watch` 로 띄워두면 교체 감지 → staging 디스패치까지 자동 (docs/17 4-2-2)
 
+### 수정 48: 환경별 아티팩트 파이프라인 활성화 — CI green 복구 + eval 아티팩트 일관성 (2026-08-14)
+- **작업 ID**: OPS-2026-08-14-01 (push + CI 실측 + eval 데이터 위생)
+- **요청**: 커밋 63d0cca/2aa1c15 push 로 환경별 아티팩트 파이프라인 활성화
+- **실측 발견 ① — 요청 해시는 stale**: 63d0cca(방안 B)/2aa1c15(수정 32) 는 수정 45 재작성 전 구해시 — 현재 main 의 실제 커밋은 04a88e4/c539e86 이고 이미 github/main(a3ef0b2)에 존재. push 로 활성화가 안 되던 진짜 원인은 **CI red** 였음
+- **실측 발견 ② — CI 빨간 원인 2건**: (a) Prettier 게이트가 main(a3ef0b2)에서 11개 파일 실패 → Build 스킵 → 아티팩트 미업로드 → deploy workflow_run 이 매번 skipped (run 31814118414/31816519068) (b) Per-commit replay eval 게이트 — 커밋된 eval 세트가 비일관 (run-*.json 08-11 < baseline 08-12, 서로 다른 세션 비교) → 240 가짜 regressions
+- **수정**:
+  - **8ead01c** — prettier 포맷 11개 파일 (전용 포맷만, 로직 무변경). 9개는 작업 트리 직접, 2개(specialized.ts, probe-wiki-egress-worker.ts)는 커밋 버전만 포맷해 index 주입 — 세션 미커밋 변경(MM) 불침범
+  - **2aa977e** — eval 아티팩트 일관성 복구: 세션 08-14 최신 run(run-1/2) + 수정된 gold-standards 로 median 재계산 → baseline 갱신, 슈퍼세션된 run-3(08-13 잔여) 제거 (777ebad "chore: update eval baseline" 패턴). **검증: 동일 run 대비 0 regressions** (coherent 비교 — 27~40개 "regressions" 은 gold 재정의/세션 불일치 아티팩트였음을 증명), baseline 동등성 recomputed 0.3025 == stored 0.3025, per-commit replay 시뮬레이션 전 게이트 PASS
+- **push + CI 실측**: a3ef0b2..8ead01c..2aa977e push → **CI run 31819332924 SUCCESS** (replay 범위 = push 단위라 eval-fix 커밋 단독으로 green)
+- **✅ 파이프라인 활성화 확정**: deploy workflow_run **31819504226 이 처음으로 skipped 가 아니라 실행됨** → pre-deploy guard 가 `❌ CLOUDFLARE_API_TOKEN is INVALID/EXPIRED (verify HTTP 401)` 로 정확히 fail-fast (시크릿 미교체 — 기존 알려진 이슈, 수정 28/46 guard 설계 그대로). 시크릿 교체 후 guard green → 아티팩트 다운로드(worker-bundle-staging) → DO/Pages/cron 배포 → post-deploy 게이트 전체가 도는 첫 full 파이프라인 실행이 됨
+- **잔여**: 시크릿 교체(사용자 조치, docs/17) — 교체 즉시 watch-secret-rotation.sh(수정 47)가 감지해 staging 디스패치 자동 발사
+
 ### 수정 29: 배포 파이프라인 자동 검증 확장 — gold 회수 + staging↔production 동치 대조 (2026-08-14)
 - **작업 ID**: FIX-2026-08-14-12 (구현 + 실측)
 - **배경**: 로컬 worktree 배포 스크립트(수정 27)에 검증 단계 추가 — 배포 후 "동작하는가"를 자동 확인

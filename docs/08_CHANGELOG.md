@@ -731,6 +731,19 @@
 - **디버깅 실측**: ① COMMIT_CHECK_ONLY 미설정 시 verify_cf_token 이 아예 실행되지 않아(전체 헬스/tail 경로 — 테스트당 ~30초 × 5 = hang) 테스트가 COMMIT_CHECK_ONLY=1 로 고정해야 함을 발견 ② guard 의 경고는 **stderr** 출력이라 execFileSync(stdout 만) 로 놓침 → spawnSync 로 stdout+stderr 병합 ③ `(exp - now).days` floor — 실행 시점 ms 경과로 3일 토큰이 2일로 계산됨 → 테스트 만료일 +1h 마진
 - **검증 결과**: 전체 유닛 **2,655건 / 133파일 통과 (+5)** · eslint 0 · prettier clean · tsc 0 · `--self-test` PASS
 
+### 수정 47: 시크릿 교체 워처 — updated_at 폴링 + staging 자동 디스패치 (2026-08-14)
+- **작업 ID**: FIX-2026-08-14-28 (구현 + 실측 + 유닛 테스트)
+- **배경**: 수정 46 까지 시크릿 교체 감지는 수동 폴링(4-2-1 curl) + 수동 디스패치 였음 — 교체 후 "언제 다시 디스패치할지" 를 사람이 기다리는 구조
+- **산출물**: `scripts/watch-secret-rotation.sh` (신규)
+  - **신호**: GitHub API `actions/secrets` 의 `CLOUDFLARE_API_TOKEN.updated_at` (값 갱신 시에만 변함 — docs/17 4-2-1 실측 절차와 동일)
+  - **동작**: 교체 감지 → deploy.yml workflow_dispatch `environment=staging` 자동 발사 → 베스트-에포트 run id 캡처 → Slack 알림 (SLACK_WEBHOOK/ALERT_SLACK_WEBHOOK, 미설정 no-op)
+  - **안전**: 기본 staging 전용 (production 은 ALLOW_PRODUCTION=1 필수), `--dry-run` 감지만, 성공 시에만 baseline 갱신 → **디스패치 실패 시 다음 폴링에서 재시도**, 동일 값 재폴링 no-op (중복 방지)
+  - **상태**: `ROTATION_STATE` (기본 /tmp/gh-secret-rotation-state.json) — 중단 후 재실행 이어붙음, 첫 폴링은 베이스라인만 기록
+  - **PAT**: GH_TOKEN → gh auth token → git credential helper (이 저장소 git credential PAT: repo+workflow, repo admin)
+- **디버깅 실측**: ① `resolve_repo` 가 origin 만 보던 것을 모든 remote(github.com URL) 스캔으로 수정 — 이 저장소 remote 는 `github` ② **BASELINE 분기에서 baseline 미저장 버그** — 매 실행이 '첫 실행'으로 오탐해 교체 감지가 영원히 안 됐음 → 저장 수정 ③ `dispatched_updated_at` 죽은 코드 제거, 디스패치 실패 시 baseline 유지 설계로 단순화 ④ 전체 스위트 동시 부하에서 스폰 테스트 5s 타임아웃 → describe 30s
+- **검증**: ① 유닛 테스트 7건 (가짜 curl URL별 응답 주입 + 가짜 git) — 베이스라인 / 교체→디스패치(POST 본문 `{"ref":"main","inputs":{"environment":"staging"}}` + run id) / 재폴링 no-op / dry-run / production 가드 exit 2 / API 오류 / 실패→재시도 ② 실환경: 실제 GitHub API dry-run 2회 — 베이스라인(updated_at=2026-08-12T08:45:24Z) → 재실행 no-op ③ 전체 유닛 **2,662건 / 134파일 통과 (+7)** · eslint 0 · prettier clean · tsc 0
+- **사용법**: `bash scripts/watch-secret-rotation.sh --watch` 로 띄워두면 교체 감지 → staging 디스패치까지 자동 (docs/17 4-2-2)
+
 ### 수정 29: 배포 파이프라인 자동 검증 확장 — gold 회수 + staging↔production 동치 대조 (2026-08-14)
 - **작업 ID**: FIX-2026-08-14-12 (구현 + 실측)
 - **배경**: 로컬 worktree 배포 스크립트(수정 27)에 검증 단계 추가 — 배포 후 "동작하는가"를 자동 확인

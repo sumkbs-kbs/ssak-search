@@ -110,6 +110,29 @@ curl -s -H "Authorization: Bearer <PAT>" \
 교체 직후라면 `updated_at`이 현재 시각 근처여야 한다. 여전히 08-12 같은 과거
 시각이면 교체가 안 된 것 — 2~3단계부터 다시 확인한다.
 
+### 4-2-2. 시크릿 교체 워처 — 자동 감지 + staging 자동 디스패치 (수정 47, 2026-08-14)
+
+수동 폴링 대신 **`scripts/watch-secret-rotation.sh`** 를 두면 교체를 자동으로
+감지하고 **바로 staging 디스패치를 발사**한다:
+
+```bash
+bash scripts/watch-secret-rotation.sh              # 1회 폴링 (감지 시 자동 디스패치)
+bash scripts/watch-secret-rotation.sh --watch      # 5분 간격 반복 (WATCH_MINUTES, 0=무기한)
+bash scripts/watch-secret-rotation.sh --dry-run    # 감지만 — 디스패치 안 함
+```
+
+- **신호**: GitHub API `actions/secrets` 의 `CLOUDFLARE_API_TOKEN.updated_at`
+  (값이 갱신될 때만 변함 — 4-2-1과 동일 신호)
+- **동작**: updated_at 변경 감지 → `deploy.yml` workflow_dispatch
+  `environment=staging` 자동 발사 (성공 시에만 baseline 갱신 — 실패하면 다음
+  폴링에서 재시도, 동일 값 재폴링은 no-op)
+- **PAT**: `GH_TOKEN` → `gh auth token` → git credential helper 순서로 해결
+  (이 저장소 git credential 의 PAT 는 repo+workflow 스코프 + repo admin)
+- **안전**: 기본 `TARGET_ENV=staging` 전용 — production 은 `ALLOW_PRODUCTION=1`
+  필수. 디스패치 후 새 토큰 검증은 CI guard(수정 28/46)가 담당
+- **알림**: 교체 감지 시 `SLACK_WEBHOOK`/`ALERT_SLACK_WEBHOOK` 로 Slack 알림
+  (미설정 no-op). 상태는 `ROTATION_STATE`(기본 /tmp/gh-secret-rotation-state.json)
+
 > ✅ **허점 수정됨 (2026-08-14, 커밋 f5ef768)**: pre-deploy guard(`verify-do-binding.sh`)
 > 가 이제 COMMIT_CHECK_ONLY 시작 시 `/user/tokens/verify`로 토큰 **유효성**을
 > 검사한다 — 무효(만료) 토큰은 guard가 즉시 `❌ INVALID/EXPIRED (verify HTTP 401)`

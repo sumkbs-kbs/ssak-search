@@ -67,9 +67,18 @@
 
 - `stackprinter.appspot.com`, `stackoverflow.com` 직접 크롤링 등 — **비권장**: ToS 위험 + challenge 우회는 서비스 약관 위반 소지 + 유지보수 부담. SE API가 정식 인터페이스이므로 재개를 기다리는 게 정석.
 
-### 방안 C (완화): 검색 풀에서 SO gold를 다른 백엔드로 충당
+### 방안 C (완화): 검색 풀에서 SO gold를 다른 백엔드로 충당 — **기각 (실측)**
 
-- bing 자연 랭킹: site: 연산은 무시되지만 특정 기술 쿼리에서 stackoverflow.com이 자연 노출되는지 확인 — 검색 풀 보완 (서킷 복구와는 별개)
+- **실측 (2026-08-14, `scripts/probe-bing-stackoverflow.ts`)**: SO gold 대표 13쿼리
+  (en-tech/kr-tech/adv)에서 **bing 자연 0/13 · DDG 자연 0/13 · production 검색 풀
+  0/13** — stackoverflow.com 이 어디에도 노출되지 않았다. production 풀 0/13 은
+  Workers egress 기준의 직접 실측이라 확정적이다 (SE API rate-limit 의 직접 영향).
+- **판단**: bing/DDG 자연 랭킹으로는 SO gold 를 충당할 수 없다 → 방안 C 기각.
+  SO gold 회복은 SE API rate-limit 리셋을 기다리는 수밖에 없고, 방안 A 가 서킷
+  상태를 정직화하므로 리셋 후 자동 회복된다.
+- ⚠️ 보조 관찰: 로컬 egress 의 bing/DDG 직접 결과는 노이즈가 심하다 (OAuth 쿼리에
+  인도 선거 사이트, 한국어 로컬라이즈 등) — 방안 C 판단은 production 풀 실측을
+  기준으로 한다.
 
 ---
 

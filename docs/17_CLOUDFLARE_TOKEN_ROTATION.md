@@ -242,6 +242,15 @@ curl -s -H "Authorization: Bearer <PAT>" \
   정확히 실패). ci.yml 의 `deploy-selftest` job 으로 CI 에서도 자동 실행된다 —
   이전에 수동으로 돌리던 가짜 npx 래퍼 실측을 정식화.
 
+  **드라이런 유닛 테스트 (수정 41, 2026-08-14)**: `tests/unit/deploy-local-worktree.test.ts`
+  (신규) — 드라이런 모드를 **vitest 유닛 테스트로 검증** (parse-cron-health.test.ts 와
+  동일 패턴: execFileSync 로 bash 스크립트 스폰, 가짜 npx 로 whoami 만 스텁). 7개
+  케이스: ① 계획만 출력 + **배포 명령 미실행**(가짜 npx 로그에 whoami 만 존재 —
+  드라이런이 배포로 진행하는 회귀는 whoami 외 호출이 실패해 즉시 적발) ② staging
+  변형(branch/cron/헬스 URL/DEPLOY_ENV) ③ GOLD_FAIL_HARD=1 계획 라인 ④
+  --auto-rollback 계획 라인 ⑤ 미지 옵션 exit 1 ⑥ 미존재 커밋 exit 1 ⑦ OAuth 실패 시
+  드라이런도 실패. npm test (vitest unit project) 에 자동 포함 — CI 에서도 실행.
+
   `scripts/deploy-local-worktree.sh`가 worktree 생성 → node_modules 심링크 → build →
   3단계 배포(DO → Pages → cron) → Source commit 검증 → 헬스 확인 → worktree 정리
   (실패 시 trap 정리)를 자동 수행한다. 로컬 OAuth(`wrangler login`)가 살아있는 한

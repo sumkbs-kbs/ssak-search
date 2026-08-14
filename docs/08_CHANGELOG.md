@@ -675,6 +675,13 @@
   - ci.yml `deploy-selftest` job (신규) — push/PR 마다 자동 실행
 - **검증**: ① 로컬 5/5 PASS ② **mutation 테스트** — 롤백 조건을 `PAGES=0 → PAGES=1` 로 뒤집자 `pages_fail --auto-rollback` 케이스가 정확히 FAIL (exit 1) → 테스트가 실제 회귀를 감지함을 확인 후 원복 ③ bash -n 클린
 
+### 수정 41: 드라이런 모드 유닛 테스트화 — 테스트 프레임워크(vitest)에서 bash 스크립트 검증 (2026-08-14)
+- **작업 ID**: FIX-2026-08-14-24 (구현 + 전체 회귀)
+- **배경**: 수정 40 은 `--self-test`(배포 판정/롤백 조건)를 bash 모드로 정식화했지만, **드라이런 계획 모드는 유닛 테스트가 없었다** — 계획 문구·환경별 배선·배포 미실행 보장이 회귀에 노출
+- **산출물**: `tests/unit/deploy-local-worktree.test.ts` (신규) — parse-cron-health.test.ts 와 동일 패턴으로 **vitest 가 bash 스크립트를 스폰** (execFileSync + 가짜 npx 로 whoami 만 스텁, 오프라인)
+- **케이스 7건**: ① 드라이런은 계획만 출력하고 **배포 명령을 실행하지 않음** — 가짜 npx 로그에 `whoami` 만 존재, `deploy/pages deploy/rollback` 없음. whoami 외 wrangler/npx 호출은 가짜 npx 가 **실패**시키므로 "드라이런이 배포 단계로 진행" 회귀는 즉시 적발 ② staging 변형 — DEPLOY_ENV=staging + `--branch=staging` + `wrangler.cron.staging.jsonc` + staging 헬스 URL ③ GOLD_FAIL_HARD=1 → fail-hard 재시도 계획 라인 ④ `--auto-rollback` → 자동 롤백 계획 라인 ⑤ 미지 옵션 → exit 1 ⑥ 미존재 커밋 → exit 1 (드라이런이어도 사전 확인 게이트) ⑦ OAuth 실패 → 드라이런도 exit 1 (읽기 전용 whoami 게이트가 계획을 막음 — 현행 동작 문서화)
+- **검증**: 신규 7건 통과 · 전체 유닛 **2,644건 / 131파일 통과 (+7)** · eslint 0 · prettier clean · tsc 0. `npm test`(vitest unit project)에 자동 포함 → CI unit-tests job 에서도 실행
+
 ### 수정 29: 배포 파이프라인 자동 검증 확장 — gold 회수 + staging↔production 동치 대조 (2026-08-14)
 - **작업 ID**: FIX-2026-08-14-12 (구현 + 실측)
 - **배경**: 로컬 worktree 배포 스크립트(수정 27)에 검증 단계 추가 — 배포 후 "동작하는가"를 자동 확인

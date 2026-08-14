@@ -159,23 +159,46 @@ describe('RateLimiterDO self-healing circuit breaker (D.2)', () => {
     expect(health[HOST].probeInFlight).toBe(false)
   })
 
-  it('reaps a LEGACY stuck probe flag (probeStartedAt=0 persisted pre-fix) on first request', async () => {
+  it('migrates a LEGACY stuck-probe deadlock (probeStartedAt key absent) — fresh backoff + immediate probe', async () => {
     instantiate()
     for (let i = 0; i < FAILURE_THRESHOLD; i++) await doInstance.release(HOST, false)
 
-    // Simulate a legacy persisted state: probeInFlight=true with no lease timestamp.
-    const circuits = doInstance.state.circuits
-    const circuit = circuits.get(HOST)
+    // Simulate the pre-TTL persisted deadlock: probeInFlight=true with NO
+    // probeStartedAt key at all (undefined — `=== 0` misses it, the exact
+    // production bug: 30min+ stuck on healthy upstreams).
+    const circuit = doInstance.state.circuits.get(HOST)
     circuit.probeInFlight = true
-    circuit.probeStartedAt = 0
+    delete circuit.probeStartedAt
 
-    vi.advanceTimersByTime(30_000)
-    // Legacy flag treated as stale → request becomes the probe immediately.
+    // Migration resets the fresh 30s backoff → probe fires on the next request
+    // WITHOUT waiting for the stuck 30-min stage.
     const probe = await doInstance.canRequest(HOST)
     expect(probe.allowed).toBe(true)
     await doInstance.release(HOST, true)
     const health = await doInstance.getAllHealth()
     expect(health[HOST].tripped).toBe(false)
+    expect(health[HOST].tripCount).toBe(0)
+  })
+
+  it('does NOT migrate healthy or legitimately-probing circuits', async () => {
+    instantiate()
+    // Create the circuit entry with a normal (healthy) request.
+    await doInstance.canRequest(HOST)
+    let health = await doInstance.getAllHealth()
+    expect(health[HOST].tripped).toBe(false)
+
+    // Legitimate in-flight probe (probeStartedAt set) — migration must NOT fire.
+    for (let i = 0; i < FAILURE_THRESHOLD; i++) await doInstance.release(HOST, false)
+    vi.advanceTimersByTime(30_000)
+    await doInstance.canRequest(HOST) // arms a real probe
+    const circuit = doInstance.state.circuits.get(HOST)
+    expect(circuit.probeInFlight).toBe(true)
+    expect(circuit.probeStartedAt).toBeGreaterThan(0)
+    // tripCount stays at its stage (migration would have zeroed it)
+    expect(circuit.tripCount).toBe(0) // stage 1 from the fresh trip
+    health = await doInstance.getAllHealth()
+    expect(health[HOST].probeInFlight).toBe(true)
+    await doInstance.release(HOST, true)
   })
 
   it('stamps every host with source: durable (S88 cross-isolate marker)', async () => {

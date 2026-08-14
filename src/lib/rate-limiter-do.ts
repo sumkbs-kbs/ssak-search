@@ -279,6 +279,28 @@ export class RateLimiterDO extends DurableObject<Env> {
     return circuit
   }
 
+  /**
+   * S73 후속 (2026-08-14): 레거시 stuck-probe deadlock 마이그레이션.
+   *
+   * TTL 수정 이전에 persist된 deadlock 상태는 probeInFlight=true + probeStartedAt
+   * 부재(undefined) + backoff stage 3(30분) — 리퍼는 backoff 게이트 뒤에 있어
+   * 발화할 수 없고 alarm도 불신뢰 상태. 이 조합을 감지하면 회로를 fresh backoff
+   * (stage 0, 30s)로 리셋해 다음 요청이 즉시 새 프로브가 되게 한다. 정상 회로
+   * (probeInFlight=false)는 무변경 — 상시 리셋이 아니라 deadlock 서명만 정리한다.
+   * canRequest와 getAllHealth 진입점에서 호출된다.
+   */
+  private migrateLegacyProbeDeadlock(circuit: CircuitState): boolean {
+    if (circuit.tripped && circuit.probeInFlight && !circuit.probeStartedAt) {
+      circuit.probeInFlight = false
+      circuit.probeStartedAt = 0
+      circuit.tripCount = 0
+      circuit.openedAt = 0
+      logger.warn('[DO-rate-limiter] Legacy stuck-probe deadlock reset — fresh 30s backoff probe armed on next request')
+      return true
+    }
+    return false
+  }
+
   private getStats(host: string) {
     let stats = this.state.stats.get(host)
     if (!stats) {
@@ -296,6 +318,11 @@ export class RateLimiterDO extends DurableObject<Env> {
     const config = this.getConfig(host)
     const circuit = this.getCircuit(host)
     const now = Date.now()
+
+    // S73 후속: 레거시 stuck-probe deadlock 마이그레이션 (canRequest 진입점).
+    if (this.migrateLegacyProbeDeadlock(circuit)) {
+      await this.persist()
+    }
 
     // S105: 만료 슬롯 회수 — 누수된 슬롯이 maxConcurrent를 영구 점유하지 않도록
     // (concurrency 검사 이전에 실행해 포화 상태에서도 자가치유되게 한다).
@@ -318,7 +345,10 @@ export class RateLimiterDO extends DurableObject<Env> {
         // 레거시 상태(probeStartedAt=0)도 stale로 간주해 배포 직후 즉시 회수
         // → 이 요청이 새 프로브가 된다. 정상 프로브는 15s 안에 완료되므로
         // 임대가 살아있을 때만 거부한다.
-        const probeStale = circuit.probeStartedAt === 0 || now - circuit.probeStartedAt > PROBE_STALE_MS
+        // ⚠️ `!circuit.probeStartedAt` — 레거시 상태는 키 자체가 없어(undefined)
+        // `=== 0` 비교가 false가 되어 stale로 안 잡히는 버그가 있었다 (실측:
+        // TTL 배포 후에도 probe: True 30분+ 지속). undefined/0 모두 stale.
+        const probeStale = !circuit.probeStartedAt || now - circuit.probeStartedAt > PROBE_STALE_MS
         if (!probeStale) {
           return { allowed: false, reason: 'circuit_open', retryAfter: 10 }
         }
@@ -535,6 +565,9 @@ export class RateLimiterDO extends DurableObject<Env> {
     const now = Date.now()
     const result: Record<string, HostHealth> = {}
     for (const [host, circuit] of this.state.circuits) {
+      // S73 후속: 레거시 stuck-probe deadlock 마이그레이션 (헬스 진입점 —
+      // /api/health만으로도 회복이 시작되게).
+      this.migrateLegacyProbeDeadlock(circuit)
       // S105: 헬스 보고 전 만료 슬롯 회수 — 누수가 실시간 표시되지 않게.
       this.reapInflight(host, now)
       const inflight = this.state.inflight.get(host) ?? 0

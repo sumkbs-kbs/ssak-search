@@ -42,13 +42,20 @@ LABEL_A="${LABEL_A:-staging}"
 LABEL_B="${LABEL_B:-production}"
 
 # 배포 커밋 동치 검증: staging 브랜치 최신 배포 vs Production 최신 배포의
-# Source commit (deployment list 테이블 — Source 는 컬럼 5)
-COMMIT_A="$(npx wrangler pages deployment list --project-name=search-engine-api 2>/dev/null \
-  | grep '│' | grep -vE 'Id|─' | grep -E '│.*staging *│' | head -1 \
-  | awk -F'│' '{gsub(/ /,"",$5); print $5}' || true)"
-COMMIT_B="$(npx wrangler pages deployment list --project-name=search-engine-api 2>/dev/null \
-  | grep '│' | grep -vE 'Id|─' | grep -E 'Production *│ *main' | head -1 \
-  | awk -F'│' '{gsub(/ /,"",$5); print $5}' || true)"
+# Source commit (deployment list 테이블 — Source 는 컬럼 5). SKIP_COMMIT=1 이면
+# wrangler 호출 자체를 생략한다 — CI 게이트는 verify-do-binding.sh post-deploy
+# gate 가 커밋 일치를 이미 검증하므로 (2026-08-14), 런타임 동치만 남긴다.
+if [ "${SKIP_COMMIT:-0}" = "1" ]; then
+  COMMIT_A=""
+  COMMIT_B=""
+else
+  COMMIT_A="$(npx wrangler pages deployment list --project-name=search-engine-api 2>/dev/null \
+    | grep '│' | grep -vE 'Id|─' | grep -E '│.*staging *│' | head -1 \
+    | awk -F'│' '{gsub(/ /,"",$5); print $5}' || true)"
+  COMMIT_B="$(npx wrangler pages deployment list --project-name=search-engine-api 2>/dev/null \
+    | grep '│' | grep -vE 'Id|─' | grep -E 'Production *│ *main' | head -1 \
+    | awk -F'│' '{gsub(/ /,"",$5); print $5}' || true)"
+fi
 
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo " 환경 동치 대조: $LABEL_A ($ENV_A)  vs  $LABEL_B ($ENV_B)"
@@ -61,12 +68,14 @@ COMMIT_FAIL=0; HEALTH_FAIL=0; SEARCH_FAIL=0; GOLD_FAIL=0
 # ── 1. 배포 커밋 동치 ─────────────────────────────────────────────────────
 echo ""
 echo " [1/4] 배포 커밋 동치"
-if [ "${SKIP_COMMIT:-0}" = "1" ] || [ -z "$COMMIT_A" ] || [ -z "$COMMIT_B" ]; then
-  echo "   ⚠️  배포 커밋 비교 생략 (SKIP_COMMIT=1 또는 커밋 미확인)"
-  if [ -z "$COMMIT_A" ] || [ -z "$COMMIT_B" ]; then
-    echo "      (A=$COMMIT_A, B=$COMMIT_B — deployment list 파싱 실패일 수 있음)" >&2
-    FAIL=1; COMMIT_FAIL=1
-  fi
+if [ "${SKIP_COMMIT:-0}" = "1" ]; then
+  # CI 게이트(SKIP_COMMIT=1)는 커밋 일치를 verify-do-binding.sh post-deploy
+  # gate 에 위임 — 여기선 검증만 생략하고 실패로 보지 않는다.
+  echo "   ⚠️  배포 커밋 비교 생략 (SKIP_COMMIT=1 — post-deploy gate 가 커버)"
+elif [ -z "$COMMIT_A" ] || [ -z "$COMMIT_B" ]; then
+  echo "   ⚠️  배포 커밋 미확인 (deployment list 파싱 실패 또는 미배포)"
+  echo "      (A=$COMMIT_A, B=$COMMIT_B)" >&2
+  FAIL=1; COMMIT_FAIL=1
 elif [ "$COMMIT_A" = "$COMMIT_B" ]; then
   echo "   ✅ 동치 ($COMMIT_A)"
 else

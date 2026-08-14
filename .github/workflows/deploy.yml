@@ -44,7 +44,9 @@ jobs:
       (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success') ||
       (github.event_name == 'workflow_dispatch' && inputs.environment == 'staging')
     runs-on: ubuntu-latest
-    timeout-minutes: 8
+    # 수정 33 (2026-08-14): 동치 대조 게이트 추가로 8분에서 연장 — 최악 2회 시도
+    # (대조 ~2분 × 2 + 재시도 45s) 까지 흡수.
+    timeout-minutes: 12
     environment:
       name: staging
       url: https://staging.search-engine-api.pages.dev
@@ -173,6 +175,33 @@ jobs:
         run: |
           sleep 5
           bash scripts/verify-do-binding.sh
+
+      - name: Verify staging↔production equivalence (post-deploy gate)
+        # 수정 33/34 (2026-08-14): 매 staging 배포 후 staging ↔ production 의
+        # 런타임 동치를 자동 대조한다 — 검색 top-5 도메인 시퀀스 + gold 회수 +
+        # 공통 호스트 down 여부 (verify-env-equivalence.sh). SKIP_COMMIT=1:
+        # 커밋 일치는 위 post-deploy gate(verify-do-binding.sh)가 이미 검증하고,
+        # dispatch 단독 실행 시 production 미배포(커밋 불일치)는 정상 상태이므로
+        # 커밋 항목은 게이트에서 제외한다. 실패 시 Slack 알림(EQ_NOTIFY —
+        # ALERT_SLACK_WEBHOOK 시크릿, 미설정이면 no-op) 후 job 을 실패 처리한다.
+        # workflow_run 에서 production 배포가 동시 진행 중일 수 있어 45s 간격 1회
+        # 재시도 — 중간 시도는 조용히(EQ_NOTIFY=0), 최종 시도에서만 알림.
+        # (조건 없음 = 이전 단계(사전 guard/배포/post-deploy gate)가 전부 성공한
+        # 경우에만 실행 — 배포 실패 시 동치 대조를 돌리지 않는다.)
+        env:
+          SLACK_WEBHOOK: ${{ secrets.ALERT_SLACK_WEBHOOK }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          for i in 1 2; do
+            if EQ_NOTIFY=$([ "$i" = "2" ] && echo 1 || echo 0) SKIP_COMMIT=1 \
+              bash scripts/verify-env-equivalence.sh; then
+              exit 0
+            fi
+            echo "⚠️ 동치 대조 실패 (시도 $i/2) — 45s 후 재시도 (production 배포 동시 진행 가능)"
+            sleep 45
+          done
+          exit 1
 
   deploy-production:
     name: Deploy to Cloudflare Pages (Production)

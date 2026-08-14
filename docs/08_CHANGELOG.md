@@ -620,6 +620,16 @@
 - **검증 (실측)**: ① 실환경(staging/production @ 63d0cca) 4/4 통과 exit 0 — 헬스는 ℹ️ 정보성만 (미추적 호스트 + en.wikipedia degraded vs operational) ② fake 환경(한쪽만 down) + 검색/gold 실패 → **danger 알림 POST 캡처 성공** (헬스 상세에 'api.stackexchange.com: down vs operational' 포함)
 - **부수 확증**: staging 캐시-미스 쿼리 1건 후 **staging 인스턴스에만 6개 회로 생성, production 9개 불변** — 방안 B 독립성의 직접 증거
 
+### 수정 35: 동치 대조 CI 등록 — 매 staging 배포 후 자동 게이트 (2026-08-14)
+- **작업 ID**: FIX-2026-08-14-18 (구현 + 로컬 실측)
+- **수정**:
+  - `deploy.yml` `deploy-staging` job 에 post-deploy 게이트로 `verify-env-equivalence.sh` 등록 — **매 staging 배포 후 자동 실행**, 실패 시 job 실패 처리 + Slack 알림 (최종 시도에서만 EQ_NOTIFY=1, ALERT_SLACK_WEBHOOK 시크릿 — 미설정 no-op)
+  - `SKIP_COMMIT=1`로 커밋 항목은 게이트에서 제외 (커밋 일치는 기존 verify-do-binding.sh post-deploy gate 가 검증) + 스크립트가 SKIP_COMMIT=1 시 wrangler 호출 생략
+  - workflow_run 에서 production 배포 동시 진행 대비 45s 간격 1회 재시도, job 타임아웃 8→12분
+- **디버깅 실측**: SKIP_COMMIT 가드 도입 시 COMMIT_A/B 가 빈 문자열이 되어 [1/4] 블록이 "파싱 실패"로 오판해 FAIL 을 세팅하는 버그 → 분기 구조 분리(SKIP_COMMIT 생략 / 파싱 실패 / 불일치)로 수정
+- **검증**: YAML 파싱 OK (11단계, 타임아웃 12분), SKIP_COMMIT=1 경로 로컬 실측 — 커밋 생략 분기 정상 + **실제 신호 검출 확인**: 내 테스트 부하가 staging 인스턴스의 en.wikipedia 를 down 으로 트립 → 게이트가 "down vs operational" 실패로 정확히 잡음 (production 무영향 = 방안 B 독립성 재확인, alarm 프로브 자가회복 예정)
+- **참고**: CI 종단 검증은 CLOUDFLARE_API_TOKEN 시크릿 교체(docs/17 2~3단계) 후 staging 디스패치로 가능 (현재는 사전 guard 가 무효 토큰을 BLOCK)
+
 ### 수정 29: 배포 파이프라인 자동 검증 확장 — gold 회수 + staging↔production 동치 대조 (2026-08-14)
 - **작업 ID**: FIX-2026-08-14-12 (구현 + 실측)
 - **배경**: 로컬 worktree 배포 스크립트(수정 27)에 검증 단계 추가 — 배포 후 "동작하는가"를 자동 확인

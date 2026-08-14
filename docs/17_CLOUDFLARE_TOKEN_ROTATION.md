@@ -217,6 +217,13 @@ curl -s -H "Authorization: Bearer <PAT>" \
   없음 → 미추적, fresh 인스턴스 누적 차이). 대조는 ① 한쪽만 추적 중인 호스트는
   정보성(실패 아님) ② 공통 호스트는 **한쪽만 down 일 때만 실패** ③ degraded vs
   operational 은 시점 차이로 정보성. 실질적인 동치 신호는 검색 top-5 + gold 회수.
+
+  **CI 등록 (2026-08-14)**: deploy.yml 의 `deploy-staging` job 에 동치 대조를
+  post-deploy gate 로 등록 — **매 staging 배포 후 자동 실행**된다. `SKIP_COMMIT=1`
+  (커밋 일치는 verify-do-binding.sh post-deploy gate 가 이미 검증) + 최종 시도에서만
+  Slack 알림(EQ_NOTIFY, ALERT_SLACK_WEBHOOK 시크릿 — 미설정 no-op). 실패 시 job
+  실패 처리. workflow_run 에서 production 배포가 동시 진행될 수 있어 45s 간격 1회
+  재시도. 배포 이전 단계가 실패하면 동치 대조는 실행되지 않는다.
   `scripts/deploy-local-worktree.sh`가 worktree 생성 → node_modules 심링크 → build →
   3단계 배포(DO → Pages → cron) → Source commit 검증 → 헬스 확인 → worktree 정리
   (실패 시 trap 정리)를 자동 수행한다. 로컬 OAuth(`wrangler login`)가 살아있는 한

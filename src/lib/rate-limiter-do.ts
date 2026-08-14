@@ -324,6 +324,11 @@ export class RateLimiterDO extends DurableObject<Env> {
       await this.persist()
     }
 
+    // S73c: 열린 서킷이 있으면 alarm self-healing 체인을 보장 — orchestrator가
+    // 서킷 오픈 시 이 백엔드를 호출하지 않아 하프오픈 프로브가 발화하지 못하는
+    // 상황에서도 주기 프로브가 계속 도도록 한다.
+    await this.ensureCircuitProbeScheduled()
+
     // S105: 만료 슬롯 회수 — 누수된 슬롯이 maxConcurrent를 영구 점유하지 않도록
     // (concurrency 검사 이전에 실행해 포화 상태에서도 자가치유되게 한다).
     this.reapInflight(host, now)
@@ -487,6 +492,26 @@ export class RateLimiterDO extends DurableObject<Env> {
   }
 
   /**
+   * S73c (2026-08-14): alarm self-healing 체인 보장.
+   *
+   * alarm()은 트립 시 scheduleCircuitProbe()로만 스케줄되므로, alarm이 유실
+   * (스케줄 실패/DO 재생성/예외로 인한 체인 단절)되면 서킷이 영원히 열린 채
+   * 남는다 — canRequest 하프오픈 프로브는 orchestrator가 서킷 오픈 시 해당
+   * 백엔드를 호출하지 않아 발화하지 않는다 (실측: en/ko/wikidata가 30s
+   * backoff 상태로 90s+ 무변화). 모든 공개 RPC 진입점에서 열린 서킷이
+   * 있으면 alarm을 (재)스케줄해, /api/health 폴링만으로도 자가회복이
+   * 재개되게 한다. 무해: 이미 pending alarm이 있으면 no-op.
+   */
+  private async ensureCircuitProbeScheduled(): Promise<void> {
+    for (const circuit of this.state.circuits.values()) {
+      if (circuit.tripped) {
+        await this.scheduleCircuitProbe()
+        return
+      }
+    }
+  }
+
+  /**
    * DO alarm handler — probes open circuits and auto-closes recovered backends.
    * Runs every CIRCUIT_PROBE_INTERVAL_MS while any circuit is open.
    */
@@ -568,6 +593,9 @@ export class RateLimiterDO extends DurableObject<Env> {
       // S73 후속: 레거시 stuck-probe deadlock 마이그레이션 (헬스 진입점 —
       // /api/health만으로도 회복이 시작되게).
       this.migrateLegacyProbeDeadlock(circuit)
+      // S73c: alarm self-healing 체인 보장 — /api/health 폴링만으로도
+      // 열린 서킷의 주기 프로브가 유지된다.
+      await this.ensureCircuitProbeScheduled()
       // S105: 헬스 보고 전 만료 슬롯 회수 — 누수가 실시간 표시되지 않게.
       this.reapInflight(host, now)
       const inflight = this.state.inflight.get(host) ?? 0

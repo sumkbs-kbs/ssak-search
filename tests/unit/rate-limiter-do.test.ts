@@ -512,4 +512,21 @@ describe('RateLimiterDO inflight slot lease reaper (S105)', () => {
     expect(after.probeInFlight).toBe(true)
     expect(after.tripped).toBe(true)
   })
+
+  it('re-arms the self-healing alarm from any RPC entry point while circuits are open (S73c)', async () => {
+    // alarm 유실 시나리오: 서킷 트립 후 alarm 스케줄이 사라진 상태를 재현.
+    await doState.storage.deleteAlarm()
+
+    // 5회 실패로 트립 (트립 시 scheduleCircuitProbe가 다시 스케줄하므로,
+    // 스케줄이 사라진 상태를 만들기 위해 트립 후 alarm을 명시적으로 제거)
+    for (let i = 0; i < FAILURE_THRESHOLD; i++) await doInstance.release(HOST, false)
+    expect((await doInstance.getAllHealth())[HOST].tripped).toBe(true)
+    await doState.storage.deleteAlarm()
+
+    // 다음 RPC(canRequest)만으로 alarm이 재무장되어야 한다
+    // (orchestrator가 서킷 오픈 시 이 백엔드를 호출하지 않아도 /api/health가 보장).
+    await doInstance.canRequest(HOST)
+    expect(doState.storage.setAlarm).toHaveBeenCalled()
+    expect(await doState.storage.getAlarm()).not.toBeNull()
+  })
 })

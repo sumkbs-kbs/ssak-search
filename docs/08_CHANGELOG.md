@@ -648,6 +648,16 @@
 - **판단**: **방안 C 기각** — bing/DDG 자연 랭킹으로 SO gold 를 충당할 수 없음. SO gold 회복은 SE API egress rate-limit 리셋을 기다리는 수밖에 없고, 방안 A(수정 36)가 서킷을 정직화해 리셋 후 자동 회복됨
 - **근거 강도**: production 풀 0/13 은 Workers egress 기준 직접 실측이라 확정적. bing/DDG 직접 결과는 로컬 egress 노이즈(한국어 로컬라이즈·봇 감지)가 심해 보조 데이터로만 사용
 
+### 수정 38: SE rate-limit 리셋 자동 회복 모니터 — monitor-se-recovery.sh (2026-08-14)
+- **작업 ID**: FIX-2026-08-14-21 (구현 + 실측)
+- **산출물**: `scripts/monitor-se-recovery.sh` — api.stackexchange.com egress rate-limit 리셋 시점에 서킷/검색 gold 자동 회복 추적
+  - Workers egress IP 의 rate-limit 은 로컬에서 볼 수 없으므로(per-IP) **production 엔드포인트를 진실 원본으로 폴링**: ① `/api/health` 서킷 상태 ② `/api/search` SO gold 쿼리 2건 → stackoverflow.com top-10 존재
+  - **상태 파일** (`SE_MONITOR_STATE`, 기본 /tmp/se-recovery-state.json)로 이력 저장 — 중단 후 재실행이 이어붙음 (세션 환경의 백그라운드 reap 에 안전)
+  - **전이 감지**: 서킷 down→operational (CIRCUIT-RECOVERED) / gold 없음→있음 (GOLD-RECOVERED). 첫 폴링은 [BASELINE] 으로만 기록 (오탐 방지)
+  - `--watch` 반복 모드 (POLL_INTERVAL/SE_MONITOR_MINUTES) / `--reset` 상태 초기화
+- **실측**: 현재 상태 — 서킷 operational (방안 A 미배포라 프로브 판정 의미 없음 — rate-limit 리셋의 확증 아님), **gold 없음** (여전히 rate-limit 또는 전략 미회수). **gold 회복만이 리셋 확정 신호**
+- **참고**: 방안 A(af28f12) 배포 후에는 서킷 신호도 유효해짐 (프로브가 /2.3/info 200 → 닫힘)
+
 ### 수정 29: 배포 파이프라인 자동 검증 확장 — gold 회수 + staging↔production 동치 대조 (2026-08-14)
 - **작업 ID**: FIX-2026-08-14-12 (구현 + 실측)
 - **배경**: 로컬 worktree 배포 스크립트(수정 27)에 검증 단계 추가 — 배포 후 "동작하는가"를 자동 확인

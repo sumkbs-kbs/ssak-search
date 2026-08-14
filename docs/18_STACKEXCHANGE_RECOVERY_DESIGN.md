@@ -5,6 +5,8 @@
 > 구현: `rate-limiter-do.ts` — `isStackExchangeHost()` + probeHost SE 분기
 > (`/2.3/info?site=stackoverflow`, 400+error_id:502 → alive) + SE 전용 10분 프로브
 > 간격. 테스트 4건 추가 (전체 2,637 통과).
+> 모니터: `scripts/monitor-se-recovery.sh` — 리셋 후 자동 회복 추적 (상태 파일
+> 기반 재개, production 헬스+검색 폴링, 전이 감지, --watch 반복 모드).
 
 ---
 

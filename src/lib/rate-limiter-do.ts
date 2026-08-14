@@ -561,12 +561,20 @@ export class RateLimiterDO extends DurableObject<Env> {
    * Returns status + body snippet so the alarm log records WHY a probe failed
    * (S73d: e.g. 403 Cloudflare challenge vs timeout vs 5xx) — without this,
    * "probe failed" leaves the upstream response unobservable.
+   *
+   * S73e (2026-08-14): sends a User-Agent — wikimedia rejects UA-less robots.txt
+   * fetches with HTTP 403 "Please set a user-agent", which failed every wikipedia/
+   * wikidata probe (실측: en/ko/wikidata 403 UA-less vs 200/429 with UA) and kept
+   * healthy circuits open forever. The UA mirrors the production search fetch UA.
    */
   private async probeHost(host: string): Promise<{ alive: boolean; status: number; snippet: string }> {
     try {
       const controller = new AbortController()
       const timer = setTimeout(() => controller.abort(), CIRCUIT_PROBE_TIMEOUT_MS)
-      const resp = await fetch(`https://${host}/robots.txt`, { signal: controller.signal })
+      const resp = await fetch(`https://${host}/robots.txt`, {
+        signal: controller.signal,
+        headers: { 'User-Agent': 'SearchAPI/1.0 (https://search-engine-api.pages.dev; contact: admin@example.com)' },
+      })
       clearTimeout(timer)
       const text = await resp.text().catch(() => '')
       return {

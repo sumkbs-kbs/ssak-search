@@ -597,8 +597,9 @@
   - `deploy.yml` — 각 job 이 자기 환경 아티팩트 다운로드 + 폴백 빌드에 DEPLOY_ENV 설정
   - `deploy-local-worktree.sh` — 빌드에 `DEPLOY_ENV=$ENV_NAME` 주입 + 드라이런 계획 반영
 - **검증**: ① tsc 0 ② 전체 2,633건 통과 (+신규 테스트: getDOClient 가 rateLimiterInstanceName() 로 idFromName 호출, vitest 폴백='global') ③ eslint 0 ④ **번들 실측**: DEPLOY_ENV=staging 빌드 → `Ct=\`staging\`` + `idFromName(St())`, production 빌드 → `Ct=\`production\`` — 주입 확정
-- **이중 배포 실측**: (아래 이어서 기록) — staging@새 인스턴스 vs production@구 'global' 동시 비교로 독립성 확인 후 production 마이그레이션
-- **참고**: 구 'global' 인스턴스는 스토리지에 잔존하며 기존 stackexchange alarm 프로브만 주기 실행 (무해 — 정리하려면 reset RPC 별도 필요)
+- **이중 배포 실측** (커밋 **63d0cca**): ① staging 배포 직후 **동시 비교로 독립성 확정** — staging(새 인스턴스)은 `non-operational: 0`(stackexchange 미호출), production(아직 구 'global')은 stackexchange down + ko/ja degraded 유지 ② production 배포 후 양쪽 모두 fresh 인스턴스로 전환 (`non-operational: 0`) ③ 라이브 검색 양쪽 동일 동작 (zh 여행 mafengwo gold + EN 실결과 10건)
+- **디버깅 실측**: 첫 staging 배포가 새 인스턴스로 안 바뀐 원인 = 배포 스크립트가 **커밋의 clean 체크아웃**에서 빌드하는데 변경이 미커밋 상태였음 (vite define 없음 → 'global' 폴백) → 커밋 후 재배포로 해결. docs/17 에 경고 문구 추가
+- **참고**: 구 'global' 인스턴스는 스토리지에 잔존하며 기존 stackexchange alarm 프로브만 주기 실행 (무해 — 정리하려면 reset RPC 별도 필요). ci.yml/deploy.yml 변경은 push 후 GitHub Actions 에 반영 (로컬 worktree 배포는 push 불필요)
 
 ### 수정 29: 배포 파이프라인 자동 검증 확장 — gold 회수 + staging↔production 동치 대조 (2026-08-14)
 - **작업 ID**: FIX-2026-08-14-12 (구현 + 실측)

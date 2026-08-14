@@ -211,6 +211,12 @@ curl -s -H "Authorization: Bearer <PAT>" \
   정상 상태라 알림에서 제외 (EQ_NOTIFY_COMMIT=1 로 강제 가능). 페이로드는 monitor.yml
   과 같은 Slack blocks 형식 — 실패 항목별 상세(헬스 diff/검색 diff/gold 회수율) 포함,
   런타임 실패는 danger, 커밋 단독은 warning 색상.
+
+  **헬스 동치 의미론 (방안 B 이후, 2026-08-14)**: DO 인스턴스가 환경별로 독립
+  되면서 헬스 status 는 더 이상 코드 동치 지표가 아니다 (캐시 히트 시 백엔드 fetch
+  없음 → 미추적, fresh 인스턴스 누적 차이). 대조는 ① 한쪽만 추적 중인 호스트는
+  정보성(실패 아님) ② 공통 호스트는 **한쪽만 down 일 때만 실패** ③ degraded vs
+  operational 은 시점 차이로 정보성. 실질적인 동치 신호는 검색 top-5 + gold 회수.
   `scripts/deploy-local-worktree.sh`가 worktree 생성 → node_modules 심링크 → build →
   3단계 배포(DO → Pages → cron) → Source commit 검증 → 헬스 확인 → worktree 정리
   (실패 시 trap 정리)를 자동 수행한다. 로컬 OAuth(`wrangler login`)가 살아있는 한

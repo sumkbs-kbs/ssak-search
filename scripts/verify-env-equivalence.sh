@@ -12,7 +12,9 @@
 # 대조 항목:
 #   1. 배포 커밋 동치 — Pages deployment list 의 Source commit 비교
 #      (staging/main 브랜치 최신 배포 각각)
-#   2. 헬스 동치 — /api/health 의 백엔드별 status/tripped 비교
+#   2. 헬스 동치 — /api/health 의 양쪽 공통 호스트 status 비교 (방안 B 이후
+#      DO 인스턴스는 독립이라 한쪽만 추적 중인 호스트는 트래픽 누적 차이로
+#      정보성 처리 — 실패 아님)
 #   3. 검색 결과 동치 — 동일 쿼리 3종(EN/zh/general) 의 top-5 도메인 시퀀스 비교
 #   4. gold 회수 동치 — verify-deployed-gold.sh 를 양쪽에 실행해 회수율 비교
 #
@@ -87,22 +89,37 @@ except Exception as e:
     print(f'parse error: {e}')
     raise SystemExit(1)
 ba, bb = a.get('backends', {}), b.get('backends', {})
-diffs = []
+diffs, info = [], []
 for host in sorted(set(ba) | set(bb)):
     sa = ba.get(host, {}).get('status')
     sb = bb.get(host, {}).get('status')
-    # 'degraded'/'down' 등 상태 문자열만 비교 — 회로 상세(failures 등)는
-    # 시점에 따라 다를 수 있어 제외
-    if sa != sb:
+    # 방안 B (2026-08-14) 이후 DO 인스턴스는 환경별로 독립이라, 한쪽에만
+    # 회로가 있는 건 트래픽 누적 차이(캐시 히트 시 백엔드 fetch 없음 → 미추적)로
+    # 코드 동치와 무관하다 — 정보성으로만 남기고 실패로 보지 않는다.
+    if sa is None or sb is None:
+        info.append(f'{host}: {sa or "미추적"} vs {sb or "미추적"}')
+        continue
+    # 양쪽 공통 호스트 — 'down' 여부만 실질 신호로 본다. degraded/operational
+    # 차이는 독립 인스턴스의 트래픽 누적·시점 차이(캐시 미스 버스트 등)로 코드
+    # 동치와 무관 — 정보성. 한쪽만 down 이면 해당 환경이 백엔드에 도달하지
+    # 못한다는 실질 장애 신호라 실패 처리.
+    down_a, down_b = sa == 'down', sb == 'down'
+    if down_a != down_b:
         diffs.append(f'{host}: {sa} vs {sb}')
+    elif sa != sb:
+        info.append(f'{host}: {sa} vs {sb}')
 if diffs:
     print('DIFF: ' + '; '.join(diffs))
+elif info:
+    print('INFO: ' + '; '.join(info))
 else:
     print('OK')
 PYEOF
 )"
 if echo "$HEALTH_DIFF" | grep -q '^OK$'; then
-  echo "   ✅ 백엔드 status 전부 동치"
+  echo "   ✅ 백엔드 status 전부 동치 (공통 호스트)"
+elif echo "$HEALTH_DIFF" | grep -q '^INFO:'; then
+  echo "   ℹ️  공통 호스트 status 동치 — 한쪽만 추적 중인 호스트는 정보성: ${HEALTH_DIFF#INFO: }"
 elif echo "$HEALTH_DIFF" | grep -q '^DIFF:'; then
   echo "   ❌ ${HEALTH_DIFF#DIFF: }" >&2
   FAIL=1; HEALTH_FAIL=1

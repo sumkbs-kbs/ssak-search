@@ -611,6 +611,15 @@
 - **검증** (로컬 캡처 서버 실측): ① fake 환경 vs production → 헬스/검색/gold 3건 실패 → **danger 페이로드 POST 캡처 성공** (상세 블록 포함) ② webhook 미설정 → no-op 안내 + exit 1 유지 ③ 커밋 단독 분기 → 알림 생략 / EQ_NOTIFY_COMMIT=1 시 warning
 - **참고**: 알림 수신에는 Pages 프로젝트의 `ALERT_SLACK_WEBHOOK`(또는 SLACK_WEBHOOK) 시크릿 설정이 필요 — 현재 미설정 상태라 로컬/배포 시 no-op (probe-slack-delivery.ts 확인)
 
+### 수정 34: 동치 대조 헬스 의미론 갱신 + 알림 분기 검증 (방안 B 후속, 2026-08-14)
+- **작업 ID**: FIX-2026-08-14-17 (구현 + 실측)
+- **배경**: 방안 B(수정 32)로 DO 인스턴스가 독립되며 헬스 status 비교가 코드 동치 지표로서 부적합해짐 — staging fresh 인스턴스는 회로 0개(캐시 히트 시 백엔드 fetch 없음 → 미추적), 이후 트래픽 누적 차이로 status 가 계속 갈림. 수정 33의 알림이 **거짓 danger 알림**을 보낼 수 있는 상태
+- **수정** (`scripts/verify-env-equivalence.sh`):
+  - 헬스 대조 의미론: ① 한쪽만 추적 중인 호스트 → 정보성(실패 아님) ② 공통 호스트는 **한쪽만 down 일 때만 실패** ③ degraded vs operational → 정보성 (시점 차이)
+  - 실질 동치 신호는 검색 top-5 + gold 회수로 명확화
+- **검증 (실측)**: ① 실환경(staging/production @ 63d0cca) 4/4 통과 exit 0 — 헬스는 ℹ️ 정보성만 (미추적 호스트 + en.wikipedia degraded vs operational) ② fake 환경(한쪽만 down) + 검색/gold 실패 → **danger 알림 POST 캡처 성공** (헬스 상세에 'api.stackexchange.com: down vs operational' 포함)
+- **부수 확증**: staging 캐시-미스 쿼리 1건 후 **staging 인스턴스에만 6개 회로 생성, production 9개 불변** — 방안 B 독립성의 직접 증거
+
 ### 수정 29: 배포 파이프라인 자동 검증 확장 — gold 회수 + staging↔production 동치 대조 (2026-08-14)
 - **작업 ID**: FIX-2026-08-14-12 (구현 + 실측)
 - **배경**: 로컬 worktree 배포 스크립트(수정 27)에 검증 단계 추가 — 배포 후 "동작하는가"를 자동 확인

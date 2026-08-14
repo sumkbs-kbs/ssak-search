@@ -31,6 +31,10 @@
 #                     미커밋 package*.json 변경·stale node_modules 와 무관하게
 #                     재현 가능한 빌드를 보장한다. 느리지만 안전 (기본 사용 권장은
 #                     심링크 — CI/일상 배포는 npm ci 를 이미 수행한 node_modules 사용)
+#   COMMIT_SYNC_CHECK=0  배포 후 staging↔production 배포 커밋 동치 확인 생략
+#                     (기본 1=수행 — 경량: wrangler deployment list 만 조회,
+#                     검색/gold/헬스 부하 없음). 불일치는 배포 성공에 영향 없이
+#                     경고로만 (production 배포 직후 staging 미배포는 정상 상태)
 #
 # 예:
 #   scripts/deploy-local-worktree.sh                       # HEAD → production
@@ -146,7 +150,7 @@ FAKEEOF
     local out="$SELFTEST_TMP/$name.out"
     (
       export PATH="$FAKE_BIN:$PATH" FAKE_NPX_SCENARIO="$name"
-      export GOLD_CHECK=0 EQ_CHECK=0 SELFTEST_TARGET_RUN=1
+      export GOLD_CHECK=0 EQ_CHECK=0 COMMIT_SYNC_CHECK=0 SELFTEST_TARGET_RUN=1
       bash "$REPO_ROOT/scripts/deploy-local-worktree.sh" HEAD production $opts
     ) > "$out" 2>&1
     local got=$?
@@ -278,6 +282,7 @@ if [ "$DRY_RUN" = 1 ]; then
   echo "   ③ cron   : npx wrangler deploy --config=$CRON_CONFIG"
   echo "   검증     : Pages Source commit == $SHORT_SHA + $HEALTH_URL HTTP 200"
   echo "   gold     : 6개 대표 쿼리 gold 회수 (top-10) — GOLD_CHECK=0 으로 생략 가능"
+  echo "   동치     : staging↔production 배포 커밋 동치 (경량) — COMMIT_SYNC_CHECK=0 으로 생략 가능"
   if [ "${GOLD_FAIL_HARD:-0}" = "1" ]; then
     echo "   fail-hard: gold 미회수 시 ${GOLD_FAIL_HARD_RETRIES:-3}회 재시도 후 배포 실패 처리 (GOLD_FAIL_HARD=1)"
   fi
@@ -456,6 +461,21 @@ if [ "$PAGES_DEPLOYED" = "1" ]; then
       echo " ✅ 환경 동치 확인 통과"
     else
       echo " ⚠️  환경 동치 불일치 — production 이 아직 이 커밋이 아니면 정상 (f5ef768 vs 41218df 사례)" >&2
+    fi
+  fi
+
+  # ── staging ↔ production 배포 커밋 동치 (경량, 양쪽 환경 모두) ──────────
+  # verify-deploy-commit-sync.sh — wrangler deployment list 만 조회해 두
+  # 환경의 최신 배포 Source commit 을 비교 (검색/gold/헬스 부하 없음).
+  # staging 배포는 위 EQ [1/4] 가 이미 커버하지만, production 배포에는
+  # cross-env 커밋 확인이 없었으므로 여기서 채운다. 불일치는 배포 자체의
+  # 성공에는 영향 없이 경고로만 (production 배포 직후 staging 미배포는 정상).
+  if [ "${COMMIT_SYNC_CHECK:-1}" = "1" ]; then
+    echo " staging ↔ production 배포 커밋 동치 (경량)"
+    if bash "$REPO_ROOT/scripts/verify-deploy-commit-sync.sh"; then
+      echo " ✅ 배포 커밋 동치 확인 통과"
+    else
+      echo " ⚠️  배포 커밋 동치 불일치 — production 배포 직후 staging 미배포면 정상, 양쪽 배포 후 재확인" >&2
     fi
   fi
 fi

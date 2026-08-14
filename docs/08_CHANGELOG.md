@@ -690,6 +690,14 @@
   - 기본 0 = 기존 심링크 공유 (빠름) — 하위 호환. 드라이런 계획에 격리 경로 표시, 미커밋 package*.json 경고 문구가 격리 모드에서 안내로 대체
 - **검증**: ① bash -n 클린 · `--self-test` 5/5 유지 ② 유닛 테스트(수정 41 파일)에 격리 계획 케이스 +1 — `npm ci (worktree 내부 격리` 표시 + 심링크 문구 부재 ③ **실배측**: worktree 에서 심링크 없이 npm ci → build 성공 (dist/_worker.js 1,094.21 kB) → worktree 정리 ④ 전체 유닛 **2,645건 통과 (+1)** · eslint 0 · prettier clean
 
+### 수정 43: staging↔production 배포 커밋 동치 전용 검증 스크립트 (2026-08-14)
+- **작업 ID**: FIX-2026-08-14-26 (구현 + 실측 + 유닛 테스트)
+- **배경**: verify-env-equivalence.sh 의 [1/4] 커밋 동치는 검색 3쿼리 + gold 6/6 을 양쪽에 실행하는 **무거운 대조의 일부** — 검증 트래픽이 staging API rate limit(429)을 트립한 실측(이전 턴)이 있었고, production 배포에는 cross-env 커밋 확인 자체가 없었음
+- **산출물**:
+  - `scripts/verify-deploy-commit-sync.sh` 신규 — Pages deployment list 만 조회해 staging(브랜치) 최신 배포 vs Production 최신 배포의 **Source commit 동치만** 확인 (awk 필드 5, 기존 스크립트와 동일 파싱). `EXPECTED_COMMIT` 지정 시 양쪽 모두 그 커밋이어야 함. 불일치 시 Slack 알림 (SYNC_NOTIFY 기본 1, webhook 미설정 no-op). exit 0/1
+  - `deploy-local-worktree.sh` — post-deploy 단계에 COMMIT_SYNC_CHECK(기본 1) 통합: **production 배포에서도** 커밋 동치 자동 확인 (불일치는 경고만 — production 배포 직후 staging 미배포는 정상 상태), 드라이런 계획에 반영. self-test 대상 실행은 COMMIT_SYNC_CHECK=0 으로 헤르메틱 유지
+- **검증**: ① 실측 — 양쪽 1941786 → `✅ 동치` exit 0, EXPECTED_COMMIT=1941786 도 통과 ② 유닛 테스트 5건 (신규 파일: 동치 exit 0 / 불일치 exit 1 / EXPECTED 일치·불일치 / 미배포 미확인 exit 1) — 가짜 npx 로 실제 wrangler 테이블 형식 픽스처 검증 ③ `--self-test` 5/5 유지 ④ 전체 유닛 **2,650건 / 132파일 통과 (+5)** · eslint 0 · prettier clean · tsc 0
+
 ### 수정 29: 배포 파이프라인 자동 검증 확장 — gold 회수 + staging↔production 동치 대조 (2026-08-14)
 - **작업 ID**: FIX-2026-08-14-12 (구현 + 실측)
 - **배경**: 로컬 worktree 배포 스크립트(수정 27)에 검증 단계 추가 — 배포 후 "동작하는가"를 자동 확인

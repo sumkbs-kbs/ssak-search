@@ -260,6 +260,18 @@ curl -s -H "Authorization: Bearer <PAT>" \
   유닛 테스트(수정 41 파일)에 격리 계획 케이스 추가. 실측: worktree 에서 npm ci
   → build 성공 (dist/_worker.js 1,094.21 kB).
 
+  **배포 커밋 동치 전용 검증 (수정 43, 2026-08-14)**: `scripts/verify-deploy-commit-sync.sh`
+  (신규) — staging ↔ production 의 최신 배포 **Source commit 동치만** 자동 확인하는
+  경량 스크립트 (wrangler pages deployment list 만 조회 — 검색/gold/헬스 부하
+  없음, rate limit 무관). verify-env-equivalence.sh 의 [1/4] 를 전용으로 분리한
+  것. `EXPECTED_COMMIT` 지정 시 양쪽 모두 그 커밋이어야 함, 불일치 시 Slack 알림
+  (SYNC_NOTIFY, 미설정 no-op). deploy-local-worktree.sh 의 post-deploy 단계에
+  COMMIT_SYNC_CHECK(기본 1)로 통합 — **production 배포에도 cross-env 커밋 동치를
+  자동 확인** (기존 EQ 는 staging 전용이었음). 불일치는 배포 성공에 영향 없이
+  경고로만 (production 배포 직후 staging 미배포는 정상). 유닛 테스트 5건
+  (동치/불일치/EXPECTED 일치·불일치/미배포) — 가짜 npx 로 deployment list 픽스처
+  검증. 실측: 양쪽 1941786 → ✅ 동치 exit 0.
+
   `scripts/deploy-local-worktree.sh`가 worktree 생성 → node_modules 심링크 → build →
   3단계 배포(DO → Pages → cron) → Source commit 검증 → 헬스 확인 → worktree 정리
   (실패 시 trap 정리)를 자동 수행한다. 로컬 OAuth(`wrangler login`)가 살아있는 한

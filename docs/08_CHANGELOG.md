@@ -709,6 +709,18 @@
 - **디버깅**: 첫 tail 윈도우(14:45 틱) 미포착은 cron 문제가 아닌 **인라인 하네스 아티팩트**로 확정 (긴 원라이너에서 두 번째 백그라운드 명령 미기동 + pages tail 연결성은 자체 트래픽 포착으로 별도 검증) — 15:15 틱 3중 tail 포착이 결정적. 스케줄러 "배포 단 1건" 의심도 grep -m2 잘림 아티팩트였음 (실제 이력 다수 — production cron e49c3eaf 등)
 - **결론**: 로컬 worktree 배포 후 staging 딥 프로브가 15분마다 정상 발화 (deploy-local-worktree.sh cron 단계 배선 검증 완료)
 
+### 수정 45: f5ef768 커밋 위생 정리 — FAIL_ON_CAPTURE_MISS WIP 분리 + force push (2026-08-14)
+- **작업 ID**: GIT-2026-08-14-02 (수정 28 잔여 해소)
+- **배경**: 수정 28 에서 f5ef768 에 이전 턴의 미커밋 WIP(verify-do-binding.sh `FAIL_ON_CAPTURE_MISS` cron-bridge 가드)가 함께 스테이징·push 됨 — 기능상 무해하나 커밋 경계가 오염
+- **수행**:
+  - 안전망: `backup/pre-rewrite-main` 브랜치(=구 16620ac) + f5ef768 파일 스냅샷(/tmp/vdb-f5ef768-full.sh) + rev 캡처
+  - **f5ef768' = e6c3772**: 토큰 가드(verify_cf_token 함수 + COMMIT_CHECK_ONLY 호출, S104-③-⑥-⑤)만 포함, 동일 커밋 메시지 — WIP 115라인 제거 확인
+  - **WIP' = 2921840**: FAIL_ON_CAPTURE_MISS cron-bridge 가드(헤더 문서 + compare_and_persist 리팩터 + cron-bridge 분기 + 요약 변경)를 별도 커밋으로 분리 — 파일은 구 f5ef768과 **바이트 동일** (diff 0)
+  - 14개 미push 커밋(63d0cca 방안 B ~ 16620ac)을 `--onto` 리베이스로 리플레이 (작업 트리 208건 더티는 autostash 로 보존·복원, stash 잔존 0)
+  - **force-with-lease push** (lease: github/main=f5ef768 확인 후) → github/main: f5ef768 → **5395bf4**
+- **검증**: ① 구 HEAD(16620ac) vs 신 HEAD(5395bf4) 트리 diff **0라인** (최종 상태 완전 동일) ② 41218df→e6c3772 는 토큰 가드만 ③ e6c3772 에 WIP 0건 ④ `verify-do-binding.sh --self-test` PASS ⑤ 작업 트리 208건 그대로 복원
+- **참고**: 구 f5ef768/16620ac 는 reflog + backup 브랜치로 접근 가능. 배포된 Pages/DO 트리는 동일(트리 diff 0)이라 운영 영향 없음. genspark 미러는 미업데이트 (필요 시 별도 push)
+
 ### 수정 29: 배포 파이프라인 자동 검증 확장 — gold 회수 + staging↔production 동치 대조 (2026-08-14)
 - **작업 ID**: FIX-2026-08-14-12 (구현 + 실측)
 - **배경**: 로컬 worktree 배포 스크립트(수정 27)에 검증 단계 추가 — 배포 후 "동작하는가"를 자동 확인

@@ -35,6 +35,13 @@ export interface CircuitState {
   // Self-healing (D.2): exponential backoff stage + half-open probe flag
   tripCount: number
   probeInFlight: boolean
+  // S73 후속 (2026-08-14): 프로브 임대 시작 시각. S105 inflight 슬롯 리퍼와
+  // 같은 원칙 — 프로브는 몇 초면 완료되는데, 프로브 요청이 DO 재시작/RPC 유실로
+  // release를 못 하면 probeInFlight가 true로 persist되어 이후 모든 요청이
+  // 'circuit_open (probe in flight)' 거부를 받고 **새 프로브가 영영 발화하지
+  // 못 하는 deadlock**이 된다 (실측: wikidata/zh는 업스트림 200 정상인데 서킷이
+  // 17분+ stuck). PROBE_STALE_MS 지난 임대는 canRequest에서 지연 회수한다.
+  probeStartedAt: number
 }
 
 export interface HostHealth {
@@ -102,6 +109,14 @@ export const HOST_CONFIGS: Record<string, HostConfig> = {
 export const BACKOFF_STAGES_MS = [30_000, 300_000, 1_800_000]
 // Periodic health-check interval while a circuit is open (1 min)
 export const CIRCUIT_PROBE_INTERVAL_MS = 60_000
+// S73 후속 (2026-08-14): 하프오픈 프로브 임대 TTL. 프로브는 실제 fetch 체인
+// (REST 3s + Action 1.5s 최악 ≈ 4.5s, fanout 천장)보다 훨씬 짧게 끝나는데,
+// release RPC 유실/DO 재시작으로 프로브가 영영 완료되지 않으면 probeInFlight가
+// true로 persist되어 이후 모든 요청이 'circuit_open (probe in flight)' 거부를
+// 받고 새 프로브가 발화하지 못 하는 deadlock이 된다 (실측: wikidata/zh는
+// 업스트림 200 정상인데 서킷이 17분+ stuck). 15s는 모든 fetch 체인 상한보다
+// 넉넉한 여유를 준다.
+export const PROBE_STALE_MS = 15_000
 // Timeout for a single health-check probe request
 const CIRCUIT_PROBE_TIMEOUT_MS = 3_000
 
@@ -250,7 +265,15 @@ export class RateLimiterDO extends DurableObject<Env> {
   private getCircuit(host: string): CircuitState {
     let circuit = this.state.circuits.get(host)
     if (!circuit) {
-      circuit = { failures: 0, lastFailureTime: 0, tripped: false, openedAt: 0, tripCount: 0, probeInFlight: false }
+      circuit = {
+        failures: 0,
+        lastFailureTime: 0,
+        tripped: false,
+        openedAt: 0,
+        tripCount: 0,
+        probeInFlight: false,
+        probeStartedAt: 0,
+      }
       this.state.circuits.set(host, circuit)
     }
     return circuit
@@ -290,9 +313,20 @@ export class RateLimiterDO extends DurableObject<Env> {
       }
       // Half-open: allow exactly one probe request
       if (circuit.probeInFlight) {
-        return { allowed: false, reason: 'circuit_open', retryAfter: 10 }
+        // S73 후속: 프로브 임대 TTL — release 유실(DO 재시작/RPC 타임아웃)로
+        // probeInFlight가 영구 true가 되면 새 프로브가 발화하지 못 한다.
+        // 레거시 상태(probeStartedAt=0)도 stale로 간주해 배포 직후 즉시 회수
+        // → 이 요청이 새 프로브가 된다. 정상 프로브는 15s 안에 완료되므로
+        // 임대가 살아있을 때만 거부한다.
+        const probeStale = circuit.probeStartedAt === 0 || now - circuit.probeStartedAt > PROBE_STALE_MS
+        if (!probeStale) {
+          return { allowed: false, reason: 'circuit_open', retryAfter: 10 }
+        }
+        circuit.probeInFlight = false
+        circuit.probeStartedAt = 0
       }
       circuit.probeInFlight = true
+      circuit.probeStartedAt = now
       circuit.failures = 0
     }
 
@@ -373,6 +407,7 @@ export class RateLimiterDO extends DurableObject<Env> {
 
     if (circuit.probeInFlight) {
       circuit.probeInFlight = false
+      circuit.probeStartedAt = 0
       if (success) {
         // Half-open probe succeeded → close circuit (gradual recovery complete)
         circuit.tripped = false
@@ -445,6 +480,7 @@ export class RateLimiterDO extends DurableObject<Env> {
         circuit.tripCount = 0
         circuit.openedAt = 0
         circuit.probeInFlight = false
+        circuit.probeStartedAt = 0
         logger.info(`[DO-rate-limiter] Health probe OK — circuit auto-closed for ${host}`)
       } else {
         circuit.tripCount = Math.min(circuit.tripCount + 1, BACKOFF_STAGES_MS.length - 1)
@@ -486,6 +522,7 @@ export class RateLimiterDO extends DurableObject<Env> {
     circuit.tripCount = 0
     circuit.openedAt = Date.now()
     circuit.probeInFlight = false
+    circuit.probeStartedAt = 0
     logger.warn(`[DO-rate-limiter] Circuit force-opened for ${host} (canary regression)`)
     await this.scheduleCircuitProbe()
     await this.persist()

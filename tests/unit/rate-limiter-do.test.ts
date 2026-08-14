@@ -138,6 +138,46 @@ describe('RateLimiterDO self-healing circuit breaker (D.2)', () => {
     expect(health[HOST].tripCount).toBe(0)
   })
 
+  it('reaps a STALE half-open probe (lost release) so a new probe can fire (S73)', async () => {
+    instantiate()
+    for (let i = 0; i < FAILURE_THRESHOLD; i++) await doInstance.release(HOST, false)
+
+    vi.advanceTimersByTime(30_000)
+    const probe = await doInstance.canRequest(HOST)
+    expect(probe.allowed).toBe(true)
+
+    // Release NEVER arrives (DO restart / RPC lost) — probe flag stays armed.
+    vi.advanceTimersByTime(20_000) // > PROBE_STALE_MS (15s)
+    // Stale lease reaped → this request becomes the NEW probe instead of rejecting.
+    const rearmed = await doInstance.canRequest(HOST)
+    expect(rearmed.allowed).toBe(true)
+
+    // New probe succeeds → circuit closes.
+    await doInstance.release(HOST, true)
+    const health = await doInstance.getAllHealth()
+    expect(health[HOST].tripped).toBe(false)
+    expect(health[HOST].probeInFlight).toBe(false)
+  })
+
+  it('reaps a LEGACY stuck probe flag (probeStartedAt=0 persisted pre-fix) on first request', async () => {
+    instantiate()
+    for (let i = 0; i < FAILURE_THRESHOLD; i++) await doInstance.release(HOST, false)
+
+    // Simulate a legacy persisted state: probeInFlight=true with no lease timestamp.
+    const circuits = doInstance.state.circuits
+    const circuit = circuits.get(HOST)
+    circuit.probeInFlight = true
+    circuit.probeStartedAt = 0
+
+    vi.advanceTimersByTime(30_000)
+    // Legacy flag treated as stale → request becomes the probe immediately.
+    const probe = await doInstance.canRequest(HOST)
+    expect(probe.allowed).toBe(true)
+    await doInstance.release(HOST, true)
+    const health = await doInstance.getAllHealth()
+    expect(health[HOST].tripped).toBe(false)
+  })
+
   it('stamps every host with source: durable (S88 cross-isolate marker)', async () => {
     instantiate()
     await doInstance.release(HOST, true)

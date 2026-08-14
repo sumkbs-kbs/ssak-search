@@ -116,6 +116,12 @@ curl -s -H "Authorization: Bearer <PAT>" \
 > 로 BLOCK (실측: run 31800422203 — guard fail-fast, 빌드도 안 돌고 즉시 중단).
 > 교체 성공 판정은 여전히 4-3의 **`Deploy do-worker (Staging)` green**이 기준이며,
 > guard green은 이제 "토큰 유효"를 전제로 하므로 신뢰할 수 있다.
+>
+> ✅ **만료 임박 경고 추가됨 (2026-08-14, 수정 46)**: verify_cf_token 이
+> `expires_on` 을 파싱해 만료까지 남은 일수가 `TOKEN_EXPIRY_WARN_DAYS`(기본 7일)
+> 이내면 guard 를 통과시킨 채 `⚠️ expires in N day(s) (on YYYY-MM-DD)` 경고 로그를
+> 남긴다 — 만료 직전까지 조용히 있다가 갑자기 guard 가 깨지는 사고를 예방. 만료 없는
+> 토큰(expires_on null)은 경고 없음. 유닛 테스트 5건으로 분기 검증 (수정 46 참조).
 
 ### 4-3. 통과 기준 (전부 확인)
 

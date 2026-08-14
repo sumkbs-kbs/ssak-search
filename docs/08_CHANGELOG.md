@@ -721,6 +721,16 @@
 - **검증**: ① 구 HEAD(16620ac) vs 신 HEAD(5395bf4) 트리 diff **0라인** (최종 상태 완전 동일) ② 41218df→e6c3772 는 토큰 가드만 ③ e6c3772 에 WIP 0건 ④ `verify-do-binding.sh --self-test` PASS ⑤ 작업 트리 208건 그대로 복원
 - **참고**: 구 f5ef768/16620ac 는 reflog + backup 브랜치로 접근 가능. 배포된 Pages/DO 트리는 동일(트리 diff 0)이라 운영 영향 없음. genspark 미러는 미업데이트 (필요 시 별도 push)
 
+### 수정 46: guard 토큰 만료 임박 경고 — TOKEN_EXPIRY_WARN_DAYS (2026-08-14)
+- **작업 ID**: FIX-2026-08-14-27 (구현 + 유닛 테스트)
+- **배경**: 수정 28 의 verify_cf_token 은 만료 토큰을 BLOCK 하지만, **만료 임박 토큰**(예: 3일 후 만료)은 active 로 통과시켜 배포 직후 갑자기 guard 가 깨지는 사고 여지가 남아 있었음 — 토큰 TTL 최대 1년, 사전 교체가 쉬운 만료 2주~1달 창구를 놓치지 않도록 예고가 필요
+- **수정** (`scripts/verify-do-binding.sh`):
+  - `verify_cf_token` — verify 응답의 `expires_on` 을 파싱해 남은 일수(`status_info: yes|<days>|<date>`) 계산, `days ≤ TOKEN_EXPIRY_WARN_DAYS`(기본 7) 이면 **guard 는 통과**한 채 `⚠️ CLOUDFLARE_API_TOKEN expires in N day(s) (on YYYY-MM-DD) — rotate soon` 경고 로그(stderr)
+  - `expires_on` 없음(만료 없는 토큰) / 만료일 파싱 실패 → 경고 없음 (guard 통과). `TOKEN_EXPIRY_WARN_DAYS` 로 임계값 오버라이드 가능 — 헤더 Env 문서 반영
+- **검증** (신규 `tests/unit/verify-do-binding-token.test.ts` 5건, CI guard 와 동일한 COMMIT_CHECK_ONLY 모드 + 가짜 curl/npx): ① 3일 토큰 → 통과 + `expires in 3 day(s)` ② 300일 → 통과 + 경고 없음 ③ expires_on null → 통과 + 경고 없음 ④ 무효 토큰 → exit 1 (wrangler 호출 전 verify 단계에서 차단) ⑤ 10일 토큰 — `TOKEN_EXPIRY_WARN_DAYS=14` 면 경고, 기본 7 이면 미경고
+- **디버깅 실측**: ① COMMIT_CHECK_ONLY 미설정 시 verify_cf_token 이 아예 실행되지 않아(전체 헬스/tail 경로 — 테스트당 ~30초 × 5 = hang) 테스트가 COMMIT_CHECK_ONLY=1 로 고정해야 함을 발견 ② guard 의 경고는 **stderr** 출력이라 execFileSync(stdout 만) 로 놓침 → spawnSync 로 stdout+stderr 병합 ③ `(exp - now).days` floor — 실행 시점 ms 경과로 3일 토큰이 2일로 계산됨 → 테스트 만료일 +1h 마진
+- **검증 결과**: 전체 유닛 **2,655건 / 133파일 통과 (+5)** · eslint 0 · prettier clean · tsc 0 · `--self-test` PASS
+
 ### 수정 29: 배포 파이프라인 자동 검증 확장 — gold 회수 + staging↔production 동치 대조 (2026-08-14)
 - **작업 ID**: FIX-2026-08-14-12 (구현 + 실측)
 - **배경**: 로컬 worktree 배포 스크립트(수정 27)에 검증 단계 추가 — 배포 후 "동작하는가"를 자동 확인

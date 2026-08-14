@@ -52,6 +52,10 @@
 #                    ahead/diverged/unknown commits (S104-③-⑥ pre-deploy guard)
 #   COMMIT_CHECK_ONLY=1  run ONLY deployment resolution + commit-match check
 #                    (no health/DO/tail checks) — for CI deploy gates
+#   TOKEN_EXPIRY_WARN_DAYS  만료 임박 경고 임계값(일). CLOUDFLARE_API_TOKEN
+#                    의 expires_on 이 이 값 이내면 guard 통과와 함께 교체
+#                    예고 경고 로그를 출력한다 (기본 7; expires_on 없음 =
+#                    만료 없는 토큰 → 경고 없음)
 #   VERIFY_DO_STATE_FILE  regression-state JSON path
 #                    (default ${HOME}/.cache/ssak-verify-do-state[-<env>].json)
 #   FAIL_ON_REGRESSION=1  exit 1 when a NEW down backend is detected
@@ -110,23 +114,50 @@ verify_cf_token() {
   http_code="$(curl -s -m 10 -o "${tmp}" -w '%{http_code}' \
     -H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" \
     "https://api.cloudflare.com/client/v4/user/tokens/verify" 2>/dev/null || echo '000')"
-  local ok
-  ok="$(CF_TOKEN_BODY="${tmp}" python3 -c '
-import json, os
+  # status_info: "yes|<days>|<date>" (active — <days> = 만료까지 남은 일수,
+  # <date> = 만료일, 만료 없는 토큰은 yes||) / "no" (무효/파싱 실패).
+  local status_info
+  status_info="$(CF_TOKEN_BODY="${tmp}" python3 -c '
+import json, os, datetime
 
 try:
     d = json.load(open(os.environ["CF_TOKEN_BODY"]))
-    print("yes" if d.get("success") and d.get("result", {}).get("status") == "active" else "no")
 except Exception:
     print("no")
+    raise SystemExit(0)
+if not (d.get("success") and d.get("result", {}).get("status") == "active"):
+    print("no")
+    raise SystemExit(0)
+expires = d.get("result", {}).get("expires_on")
+if not expires:
+    print("yes||")  # 만료 없는 토큰 (expires_on null)
+    raise SystemExit(0)
+try:
+    exp = datetime.datetime.fromisoformat(expires.replace("Z", "+00:00"))
+    days = (exp - datetime.datetime.now(datetime.timezone.utc)).days
+    print("yes|%d|%s" % (days, exp.strftime("%Y-%m-%d")))
+except Exception:
+    print("yes||")  # 만료일 파싱 실패 — 경고 생략, guard 는 통과
 ' 2>/dev/null || echo no)"
   rm -f "${tmp}"
+  local ok="${status_info%%|*}"
   if [ "${ok}" != "yes" ]; then
     echo " ❌ CLOUDFLARE_API_TOKEN is INVALID/EXPIRED (verify HTTP ${http_code}) — refusing to pass a guard that cannot authenticate." >&2
     echo "    Rotate the secret: docs/17_CLOUDFLARE_TOKEN_ROTATION.md (Cloudflare dashboard → GitHub secret → re-dispatch)." >&2
     exit 1
   fi
   echo " ✅ CLOUDFLARE_API_TOKEN verified (active) via /user/tokens/verify"
+  # ── 만료 임박 경고 (2026-08-14) ──────────────────────────────────────
+  # Cloudflare API 토큰은 최대 1년 TTL — 갑작스러운 만료로 배포가 깨지지
+  # 않도록 expires_on 이 TOKEN_EXPIRY_WARN_DAYS(기본 7) 이내면 교체를
+  # 예고하는 경고 로그를 남긴다 (guard 는 통과 — 경고만). expires_on 이
+  # 없으면 만료 없는 토큰이라 경고 없음.
+  local exp_days="${status_info#yes|}"
+  exp_days="${exp_days%%|*}"
+  local exp_date="${status_info##*|}"
+  if [ -n "${exp_days}" ] && [ "${exp_days}" -le "${TOKEN_EXPIRY_WARN_DAYS:-7}" ] 2>/dev/null; then
+    echo " ⚠️  CLOUDFLARE_API_TOKEN expires in ${exp_days} day(s) (on ${exp_date:-?}) — rotate soon: docs/17_CLOUDFLARE_TOKEN_ROTATION.md" >&2
+  fi
 }
 
 # resolve_deployment — read `wrangler pages deployment list --json` on stdin,

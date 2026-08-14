@@ -10,6 +10,7 @@
 
 import type { SearchResult } from '../../types'
 import type { BackendTask } from './context'
+import { DEFAULT_BACKEND_TIMEOUT_MS } from '../util'
 
 // Progressive collection phases — each phase waits up to waitMs, then checks
 // if we have enough results (≥ minResults). Phase 3 has minResults=0 so it
@@ -48,7 +49,14 @@ const PHASES = [
 // silently dropped the quote whenever the v1-search + v8-chart chain needed a
 // retry — the en-stock-06 "0.000" availability noise. 4.5s + waitFor lets the
 // retry chain finish inside the fanout window.
-/** Per-backend max wait (ms). Exported for tests (P1-G ceiling assertions). */
+/**
+ * Per-backend max wait (ms) — the SINGLE SOURCE for both fanout ceilings and
+ * fetchWithTimeout default timeouts. Registered backends whose fetch default
+ * exceeds this ceiling waste background subrequests (the ceiling timer fires
+ * first and discards the result). Call sites should derive fetch timeouts via
+ * backendTimeoutMs() so tuning this table propagates everywhere.
+ * Exported for tests (P1-G ceiling assertions).
+ */
 export const BACKEND_TIMEOUT_MS: Record<string, number> = {
   'self-index': 2500,
   bing: 2000,
@@ -96,6 +104,18 @@ export const BACKEND_TIMEOUT_MS: Record<string, number> = {
   brave: 2000,
   'yahoo-finance': 4500,
   youtube: 2500,
+}
+
+/**
+ * Resolve the effective timeout for a backend — the single-source accessor.
+ *
+ * Registered fanout backends return their BACKEND_TIMEOUT_MS ceiling (so a
+ * fetch can never outlive the fanout window). Unregistered names (auxiliary
+ * fetches like dbpedia/wikidata, or not-yet-tuned backends) fall back to the
+ * caller's current value, then to DEFAULT_BACKEND_TIMEOUT_MS.
+ */
+export function backendTimeoutMs(name: string, fallbackMs?: number): number {
+  return BACKEND_TIMEOUT_MS[name] ?? fallbackMs ?? DEFAULT_BACKEND_TIMEOUT_MS
 }
 
 interface TaskResult {
@@ -166,7 +186,7 @@ export async function fanoutBackends(
 
   // Start all tasks with per-backend timeout (fire-and-forget — they update taskState)
   for (let idx = 0; idx < tasks.length; idx++) {
-    const backendTimeout = BACKEND_TIMEOUT_MS[tasks[idx].name] ?? 4000
+    const backendTimeout = BACKEND_TIMEOUT_MS[tasks[idx].name] ?? DEFAULT_BACKEND_TIMEOUT_MS
     const task = tasks[idx]
     const state = taskState[idx]
 

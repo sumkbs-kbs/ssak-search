@@ -157,6 +157,7 @@ export function __resetRateLimiterStateForTests(): void {
   LOCAL_INFLIGHT.clear()
   LOCAL_CIRCUITS.clear()
   LOCAL_RATE_WINDOWS.clear()
+  LOCAL_COOLDOWNS.clear()
 }
 
 // ============================================================
@@ -172,6 +173,8 @@ interface RateLimiterDOClient {
   getAllHealth(): Promise<Record<string, HostHealth>>
   getRateLimitStatus(host: string): Promise<RateLimitResult>
   forceOpen(host: string): Promise<void>
+  setCooldown(key: string, untilMs: number): Promise<void>
+  getCooldown(key: string): Promise<number>
 }
 
 /**
@@ -433,6 +436,82 @@ export async function forceOpenBackend(env: AppBindings, url: string): Promise<v
   circuit.openedAt = Date.now()
   circuit.probeInFlight = false
   logger.warn(`[rate-limiter] Circuit force-opened for ${host} (canary regression)`)
+}
+
+// ============================================================
+// Shared cooldown windows (cross-isolate 429 pacing guards)
+// ============================================================
+
+/**
+ * Per-isolate cache of shared cooldown deadlines, keyed by cooldown key
+ * (e.g. 'cooldown:wikipedia'). Two roles:
+ *  - no-binding fallback: without the RATE_LIMITER DO the cooldowns stay
+ *    per-isolate (today's behavior), and
+ *  - read/write cache: with the DO, the local value short-circuits repeat
+ *    RPCs; correctness always comes from DO storage (getSharedCooldown
+ *    re-reads whenever the local cache is clean/expired, because another
+ *    isolate may have armed a longer window).
+ */
+const LOCAL_COOLDOWNS = new Map<string, number>()
+
+/** Clear one cooldown key from the local cache (test hooks / state resets). */
+export function resetSharedCooldownLocal(key: string): void {
+  LOCAL_COOLDOWNS.delete(key)
+}
+
+/**
+ * Arm (untilMs > now) or clear (else) a shared cooldown window. Updates the
+ * local cache first, then mirrors into the RateLimiter DO when the binding is
+ * available so every isolate observes the same upstream 429 window. Without a
+ * binding the local cache is the per-isolate fallback (today's behavior).
+ */
+export async function setSharedCooldown(
+  env: AppBindings | undefined,
+  key: string,
+  untilMs: number,
+): Promise<void> {
+  if (untilMs > Date.now()) LOCAL_COOLDOWNS.set(key, untilMs)
+  else LOCAL_COOLDOWNS.delete(key)
+  if (!env) return
+  const client = getDOClient(env)
+  if (client) {
+    try {
+      await client.setCooldown(key, untilMs)
+    } catch (e) {
+      // Mirroring is best-effort — a DO RPC failure must not break the
+      // upstream request that just recorded the 429.
+      logger.warn('[rate-limiter] Failed to mirror shared cooldown:', { error: toError(e) })
+    }
+  }
+}
+
+/**
+ * Read a shared cooldown deadline (epoch ms; 0 = not armed). Local fast path
+ * first; when the local cache is clean/expired and a DO binding exists, DO
+ * storage is the source of truth — another isolate may have armed a window
+ * this isolate hasn't seen yet, and adopting it lets the whole fleet skip the
+ * upstream instead of re-tripping it one isolate at a time.
+ */
+export async function getSharedCooldown(
+  env: AppBindings | undefined,
+  key: string,
+  now: number = Date.now(),
+): Promise<number> {
+  const local = LOCAL_COOLDOWNS.get(key)
+  if (local !== undefined && local > now) return local
+  if (!env) return local ?? 0
+  const client = getDOClient(env)
+  if (client) {
+    try {
+      const untilMs = await client.getCooldown(key)
+      if (untilMs > now) LOCAL_COOLDOWNS.set(key, untilMs)
+      else LOCAL_COOLDOWNS.delete(key)
+      return untilMs
+    } catch (e) {
+      logger.warn('[rate-limiter] Failed to read shared cooldown:', { error: toError(e) })
+    }
+  }
+  return local ?? 0
 }
 
 /** Get rate limit status for a specific host (for response headers). */

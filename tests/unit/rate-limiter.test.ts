@@ -17,6 +17,9 @@ import {
   rateLimitedFetch,
   getBackendHealth,
   getRateLimitStatus,
+  setSharedCooldown,
+  getSharedCooldown,
+  resetSharedCooldownLocal,
   __resetRateLimiterStateForTests,
 } from '../../src/lib/rate-limiter'
 import type { AppBindings } from '../../src/types'
@@ -283,6 +286,66 @@ describe('Rate Limiter — Local Fallback', () => {
         vi.useRealTimers()
       }
     })
+  })
+})
+
+describe('Shared cooldowns — cross-isolate 429 pacing guards', () => {
+  beforeEach(() => {
+    // Fresh module state per test (LOCAL_COOLDOWNS is module-level).
+    __resetRateLimiterStateForTests()
+  })
+
+  /** Build an env whose RATE_LIMITER binding returns a fake DO client. */
+  function doEnv(client: { setCooldown: ReturnType<typeof vi.fn>; getCooldown: ReturnType<typeof vi.fn> }): AppBindings {
+    return {
+      RATE_LIMITER: {
+        idFromName: vi.fn(() => 'id'),
+        get: vi.fn(() => client),
+      },
+    } as unknown as AppBindings
+  }
+
+  it('arms and reads via the local fallback when no binding is present', async () => {
+    const untilMs = Date.now() + 30_000
+    await setSharedCooldown(undefined, 'cooldown:wikipedia', untilMs)
+    expect(await getSharedCooldown(undefined, 'cooldown:wikipedia')).toBe(untilMs)
+  })
+
+  it('treats a missing local entry as 0 when no binding is present', async () => {
+    expect(await getSharedCooldown(undefined, 'cooldown:wikipedia')).toBe(0)
+  })
+
+  it('mirrors writes into the DO client and reads from it', async () => {
+    const client = { setCooldown: vi.fn(async () => {}), getCooldown: vi.fn(async () => 0) }
+    const env = doEnv(client)
+    const untilMs = Date.now() + 45_000
+    await setSharedCooldown(env, 'cooldown:wikipedia', untilMs)
+    expect(client.setCooldown).toHaveBeenCalledWith('cooldown:wikipedia', untilMs)
+
+    // A DIFFERENT key has no local cache entry — the read must hit DO
+    // storage (the wikipedia key's local cache is armed by the write above).
+    client.getCooldown.mockResolvedValue(untilMs)
+    expect(await getSharedCooldown(env, 'cooldown:github-search')).toBe(untilMs)
+    expect(client.getCooldown).toHaveBeenCalledWith('cooldown:github-search')
+  })
+
+  it('adopts a window armed by another isolate and caches it locally (no repeat RPC)', async () => {
+    const client = { setCooldown: vi.fn(async () => {}), getCooldown: vi.fn(async () => 0) }
+    const env = doEnv(client)
+    const untilMs = Date.now() + 60_000
+    client.getCooldown.mockResolvedValue(untilMs)
+
+    // First read pulls the shared window from DO storage and caches it.
+    expect(await getSharedCooldown(env, 'cooldown:wikipedia')).toBe(untilMs)
+    // Second read short-circuits the RPC — the local cache is armed.
+    expect(await getSharedCooldown(env, 'cooldown:wikipedia')).toBe(untilMs)
+    expect(client.getCooldown).toHaveBeenCalledTimes(1)
+  })
+
+  it('clears a cached window via resetSharedCooldownLocal', async () => {
+    await setSharedCooldown(undefined, 'cooldown:wikipedia', Date.now() + 30_000)
+    resetSharedCooldownLocal('cooldown:wikipedia')
+    expect(await getSharedCooldown(undefined, 'cooldown:wikipedia')).toBe(0)
   })
 })
 

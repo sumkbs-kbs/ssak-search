@@ -816,12 +816,22 @@ export function timeRangeToDays(range: string | undefined): number | undefined {
   }
 }
 
+/**
+ * Default per-backend fetch timeout (ms). Single source for BOTH the fanout
+ * per-backend ceiling fallback (search/fanout.ts) AND fetchWithTimeout's own
+ * default — a backend fetch must never outlive its fanout ceiling, or the
+ * ceiling timer discards the result while the fetch keeps burning background
+ * subrequests. Call sites of registered backends derive their default from
+ * BACKEND_TIMEOUT_MS via backendTimeoutMs() instead of this constant.
+ */
+export const DEFAULT_BACKEND_TIMEOUT_MS = 4000
+
 /** Fetch with timeout */
 export async function fetchWithTimeout(
   env: Env | undefined,
   url: string,
   init: RequestInit = {},
-  timeoutMs = 15000,
+  timeoutMs = DEFAULT_BACKEND_TIMEOUT_MS,
 ): Promise<Response> {
   // Count this fetch against the active request's subrequest budget (if any).
   // This is the single choke point for all backend fetches, which is why we
@@ -849,6 +859,20 @@ export async function fetchWithTimeout(
   // unexpected (race with another concurrent acquire). Bail with a 503 rather
   // than silently bypassing the breaker.
   throw new Error(`Rate limiter rejected (capacity race): ${url}`)
+}
+
+/**
+ * Detect the rate limiter's circuit-open / capacity-race throws (see
+ * fetchWithTimeout above). Retry decorators (resilience/retry.ts consumers)
+ * MUST exclude these from `retryable`: a circuit stays open for its
+ * resetTimeoutMs (30–60s), so a 150ms retry would just re-throw and burn a
+ * subrequest against a closed circuit. docs/16 rule 4.
+ */
+export function isCircuitOpenError(err: unknown): boolean {
+  return (
+    err instanceof Error &&
+    /Upstream unavailable \(circuit open or at capacity\)|Rate limiter rejected \(capacity race\)/.test(err.message)
+  )
 }
 
 /**

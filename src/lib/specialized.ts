@@ -14,7 +14,17 @@
 
 import type { SearchResult, Env } from '../types'
 import { logger, toError } from './logger'
-import { fetchWithTimeout, extractDomain, stripHtml, computeScore, truncateToTokens, simplifyQuery } from './util'
+import {
+  fetchWithTimeout,
+  extractDomain,
+  stripHtml,
+  computeScore,
+  truncateToTokens,
+  simplifyQuery,
+} from './util'
+import { withRetry, splitRetryBudget } from './resilience/retry'
+import { BACKEND_TIMEOUT_MS, backendTimeoutMs } from './search/fanout'
+import { setSharedCooldown, getSharedCooldown, resetSharedCooldownLocal } from './rate-limiter'
 
 // ============================================================
 // Wikipedia REST API
@@ -100,34 +110,119 @@ export function clearWikipediaCache(): void {
  */
 const WIKIPEDIA_RATE_COOLDOWN_MS = 30_000
 
-/** Epoch ms; 0 = not limited. B1: module-level wikipedia 429 window. */
-let wikipediaRateLimitedUntil = 0
+/**
+ * 네트워크 백오프 쿨다운의 절대 상한(ms) — Retry-After 캡(LLM 게이트웨이)과
+ * 동일한 원칙: 서버의 지시는 상한 안에서 권위를 가지지만, 오설정·비현실적으로
+ * 큰 값(예: 3600초)이 검색 백엔드를 수 시간 동안 막아서는 안 된다. wikimedia
+ * 게이트웨이의 기존 [1s, 120s] 클램프 상한을 공유 단일 소스로 승격 — wikipedia와
+ * github 가드 모두 사용.
+ */
+export const MAX_NETWORK_COOLDOWN_MS = 120_000
+
+/**
+ * Epoch ms per wikipedia language; 0/absent = not limited. B1: module-level
+ * wikipedia 429 window. S73 (2026-08-13): split per-language — the wikimedia
+ * gateway rate-limits per site (per-IP, per-project), so an en.wikipedia 429
+ * must NOT kill zh.wikipedia for the same window. Live probe 2026-08-13:
+ * en.wikipedia REST 429 while zh.wikipedia/ja.wikipedia returned 200 for
+ * zh/ja queries — the old single global window was the zh-fact flicker
+ * (zh 20%, worst of all languages) mechanism: one en 429 mid-eval wiped
+ * wikipedia from EVERY subsequent query regardless of language, and the
+ * EN-only DBpedia mirror could not cover zh.wikipedia.org gold.
+ */
+const wikipediaRateLimitedUntilByLang = new Map<string, number>()
+
+/**
+ * Shared-cooldown key for the wikipedia 429 window. Mirrored into the
+ * RateLimiter DO storage so every isolate observes the SAME window — the
+ * module-level guard above is per-isolate, and without sharing each isolate
+ * would independently re-trip the wikimedia gateway with its own burst.
+ * en keeps the legacy bare key (backward compatible with stored DO state);
+ * other languages get a per-language suffix.
+ */
+const WIKIPEDIA_COOLDOWN_KEY = 'cooldown:wikipedia'
+
+function wikipediaCooldownKey(language: string): string {
+  return language === 'en' ? WIKIPEDIA_COOLDOWN_KEY : `${WIKIPEDIA_COOLDOWN_KEY}:${language}`
+}
 
 /** TEST HOOK: reset the wikipedia rate-guard state (per-isolate module state). */
 export function resetWikipediaRateState(): void {
-  wikipediaRateLimitedUntil = 0
+  wikipediaRateLimitedUntilByLang.clear()
+  resetSharedCooldownLocal(WIKIPEDIA_COOLDOWN_KEY)
 }
 
-/** True when wikipedia recently 429'd and the cooldown window has not passed. */
-export function isWikipediaRateLimited(now: number = Date.now()): boolean {
-  return now < wikipediaRateLimitedUntil
+/** True when that wikipedia language recently 429'd and the window has passed. */
+export function isWikipediaRateLimited(language: string = 'en', now: number = Date.now()): boolean {
+  return now < (wikipediaRateLimitedUntilByLang.get(language) ?? 0)
 }
 
 /**
- * Record a wikipedia 429 — arms a cooldown. Honours the upstream Retry-After
- * header when present (clamped to [1s, 120s]); falls back to the 30s default
- * otherwise (a plain-object mock in tests has no headers). EXPORTED FOR TESTS.
+ * Cross-isolate wikipedia 429 window check (per language). Local guard first
+ * (fast path); when the local window is clean and a RATE_LIMITER DO binding is
+ * available, consult the shared DO cooldown — another isolate may have already
+ * discovered the window, and adopting it skips this isolate's network chain
+ * instead of re-arming the block with its own request burst.
+ */
+export async function isWikipediaRateLimitedShared(
+  env: Env | undefined,
+  language: string = 'en',
+  now: number = Date.now(),
+): Promise<boolean> {
+  const localUntil = wikipediaRateLimitedUntilByLang.get(language) ?? 0
+  if (localUntil > now) return true
+  const untilMs = await getSharedCooldown(env, wikipediaCooldownKey(language), now)
+  if (untilMs > now) {
+    wikipediaRateLimitedUntilByLang.set(language, Math.max(localUntil, untilMs))
+    return true
+  }
+  return false
+}
+
+/**
+ * Mirror the current wikipedia cooldown deadline into shared DO storage so
+ * other isolates skip the network chain for the same window. Local-only when
+ * the binding is absent (recordWikipediaRateLimit already covers that path).
+ */
+export async function mirrorWikipediaCooldown(env: Env | undefined, language: string = 'en'): Promise<void> {
+  await setSharedCooldown(env, wikipediaCooldownKey(language), wikipediaRateLimitedUntilByLang.get(language) ?? 0)
+}
+
+/**
+ * Record a wikipedia 429 — arms a cooldown for that language. Honours the
+ * upstream Retry-After header when present (clamped to [1s, 120s]); falls back
+ * to the 30s default otherwise (a plain-object mock in tests has no headers).
+ * EXPORTED FOR TESTS.
  */
 export function recordWikipediaRateLimit(
   res?: { headers?: { get?: (key: string) => string | null } },
+  language: string = 'en',
   now: number = Date.now(),
 ): void {
   const retryAfterSec = Number(res?.headers?.get?.('retry-after'))
   const cooldownMs =
     Number.isFinite(retryAfterSec) && retryAfterSec > 0
-      ? Math.min(Math.max(retryAfterSec * 1000, 1000), 120_000)
+      ? Math.min(Math.max(retryAfterSec * 1000, 1000), MAX_NETWORK_COOLDOWN_MS)
       : WIKIPEDIA_RATE_COOLDOWN_MS
-  wikipediaRateLimitedUntil = Math.max(wikipediaRateLimitedUntil, now + cooldownMs)
+  const prev = wikipediaRateLimitedUntilByLang.get(language) ?? 0
+  wikipediaRateLimitedUntilByLang.set(language, Math.max(prev, now + cooldownMs))
+}
+
+/**
+ * HTTP failure from a wikipedia endpoint (REST or Action). `transient` marks
+ * the 429 case, which withRetry retries; other statuses (5xx, 4xx) fail fast —
+ * exactly the old loops' `if (status === 429 …) retry else break`. Carries the
+ * status so the REST-failure log can report it after the retry chain exhausts.
+ */
+class WikipediaHttpError extends Error {
+  readonly status: number
+  readonly transient: boolean
+  constructor(status: number, transient: boolean) {
+    super(`Wikipedia HTTP ${status}`)
+    this.status = status
+    this.transient = transient
+    this.name = 'WikipediaHttpError'
+  }
 }
 
 /**
@@ -139,7 +234,7 @@ export async function wikipediaSearch(
   query: string,
   opts: { maxResults?: number; timeoutMs?: number; language?: string; env?: Env } = {},
 ): Promise<SearchResult[]> {
-  const { maxResults = 5, timeoutMs = 8000, language = 'en', env } = opts
+  const { maxResults = 5, timeoutMs = backendTimeoutMs('wikipedia', 8000), language = 'en', env } = opts
   const cacheKey = wikipediaCacheKey(language, query, maxResults)
   const cached = wikipediaCacheGet(cacheKey)
   if (cached) return cached
@@ -153,9 +248,9 @@ export async function wikipediaSearch(
   // checked BEFORE this guard so a pre-window result still serves. Mirrors
   // the S23 GitHub rate-guard skip semantics.
   const results: SearchResult[] = []
-  if (isWikipediaRateLimited()) {
+  if (await isWikipediaRateLimitedShared(env, language)) {
     logger.warn('Wikipedia search skipped (429 cooldown window):', {
-      resumeAt: new Date(wikipediaRateLimitedUntil).toISOString(),
+      resumeAt: new Date(wikipediaRateLimitedUntilByLang.get(language) ?? 0).toISOString(),
       query,
       language,
     })
@@ -178,6 +273,25 @@ export async function wikipediaSearch(
   // zh-general-04 fell to 4 results.
   const maxRetries = 2
   const backoffDelays = [300, 600]
+
+  // Reserve the 4.5s wikipedia fanout ceiling across the two SEQUENTIAL
+  // chains: REST gets 3000ms (3 × 700ms attempts + 900ms backoff) and the
+  // Action fallback 1500ms (2 × 500ms + 500ms beat) — the combined worst
+  // case (every attempt timing out) totals exactly 4500ms. Under the old
+  // full 8000ms/attempt budget a hanging wikipedia burned up to ~25s of
+  // background work whose result fanout had already discarded at the ceiling.
+  //
+  // 2026-08 검증 (scripts/probe-wikipedia-budget 실측, 3회): 실제 429 체인이
+  // REST 1812~1900ms / Action 1303~1380ms를 기록 — 각각 예약(3000/1500)의
+  // 60~63% / 87~92%로 두 체인 다 안전하게 들어온다 → 2:1 비율 검증됨. 건강한
+  // 단일 시도 테일은 REST 650~751ms / Action 459~524ms로 양쪽 다 per-attempt
+  // 예산(700/500) 근처인데, ceiling 4500 안에서 양쪽을 동시에 여유 있게 담는
+  // 분할은 존재하지 않는다(필요 ≈4700ms). REST는 주경로이고 테일이 더 무거워
+  // per-attempt 700을 유지한다 — 잘림은 재시도 체인이 흡수.
+  const ACTION_BUDGET_MS = 1500
+  const restBudgetMs = Math.min(timeoutMs, (BACKEND_TIMEOUT_MS.wikipedia ?? 4500) - ACTION_BUDGET_MS)
+  const restPerAttempt = splitRetryBudget(restBudgetMs, maxRetries + 1, 300 + 600, 500)
+  const actionPerAttempt = splitRetryBudget(ACTION_BUDGET_MS, 2, 500, 400)
 
   // Fallback: if the REST API returned no results (including after exhausted
   // 429 retries — previously the `if (!response?.ok) return results` early
@@ -205,28 +319,70 @@ export async function wikipediaSearch(
     try {
       const actionUrl = `https://${language}.wikipedia.org/w/api.php?action=query&list=search&srsearch=${encodeURIComponent(query)}&format=json&srlimit=${maxResults}&srprop=snippet`
       let actionRes: Response | null = null
-      for (let attempt = 0; attempt <= 1; attempt++) {
-        actionRes = await fetchWithTimeout(
-          env,
-          actionUrl,
-          {
-            headers: { Accept: 'application/json', 'User-Agent': 'SearchAPI/1.0 (contact@example.com)' },
+      try {
+        // One retry on 429 with a 500ms beat, via the shared withRetry
+        // decorator — same policy as the old loop (retry only the first 429,
+        // fail fast on everything else).
+        let actionAttemptNo = 0
+        actionRes = await withRetry(
+          async () => {
+            actionAttemptNo += 1
+            const attemptStart = Date.now()
+            const res = await fetchWithTimeout(
+              env,
+              actionUrl,
+              {
+                headers: { Accept: 'application/json', 'User-Agent': 'SearchAPI/1.0 (contact@example.com)' },
+              },
+              actionPerAttempt,
+            )
+            // Chain timing log (Logpush 대상) — Action 1500ms 예산 분할 검증용 실측 데이터.
+            logger.info('[Wikipedia] Action attempt', {
+              chain: 'action',
+              attempt: actionAttemptNo,
+              status: res.status,
+              latencyMs: Date.now() - attemptStart,
+              budgetMs: actionPerAttempt,
+              query,
+              language,
+            })
+            if (res.ok) return res
+            // B1: the Action endpoint shares the same gateway block as REST
+            // (verified live) — record the cooldown so later queries skip the
+            // whole chain. The REST chain already burned ~900ms of backoff
+            // sleep, so the 500ms beat stays well inside the 4.5s fanout
+            // ceiling.
+            if (res.status === 429) {
+              recordWikipediaRateLimit(res, language)
+              // Share the window with other isolates (best-effort DO mirror).
+              await mirrorWikipediaCooldown(env, language)
+            }
+            throw new WikipediaHttpError(res.status, res.status === 429)
           },
-          timeoutMs,
+          {
+            maxRetries: 1,
+            delaysMs: [500],
+            jitter: false,
+            retryable: (err) => err instanceof WikipediaHttpError && err.transient,
+            onRetry: (attempt, delayMs, err) => {
+              logger.info('[Wikipedia] Action retry scheduled', {
+                chain: 'action',
+                attempt,
+                delayMs,
+                error: toError(err),
+                query,
+                language,
+              })
+            },
+          },
         )
-        if (actionRes.ok) break
-        if (actionRes.status === 429 && attempt === 0) {
-          // B1: the Action endpoint shares the same gateway block as REST
-          // (verified live) — record the cooldown so later queries skip the
-          // whole chain, then give the window a slightly longer beat (500ms)
-          // for the rare transient case. The REST chain already burned ~900ms
-          // of backoff sleep, so this stays well inside the 4.5s fanout
-          // ceiling.
-          recordWikipediaRateLimit(actionRes)
-          await new Promise((r) => setTimeout(r, 500))
-          continue
+      } catch (err) {
+        // Exhausted 429 / fail-fast 5xx-4xx: leave actionRes null, silently —
+        // matching the old loop's `break`. Network/timeout errors keep the
+        // original 'fallback failed' warn.
+        if (!(err instanceof WikipediaHttpError)) {
+          logger.warn('Wikipedia Action API fallback failed:', { error: toError(err) })
         }
-        break
       }
       if (actionRes?.ok) {
         const actionData = (await actionRes.json()) as { query?: { search?: { title: string; snippet: string }[] } }
@@ -252,33 +408,69 @@ export async function wikipediaSearch(
     // Search for page titles
     const searchUrl = `https://${language}.wikipedia.org/w/rest.php/v1/search/page?q=${encodeURIComponent(query)}&limit=${maxResults}`
 
-    let response: Response | null = null
+    // REST retry chain via the shared withRetry decorator, preserving the
+    // ceiling-safe budget (maxRetries=2, 300/600ms backoff) and the B1
+    // cooldown side effect: every 429 records the rate-guard BEFORE the
+    // retry, so the NEXT wikipedia-expected query in this isolate skips
+    // instantly instead of burning its own 429 attempts. The intra-query
+    // retry chain is kept for the DISCOVERY query only (the one that finds
+    // the window) — later queries are skipped at the top by the guard.
     let restRateLimited = false
-    for (let attempt = 0; attempt <= maxRetries; attempt++) {
-      response = await fetchWithTimeout(
-        env,
-        searchUrl,
-        {
-          headers: { Accept: 'application/json', 'User-Agent': 'SearchAPI/1.0 (contact@example.com)' },
+    let restError: unknown = null
+    let restAttemptNo = 0
+    const response = await withRetry(
+      async () => {
+        restAttemptNo += 1
+        const attemptStart = Date.now()
+        const res = await fetchWithTimeout(
+          env,
+          searchUrl,
+          {
+            headers: { Accept: 'application/json', 'User-Agent': 'SearchAPI/1.0 (contact@example.com)' },
+          },
+          restPerAttempt,
+        )
+        // Chain timing log (Logpush 대상) — REST 3000ms 예산 분할 검증용 실측 데이터.
+        logger.info('[Wikipedia] REST attempt', {
+          chain: 'rest',
+          attempt: restAttemptNo,
+          status: res.status,
+          latencyMs: Date.now() - attemptStart,
+          budgetMs: restPerAttempt,
+          query,
+          language,
+        })
+        if (res.ok) return res
+        if (res.status === 429) {
+          restRateLimited = true
+          recordWikipediaRateLimit(res, language)
+          // Share the window with other isolates (best-effort DO mirror).
+          await mirrorWikipediaCooldown(env, language)
+          throw new WikipediaHttpError(res.status, true)
+        }
+        // Non-429 error (5xx, 4xx) — fail fast, exactly like the old `break`.
+        throw new WikipediaHttpError(res.status, false)
+      },
+      {
+        maxRetries,
+        delaysMs: backoffDelays,
+        jitter: false,
+        retryable: (err) => err instanceof WikipediaHttpError && err.transient,
+        onRetry: (attempt, delayMs, err) => {
+          logger.info('[Wikipedia] REST retry scheduled', {
+            chain: 'rest',
+            attempt,
+            delayMs,
+            error: toError(err),
+            query,
+            language,
+          })
         },
-        timeoutMs,
-      )
-
-      if (response.ok) break
-      if (response.status === 429 && attempt < maxRetries) {
-        // Rate limited — B1: record the cooldown (Retry-After-aware) so the
-        // NEXT wikipedia-expected query in this isolate skips instantly
-        // instead of burning its own 429 attempts. The intra-query retry
-        // chain is kept for the DISCOVERY query only (the one that finds the
-        // window) — later queries are skipped at the top by the guard.
-        restRateLimited = true
-        recordWikipediaRateLimit(response)
-        await new Promise((r) => setTimeout(r, backoffDelays[attempt]))
-        continue
-      }
-      // Non-429 error or exhausted retries
-      break
-    }
+      },
+    ).catch((err) => {
+      restError = err
+      return null
+    })
 
     // REST failure (429 exhausted / 5xx / network) must NOT short-circuit the
     // Action API fallback — drop through to it instead of returning empty.
@@ -304,8 +496,8 @@ export async function wikipediaSearch(
           domain: `${language}.wikipedia.org`,
         })
       }
-    } else if (response) {
-      logger.warn(`Wikipedia REST search failed (status ${response.status}), trying Action API:`, { query })
+    } else if (restError instanceof WikipediaHttpError) {
+      logger.warn(`Wikipedia REST search failed (status ${restError.status}), trying Action API:`, { query })
     } else {
       logger.warn('Wikipedia REST search failed (no response), trying Action API:', { query })
     }
@@ -369,7 +561,7 @@ export async function dbpediaSearch(
   query: string,
   opts: { maxResults?: number; timeoutMs?: number; language?: string; env?: Env } = {},
 ): Promise<SearchResult[]> {
-  const { maxResults = 5, timeoutMs = 8000, language = 'en', env } = opts
+  const { maxResults = 5, timeoutMs = backendTimeoutMs('dbpedia', 8000), language = 'en', env } = opts
   if (language !== 'en') return [] // EN-only Lookup index
 
   const cacheKey = wikipediaCacheKey(language, query, maxResults, 'dbpedia')
@@ -570,7 +762,7 @@ export async function wikidataWikiSearch(
   query: string,
   opts: { maxResults?: number; timeoutMs?: number; language?: string; env?: Env } = {},
 ): Promise<SearchResult[]> {
-  const { maxResults = 5, timeoutMs = 8000, language = 'zh', env } = opts
+  const { maxResults = 5, timeoutMs = backendTimeoutMs('wikidata', 8000), language = 'zh', env } = opts
   // EN is covered by dbpediaSearch (DBpedia Lookup, English index).
   if (language === 'en') return []
 
@@ -739,7 +931,7 @@ export async function dbpediaLangSearch(
   query: string,
   opts: { maxResults?: number; timeoutMs?: number; language?: string; env?: Env } = {},
 ): Promise<SearchResult[]> {
-  const { maxResults = 5, timeoutMs = 8000, language = 'ja', env } = opts
+  const { maxResults = 5, timeoutMs = backendTimeoutMs('dbpedia', 8000), language = 'ja', env } = opts
   // Only the ja endpoint is live — zh/ko.dbpedia.org are down. EN is covered
   // by dbpediaSearch (Lookup), not this SPARQL path.
   if (language !== 'ja') return []
@@ -827,7 +1019,7 @@ export async function dbpediaLangSearch(
 export async function wikipediaSummary(
   title: string,
   language = 'en',
-  timeoutMs = 8000,
+  timeoutMs = backendTimeoutMs('wikipedia', 8000),
   env?: Env,
 ): Promise<{ title: string; extract: string; url: string } | null> {
   try {
@@ -2166,7 +2358,7 @@ export async function fetchDbpediaEntity(
       {
         headers: { Accept: 'application/json', 'User-Agent': 'SearchAPI/1.0' },
       },
-      6000,
+      backendTimeoutMs('dbpedia', 6000),
     )
     if (!resp.ok) return null
     const data = (await resp.json()) as Record<string, unknown>
@@ -2266,7 +2458,7 @@ export async function getKnowledgeGraph(
       env,
       summaryUrl,
       { headers: { Accept: 'application/json', 'User-Agent': 'SearchAPI/1.0 (contact@example.com)' } },
-      6000,
+      backendTimeoutMs('wikipedia', 6000),
     )
 
     if (!summaryResp.ok) return null

@@ -30,7 +30,35 @@
 
 import type { SearchResult, Env } from '../types'
 import { logger, toError } from './logger'
-import { fetchWithTimeout, extractDomain, decodeEntities, computeScore, truncateToTokens, simplifyQuery } from './util'
+import { backendTimeoutMs } from './search/fanout'
+import {
+  fetchWithTimeout,
+  extractDomain,
+  decodeEntities,
+  computeScore,
+  truncateToTokens,
+  simplifyQuery,
+  isCircuitOpenError,
+} from './util'
+import { withRetry, splitRetryBudget } from './resilience/retry'
+
+/**
+ * Transient failure from the Stack Exchange API — the ONLY error class worth
+ * retrying (docs/16_FAILFAST_BACKEND_RETRY_ANALYSIS.md §3.9). Covers 5xx and
+ * network errors (fetch throw). Deliberately NOT wrapped: 4xx (permanent
+ * refusal), 429 (keyless quota exhausted — the quota guard hard-stops below
+ * QUOTA_FLOOR, and a retry would waste the daily allowance), and the rate
+ * limiter's circuit-open / capacity-race throws (retrying a closed circuit
+ * just hammers it).
+ */
+class TransientStackExchangeError extends Error {
+  readonly status: number | null
+  constructor(message: string, status: number | null) {
+    super(message)
+    this.status = status
+    this.name = 'TransientStackExchangeError'
+  }
+}
 
 const STACK_EXCHANGE_SEARCH_URL = 'https://api.stackexchange.com/2.3/search/advanced'
 
@@ -106,7 +134,7 @@ export async function stackExchangeSearch(
   query: string,
   opts: StackExchangeSearchOptions = {},
 ): Promise<SearchResult[]> {
-  const { maxResults = 5, timeoutMs = 8000, env } = opts
+  const { maxResults = 5, timeoutMs = backendTimeoutMs('stack-exchange', 8000), env } = opts
   if (quotaRemaining <= QUOTA_FLOOR) {
     logger.warn('Stack Exchange API quota floor reached — skipping', { quotaRemaining })
     return []
@@ -125,14 +153,57 @@ export async function stackExchangeSearch(
       filter: 'default',
     })
     const url = `${STACK_EXCHANGE_SEARCH_URL}?${params.toString()}`
-    const response = await fetchWithTimeout(
-      env,
-      url,
-      { headers: { Accept: 'application/json', 'User-Agent': 'SearchAPI/1.0' } },
-      timeoutMs,
-    )
-    if (!response.ok) {
-      logger.warn('Stack Exchange API non-OK:', { status: response.status })
+    // docs/16 §3.9: 5xx/network gets ONE retry via the shared withRetry
+    // decorator. Budget: splitRetryBudget(4000, 2, 150, 800) = 1925 → worst
+    // 2×1925+150 = 4000 = the stack-exchange fanout ceiling exactly. 429/4xx
+    // pass through as Responses and fail fast below (429 = quota exhausted);
+    // circuit-open throws excluded.
+    const perAttemptMs = splitRetryBudget(Math.min(timeoutMs, 4000), 2, 150, 800)
+    const response = await withRetry(
+      async () => {
+        let res: Response
+        try {
+          res = await fetchWithTimeout(
+            env,
+            url,
+            { headers: { Accept: 'application/json', 'User-Agent': 'SearchAPI/1.0' } },
+            perAttemptMs,
+          )
+        } catch (err) {
+          if (isCircuitOpenError(err)) throw err
+          // Network timeout / blip — transient, worth the single retry.
+          throw new TransientStackExchangeError(`Stack Exchange fetch failed: ${toError(err)}`, null)
+        }
+        if (res.ok) return res
+        // 4xx → permanent refusal; 429 → quota exhausted — fail fast (a retry
+        // would waste the 300/day keyless allowance).
+        if (res.status === 429 || (res.status >= 400 && res.status < 500)) return res
+        // 5xx → server-side transient failure — retry once.
+        res.body?.cancel().catch(() => {})
+        throw new TransientStackExchangeError(`Stack Exchange HTTP ${res.status}`, res.status)
+      },
+      {
+        maxRetries: 1,
+        delaysMs: [150],
+        jitter: false,
+        retryable: (err) => err instanceof TransientStackExchangeError && !isCircuitOpenError(err),
+      },
+    ).catch((err) => {
+      logger.warn('Stack Exchange API search failed:', { error: toError(err) })
+      return null
+    })
+
+    if (!response?.ok) {
+      if (response?.status === 429) {
+        // 429 = keyless quota exhausted (300/day/IP). Hard-stop the quota
+        // guard so every later query skips the API entirely — the previous
+        // behavior kept calling into the exhausted window, the circuit's
+        // failure counter grew to the trip threshold, and the open circuit
+        // fail-fast'ed for the rest of the day. quotaRemaining=0 → the guard
+        // returns [] BEFORE any fetch/acquire, so no new failures accumulate.
+        quotaRemaining = 0
+      }
+      if (response) logger.warn('Stack Exchange API non-OK:', { status: response.status })
       return []
     }
     const data = (await response.json()) as { quota_remaining?: number; backoff?: number }

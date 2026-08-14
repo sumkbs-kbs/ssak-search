@@ -123,6 +123,70 @@ describe('stackExchangeSearch — quota guard / fetch', () => {
     expect(results).toEqual([])
   })
 
+  // ── docs/16 §3.9 retry policy (5xx/network → 1 retry; 429/4xx/circuit fail-fast) ──
+  it('retries a 5xx once and succeeds on the second attempt', async () => {
+    mockFetchWithTimeout
+      .mockResolvedValueOnce({ ok: false, status: 503 })
+      .mockResolvedValueOnce({ ok: true, status: 200, json: async () => SO_ITEMS } as unknown as Response)
+    const results = await stackExchangeSearch('React useState', { maxResults: 5, timeoutMs: 4000 })
+    expect(mockFetchWithTimeout).toHaveBeenCalledTimes(2)
+    expect(results.length).toBe(3)
+  })
+
+  it('returns [] after two consecutive 5xx responses (retries exhausted)', async () => {
+    mockFetchWithTimeout
+      .mockResolvedValueOnce({ ok: false, status: 503 })
+      .mockResolvedValueOnce({ ok: false, status: 500 })
+    const results = await stackExchangeSearch('q', { maxResults: 5, timeoutMs: 4000 })
+    expect(mockFetchWithTimeout).toHaveBeenCalledTimes(2)
+    expect(results).toEqual([])
+  })
+
+  it('retries a network error once and succeeds on the second attempt', async () => {
+    mockFetchWithTimeout
+      .mockRejectedValueOnce(new Error('socket hang up'))
+      .mockResolvedValueOnce({ ok: true, status: 200, json: async () => SO_ITEMS } as unknown as Response)
+    const results = await stackExchangeSearch('q', { maxResults: 5, timeoutMs: 4000 })
+    expect(mockFetchWithTimeout).toHaveBeenCalledTimes(2)
+    expect(results.length).toBe(3)
+  })
+
+  it('does NOT retry 429 (keyless quota exhausted — retry wastes the allowance)', async () => {
+    mockFetchWithTimeout.mockResolvedValueOnce({ ok: false, status: 429 })
+    const results = await stackExchangeSearch('q', { maxResults: 5, timeoutMs: 4000 })
+    expect(mockFetchWithTimeout).toHaveBeenCalledTimes(1)
+    expect(results).toEqual([])
+  })
+
+  it('does NOT retry 4xx (permanent refusal)', async () => {
+    mockFetchWithTimeout.mockResolvedValueOnce({ ok: false, status: 400 })
+    const results = await stackExchangeSearch('q', { maxResults: 5, timeoutMs: 4000 })
+    expect(mockFetchWithTimeout).toHaveBeenCalledTimes(1)
+    expect(results).toEqual([])
+  })
+
+  it('does NOT retry the rate-limiter circuit-open throw', async () => {
+    mockFetchWithTimeout.mockRejectedValueOnce(
+      new Error('Upstream unavailable (circuit open or at capacity): https://api.stackexchange.com/2.3/search/advanced'),
+    )
+    const results = await stackExchangeSearch('q', { maxResults: 5, timeoutMs: 4000 })
+    expect(mockFetchWithTimeout).toHaveBeenCalledTimes(1)
+    expect(results).toEqual([])
+  })
+
+  it('hard-stops the quota guard after a 429 — later queries skip the API entirely', async () => {
+    resetStackExchangeQuota()
+    mockFetchWithTimeout.mockResolvedValueOnce({ ok: false, status: 429 })
+    const first = await stackExchangeSearch('q', { maxResults: 5, timeoutMs: 4000 })
+    expect(first).toEqual([])
+    // quotaRemaining=0 → the guard returns [] before any fetch — the circuit
+    // failure counter stops growing and the circuit can half-open recover.
+    mockFetchWithTimeout.mockClear()
+    const second = await stackExchangeSearch('q', { maxResults: 5, timeoutMs: 4000 })
+    expect(second).toEqual([])
+    expect(mockFetchWithTimeout).not.toHaveBeenCalled()
+  })
+
   it('skips requests once the keyless quota approaches the floor', async () => {
     // Simulate a near-exhausted quota (floor = 10)
     const low = { items: [], quota_remaining: 5, backoff: 0 }

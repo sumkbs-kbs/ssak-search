@@ -13,6 +13,19 @@ vi.mock('../../src/lib/util', async (importOriginal) => {
   return { ...actual, fetchWithTimeout: (...args: unknown[]) => mockFetchWithTimeout(...args) }
 })
 
+// Mock the shared-cooldown bridge so wikipedia/github guard tests can observe
+// DO mirroring + adoption without a real RateLimiter DO binding.
+const cooldownMocks = vi.hoisted(() => ({
+  setSharedCooldown: vi.fn(async (_env: unknown, _key: string, _untilMs: number) => {}),
+  getSharedCooldown: vi.fn(async (_env: unknown, _key: string, _now: number) => 0),
+  resetSharedCooldownLocal: vi.fn(() => {}),
+}))
+vi.mock('../../src/lib/rate-limiter', () => ({
+  setSharedCooldown: cooldownMocks.setSharedCooldown,
+  getSharedCooldown: cooldownMocks.getSharedCooldown,
+  resetSharedCooldownLocal: cooldownMocks.resetSharedCooldownLocal,
+}))
+
 import {
   detectQueryType,
   getSourcesForQueryType,
@@ -645,9 +658,112 @@ describe('wikipediaSearch', () => {
     // 5s Retry-After → cooldown ends 5s from the call. Timestamp-armed checks:
     // still armed at now+4s, expired by now+6s — and NEVER extended to the
     // 30s no-header default (now+29s must be expired).
-    expect(isWikipediaRateLimited(now + 4000)).toBe(true)
-    expect(isWikipediaRateLimited(now + 6000)).toBe(false)
-    expect(isWikipediaRateLimited(now + 29_000)).toBe(false)
+    expect(isWikipediaRateLimited('en', now + 4000)).toBe(true)
+    expect(isWikipediaRateLimited('en', now + 6000)).toBe(false)
+    expect(isWikipediaRateLimited('en', now + 29_000)).toBe(false)
+  })
+
+  it('clamps an excessive wikipedia Retry-After at the shared 120s cap', () => {
+    const now = Date.now()
+    // 1시간 Retry-After도 [1s, 120s] 클램프(MAX_NETWORK_COOLDOWN_MS)를 넘지 못한다.
+    recordWikipediaRateLimit({ headers: { get: (k: string) => (k === 'retry-after' ? '3600' : null) } }, 'en', now)
+    expect(isWikipediaRateLimited('en', now + 119_000)).toBe(true)
+    expect(isWikipediaRateLimited('en', now + 121_000)).toBe(false)
+  })
+
+  // ── S73: per-language wikipedia 429 windows ──────────────────────
+
+  it('arms the cooldown for ONE language only — others stay live (S73)', () => {
+    resetWikipediaRateState()
+    recordWikipediaRateLimit(undefined, 'zh')
+    expect(isWikipediaRateLimited('zh')).toBe(true)
+    expect(isWikipediaRateLimited('en')).toBe(false)
+    expect(isWikipediaRateLimited('ja')).toBe(false)
+  })
+
+  it('keeps other languages on the network chain while one is cooldown-armed (S73)', async () => {
+    resetWikipediaRateState()
+    clearWikipediaCache()
+    mockFetchWithTimeout.mockReset()
+    mockFetchWithTimeout.mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({ pages: [{ title: 'Zh Ok', key: 'Zh Ok', excerpt: 'zh' }] }),
+    })
+    // en is 429-armed (as if the en chain just tripped mid-eval)…
+    recordWikipediaRateLimit(undefined, 'en')
+    expect(isWikipediaRateLimited('en')).toBe(true)
+    // …but a zh query must still hit the network instead of skipping.
+    const results = await wikipediaSearch('什么是量子计算', { language: 'zh' })
+    expect(results).toHaveLength(1)
+    expect(mockFetchWithTimeout).toHaveBeenCalled()
+  })
+
+  it('uses a per-language shared key for non-en cooldowns (S73)', async () => {
+    resetWikipediaRateState()
+    clearWikipediaCache()
+    mockFetchWithTimeout.mockReset()
+    // B1 describe has no cooldown-mock clear in its beforeEach — a prior
+    // test's REST 429 armed 'cooldown:wikipedia' into the shared mock, so
+    // clear it here (calls[0] must be THIS test's zh mirror, not a leftover).
+    cooldownMocks.setSharedCooldown.mockClear()
+    cooldownMocks.getSharedCooldown.mockClear()
+    cooldownMocks.getSharedCooldown.mockResolvedValue(0)
+    mockFetchWithTimeout.mockResolvedValue({ ok: false, status: 429 })
+    await wikipediaSearch('mirror zh', { language: 'zh', env: {} as never })
+    expect(cooldownMocks.setSharedCooldown).toHaveBeenCalled()
+    const [, key] = cooldownMocks.setSharedCooldown.mock.calls[0]
+    expect(key).toBe('cooldown:wikipedia:zh')
+  })
+})
+
+// ============================================================
+// Cross-isolate shared cooldowns — wikipedia/github 429 windows mirrored
+// into the RateLimiter DO so every isolate skips the SAME upstream window.
+// ============================================================
+
+describe('Cross-isolate shared cooldowns (wikipedia/github 429 windows)', () => {
+  beforeEach(() => {
+    resetWikipediaRateState()
+    resetGithubSearchRateState()
+    clearWikipediaCache()
+    // Fresh fetch mock per test — a prior test's 429 chain must not leak
+    // calls into the next test's `not.toHaveBeenCalled()` assertions.
+    mockFetchWithTimeout.mockReset()
+    cooldownMocks.setSharedCooldown.mockClear()
+    cooldownMocks.getSharedCooldown.mockClear()
+    cooldownMocks.getSharedCooldown.mockResolvedValue(0)
+  })
+
+  afterEach(() => {
+    // Do not leak an armed shared window into later github/wikipedia tests
+    // in this file (they run without an env and would otherwise skip).
+    resetWikipediaRateState()
+    resetGithubSearchRateState()
+    cooldownMocks.getSharedCooldown.mockReset()
+    cooldownMocks.getSharedCooldown.mockResolvedValue(0)
+  })
+
+  it('mirrors a wikipedia 429 into the shared DO storage', async () => {
+    mockFetchWithTimeout.mockResolvedValue({ ok: false, status: 429 })
+    await wikipediaSearch('mirror test', { env: {} as never })
+    expect(cooldownMocks.setSharedCooldown).toHaveBeenCalled()
+    const [env, key, untilMs] = cooldownMocks.setSharedCooldown.mock.calls[0]
+    expect(env).toEqual({})
+    expect(key).toBe('cooldown:wikipedia')
+    expect(untilMs as number).toBeGreaterThan(Date.now())
+  })
+
+  it('adopts a window another isolate armed — skips the network chain', async () => {
+    cooldownMocks.getSharedCooldown.mockResolvedValue(Date.now() + 30_000)
+    const results = await wikipediaSearch('shared window', { env: {} as never })
+    expect(results).toEqual([])
+    expect(mockFetchWithTimeout).not.toHaveBeenCalled()
+  })
+
+  it('adopts the shared window into the local guard state', async () => {
+    cooldownMocks.getSharedCooldown.mockResolvedValue(Date.now() + 30_000)
+    await wikipediaSearch('shared window 2', { env: {} as never })
+    expect(isWikipediaRateLimited()).toBe(true)
   })
 })
 

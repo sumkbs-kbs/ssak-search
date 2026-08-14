@@ -79,6 +79,42 @@ case "${ENVIRONMENT}" in
     ;;
 esac
 
+# verify_cf_token — validate CLOUDFLARE_API_TOKEN against the Cloudflare
+# /user/tokens/verify endpoint BEFORE any guard can pass.
+#
+# Background (2026-08-14 live finding): the pre-deploy guard only checked the
+# token was non-empty (-z), so an EXPIRED/INVALID token sailed through as
+# "auth OK" — the guard went green while the actual deploy step failed with
+# `Authentication error [code: 10000]` → `9109`. A guard that cannot
+# authenticate must BLOCK, not pass. No token (local OAuth flow) → no-op.
+verify_cf_token() {
+  if [ -z "${CLOUDFLARE_API_TOKEN:-}" ]; then
+    return 0  # local wrangler OAuth path — no API token in play
+  fi
+  local tmp="/tmp/cf-token-verify-body.$$"
+  local http_code
+  http_code="$(curl -s -m 10 -o "${tmp}" -w '%{http_code}' \
+    -H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" \
+    "https://api.cloudflare.com/client/v4/user/tokens/verify" 2>/dev/null || echo '000')"
+  local ok
+  ok="$(CF_TOKEN_BODY="${tmp}" python3 -c '
+import json, os
+
+try:
+    d = json.load(open(os.environ["CF_TOKEN_BODY"]))
+    print("yes" if d.get("success") and d.get("result", {}).get("status") == "active" else "no")
+except Exception:
+    print("no")
+' 2>/dev/null || echo no)"
+  rm -f "${tmp}"
+  if [ "${ok}" != "yes" ]; then
+    echo " ❌ CLOUDFLARE_API_TOKEN is INVALID/EXPIRED (verify HTTP ${http_code}) — refusing to pass a guard that cannot authenticate." >&2
+    echo "    Rotate the secret: docs/17_CLOUDFLARE_TOKEN_ROTATION.md (Cloudflare dashboard → GitHub secret → re-dispatch)." >&2
+    exit 1
+  fi
+  echo " ✅ CLOUDFLARE_API_TOKEN verified (active) via /user/tokens/verify"
+}
+
 # resolve_deployment — read `wrangler pages deployment list --json` on stdin,
 # emit ONE JSON line {"url": ..., "commit": ..., "id": ...} for the target
 # environment. The ID is what `wrangler pages deployment tail` actually needs:
@@ -402,6 +438,11 @@ echo ""
 # verify must block rather than pass silently.
 if [ "${COMMIT_CHECK_ONLY:-0}" = "1" ]; then
   echo " Commit-check-only mode (COMMIT_CHECK_ONLY=1) — deployment resolution + commit match only."
+  # S104-③-⑥-⑤ (2026-08-14): an invalid/expired CLOUDFLARE_API_TOKEN must
+  # fail the guard HERE (verify before trusting ANY deployment resolution) —
+  # previously the guard passed with the broken token and the deploy step
+  # died with code 10000 after several minutes of build.
+  verify_cf_token
   check_deployment_commit
   if [ -z "${DEPLOY_URL}" ]; then
     # S104-③-⑥-④ (2026-08-12): "no deployment resolved" must NOT pass

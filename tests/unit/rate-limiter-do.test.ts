@@ -400,4 +400,53 @@ describe('RateLimiterDO inflight slot lease reaper (S105)', () => {
     expect((await reloaded.canRequest(HOST)).allowed).toBe(true)
     expect((await reloaded.getAllHealth())[HOST].inflight).toBe(0)
   })
+
+  it('cancelAcquire pops exactly one slot with NO circuit/stats side effects (S105 후속 이차 누수 벡터)', async () => {
+    // release(false) 2회로 circuit.failures=2 생성 (cancelAcquire가 건드리면 안 됨)
+    await doInstance.release(HOST, false)
+    await doInstance.release(HOST, false)
+    expect((await doInstance.getAllHealth())[HOST].failures).toBe(2)
+
+    await doInstance.acquire(HOST)
+    await doInstance.acquire(HOST) // 2개 슬롯
+    expect((await doInstance.getAllHealth())[HOST].inflight).toBe(2)
+
+    await doInstance.cancelAcquire(HOST) // FIFO로 최고령 1개만 제거
+
+    const health = (await doInstance.getAllHealth())[HOST]
+    expect(health.inflight).toBe(1)
+    expect(health.failures).toBe(2) // 서킷 실패 카운트 불변
+    expect(health.totalFailures).toBe(2) // 통계 불변
+    expect(health.tripped).toBe(false)
+  })
+
+  it('cancelAcquire on empty slots is a no-op (compensating call when the DO never incremented)', async () => {
+    await doInstance.canRequest(HOST) // circuit 엔트리 생성
+    expect((await doInstance.getAllHealth())[HOST].inflight).toBe(0)
+    await doInstance.cancelAcquire(HOST)
+    await doInstance.cancelAcquire(HOST) // 이중 보상도 무해
+    expect((await doInstance.getAllHealth())[HOST].inflight).toBe(0)
+  })
+
+  it('cancelAcquire never touches circuit state — even mid half-open probe (no premature circuit close)', async () => {
+    // 트립 (5회 실패)
+    for (let i = 0; i < FAILURE_THRESHOLD; i++) await doInstance.release(HOST, false)
+    expect((await doInstance.getAllHealth())[HOST].tripped).toBe(true)
+
+    // 백오프(30s) 경과 → canRequest가 하프오픈 프로브 허용 (probeInFlight=true)
+    vi.advanceTimersByTime(31_000)
+    expect((await doInstance.canRequest(HOST)).allowed).toBe(true)
+    const probeState = (await doInstance.getAllHealth())[HOST]
+    expect(probeState.probeInFlight).toBe(true)
+    expect(probeState.tripped).toBe(true)
+
+    // acquire → cancelAcquire: 슬롯만 제거, 프로브/트립 상태 불변
+    // (release(true)였다면 probeInFlight일 때 회로를 닫았을 것 — 그건 오답)
+    await doInstance.acquire(HOST)
+    await doInstance.cancelAcquire(HOST)
+    const after = (await doInstance.getAllHealth())[HOST]
+    expect(after.inflight).toBe(0)
+    expect(after.probeInFlight).toBe(true)
+    expect(after.tripped).toBe(true)
+  })
 })

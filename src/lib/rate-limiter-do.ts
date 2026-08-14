@@ -338,6 +338,24 @@ export class RateLimiterDO extends DurableObject<Env> {
   }
 
   /**
+   * S105 후속 (2026-08-14): acquire RPC가 DO-측 증분 이후 실패했을 때
+   * 클라이언트가 호출하는 보상 RPC. 인플라이트 슬롯만 제거하고 서킷/통계는
+   * 건드리지 않는다 — release(success=false)는 실패 카운트를 올리고, 하프오픈
+   * 프로브 단계에선 회로를 닫아버려, 업스트림에 도달하기 전에 실패한 acquire를
+   * 업스트림 실패로 오집계하면 안 되기 때문. 빈 슬롯에서 호출돼도 no-op
+   * (FIFO shift + inflight 클램프).
+   */
+  async cancelAcquire(host: string): Promise<void> {
+    const now = Date.now()
+    this.reapInflight(host, now)
+    const slots = this.state.inflightSlots.get(host) ?? []
+    if (slots.length > 0) slots.shift()
+    this.state.inflightSlots.set(host, slots)
+    this.state.inflight.set(host, slots.length)
+    await this.persist()
+  }
+
+  /**
    * Mark request as completed (decrement inflight, update circuit).
    */
   async release(host: string, success: boolean): Promise<void> {

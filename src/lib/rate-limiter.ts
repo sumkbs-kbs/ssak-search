@@ -166,6 +166,8 @@ export function __resetRateLimiterStateForTests(): void {
 interface RateLimiterDOClient {
   canRequest(host: string): Promise<{ allowed: boolean; reason?: string; retryAfter?: number }>
   acquire(host: string): Promise<void>
+  /** S105 후속: acquire RPC 실패 시 슬롯만 되돌리는 보상 RPC (서킷 미변경). */
+  cancelAcquire(host: string): Promise<void>
   release(host: string, success: boolean): Promise<void>
   getAllHealth(): Promise<Record<string, HostHealth>>
   getRateLimitStatus(host: string): Promise<RateLimitResult>
@@ -266,7 +268,22 @@ export async function acquire(env: AppBindings, url: string): Promise<void> {
   const host = hostname(url)
   const client = getDOClient(env)
   if (client) {
-    await client.acquire(host)
+    try {
+      await client.acquire(host)
+    } catch (err) {
+      // S105 후속 — 이차 누수 벡터: acquire RPC가 DO-측 증분 *이후* 실패하면
+      // (응답 유실/DO 재시작/RPC 타임아웃) release가 호출될 수 없어 슬롯이
+      // 새고, TTL 리퍼(60s)가 유일한 수단이 된다. 증분이 실제로 일어났을 수
+      // 있으므로 보상 cancelAcquire를 최선 노력으로 호출한다 — 일어나지
+      // 않았다면 DO는 빈 슬롯에서 no-op이고, DO 자체가 죽어 보상도 실패하면
+      // 리퍼가 백스톱이다. 오류는 그대로 전파 (호출자는 실패로 처리).
+      try {
+        await client.cancelAcquire(host)
+      } catch {
+        // DO unreachable — S105 TTL 리퍼가 정리
+      }
+      throw err
+    }
     return
   }
   // Local fallback
@@ -335,24 +352,38 @@ export async function rateLimitedFetch(
   const can = await canRequest(env, url)
   if (!can) return null
 
-  await acquire(env, url)
-
   const controller = new AbortController()
   const timer = setTimeout(() => controller.abort(), timeoutMs)
+
+  // acquire 실패(보상 cancelAcquire 포함) 시 타이머 정리 후 전파 — 슬롯 유실 없음.
+  try {
+    await acquire(env, url)
+  } catch (err) {
+    clearTimeout(timer)
+    throw err
+  }
 
   try {
     const response = await fetch(url, { ...init, signal: controller.signal })
     clearTimeout(timer)
 
     const success = response.status !== 429 && response.status !== 503
-    await release(env, url, success)
+    // release는 정확히 한 번 시도. RPC 실패 시 DO-측에서 pop이 됐을 수 있어
+    // 재시도(이중 release)는 FIFO로 다른 요청의 슬롯을 pop할 수 있다 — 잔여는
+    // S105 TTL 리퍼가 정규화한다.
+    await release(env, url, success).catch(() => {
+      logger.warn(`[rate-limiter] release RPC failed for ${hostname(url)} — TTL reaper will normalize`)
+    })
 
     if (!success) {
       logger.warn(`[rate-limiter] ${url} returned ${response.status}`)
     }
     return response
   } catch (err) {
-    await release(env, url, false)
+    clearTimeout(timer)
+    await release(env, url, false).catch(() => {
+      logger.warn(`[rate-limiter] release RPC failed for ${hostname(url)} (error path) — TTL reaper will normalize`)
+    })
     throw err
   }
 }

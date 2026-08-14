@@ -14,6 +14,7 @@ import {
   canRequest,
   acquire,
   release,
+  rateLimitedFetch,
   getBackendHealth,
   getRateLimitStatus,
   __resetRateLimiterStateForTests,
@@ -282,5 +283,99 @@ describe('Rate Limiter — Local Fallback', () => {
         vi.useRealTimers()
       }
     })
+  })
+})
+
+describe('DO-client acquire failure — compensating cancelAcquire (S105 후속 이차 누수 벡터)', () => {
+  beforeEach(() => {
+    __resetRateLimiterStateForTests()
+  })
+
+  const URL = 'https://www.bing.com/search?q=test'
+
+  /** Build an env whose RATE_LIMITER binding returns a fake DO client stub. */
+  function doEnv(client: Record<string, ReturnType<typeof vi.fn>>): AppBindings {
+    return {
+      RATE_LIMITER: {
+        idFromName: vi.fn(() => 'id'),
+        get: vi.fn(() => client),
+      },
+    } as unknown as AppBindings
+  }
+
+  it('rolls back the DO-side slot when the acquire RPC fails after the increment', async () => {
+    const client = {
+      canRequest: vi.fn(async () => ({ allowed: true })),
+      acquire: vi.fn(async () => {
+        throw new Error('RPC: connection closed')
+      }),
+      cancelAcquire: vi.fn(async () => {}),
+      release: vi.fn(async () => {}),
+      getAllHealth: vi.fn(async () => ({})),
+      getRateLimitStatus: vi.fn(async () => ({ allowed: true, remaining: 60, resetInMs: 0 })),
+      forceOpen: vi.fn(async () => {}),
+      setCooldown: vi.fn(async () => {}),
+      getCooldown: vi.fn(async () => 0),
+    }
+    const env = doEnv(client)
+
+    await expect(acquire(env, URL)).rejects.toThrow('RPC: connection closed')
+    // 보상 RPC가 정확히 1회 — DO-측 증분을 되돌린다 (TTL 리퍼까지 기다리지 않음)
+    expect(client.cancelAcquire).toHaveBeenCalledTimes(1)
+    expect(client.cancelAcquire).toHaveBeenCalledWith('www.bing.com')
+    // release는 호출되면 안 됨 — 실패 카운트/서킷 오집계 방지
+    expect(client.release).not.toHaveBeenCalled()
+  })
+
+  it('rateLimitedFetch propagates the acquire failure after the compensating rollback (no release)', async () => {
+    const client = {
+      canRequest: vi.fn(async () => ({ allowed: true })),
+      acquire: vi.fn(async () => {
+        throw new Error('RPC: DO restarted')
+      }),
+      cancelAcquire: vi.fn(async () => {}),
+      release: vi.fn(async () => {}),
+      getAllHealth: vi.fn(async () => ({})),
+      getRateLimitStatus: vi.fn(async () => ({ allowed: true, remaining: 60, resetInMs: 0 })),
+      forceOpen: vi.fn(async () => {}),
+      setCooldown: vi.fn(async () => {}),
+      getCooldown: vi.fn(async () => 0),
+    }
+    const env = doEnv(client)
+
+    await expect(rateLimitedFetch(env, URL, {}, 1000)).rejects.toThrow('RPC: DO restarted')
+    expect(client.cancelAcquire).toHaveBeenCalledTimes(1)
+    expect(client.release).not.toHaveBeenCalled() // 이중 해제 없음
+  })
+
+  it('a failed release RPC does NOT double-release — one attempt, TTL reaper is the backstop', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => new Response('ok', { status: 200 })),
+    )
+    try {
+      const client = {
+        canRequest: vi.fn(async () => ({ allowed: true })),
+        acquire: vi.fn(async () => {}),
+        cancelAcquire: vi.fn(async () => {}),
+        release: vi.fn(async () => {
+          throw new Error('RPC: release response lost')
+        }),
+        getAllHealth: vi.fn(async () => ({})),
+        getRateLimitStatus: vi.fn(async () => ({ allowed: true, remaining: 60, resetInMs: 0 })),
+        forceOpen: vi.fn(async () => {}),
+        setCooldown: vi.fn(async () => {}),
+        getCooldown: vi.fn(async () => 0),
+      }
+      const env = doEnv(client)
+
+      const res = await rateLimitedFetch(env, URL, {}, 1000)
+      expect(res?.status).toBe(200)
+      // release는 정확히 1회 시도 — 실패해도 재시도하지 않음 (FIFO 이중 pop 방지)
+      expect(client.release).toHaveBeenCalledTimes(1)
+      expect(client.release).toHaveBeenCalledWith('www.bing.com', true)
+    } finally {
+      vi.unstubAllGlobals()
+    }
   })
 })

@@ -698,6 +698,17 @@
   - `deploy-local-worktree.sh` — post-deploy 단계에 COMMIT_SYNC_CHECK(기본 1) 통합: **production 배포에서도** 커밋 동치 자동 확인 (불일치는 경고만 — production 배포 직후 staging 미배포는 정상 상태), 드라이런 계획에 반영. self-test 대상 실행은 COMMIT_SYNC_CHECK=0 으로 헤르메틱 유지
 - **검증**: ① 실측 — 양쪽 1941786 → `✅ 동치` exit 0, EXPECTED_COMMIT=1941786 도 통과 ② 유닛 테스트 5건 (신규 파일: 동치 exit 0 / 불일치 exit 1 / EXPECTED 일치·불일치 / 미배포 미확인 exit 1) — 가짜 npx 로 실제 wrangler 테이블 형식 픽스처 검증 ③ `--self-test` 5/5 유지 ④ 전체 유닛 **2,650건 / 132파일 통과 (+5)** · eslint 0 · prettier clean · tsc 0
 
+### 수정 44: staging deep probe(15분 cron) 발화 tail 검증 + 프로브 스크립트 (2026-08-14)
+- **작업 ID**: VER-2026-08-14-01 (실측 + 산출물)
+- **배경**: 로컬 worktree 배포(1941786) 후 staging 딥 프로브 cron 이 실제 도는지 tail 로 검증 요청. Pages 는 cron 을 못 받으므로 별도 Workers 스크립트(ssak-probe-scheduler-staging, */15)가 `/api/health?depth=full` 을 호출
+- **산출물**: `scripts/probe-deep-probe-cron.sh` (신규) — staging/production scheduler + staging Pages 를 wrangler tail 로 동시 관찰 (재사용 가능). tail 연결 확인용 자체 트래픽 대조군, 직접 wrangler 바이너리(npx 병렬 시작 경합 회피)
+- **실측 (15:15 UTC 틱)**:
+  - staging scheduler: `[cron-probe] deep health probe triggered` 15:15:43.511Z — cron `*/15`, probe_url=staging, HTTP 200, probe_status degraded, down_backends none
+  - production scheduler (대조군): 동일 틱 동시 발화 15:15:43.226Z — cron 메커니즘 정상
+  - staging Pages: `GET /api/health?depth=full` **user-agent ssak-cron-probe/1.0** 수신 → `[health] deep health probe complete` (cached:false — 신규 실행, hosts_tracked 12, down_backends none)
+- **디버깅**: 첫 tail 윈도우(14:45 틱) 미포착은 cron 문제가 아닌 **인라인 하네스 아티팩트**로 확정 (긴 원라이너에서 두 번째 백그라운드 명령 미기동 + pages tail 연결성은 자체 트래픽 포착으로 별도 검증) — 15:15 틱 3중 tail 포착이 결정적. 스케줄러 "배포 단 1건" 의심도 grep -m2 잘림 아티팩트였음 (실제 이력 다수 — production cron e49c3eaf 등)
+- **결론**: 로컬 worktree 배포 후 staging 딥 프로브가 15분마다 정상 발화 (deploy-local-worktree.sh cron 단계 배선 검증 완료)
+
 ### 수정 29: 배포 파이프라인 자동 검증 확장 — gold 회수 + staging↔production 동치 대조 (2026-08-14)
 - **작업 ID**: FIX-2026-08-14-12 (구현 + 실측)
 - **배경**: 로컬 worktree 배포 스크립트(수정 27)에 검증 단계 추가 — 배포 후 "동작하는가"를 자동 확인

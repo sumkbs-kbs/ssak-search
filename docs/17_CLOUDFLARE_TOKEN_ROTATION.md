@@ -268,9 +268,18 @@ curl -s -H "Authorization: Bearer <PAT>" \
   (SYNC_NOTIFY, 미설정 no-op). deploy-local-worktree.sh 의 post-deploy 단계에
   COMMIT_SYNC_CHECK(기본 1)로 통합 — **production 배포에도 cross-env 커밋 동치를
   자동 확인** (기존 EQ 는 staging 전용이었음). 불일치는 배포 성공에 영향 없이
-  경고로만 (production 배포 직후 staging 미배포는 정상). 유닛 테스트 5건
-  (동치/불일치/EXPECTED 일치·불일치/미배포) — 가짜 npx 로 deployment list 픽스처
+  경고로만 (production 배포 직후 staging 미배포는 정상).  유닛 테스트 5건 (동치/불일치/EXPECTED 일치·불일치/미배포) — 가짜 npx 로 deployment list 픽스처
   검증. 실측: 양쪽 1941786 → ✅ 동치 exit 0.
+
+  **deep probe cron 발화 검증 (수정 44, 2026-08-14)**: `scripts/probe-deep-probe-cron.sh`
+  (신규) — staging/production 스케줄러 + staging Pages 를 wrangler tail 로 동시 관찰해
+  15분 cron 틱이 실제 발화하는지 검증하는 프로브. tail 연결 확인용 자체 트래픽(대조군),
+  직접 wrangler 바이너리 사용(npx 병렬 시작 경합 회피). **실측 (15:15 UTC 틱)**:
+  staging scheduler `[cron-probe] deep health probe triggered` (probe_url=staging,
+  HTTP 200) + production scheduler 동시 발화(대조군) + staging Pages 에서
+  `user-agent: ssak-cron-probe/1.0` 의 `GET /api/health?depth=full` 수신 →
+  `[health] deep health probe complete` (cached:false, down_backends none) —
+  로컬 worktree 배포(1941786) 후 staging 딥 프로브가 실제 도는 것 tail 로 확정.
 
   `scripts/deploy-local-worktree.sh`가 worktree 생성 → node_modules 심링크 → build →
   3단계 배포(DO → Pages → cron) → Source commit 검증 → 헬스 확인 → worktree 정리

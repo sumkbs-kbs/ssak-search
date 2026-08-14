@@ -99,7 +99,9 @@ async function main() {
 
   console.log('')
   console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━')
-  console.log(` bing 자연 랭킹 stackoverflow.com 노출: ${bingHit}/${SO_QUERIES.length} (평균 위치 ${bingPosCount ? (bingPosSum / bingPosCount).toFixed(1) : '-'})`)
+  console.log(
+    ` bing 자연 랭킹 stackoverflow.com 노출: ${bingHit}/${SO_QUERIES.length} (평균 위치 ${bingPosCount ? (bingPosSum / bingPosCount).toFixed(1) : '-'})`,
+  )
   console.log(` DDG 자연 랭킹 stackoverflow.com 노출: ${ddgHit}/${SO_QUERIES.length}`)
   console.log(` production 검색 풀 stackoverflow.com 노출: ${poolHit}/${SO_QUERIES.length}`)
   console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━')

@@ -277,7 +277,10 @@ describe('RateLimiterDO self-healing circuit breaker (D.2)', () => {
     vi.advanceTimersByTime(600_000)
     await doInstance.alarm()
 
-    expect(fetchMock).toHaveBeenCalledWith('https://api.stackexchange.com/2.3/info?site=stackoverflow', expect.anything())
+    expect(fetchMock).toHaveBeenCalledWith(
+      'https://api.stackexchange.com/2.3/info?site=stackoverflow',
+      expect.anything(),
+    )
     const health = await doInstance.getAllHealth()
     expect(health[SE_HOST].tripped).toBe(false) // 502 = alive → 서킷 닫힘 (상태 정직화)
     expect(health[SE_HOST].failures).toBe(0)
@@ -315,7 +318,10 @@ describe('RateLimiterDO self-healing circuit breaker (D.2)', () => {
     fetchMock.mockResolvedValue({ ok: true, status: 200, text: async () => '{"items":[]}' })
     await doInstance.alarm()
     expect(fetchMock).toHaveBeenCalledTimes(1)
-    expect(fetchMock).toHaveBeenCalledWith('https://api.stackexchange.com/2.3/info?site=stackoverflow', expect.anything())
+    expect(fetchMock).toHaveBeenCalledWith(
+      'https://api.stackexchange.com/2.3/info?site=stackoverflow',
+      expect.anything(),
+    )
   })
 
   it('non-SE hosts still probe on the normal backoff cadence (60s interval unaffected)', async () => {

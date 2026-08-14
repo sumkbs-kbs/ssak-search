@@ -167,7 +167,9 @@ describe('stackExchangeSearch — quota guard / fetch', () => {
 
   it('does NOT retry the rate-limiter circuit-open throw', async () => {
     mockFetchWithTimeout.mockRejectedValueOnce(
-      new Error('Upstream unavailable (circuit open or at capacity): https://api.stackexchange.com/2.3/search/advanced'),
+      new Error(
+        'Upstream unavailable (circuit open or at capacity): https://api.stackexchange.com/2.3/search/advanced',
+      ),
     )
     const results = await stackExchangeSearch('q', { maxResults: 5, timeoutMs: 4000 })
     expect(mockFetchWithTimeout).toHaveBeenCalledTimes(1)

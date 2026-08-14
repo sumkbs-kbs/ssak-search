@@ -469,11 +469,7 @@ export function resetSharedCooldownLocal(key: string): void {
  * available so every isolate observes the same upstream 429 window. Without a
  * binding the local cache is the per-isolate fallback (today's behavior).
  */
-export async function setSharedCooldown(
-  env: AppBindings | undefined,
-  key: string,
-  untilMs: number,
-): Promise<void> {
+export async function setSharedCooldown(env: AppBindings | undefined, key: string, untilMs: number): Promise<void> {
   if (untilMs > Date.now()) LOCAL_COOLDOWNS.set(key, untilMs)
   else LOCAL_COOLDOWNS.delete(key)
   if (!env) return

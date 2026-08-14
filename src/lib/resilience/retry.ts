@@ -113,7 +113,10 @@ export function splitRetryBudget(
 }
 
 /** Compute the delay for a 1-based retry attempt, before jitter. */
-export function computeRetryDelayMs(attempt: number, opts: Pick<RetryOptions, 'baseDelayMs' | 'factor' | 'maxDelayMs'>): number {
+export function computeRetryDelayMs(
+  attempt: number,
+  opts: Pick<RetryOptions, 'baseDelayMs' | 'factor' | 'maxDelayMs'>,
+): number {
   const baseDelayMs = opts.baseDelayMs ?? DEFAULT_OPTIONS.baseDelayMs
   const factor = opts.factor ?? DEFAULT_OPTIONS.factor
   const maxDelayMs = opts.maxDelayMs ?? DEFAULT_OPTIONS.maxDelayMs
@@ -422,10 +425,7 @@ export async function withResultRetry<T>(
  * adapt (e.g. split a timeout budget across attempts, like the yahoo-finance
  * retry chain does). The last error is rethrown once retries are exhausted.
  */
-export async function withRetry<T>(
-  fn: (attempt: number) => Promise<T>,
-  options: RetryOptions = {},
-): Promise<T> {
+export async function withRetry<T>(fn: (attempt: number) => Promise<T>, options: RetryOptions = {}): Promise<T> {
   const maxRetries = options.maxRetries ?? DEFAULT_OPTIONS.maxRetries
   const isRetryable = options.retryable ?? (() => true)
 

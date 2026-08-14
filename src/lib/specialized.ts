@@ -14,14 +14,7 @@
 
 import type { SearchResult, Env } from '../types'
 import { logger, toError } from './logger'
-import {
-  fetchWithTimeout,
-  extractDomain,
-  stripHtml,
-  computeScore,
-  truncateToTokens,
-  simplifyQuery,
-} from './util'
+import { fetchWithTimeout, extractDomain, stripHtml, computeScore, truncateToTokens, simplifyQuery } from './util'
 import { withRetry, splitRetryBudget } from './resilience/retry'
 import { BACKEND_TIMEOUT_MS, backendTimeoutMs } from './search/fanout'
 import { setSharedCooldown, getSharedCooldown, resetSharedCooldownLocal } from './rate-limiter'

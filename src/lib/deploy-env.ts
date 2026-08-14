@@ -20,8 +20,7 @@
 declare const __DEPLOY_ENV__: string | undefined
 
 /** 배포 환경 문자열 — 'production' | 'staging' | (테스트/로컬 폴백) 'global'. */
-export const DEPLOY_ENV: string =
-  typeof __DEPLOY_ENV__ !== 'undefined' && __DEPLOY_ENV__ ? __DEPLOY_ENV__ : 'global'
+export const DEPLOY_ENV: string = typeof __DEPLOY_ENV__ !== 'undefined' && __DEPLOY_ENV__ ? __DEPLOY_ENV__ : 'global'
 
 /** RATE_LIMITER DO 인스턴스 키 — 환경별로 분리되어 서킷 상태를 독립화한다. */
 export function rateLimiterInstanceName(): string {

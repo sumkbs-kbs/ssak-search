@@ -542,14 +542,14 @@ export class RateLimiterDO extends DurableObject<Env> {
       // 방안 A (docs/18, 2026-08-14): SE 프로브는 backoff 와 무관하게 10분
       // 최소 간격을 둔다 — 60s 프로브가 SE egress rate-limit 을 갱신·연장하는
       // 것을 방지. 리셋 후엔 다음 10분 틱에서 502→alive 로 닫힌다.
-      const minWait = this.isStackExchangeHost(host)
-        ? Math.max(backoff, STACKEXCHANGE_PROBE_INTERVAL_MS)
-        : backoff
+      const minWait = this.isStackExchangeHost(host) ? Math.max(backoff, STACKEXCHANGE_PROBE_INTERVAL_MS) : backoff
       // Probe only after the current backoff window has elapsed
       if (elapsed < minWait) {
         // S73d 진단: backoff 창 미경과로 프로브를 건너뜀 — alarm이 실제 도는지와
         // openedAt/backoff 관계를 로그로 남겨 회복 지연 원인을 확정한다.
-        logger.debug(`[DO-rate-limiter] Alarm tick — skipping ${host}: elapsed=${elapsed}ms < minWait=${minWait}ms (backoff=${backoff}ms, tripCount=${circuit.tripCount})`)
+        logger.debug(
+          `[DO-rate-limiter] Alarm tick — skipping ${host}: elapsed=${elapsed}ms < minWait=${minWait}ms (backoff=${backoff}ms, tripCount=${circuit.tripCount})`,
+        )
         continue
       }
 
@@ -565,7 +565,9 @@ export class RateLimiterDO extends DurableObject<Env> {
       } else {
         circuit.tripCount = Math.min(circuit.tripCount + 1, BACKOFF_STAGES_MS.length - 1)
         circuit.openedAt = now
-        logger.warn(`[DO-rate-limiter] Health probe failed for ${host} — upstream HTTP ${probe.status} (${probe.snippet}) — escalating to stage ${circuit.tripCount}`)
+        logger.warn(
+          `[DO-rate-limiter] Health probe failed for ${host} — upstream HTTP ${probe.status} (${probe.snippet}) — escalating to stage ${circuit.tripCount}`,
+        )
       }
     }
 

@@ -287,9 +287,9 @@ describe('withResultRetry', () => {
 
   it('rethrows a rate-limit error after exhausting retries', async () => {
     const fn = vi.fn().mockRejectedValue(Object.assign(new Error('quota exceeded'), { status: 429 }))
-    await expect(withResultRetry(fn, { maxRetries: 1, retryableError: isRateLimitError, delaysMs: [5] })).rejects.toThrow(
-      'quota exceeded',
-    )
+    await expect(
+      withResultRetry(fn, { maxRetries: 1, retryableError: isRateLimitError, delaysMs: [5] }),
+    ).rejects.toThrow('quota exceeded')
     expect(fn).toHaveBeenCalledTimes(2) // initial + 1 retry
   })
 
@@ -321,10 +321,7 @@ describe('withResultRetry', () => {
 
   it('defaults the structured failure reason to { kind: gate } without reasonFor', async () => {
     const onRetry = vi.fn()
-    await withResultRetry(
-      async (a) => ({ ok: a >= 1 }),
-      { maxRetries: 1, retryable: (r) => !r.ok, onRetry },
-    )
+    await withResultRetry(async (a) => ({ ok: a >= 1 }), { maxRetries: 1, retryable: (r) => !r.ok, onRetry })
     expect(onRetry).toHaveBeenCalledTimes(1)
     expect(onRetry.mock.calls[0][2]).toEqual({ kind: 'gate' })
   })
@@ -351,9 +348,9 @@ describe('withResultRetry', () => {
       .fn()
       .mockRejectedValueOnce(Object.assign(new Error('429 first'), { status: 429 }))
       .mockRejectedValueOnce(Object.assign(new Error('429 again'), { status: 429 }))
-    await expect(withResultRetry(fn, { maxRetries: 1, retryableError: isRateLimitError, delaysMs: [5] })).rejects.toThrow(
-      '429 again',
-    )
+    await expect(
+      withResultRetry(fn, { maxRetries: 1, retryableError: isRateLimitError, delaysMs: [5] }),
+    ).rejects.toThrow('429 again')
     expect(fn).toHaveBeenCalledTimes(2)
   })
 })

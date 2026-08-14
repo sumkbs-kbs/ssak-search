@@ -297,7 +297,10 @@ describe('Shared cooldowns — cross-isolate 429 pacing guards', () => {
   })
 
   /** Build an env whose RATE_LIMITER binding returns a fake DO client. */
-  function doEnv(client: { setCooldown: ReturnType<typeof vi.fn>; getCooldown: ReturnType<typeof vi.fn> }): AppBindings {
+  function doEnv(client: {
+    setCooldown: ReturnType<typeof vi.fn>
+    getCooldown: ReturnType<typeof vi.fn>
+  }): AppBindings {
     return {
       RATE_LIMITER: {
         idFromName: vi.fn(() => 'id'),

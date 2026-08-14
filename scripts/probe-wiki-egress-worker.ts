@@ -28,7 +28,10 @@ export default {
 
 const UA = 'SearchAPI/1.0 (contact@example.com)'
 
-async function tryFetch(url: string, init?: RequestInit): Promise<{ status: number; ok: boolean; latencyMs: number; snippet: string }> {
+async function tryFetch(
+  url: string,
+  init?: RequestInit,
+): Promise<{ status: number; ok: boolean; latencyMs: number; snippet: string }> {
   const t0 = Date.now()
   try {
     const res = await fetch(url, init)

@@ -947,6 +947,19 @@
 - **검증**: rate-limiter-do **39/39** · 전체 unit 138파일 **2,698/2,698 PASS** · tsc 0 · prettier clean · 프로브 워커는 검증 후 삭제 (컨벤션)
 - **잔존 노트**: 서킷 맵에 `workers_ai`(내부 바인딩 pseudo-host) 존재 — 트립 시 robots.txt 프로브가 DNS 실패로 stuck-open 될 수 있는 사전 존재 이슈 (404-alive 와 무관, 별도 추적)
 
+### 수정 69: wikipedia REST↔Action 429 가용성 주기 모니터 — egress 프로브 + 이력 추적 (2026-08-15)
+- **작업 ID**: FIX-2026-08-15-17 (구현 + 테스트)
+- **요청**: 위키미디어 429 버스트를 주기적으로 모니터링해 REST↔Action 가용성을 추적하는 스크립트
+- **배경**: 429 버스트는 **Workers egress 공유 IP 에서만 실측** (수정 57: production zh 5/5 트립 — 로컬 200, egress REST 429). 로컬 모니터링은 재현 불가 → egress 프로브 워커가 필수
+- **구성**:
+  - `scripts/probe-wiki-egress-worker.ts` (신규) — egress 프로브 워커. 언어별(en/zh/ko) REST(/w/rest.php)+Action(/w/api.php)+robots 케이스. Free 플랜 CPU 한도상 요청당 1케이스 (`?case=en_rest` 등). `wrangler.probe-wiki.jsonc` (신규) 로 배포 (name: wiki-429-monitor)
+  - `scripts/monitor-wiki-429.ts` (신규) — 주기 모니터: 매 라운드 언어별 REST+Action 프로브 → 상태 분류(`healthy` / `rest_limited_action_ok` / `action_limited_rest_ok` / `full_block_429` / `full_block_down`) → JSONL 상태 파일(기본 `logs/wiki-429-monitor/state.jsonl`, gitignore)에 기록 → Ctrl-C 시 누적 리포트
+  - **리포트 지표**: 언어별 REST-200/Action-200 가용률 · REST-429 중 Action-200 **회복률** (수정 58/68 의 근거 지표) · 연속 REST-429 런(≥2) 버스트 수·진행 여부
+  - `--worker-url` (egress, 기본) / `--local` (비교용 — egress 429 재현 안 됨) / `--report` (이력만) / `--interval` / `--iterations` / `--langs` / `--state`
+- **테스트** (+13, `tests/unit/monitor-wiki-429.test.ts`): classifyRound 6건 (429+Action200 회복, full_block 등) · computeReport 4건 (회복률·버스트 카운트·currentBurst·언어 분리) · parseStateLine 3건 (손상 라인 내성)
+- **검증**: 모니터 13/13 · tsc 0 · prettier clean · 라이브 스모크: 로컬 1라운드 (en REST 200/Action 200) + 상태 파일 기록 + --report 출력 확인
+- **사용**: `npx wrangler deploy --config wrangler.probe-wiki.jsonc` → `npx tsx scripts/monitor-wiki-429.ts --worker-url <URL>` → `--report` 로 누적 이력 확인. package.json `monitor:wiki-429` 별칭은 세션 미커밋 변경과 함께 미커밋 유지
+
 ### 수정 68: B1 cooldown 가드 완화 — REST 429 창 내에서도 Action 경로 동작 (2026-08-15)
 - **작업 ID**: FIX-2026-08-15-16 (구현 + 테스트)
 - **요청**: B1 cooldown 가드를 완화해 REST 429 창 내에서도 Action 경로가 동작하도록

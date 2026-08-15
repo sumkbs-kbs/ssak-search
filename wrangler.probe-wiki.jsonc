@@ -1,8 +1,10 @@
 {
-  // S73 wikipedia/wikidata egress probe (2026-08-14) — isolated Workers project.
-  // 프로덕션(search-engine-api)과 무관. 검증 후 삭제:
-  //   npx wrangler delete s73-wiki-probe --config wrangler.probe.jsonc --force
-  "name": "s73-wiki-probe",
-  "compatibility_date": "2026-08-14",
-  "main": "scripts/probe-wiki-egress-worker.ts"
+  // wikipedia REST↔Action 429 모니터 프로브 (수정 69, 2026-08-15) — isolated
+  // Workers project, NOT Pages. 프로덕션(search-engine-api)과 무관.
+  // 배포:   npx wrangler deploy --config wrangler.probe-wiki.jsonc
+  // 실행:   npx tsx scripts/monitor-wiki-429.ts --worker-url <배포 URL>
+  // 철거:   npx wrangler delete wiki-429-monitor --config wrangler.probe-wiki.jsonc --force
+  "name": "wiki-429-monitor",
+  "compatibility_date": "2026-08-15",
+  "main": "scripts/probe-wiki-egress-worker.ts",
 }

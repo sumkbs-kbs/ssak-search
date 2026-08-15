@@ -803,6 +803,15 @@
 - **문서화**: docs/17 "환경 동치 대조" 절 — 로컬 배포 자동화는 **실행 환경 env var** 를 읽는다는 점(Cloudflare 시크릿과 구분) + 알림 규칙 + 드라이런 표시 명시
 - **검증**: bash -n OK · `--self-test` 5/5 · 유닛 **2,679건 / 136파일 전체 통과** (deploy-local-worktree.test.ts 8건 포함) — 드라이런 라인 추가는 `toContain` 검증이라 회귀 없음 · `verify-deploy-workflow` PASS (수정 51 의 `failure()` 조건을 'skipped' 조건으로 재작성하면서 6개 회귀 체크 복구) · deploy.yml YAML 파싱 OK
 
+### 수정 53: Pages "Uploaded 0 files" 메시지 해석 문서화 — Functions 번들 별도 업로드 명시 (2026-08-15)
+- **작업 ID**: DOC-2026-08-15-02 (문서화)
+- **요청**: deploy-local-worktree.sh 의 Pages 'Uploaded 0 files' 메시지가 Functions 번들 업로드를 안 세는 걸 문서화해 다음 운영자가 스테일로 오해하지 않게
+- **배경**: production f3511e4 배포 검증 턴에서 "Uploaded 0 files (3 already uploaded)" 를 스테일(stale)로 의심하는 조사가 필요했음 — Cloudflare API 실측으로 **정적 에셋 3개(manifest.json / static/style.css / sw.js, 배포 간 해시 불변)만 카운트되고 _worker.js Functions 번들은 별도 경로로 업로드되어 카운트에 안 집계됨** 을 확정 (file_count = 정적 3파일뿐, Source 커밋은 배포마다 신선, 동일 커밋 재빌드는 동일 번들 해시 — 결정적)
+- **수정** (`scripts/deploy-local-worktree.sh`):
+  - **헤더 "출력 해석" 절 신설**: 'Uploaded 0 files' = 스테일 아님 — 카운트 의미(정적 에셋만), Functions 경로 별도 업로드, 신선도 확인 방법(① 배포 URL 고유 해시 ② [6/6] Source commit 검증), 0 files 보고 재배포 반복 금지 명시
+  - **Pages 배포 스텝**: wrangler 출력을 변수로 캡처해 성공 판정 + **'Uploaded 0 files' 감지 시 "(정적 에셋 3개 불변 … 스테일 아님)" 안내 라인 출력** — 운영자가 로그에서 바로 해석 가능. 실패 시에는 이제 wrangler 실제 오류 출력(tail -20)을 stderr로 노출 (기존엔 grep 필터로 오류 메시지가 숨겨짐)
+- **검증**: bash -n OK · `--self-test` 5/5 (가짜 pages deploy 는 'Uploaded 0 files' 미출력 → 힌트 라인 미발화, 성공 판정 회귀 없음) · deploy-local-worktree.test.ts 8건 통과
+
 ### 수정 29: 배포 파이프라인 자동 검증 확장 — gold 회수 + staging↔production 동치 대조 (2026-08-14)
 - **작업 ID**: FIX-2026-08-14-12 (구현 + 실측)
 - **배경**: 로컬 worktree 배포 스크립트(수정 27)에 검증 단계 추가 — 배포 후 "동작하는가"를 자동 확인

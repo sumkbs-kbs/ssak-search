@@ -71,6 +71,18 @@
 #   (Pages는 롤백 없이 이전 배포를 유지 — DO를 이전 버전으로 되돌리는 게 정합).
 #   실패 시 exit 1 (부분 배포가 있으면 그 상태를 요약).
 #
+# 출력 해석 — Pages "Uploaded 0 files (3 already uploaded)" (2026-08-14 실측):
+#   이 메시지는 **스테일(stale)이 아니다**. wrangler pages deploy 의 "Uploaded N
+#   files" 카운트는 **정적 에셋(manifest.json / static/style.css / sw.js — 배포
+#   간 해시 불변, 그래서 항상 0~3개)** 만 집계한다. Workers Functions 번들
+#   (_worker.js)은 별도 Functions 경로로 업로드되어 **이 카운트에 안 집계된다**.
+#   Cloudflare API 실측: 배포 file_count = 정적 3파일뿐, 해시는 모든 배포에서
+#   동일 — 번들은 배포마다 신선하게 새로 올라간다. 신선도는 "Uploaded N files"가
+#   아니라 ① 배포 URL(고유 해시) ② [6/6] Source commit 검증으로 확인한다
+#   (배포 로그의 "Source f3511e4" 등). 번들 내용은 결정적 — 동일 커밋 재빌드는
+#   동일 해시를 낸다 (vite 캐시로 74ms 등 빠른 빌드도 정상).
+#   → "0 files"를 보고 스테일로 오해해 재배포를 반복하지 말 것 (중복 배포만 생성).
+#
 # 동작: 사전 확인(커밋/미커밋/push 상태) → worktree 생성 → node_modules 심링크 →
 #       build → 3단계 배포(각 단계 성공/실패 추적) → Pages Source commit 검증 →
 #       헬스 확인 → 부분 배포 상태 요약 → worktree 정리(실패 시에도 trap).
@@ -378,11 +390,21 @@ fi
 # ── ② Pages 배포 ────────────────────────────────────────────────────────
 if [ "$DO_DEPLOYED" = "1" ]; then
   echo " [4/6] ② Pages 배포 (branch=$PAGES_BRANCH)"
-  if npx wrangler pages deploy dist/ --project-name=search-engine-api --branch="$PAGES_BRANCH" --commit-dirty=true 2>&1 | grep -E '✨ Success|Deployment complete'; then
+  # ⚠️ "Uploaded 0 files (3 already uploaded)"는 스테일이 아님 — 카운트는 정적
+  # 에셋 3개(배포 간 불변)만 집계하고 _worker.js Functions 번들은 별도 경로로
+  # 업로드된다 (헤더 "출력 해석" 절 참조). 신선도는 아래 Source commit 검증이
+  # 보장한다 — 0 files 여부로 재배포하지 말 것.
+  PAGES_OUT="$(npx wrangler pages deploy dist/ --project-name=search-engine-api --branch="$PAGES_BRANCH" --commit-dirty=true 2>&1)"
+  if printf '%s\n' "$PAGES_OUT" | grep -qE '✨ Success|Deployment complete'; then
     PAGES_DEPLOYED=1
     echo "   ✓ Pages 배포 성공"
+    if printf '%s\n' "$PAGES_OUT" | grep -q 'Uploaded 0 files'; then
+      echo "   (정적 에셋 3개 불변 — 'Uploaded 0 files'는 정상. _worker.js 번들은 별도 업로드, 스테일 아님)"
+    fi
+    printf '%s\n' "$PAGES_OUT" | grep -E '✨ Success|Deployment complete|pages.dev' || true
   else
     echo " ❌ Pages 배포 실패 — DO는 새 버전($SHORT_SHA), Pages는 이전 버전 유지 (부분 배포)." >&2
+    printf '%s\n' "$PAGES_OUT" | tail -20 >&2
   fi
 fi
 

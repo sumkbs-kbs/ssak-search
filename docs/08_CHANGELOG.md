@@ -947,6 +947,17 @@
 - **검증**: rate-limiter-do **39/39** · 전체 unit 138파일 **2,698/2,698 PASS** · tsc 0 · prettier clean · 프로브 워커는 검증 후 삭제 (컨벤션)
 - **잔존 노트**: 서킷 맵에 `workers_ai`(내부 바인딩 pseudo-host) 존재 — 트립 시 robots.txt 프로브가 DNS 실패로 stuck-open 될 수 있는 사전 존재 이슈 (404-alive 와 무관, 별도 추적)
 
+### 수정 71: 알림 배선 검증 절차 가이드 — 수정 62/63 검증 경로 통합 문서 (2026-08-15)
+- **작업 ID**: FIX-2026-08-15-19 (문서)
+- **요청**: 수정 62/63 의 검증 경로(드라이런 캡처 + 실 웹훅 E2E)를 한 문서로 묶어 알림 배선 검증 절차 가이드 작성
+- **산출물**: `docs/19_ALERT_WIRING_VERIFICATION.md` (신규)
+  - 배선 구조: deploy.yml [13] Notify → notify-pipeline-failure.sh → (A) 캡처 서버 / (B) 실 Slack 웹훅
+  - **경로 A (수정 62)** — 웹훅 불필요 드라이런: capture-webhook.py + SLACK_DRY_RUN=1 절차 · Env 표 · self-test 5/5
+  - **경로 B (수정 63+70)** — 실 웹훅 E2E: 6단계 표 · **URL 주입 보안 (argv 금지 → env/파일/stdin + curl -K)** · 사전 조건(권한) · self-test 2/2
+  - 선택 매트릭스 (웹훅 유무 × CI 회귀) · 결과 해석표 (발화/미발화/마커 부재) · 문제 해결 표 · 관련 수정/문서 인덱스
+- **검증**: 마크다운 문법 점검 · 해당 스크립트 헤더/env 실제값과 교차 확인 (변경된 스크립트 코드 없음 — 문서만)
+- **커밋**: (수정 71 커밋에 포함)
+
 ### 수정 70: verify-slack-alert-e2e.sh 웹훅 URL 주입 보안 강화 — argv/히스토리/ps 노출 제거 (2026-08-15)
 - **작업 ID**: FIX-2026-08-15-18 (구현 + 테스트)
 - **요청**: verify-slack-alert-e2e.sh 가 웹훅 URL 을 셸 히스토리/프로세스 인자에 남기지 않도록 (stdin·파일·env 로 주입) 보안 강화

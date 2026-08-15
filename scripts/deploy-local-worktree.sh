@@ -20,6 +20,13 @@
 # Env:
 #   GOLD_CHECK=0  배포 후 라이브 gold 회수 검증 생략 (기본 1=수행)
 #   EQ_CHECK=0    배포 후 staging↔production 동치 대조 생략 (기본 1=수행, staging 전용)
+#   EQ_NOTIFY=0   동치 대조 실패 Slack 알림 생략 (기본 1=발송). staging 배포 후
+#                 동치 대조가 실패하면 런타임 동치(헬스/검색/gold) 실패 항목을
+#                 Slack danger 알림으로 보낸다 — SLACK_WEBHOOK 또는
+#                 ALERT_SLACK_WEBHOOK 환경변수 필요 (미설정이면 no-op).
+#                 커밋 불일치 단독은 알림 제외 (staging 배포 직후 production
+#                 미배포의 정상 상태). 동치 대조 실패는 배포 자체를 실패시키지
+#                 않는다 (경고만 — CI 게이트와 달리 로컬 배포는 경고 유지).
 #   GOLD_FAIL_HARD=1  gold 미회수가 재시도 횟수 동안 지속되면 배포를 실패 처리(exit 1).
 #                     기본 0 = 경고만 출력하고 배포는 성공 처리.
 #   GOLD_FAIL_HARD_RETRIES      GOLD_FAIL_HARD=1 시 총 시도 횟수 (기본 3 — 일시적
@@ -282,6 +289,8 @@ if [ "$DRY_RUN" = 1 ]; then
   echo "   ③ cron   : npx wrangler deploy --config=$CRON_CONFIG"
   echo "   검증     : Pages Source commit == $SHORT_SHA + $HEALTH_URL HTTP 200"
   echo "   gold     : 6개 대표 쿼리 gold 회수 (top-10) — GOLD_CHECK=0 으로 생략 가능"
+  echo "   동치 대조 : staging↔production 동치 (커밋·헬스·검색 top-5·gold) — staging 전용, EQ_CHECK=0 으로 생략"
+  echo "             실패 시 Slack 알림 (EQ_NOTIFY=1 기본 — SLACK_WEBHOOK/ALERT_SLACK_WEBHOOK 필요, 미설정 no-op)"
   echo "   동치     : staging↔production 배포 커밋 동치 (경량) — COMMIT_SYNC_CHECK=0 으로 생략 가능"
   if [ "${GOLD_FAIL_HARD:-0}" = "1" ]; then
     echo "   fail-hard: gold 미회수 시 ${GOLD_FAIL_HARD_RETRIES:-3}회 재시도 후 배포 실패 처리 (GOLD_FAIL_HARD=1)"
@@ -455,9 +464,15 @@ if [ "$PAGES_DEPLOYED" = "1" ]; then
   # ── staging ↔ production 동치 대조 (staging 배포 후에만 의미 있음) ──────
   # 배포 커밋 · 헬스 · 검색 top-5 · gold 회수를 양쪽에서 비교해 staging 이
   # production 과 동일하게 동작하는지 확인한다. EQ_CHECK=0 으로 생략.
+  # 실패 시 Slack 알림 (EQ_NOTIFY=1 기본): 런타임 동치(헬스/검색/gold) 실패 항목을
+  # Slack danger 알림으로 보낸다 — SLACK_WEBHOOK 또는 ALERT_SLACK_WEBHOOK 환경변수
+  # 필요 (미설정이면 no-op). 커밋 불일치 단독은 staging 배포 직후 production
+  # 미배포의 정상 상태라 알림 제외. EQ_NOTIFY=0 으로 생략 가능. 동치 대조 실패는
+  # 배포 자체를 실패시키지 않는다 (경고만 — CI post-deploy 게이트와 달리 로컬
+  # 배포는 배포 성공을 우선).
   if [ "${EQ_CHECK:-1}" = "1" ] && [ "$ENV_NAME" = "staging" ]; then
     echo " staging ↔ production 동치 대조"
-    if bash "$REPO_ROOT/scripts/verify-env-equivalence.sh"; then
+    if EQ_NOTIFY="${EQ_NOTIFY:-1}" bash "$REPO_ROOT/scripts/verify-env-equivalence.sh"; then
       echo " ✅ 환경 동치 확인 통과"
     else
       echo " ⚠️  환경 동치 불일치 — production 이 아직 이 커밋이 아니면 정상 (f5ef768 vs 41218df 사례)" >&2

@@ -238,12 +238,20 @@ bash scripts/watch-secret-rotation.sh --dry-run    # 감지만 — 디스패치 
   비수요 시간에만 실행할 것 — 전량 회귀가 목적이면 로컬 eval 하네스(eval/index.ts)를
   우선 사용한다.
 
-  **환경 동치 대조 (2026-08-14)**: `scripts/verify-env-equivalence.sh`가 staging 배포
-  후 staging ↔ production 의 4가지를 자동 비교한다: ① 배포 커밋(Source commit) ② 헬스
-  (백엔드별 status) ③ 검색 top-5 도메인 시퀀스 ④ gold 회수율. staging 배포 시
-  `deploy-local-worktree.sh` 가 자동 호출 (EQ_CHECK=0 으로 생략). production 이
-  아직 그 커밋이 아니면 커밋 항목만 실패로 표시된다 (정상 — production 배포 후 전체
-  green). 실측: staging/production 모두 f5ef768 로 맞춘 뒤 4/4 동치 확인.
+  **환경 동치 대조 (2026-08-14, 수정 52 갱신)**: `scripts/verify-env-equivalence.sh`가
+  staging 배포 후 staging ↔ production 의 4가지를 자동 비교한다: ① 배포 커밋
+  (Source commit) ② 헬스 (백엔드별 status) ③ 검색 top-5 도메인 시퀀스 ④ gold 회수율.
+  staging 배포 시 `deploy-local-worktree.sh` 가 자동 호출 (EQ_CHECK=0 으로 생략).
+  production 이 아직 그 커밋이 아니면 커밋 항목만 실패로 표시된다 (정상 — production
+  배포 후 전체 green). 실측: staging/production 모두 f5ef768 로 맞춘 뒤 4/4 동치 확인.
+  **알림 (수정 52)**: staging 배포 자동화는 `EQ_NOTIFY=1` 을 **기본값으로 명시**
+  (EQ_NOTIFY=0 으로 생략) — 동치 대조 실패 시 런타임 동치(헬스/검색/gold) 실패 항목을
+  Slack danger 알림으로 보낸다. 웹훅은 환경변수 `SLACK_WEBHOOK` 또는
+  `ALERT_SLACK_WEBHOOK` (둘 다 없으면 no-op) — 로컬 배포 스크립트는 Cloudflare
+  시크릿이 아니라 **실행 환경의 env var** 를 읽는다. 커밋 불일치 단독은 알림 제외
+  (staging 배포 직후 production 미배포의 정상 상태). 동치 대조 실패는 **배포 자체를
+  실패시키지 않는다** (경고만 — CI post-deploy 게이트는 실패 처리, 로컬 배포는
+  배포 성공 우선). 드라이런 계획에도 알림 동작이 표시된다.
 
   **실패 알림 (2026-08-14)**: 런타임 동치(헬스/검색/gold) 실패 시 Slack webhook
   알림을 보낸다 (`EQ_NOTIFY`, 기본 1; webhook 미설정 시 no-op — SLACK_WEBHOOK 또는
@@ -273,8 +281,11 @@ bash scripts/watch-secret-rotation.sh --dry-run    # 감지만 — 디스패치 
   동작 (env 에 두 이름 모두 매핑, resolveWebhookUrl: SLACK_WEBHOOK 우선). ② 동치
   대조 이전 단계(guard/배포/post-deploy gate) 실패 시엔 동치 대조가 실행되지 않아
   알림이 전혀 없던 갭을 보완 — `Notify staging pipeline failure` 스텝
-  (`if: failure() && steps.equivalence.outcome != 'failure'`)이 파이프라인 어느
-  단계 실패든 danger 알림 전송 (동치 대조 실패는 상세 알림과 중복 방지). ⚠️ GitHub
+  (`if: !cancelled() && steps.equivalence.outcome == 'skipped'`)이 파이프라인 어느
+  단계 실패든 danger 알림 전송 (동치 대조 실패는 상세 알림과 중복 방지). 조건에
+  `failure()` 를 쓰지 않는 이유: 다운로드 스텝(continue-on-error) 이후 `if:
+  failure()` 는 발화하지 않을 수 있어 verify-deploy-workflow 가 거부함 — equivalence
+  는 마지막 무조건 스텝이라 'skipped' ⟺ 이전 단계 실패. ⚠️ GitHub
   Actions 시크릿 `ALERT_SLACK_WEBHOOK`(또는 SLACK_WEBHOOK) 미설정 상태 — 실측
   (2026-08-15) repo secrets 는 CLOUDFLARE_ACCOUNT_ID/CLOUDFLARE_API_TOKEN 만 존재.
 

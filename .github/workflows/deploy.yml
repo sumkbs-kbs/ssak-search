@@ -213,9 +213,15 @@ jobs:
         # gate)가 실패하면 동치 대조 자체가 실행되지 않아 알림이 전혀 없었다 — staging
         # 파이프라인 **어느 단계에서든** 실패하면 Slack 알림이 가도록 일반 실패 알림을
         # 추가한다. 동치 대조 실패는 위 게이트가 상세 알림(호스트 diff/gold 회수율)을
-        # 이미 보내므로 중복을 피해 이 단계에서는 제외한다 (steps.equivalence.outcome
-        # != 'failure' — equivalence 스텝이 실행돼 실패한 경우).
-        if: failure() && steps.equivalence.outcome != 'failure'
+        # 이미 보내므로 중복을 피해 이 단계에서는 제외한다.
+        #
+        # 조건: `steps.equivalence.outcome == 'skipped'` — equivalence 는 마지막
+        # 스텝이고 if 조건이 없으므로, 'skipped' 는 곧 **이전 단계 실패**(실패 시
+        # 후속 스텝 스킵)를 의미한다. 동치 대조가 실행돼 실패하면 outcome='failure'
+        # (이미 EQ_NOTIFY 상세 알림 발송) → 여기선 스킵. `failure()` 를 쓰지 않는
+        # 이유: 다운로드 스텝(continue-on-error) 이후 `if: failure()` 는 발화하지
+        # 않을 수 있어 verify-deploy-workflow 가 거부한다 (S104-③-⑦-③ 실측).
+        if: !cancelled() && steps.equivalence.outcome == 'skipped'
         env:
           SLACK_WEBHOOK: ${{ secrets.ALERT_SLACK_WEBHOOK || secrets.SLACK_WEBHOOK }}
         run: |

@@ -787,9 +787,21 @@
 - **실측**: ① deploy.yml `deploy-staging` 에 동치 대조 post-deploy gate 는 **이미 등록돼 있음** (수정 33/34 — `SLACK_WEBHOOK: ${{ secrets.ALERT_SLACK_WEBHOOK }}` + 최종 시도 EQ_NOTIFY=1) ② 그러나 **repo GitHub Actions 시크릿 `ALERT_SLACK_WEBHOOK` 미존재** (실측: CLOUDFLARE_ACCOUNT_ID/CLOUDFLARE_API_TOKEN 만 존재) → env 가 비어 no-op ③ 구조적 갭 — 동치 대조는 배포 성공 후에만 실행되므로 **이전 단계(guard/배포/post-deploy gate) 실패 시 알림이 전혀 없음**
 - **수정** (`.github/workflows/deploy.yml` staging job):
   - 동치 대조 스텝 — 웹훅 시크릿 이름 **양쪽 지원**: `SLACK_WEBHOOK`(Pages 프로젝트 관례) + `ALERT_SLACK_WEBHOOK`(docs 관례) 모두 env 매핑 (어느 쪽이든 설정되면 동작), `id: equivalence` 부여
-  - **`Notify staging pipeline failure (Slack)` 스텝 신규** (`if: failure() && steps.equivalence.outcome != 'failure'`) — 파이프라인 어느 단계든 실패 시 danger 알림 (run URL 링크 포함). 동치 대조 실패는 상세 알림(호스트 diff/gold)과 중복 방지
+  - **`Notify staging pipeline failure (Slack)` 스텝 신규** — 파이프라인 어느 단계든 실패 시 danger 알림 (run URL 링크 포함). 동치 대조 실패는 상세 알림(호스트 diff/gold)과 중복 방지. 조건은 `if: !cancelled() && steps.equivalence.outcome == 'skipped'` — 수정 52 에서 `failure()` 사용을 버린 이유: 다운로드 스텝(continue-on-error) 이후 `if: failure()` 는 발화하지 않을 수 있어 verify-deploy-workflow 회귀 체크(6개)가 FAIL 함 (실측으로 확정, 스텝 조건 재작성으로 PASS 복구) — equivalence 는 마지막 무조건 스텝이라 outcome 'skipped' ⟺ 이전 단계 실패
 - **검증**: YAML 파싱 OK (12 스텝, if 조건 확인) · 페이로드 생성 로컬 시뮬레이션 (python3 json.dumps → 유효한 Slack blocks JSON) · no-op 분기 (시크릿 미설정 시 조용히 스킵) 확인
 - **⚠️ 잔여 (사용자 조치 필요)**: 웹훅 URL 값이 없어 GitHub Actions 시크릿 생성 불가 — `gh secret set ALERT_SLACK_WEBHOOK` (또는 SLACK_WEBHOOK) 에 URL 1개 필요. 설정되면: 동치 대조 실패 → 상세 danger 알림 / 그 외 단계 실패 → 일반 danger 알림
+
+### 수정 52: 로컬 staging 배포 자동화 EQ_NOTIFY=1 명시 + 알림 동작 문서화 (2026-08-15)
+- **작업 ID**: DOC-2026-08-15-01 (구현 + 문서화)
+- **요청**: deploy-local-worktree.sh 에 EQ_NOTIFY=1 기본값 명시 + staging 배포 자동화에 알림 동작 문서화
+- **배경**: verify-env-equivalence.sh 내부 기본값(`${EQ_NOTIFY:-1}`)으로 알림은 이미 발화했지만, 호출부(deploy-local-worktree.sh)에서 **암시적**이었고 문서화가 없어 "언제 Slack 으로 알림이 가는지"가 불명확 — CI(수정 51)와 달리 로컬 배포 자동화에는 알림 동작이 드러나지 않았음
+- **수정** (`scripts/deploy-local-worktree.sh`):
+  - **EQ 호출부**: `EQ_NOTIFY="${EQ_NOTIFY:-1}" bash …verify-env-equivalence.sh` — 기본값 1 을 **명시적으로 전달** (EQ_NOTIFY=0 으로 생략 가능)
+  - **헤더 Env 문서**: `EQ_NOTIFY=0` 항목 추가 — 런타임 동치(헬스/검색/gold) 실패 시 Slack danger 알림, `SLACK_WEBHOOK`/`ALERT_SLACK_WEBHOOK` env var 필요(미설정 no-op), 커밋 불일치 단독은 알림 제외, **동치 실패는 배포를 실패시키지 않음**(경고만 — CI 게이트와 차별화 명시)
+  - **EQ 호출부 주석**: 알림 동작(웹훅 이름·no-op 조건·커밋 제외·배포 비실패) 문서화
+  - **드라이런 계획**: `동치 대조` 라인 + `실패 시 Slack 알림 (EQ_NOTIFY=1 기본 …)` 라인 추가 — 계획만으로도 알림 동작 확인 가능
+- **문서화**: docs/17 "환경 동치 대조" 절 — 로컬 배포 자동화는 **실행 환경 env var** 를 읽는다는 점(Cloudflare 시크릿과 구분) + 알림 규칙 + 드라이런 표시 명시
+- **검증**: bash -n OK · `--self-test` 5/5 · 유닛 **2,679건 / 136파일 전체 통과** (deploy-local-worktree.test.ts 8건 포함) — 드라이런 라인 추가는 `toContain` 검증이라 회귀 없음 · `verify-deploy-workflow` PASS (수정 51 의 `failure()` 조건을 'skipped' 조건으로 재작성하면서 6개 회귀 체크 복구) · deploy.yml YAML 파싱 OK
 
 ### 수정 29: 배포 파이프라인 자동 검증 확장 — gold 회수 + staging↔production 동치 대조 (2026-08-14)
 - **작업 ID**: FIX-2026-08-14-12 (구현 + 실측)

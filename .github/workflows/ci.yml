@@ -207,7 +207,7 @@ jobs:
       # (같은 번들을 두 환경이 쓰면 같은 인스턴스를 가리킨다) 환경별로 각각
       # 빌드·업로드한다. deploy.yml 의 각 job 이 자기 환경 아티팩트를 내려받는다.
       - name: Build (production bundle)
-        run: DEPLOY_ENV=production npm run build
+        run: BUILD_COMMIT=${{ github.sha }} DEPLOY_ENV=production npm run build
 
       - name: Verify dist output
         run: |
@@ -227,7 +227,7 @@ jobs:
           retention-days: 7
 
       - name: Build (staging bundle)
-        run: DEPLOY_ENV=staging npm run build
+        run: BUILD_COMMIT=${{ github.sha }} DEPLOY_ENV=staging npm run build
 
       - name: Upload dist artifact (staging)
         uses: actions/upload-artifact@v4

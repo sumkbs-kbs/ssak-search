@@ -25,6 +25,7 @@ import { getPrometheusMetrics, setMetricsEnv } from '../lib/metrics'
 import { getActiveClientCount } from '../lib/auth'
 import { braveHealthCheck } from '../lib/brave-search'
 import { alertBackendDown, resolveWebhookUrl } from '../lib/slack-alert'
+import { BUILD_COMMIT } from '../lib/deploy-env'
 import { IndexingPipeline } from '../lib/index/pipeline'
 
 // Cache health probe results for 30 seconds to prevent self-DoS.
@@ -32,6 +33,8 @@ import { IndexingPipeline } from '../lib/index/pipeline'
 interface HealthData {
   status: string
   version: string
+  /** 빌드 타임에 심어진 배포 커밋 SHA (수정 56) — 배포 URL 번들이 새 코드를 담는지 검증용. */
+  build_commit: string
   timestamp: string
   backends: Record<string, unknown>
   features: Record<string, boolean>
@@ -164,6 +167,7 @@ export async function buildLightHealthData(env: AppBindings): Promise<HealthData
   return {
     status,
     version: '2.0.0',
+    build_commit: BUILD_COMMIT,
     timestamp: new Date().toISOString(),
     backends,
     features: {
@@ -297,6 +301,7 @@ export async function runDeepHealthProbe(
   const healthData: HealthData = {
     status,
     version: '2.0.0',
+    build_commit: BUILD_COMMIT,
     timestamp: new Date().toISOString(),
     backends,
     features: {

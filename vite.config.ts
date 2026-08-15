@@ -12,6 +12,11 @@ export default defineConfig({
   // config 를 쓰지 않아 define 이 적용되지 않는다 — 코드 쪽 typeof 가드로 폴백.
   define: {
     __DEPLOY_ENV__: JSON.stringify(process.env.DEPLOY_ENV || 'production'),
+    // 배포 후 번들 내용 검증용 (수정 56): 빌드 타임에 커밋 SHA 를 심는다.
+    // deploy-local-worktree.sh 가 배포 URL 의 /api/health build_commit 과
+    // 대조해 'Uploaded 0 files' 가 스테일이 아님을 런타임에서 증명한다.
+    // 미설정('')이면 헬스에서 빈 값 — 배포 스크립트/CI 가 항상 설정한다.
+    __BUILD_COMMIT__: JSON.stringify(process.env.BUILD_COMMIT || ''),
   },
   plugins: [
     build({

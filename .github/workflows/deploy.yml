@@ -126,6 +126,8 @@ jobs:
         env:
           # 방안 B: 폴백 빌드도 환경별 DO 인스턴스 키를 주입해야 한다.
           DEPLOY_ENV: staging
+          # 수정 56: 번들에 커밋 SHA 를 심어 배포 URL 검증에 쓴다.
+          BUILD_COMMIT: ${{ github.sha }}
 
       - name: Deploy do-worker (Staging)
         # S94 (2026-08-10): Pages references the 11 Durable Objects via
@@ -355,6 +357,8 @@ jobs:
         env:
           # 방안 B: 폴백 빌드도 환경별 DO 인스턴스 키를 주입해야 한다.
           DEPLOY_ENV: production
+          # 수정 56: 번들에 커밋 SHA 를 심어 배포 URL 검증에 쓴다.
+          BUILD_COMMIT: ${{ github.sha }}
 
       - name: Deploy do-worker (Production)
         uses: cloudflare/wrangler-action@v3

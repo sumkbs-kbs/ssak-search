@@ -18,9 +18,21 @@
  * 반환하므로 안전하다.
  */
 declare const __DEPLOY_ENV__: string | undefined
+declare const __BUILD_COMMIT__: string | undefined
 
 /** 배포 환경 문자열 — 'production' | 'staging' | (테스트/로컬 폴백) 'global'. */
 export const DEPLOY_ENV: string = typeof __DEPLOY_ENV__ !== 'undefined' && __DEPLOY_ENV__ ? __DEPLOY_ENV__ : 'global'
+
+/**
+ * 배포된 번들에 빌드 타임에 심어진 커밋 SHA (수정 56).
+ *
+ * vite define 이 `__BUILD_COMMIT__` 토큰을 BUILD_COMMIT 환경변수 값으로 치환한다
+ * (vite.config.ts 참고). deploy-local-worktree.sh / CI / deploy.yml 이 배포 시
+ * BUILD_COMMIT=<sha> 를 설정하고, /api/health 의 build_commit 필드로 배포 URL 의
+ * 번들이 실제로 그 커밋을 담는지 검증한다. 테스트/로컬처럼 define 이 없는
+ * 컨텍스트에서는 '' 로 폴백한다.
+ */
+export const BUILD_COMMIT: string = typeof __BUILD_COMMIT__ !== 'undefined' && __BUILD_COMMIT__ ? __BUILD_COMMIT__ : ''
 
 /** RATE_LIMITER DO 인스턴스 키 — 환경별로 분리되어 서킷 상태를 독립화한다. */
 export function rateLimiterInstanceName(): string {

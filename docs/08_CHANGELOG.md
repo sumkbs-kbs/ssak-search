@@ -830,6 +830,18 @@
 - **수정** (`scripts/deploy-local-worktree.sh`): 드라이런 계획의 `② Pages` 라인 아래 2줄 추가 — 'Uploaded 0 files' 는 스테일 아님(카운트는 정적 에셋 3개만 집계, _worker.js Functions 번들은 별도 업로드), 신선도는 배포 URL + Source commit 검증으로 확인 (헤더 '출력 해석' 절 참조)
 - **검증**: bash -n OK · 드라이런 실제 출력에서 안내 2줄 표시 확인 · `--self-test` 5/5 · deploy-local-worktree.test.ts 8건 통과
 
+### 수정 56: Pages 배포 직후 배포 URL 번들이 새 커밋을 담는지 자동 검증 (build_commit) (2026-08-15)
+- **작업 ID**: FIX-2026-08-15-05 (구현 + 검증)
+- **요청**: Pages 배포 직후 배포 URL 의 _worker.js 가 새 커밋 코드를 실제로 포함하는지 자동 검증하는 단계 추가
+- **배경**: 수정 53/55 에서 'Uploaded 0 files' 가 정적 에셋 카운트뿐임을 문서화했지만, **런타임에서 번들이 실제 새 코드를 담는지** 증명하는 검증은 없었음 (Source commit 은 배포 메타데이터 — 번들 내용과 무관)
+- **수정**:
+  - `vite.config.ts` — `__BUILD_COMMIT__` define 추가 (BUILD_COMMIT env → 빌드 타임 치환, 미설정 '')
+  - `src/lib/deploy-env.ts` — `BUILD_COMMIT` export (typeof 가드, 테스트 폴백 '')
+  - `src/routes/health.ts` — `/api/health` (light+full) 응답에 `build_commit` 필드 추가
+  - `scripts/deploy-local-worktree.sh` — 빌드에 `BUILD_COMMIT=$FULL_SHA` 주입 + Pages 배포 직후 **배포 URL(고유 해시)의 /api/health build_commit 대조** — 일치 시 ✅, 불일치 시 ❌ + **exit 1** (스테일 번들 조기 차단). main URL 은 라우팅/캐시로 이전 배포를 가리킬 수 있어 반드시 배포 URL 사용. URL 미추출(셀프테스트 등) 시 PAGES_BUNDLE_OK=2(생략, 실패 아님). 드라이런 계획 + 최종 요약 + 헤더 문서화
+  - `.github/workflows/ci.yml` + `deploy.yml` — 빌드에 `BUILD_COMMIT=${{ github.sha }}` 주입 (CI 아티팩트/폴백 빌드 모두 동일 동작)
+- **검증**: 스모크 — `BUILD_COMMIT=<sha> npm run build` → dist/_worker.js 에 SHA 포함 확인 · bash -n OK · `--self-test` 5/5 (가짜 pages deploy 는 URL 미출력 → 번들 검증 생략, exit 회귀 없음) · deploy-local-worktree.test.ts 8건 · health-status/index 31건 · 전체 unit 136파일 PASS · tsc 0 · eslint 0 · prettier clean · verify-deploy-workflow PASS
+
 ### 수정 29: 배포 파이프라인 자동 검증 확장 — gold 회수 + staging↔production 동치 대조 (2026-08-14)
 - **작업 ID**: FIX-2026-08-14-12 (구현 + 실측)
 - **배경**: 로컬 worktree 배포 스크립트(수정 27)에 검증 단계 추가 — 배포 후 "동작하는가"를 자동 확인

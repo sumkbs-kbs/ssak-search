@@ -71,6 +71,17 @@
 #   (Pages는 롤백 없이 이전 배포를 유지 — DO를 이전 버전으로 되돌리는 게 정합).
 #   실패 시 exit 1 (부분 배포가 있으면 그 상태를 요약).
 #
+# 번들 커밋 검증 (수정 56, 2026-08-15):
+#   Pages 배포 직후, wrangler 출력에서 방금 생성된 **배포 URL(고유 해시)** 을
+#   추출해 그 URL 의 /api/health build_commit 을 대상 커밋과 대조한다 — 빌드
+#   타임에 BUILD_COMMIT=<sha> 가 vite define 으로 번들에 심어진다
+#   (src/lib/deploy-env.ts BUILD_COMMIT → vite.config.ts __BUILD_COMMIT__).
+#   main URL 은 라우팅/캐시로 이전 배포를 가리킬 수 있어 반드시 배포 URL 을
+#   사용한다. 불일치 시 exit 1 (스테일 번들 조기 차단) — "Uploaded 0 files"
+#   카운트와 무관하게 런타임에서 새 코드 포함을 증명하는 강한 검증이다.
+#   CI/deploy.yml 빌드도 BUILD_COMMIT=${{ github.sha }} 를 주입하므로
+#   어느 배포 경로든 동일하게 동작한다.
+#
 # 출력 해석 — Pages "Uploaded 0 files (3 already uploaded)" (2026-08-14 실측):
 #   이 메시지는 **스테일(stale)이 아니다**. wrangler pages deploy 의 "Uploaded N
 #   files" 카운트는 **정적 에셋(manifest.json / static/style.css / sw.js — 배포
@@ -300,6 +311,7 @@ if [ "$DRY_RUN" = 1 ]; then
   echo "   ② Pages  : npx wrangler pages deploy dist/ --project-name=search-engine-api --branch=$PAGES_BRANCH"
   echo "             ⚠️  'Uploaded 0 files (3 already uploaded)' 는 스테일 아님 — 카운트는 정적 에셋 3개(배포 간 불변)만 집계,"
   echo "                 _worker.js Functions 번들은 별도 경로로 업로드 (신선도는 배포 URL + Source commit 검증으로 확인, 헤더 '출력 해석' 절 참조)"
+  echo "   번들검증 : 배포 URL(고유 해시)의 /api/health build_commit == $SHORT_SHA 대조 — 배포된 번들이 실제 새 코드인지 런타임 증명 (수정 56)"
   echo "   ③ cron   : npx wrangler deploy --config=$CRON_CONFIG"
   echo "   검증     : Pages Source commit == $SHORT_SHA + $HEALTH_URL HTTP 200"
   echo "   gold     : 6개 대표 쿼리 gold 회수 (top-10) — GOLD_CHECK=0 으로 생략 가능"
@@ -352,7 +364,10 @@ cd "$WORKTREE_DIR"
 # 방안 B (2026-08-14): DEPLOY_ENV 를 빌드 타임에 주입해 DO 인스턴스 키를
 # 환경별로 분리한다 (vite define → src/lib/deploy-env.ts). 같은 커밋이라도
 # staging 은 'staging', production 은 'production' 인스턴스를 가리킨다.
-echo " [2/6] 빌드 (vite build, DEPLOY_ENV=$ENV_NAME)"
+# 수정 56 (2026-08-15): BUILD_COMMIT 도 빌드 타임에 심어(→ src/lib/deploy-env.ts
+# BUILD_COMMIT), 배포 직후 배포 URL 의 /api/health build_commit 과 대조해
+# 'Uploaded 0 files' 가 스테일이 아님을 런타임에서 검증한다.
+echo " [2/6] 빌드 (vite build, DEPLOY_ENV=$ENV_NAME, BUILD_COMMIT=$SHORT_SHA)"
 if [ "${SELFTEST_TARGET_RUN:-0}" = "1" ]; then
   # 셀프테스트 대상 실행 — 실제 빌드 없이 성공 처리 (오프라인 회귀 테스트)
   echo "   (셀프테스트 — 빌드 생략, 성공 처리)"
@@ -366,7 +381,7 @@ else
       exit 1
     fi
   fi
-  DEPLOY_ENV="$ENV_NAME" npm run build 2>&1 | tail -2
+  BUILD_COMMIT="$FULL_SHA" DEPLOY_ENV="$ENV_NAME" npm run build 2>&1 | tail -2
   BUILD_OK=$?
 fi
 if [ "$BUILD_OK" != "0" ]; then
@@ -390,12 +405,15 @@ else
 fi
 
 # ── ② Pages 배포 ────────────────────────────────────────────────────────
+PAGES_DEPLOY_URL=""
+PAGES_BUNDLE_OK=2  # 0=실패 1=통과 2=검증 생략 (URL 미추출 등)
 if [ "$DO_DEPLOYED" = "1" ]; then
   echo " [4/6] ② Pages 배포 (branch=$PAGES_BRANCH)"
   # ⚠️ "Uploaded 0 files (3 already uploaded)"는 스테일이 아님 — 카운트는 정적
   # 에셋 3개(배포 간 불변)만 집계하고 _worker.js Functions 번들은 별도 경로로
-  # 업로드된다 (헤더 "출력 해석" 절 참조). 신선도는 아래 Source commit 검증이
-  # 보장한다 — 0 files 여부로 재배포하지 말 것.
+  # 업로드된다 (헤더 "출력 해석" 절 참조). 신선도는 아래 **배포 URL 번들 검증**
+  # (build_commit == 대상 SHA) 과 Source commit 검증이 보장한다 — 0 files 여부로
+  # 재배포하지 말 것.
   PAGES_OUT="$(npx wrangler pages deploy dist/ --project-name=search-engine-api --branch="$PAGES_BRANCH" --commit-dirty=true 2>&1)"
   if printf '%s\n' "$PAGES_OUT" | grep -qE '✨ Success|Deployment complete'; then
     PAGES_DEPLOYED=1
@@ -404,6 +422,28 @@ if [ "$DO_DEPLOYED" = "1" ]; then
       echo "   (정적 에셋 3개 불변 — 'Uploaded 0 files'는 정상. _worker.js 번들은 별도 업로드, 스테일 아님)"
     fi
     printf '%s\n' "$PAGES_OUT" | grep -E '✨ Success|Deployment complete|pages.dev' || true
+
+    # ── 배포 URL 번들 검증 (수정 56) ───────────────────────────────────
+    # 방금 만들어진 배포 URL(고유 해시)의 /api/health build_commit 이 대상
+    # 커밋과 일치하는지 확인한다 — 정적 에셋 카운트와 무관하게 **배포된
+    # 번들이 실제로 새 코드를 담는지** 런타임에서 증명한다. main URL 은
+    # 라우팅/캐시로 이전 배포를 가리킬 수 있으므로 반드시 배포 URL 을 쓴다.
+    PAGES_DEPLOY_URL="$(printf '%s\n' "$PAGES_OUT" | grep -oE 'https://[a-z0-9]+\.search-engine-api\.pages\.dev' | head -1)"
+    if [ -n "$PAGES_DEPLOY_URL" ]; then
+      BUNDLE_COMMIT="$(curl -s -m 20 "$PAGES_DEPLOY_URL/api/health" | python3 -c 'import json,sys
+h=json.load(sys.stdin)
+print(h.get("build_commit",""))' 2>/dev/null || echo '')"
+      if [ "$BUNDLE_COMMIT" = "$FULL_SHA" ]; then
+        PAGES_BUNDLE_OK=1
+        echo "   ✅ 번들 커밋 검증: $PAGES_DEPLOY_URL → build_commit=$SHORT_SHA (배포된 번들이 대상 커밋 포함)"
+      else
+        PAGES_BUNDLE_OK=0
+        echo " ❌ 번들 커밋 불일치: 배포 URL build_commit='${BUNDLE_COMMIT:-비어있음}' vs 대상 $SHORT_SHA" >&2
+        echo "    배포된 번들이 스테일일 수 있습니다 — deployment list Source 와 대조 후 재배포 권장." >&2
+      fi
+    else
+      echo " ⚠️  배포 URL 추출 실패 — 번들 커밋 검증 생략 (수동: wrangler pages deployment list)" >&2
+    fi
   else
     echo " ❌ Pages 배포 실패 — DO는 새 버전($SHORT_SHA), Pages는 이전 버전 유지 (부분 배포)." >&2
     printf '%s\n' "$PAGES_OUT" | tail -20 >&2
@@ -525,6 +565,11 @@ echo "━━━━━━━━━━━━━━━━━━━━━━━━�
 if [ "$DO_DEPLOYED" = "1" ] && [ "$PAGES_DEPLOYED" = "1" ] && [ "$CRON_DEPLOYED" = "1" ]; then
   echo " ✅ 전체 배포 완료: $ENV_NAME @ $SHORT_SHA"
   echo "   DO: ssak-do-worker · Pages: $PAGES_BRANCH · cron: $CRON_CONFIG"
+  if [ "$PAGES_BUNDLE_OK" = "1" ]; then
+    echo "   번들 커밋 검증: ✅ 배포 URL 의 번들이 $SHORT_SHA 포함"
+  elif [ "$PAGES_BUNDLE_OK" = "0" ]; then
+    echo "   번들 커밋 검증: ❌ 불일치 (아래 참조) — 배포는 완료됐지만 배포 URL 번들이 스테일일 수 있음"
+  fi
   echo "   로그: npx wrangler tail ssak-do-worker --config wrangler.do.jsonc"
 elif [ "$DO_DEPLOYED" = "1" ] && [ "$PAGES_DEPLOYED" = "1" ] && [ "$CRON_DEPLOYED" = "0" ]; then
   echo " ⚠️  부분 배포: DO + Pages 는 $SHORT_SHA, cron 만 이전 버전"
@@ -579,8 +624,11 @@ if [ "${GOLD_FAIL_HARD_FAILED:-0}" = "1" ]; then
   echo "    원인(백엔드 서킷/업스트림) 조사 후 재실행: bash scripts/deploy-local-worktree.sh $SHORT_SHA $ENV_NAME"
 fi
 
-# ── exit code: 부분 배포(실패 단계 존재) 또는 gold 미회수 지속(GOLD_FAIL_HARD)이면 1 ──
-if [ "$DO_DEPLOYED" = "0" ] || [ "$PAGES_DEPLOYED" = "0" ] || [ "$CRON_DEPLOYED" = "0" ] || [ "${GOLD_FAIL_HARD_FAILED:-0}" = "1" ]; then
+# ── exit code: 부분 배포(실패 단계 존재) / gold 미회수 지속(GOLD_FAIL_HARD) /
+#    번들 커밋 불일치(배포 URL 이 대상 커밋 미포함) 이면 1 ──
+# PAGES_BUNDLE_OK=2(검증 생략)는 실패 아님 — URL 미추출(셀프테스트/이상 출력) 시
+# 배포 자체는 성공 처리한다.
+if [ "$DO_DEPLOYED" = "0" ] || [ "$PAGES_DEPLOYED" = "0" ] || [ "$CRON_DEPLOYED" = "0" ] || [ "${GOLD_FAIL_HARD_FAILED:-0}" = "1" ] || [ "$PAGES_BUNDLE_OK" = "0" ]; then
   exit 1
 fi
 exit 0

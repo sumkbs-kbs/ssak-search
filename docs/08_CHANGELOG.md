@@ -957,7 +957,7 @@
 - **회귀 체크** (`scripts/verify-deploy-workflow.ts` +7): notify_dry_run 입력 선언 시 Notify 스텝의 SLACK_DRY_RUN/SLACK_DRY_RUN_URL 배선 필수 — 배선 누락이 조용히 웹훅/no-op 경로로 빠지는 회귀 차단. 기존 6체크에 추가 (테스트 +4, 27/27 PASS)
 - **실측**:
   - 로컬 — 캡처 서버(:18081) + `SLACK_DRY_RUN=1` → **389B 페이로드 수신** + `✅ DRY-RUN 알림 전송됨 (캡처 서버)` exit 0
-  - CI (staging 디스패치 `notify_dry_run=true`) — guard 실패(무효 CF 토큰) → [13] Notify 발화 → 캡처 서버 POST → workflow_run 로그에서 마커 실측 (아래 절차로 재현)
+  - CI (staging 디스패치 `notify_dry_run=true`, run 31890726889) — **종단 실측 완료**: guard 실패(무효 CF 토큰, `❌ INVALID/EXPIRED (verify HTTP 401)`) → [13] Notify 발화 → `SLACK_DRY_RUN=1`/`SLACK_DRY_RUN_URL=http://127.0.0.1:18080/` env 확인 → `✅ DRY-RUN 알림 전송됨 (캡처 서버) — 페이로드 검증 완료` + **캡처 서버가 429B 페이로드 수신** (`[capture] POST / Content-Type=application/json 429B` + 전체 JSON을 workflow_run 로그로 출력, run URL 31890726889 포함). push CI #31890723998 @4668434 도 success
 - **사용**: `gh workflow run deploy.yml -f environment=staging -f notify_dry_run=true` → run 로그 [13] Notify 스텝에서 `✅ DRY-RUN 알림 전송됨 (캡처 서버)` + 수신 페이로드 확인
 - **검증**: verify-deploy-workflow **PASS** (기존 6 + notify-dry-run-wiring) · 유닛 27/27 (파일) · 전체 unit 139 파일 **2,720/2,720 PASS** · tsc 0 · prettier clean
 

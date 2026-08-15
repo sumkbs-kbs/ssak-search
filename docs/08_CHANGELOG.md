@@ -822,7 +822,7 @@
   - `scripts/verify-deploy-workflow.ts` — `parse` → `parseDocument` 로 교체, **TAG_RESOLVE_FAILED 경고를 ERROR 로 승격** (GitHub 파서 정합). eval.yml 분기도 errors 명시 체크로 통일
   - `tests/unit/verify-deploy-workflow.test.ts` — 신규 2건: `!cancelled()` 선두 ERROR + 재배열 PASS (총 23건)
 - **검증**: 유닛 23/23 · 전체 unit 프로젝트 136파일 통과 (통합 테스트 14건 실패는 사전 존재/환경 — auth 401, CI 게이트 밖) · eslint 0 · prettier clean · tsc 0 · 실파일 verify-deploy-workflow PASS
-- **후속**: push → CI green → workflow_run Deploy 재발화 확인 (알림 스텝 포함, guard 무효 토큰으로 차단 예상)
+- **후속 (확정)**: 639c868 push → CI 31881348416 **SUCCESS** → **workflow_run Deploy 31881448712 재발화** (phantom 사라짐 — 워크플로 이름도 'Deploy'로 복구). 잡 스텝 실측: [3] pre-deploy guard `❌ CLOUDFLARE_API_TOKEN INVALID/EXPIRED (verify HTTP 401)` 실패 → [4~12] 전부 skipped → **[13] Notify staging pipeline failure (Slack) → completed success** — 조건 `steps.equivalence.outcome == 'skipped' && !cancelled()` 가 정확히 발화, stdout `ℹ️ SLACK_WEBHOOK 미설정 — 실패 알림 생략 (no-op)` (웹훅 시크릿 미설정 상태 — 시크릿 설정 시 danger 알림 POST 경로 활성)
 
 ### 수정 29: 배포 파이프라인 자동 검증 확장 — gold 회수 + staging↔production 동치 대조 (2026-08-14)
 - **작업 ID**: FIX-2026-08-14-12 (구현 + 실측)

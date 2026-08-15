@@ -252,11 +252,15 @@ bash scripts/watch-secret-rotation.sh --dry-run    # 감지만 — 디스패치 
   과 같은 Slack blocks 형식 — 실패 항목별 상세(헬스 diff/검색 diff/gold 회수율) 포함,
   런타임 실패는 danger, 커밋 단독은 warning 색상.
 
-  **헬스 동치 의미론 (방안 B 이후, 2026-08-14)**: DO 인스턴스가 환경별로 독립
-  되면서 헬스 status 는 더 이상 코드 동치 지표가 아니다 (캐시 히트 시 백엔드 fetch
-  없음 → 미추적, fresh 인스턴스 누적 차이). 대조는 ① 한쪽만 추적 중인 호스트는
-  정보성(실패 아님) ② 공통 호스트는 **한쪽만 down 일 때만 실패** ③ degraded vs
-  operational 은 시점 차이로 정보성. 실질적인 동치 신호는 검색 top-5 + gold 회수.
+  **헬스 동치 의미론 (방안 B 이후, 2026-08-14, 수정 50 갱신)**: DO 인스턴스가
+  환경별로 독립되면서 헬스 status 는 더 이상 코드 동치 지표가 아니다 (캐시 히트 시
+  백엔드 fetch 없음 → 미추적, fresh 인스턴스 누적 차이). 대조는 ① 한쪽만 추적 중인
+  호스트는 정보성(실패 아님) ② 공통 호스트의 **한쪽만 down 은 경고(WARN)** — 해당
+  환경 DO 서킷만 트립된 런타임 상태로 동치 실패가 아니다 (실측 2026-08-15:
+  production lookup.dbpedia.org down vs staging operational → [2/4] 통과 + 경고)
+  ③ degraded vs operational 은 시점 차이로 정보성. 실질적인 동치 신호는 검색
+  top-5 + gold 회수. 비교 로직은 `scripts/verify-env-health-diff.py` (순수 헬퍼,
+  유닛 테스트 7건) — 한쪽-down 단독은 Slack warning 알림, 게이트(FAIL)는 통과.
 
   **CI 등록 (2026-08-14)**: deploy.yml 의 `deploy-staging` job 에 동치 대조를
   post-deploy gate 로 등록 — **매 staging 배포 후 자동 실행**된다. `SKIP_COMMIT=1`

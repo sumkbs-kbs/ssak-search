@@ -770,6 +770,17 @@
 - **사용법**: `bash scripts/clean-global-limiter.sh` (reset) / `... status` (읽기 전용) — 실서버 재배포 불필요 (DO 클래스 코드는 다음 배포에 포함)
 - **후속 견고화**: getAlarmInfo RPC 는 0629eb8 에서만 존재 — DO 워커가 아직 구 코드면 해당 RPC 가 500 을 내므로, summarize() 가 getAlarmInfo 실패를 `alarmCheckFailed: true` 로 우아하게 처리하고 호스트 소거로 정리 판정 (구 코드에서도 동작, 유닛 테스트 +1 → 8건)
 
+### 수정 50: 헬스 동치 해석 갱신 — 한쪽만 down 을 경고(WARN)로, 방안 B 독립 서킷 재검증 (2026-08-15)
+- **작업 ID**: VER-2026-08-15-01 (실측 + 구현 + 유닛 테스트)
+- **요청**: 분리된 인스턴스에서 verify-env-equivalence.sh 가 여전히 4/4 동치를 확인하는지 재검증 + 헬스 항목 해석 갱신
+- **실측 (라이브 대조, staging↔production)**: ① [1/4] 배포 커밋 **1941786 동치** ② [2/4] 헬스 — **production 만 `lookup.dbpedia.org: down`** (staging 은 operational): 방안 B 후 서킷 상태가 환경별로 독립이라, 한쪽만 down 은 해당 환경 DO 서킷만 트립된 **런타임 상태**로 코드 동치와 무관 ③ [3/4] 검색 top-5 3쿼리 전부 동일 ④ [4/4] gold **6/6 ↔ 6/6**. 기존 해석(한쪽만 down = 실패)이라면 이 상태에서 [2/4] 가 ❌ 로 4/4 가 깨졌을 것
+- **수정**:
+  - **`scripts/verify-env-health-diff.py` (신규)**: [2/4] 헬스 비교 로직을 순수 헬퍼로 추출 — 한쪽만 추적 → INFO, degraded vs operational → INFO, **한쪽만 down → WARN** (동치 실패 아님), 양쪽 동일 → OK, 파싱 불가 → ERROR(exit 1)
+  - **`scripts/verify-env-equivalence.sh` [2/4]**: 헬퍼 호출로 교체 — WARN 은 `HEALTH_WARN` (FAIL 미설정) → 게이트 통과 + 요약에 경고 표시 + Slack **warning** 알림 (동치 실패가 아닌 런타임 경고 — RUNTIME_FAIL 0 이면 danger 아닌 warning 색상)
+- **재검증 (수정 후 실측)**: 전체 실행 **exit 0 + `✅ 환경 동치 확인`** — [2/4] 는 `⚠️ 한쪽만 down … lookup.dbpedia.org: operational vs down` 경고로 표시되고 실패 처리되지 않음. 헬스 경고는 문서화된 의미론(docs/17)대로 실질 동치 신호(검색 top-5 + gold)와 분리
+- **검증**: 유닛 테스트 **+7** (verify-env-health-diff.py 스폰 테스트 — parse-cron-health.test.ts 패턴: 한쪽-down WARN/한쪽-추적 INFO/degraded-vs-op INFO/동일 OK/빈 OK/파싱 ERROR exit 1/usage exit 2) → 전체 **2,679건 / 136파일** · eslint 0 · prettier clean · tsc 0 · bash -n OK
+- **참고**: production 의 lookup.dbpedia.org down 은 동치 실패가 아니라 **production 쪽 실장애 신호** — 딥 프로브/Slack alert 가 별도로 커버 (이번 변경은 게이트 오탐 방지)
+
 ### 수정 29: 배포 파이프라인 자동 검증 확장 — gold 회수 + staging↔production 동치 대조 (2026-08-14)
 - **작업 ID**: FIX-2026-08-14-12 (구현 + 실측)
 - **배경**: 로컬 worktree 배포 스크립트(수정 27)에 검증 단계 추가 — 배포 후 "동작하는가"를 자동 확인

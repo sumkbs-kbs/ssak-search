@@ -13,8 +13,9 @@
 #   1. 배포 커밋 동치 — Pages deployment list 의 Source commit 비교
 #      (staging/main 브랜치 최신 배포 각각)
 #   2. 헬스 동치 — /api/health 의 양쪽 공통 호스트 status 비교 (방안 B 이후
-#      DO 인스턴스는 독립이라 한쪽만 추적 중인 호스트는 트래픽 누적 차이로
-#      정보성 처리 — 실패 아님)
+#      DO 인스턴스는 독립이라 서킷 상태가 환경별로 누적된다: 한쪽만 추적 중인
+#      호스트는 정보성, **한쪽만 down 은 경고(WARN)** — 환경별 DO 서킷 트립의
+#      런타임 상태로 동치 실패가 아니다. 실제 동치 신호는 검색 top-5 + gold 회수)
 #   3. 검색 결과 동치 — 동일 쿼리 3종(EN/zh/general) 의 top-5 도메인 시퀀스 비교
 #   4. gold 회수 동치 — verify-deployed-gold.sh 를 양쪽에 실행해 회수율 비교
 #
@@ -31,7 +32,8 @@
 #                    resolveWebhookUrl 컨벤션 — SLACK_WEBHOOK 우선).
 #
 # 알림 규칙 (2026-08-14): 헬스/검색/gold 중 하나라도 다르면 danger 알림.
-# 커밋 불일치만 있는 경우는 알림 생략(정상 상태) — EQ_NOTIFY_COMMIT=1 로 강제 가능.
+# 헬스 '한쪽만 down' 단독(동치 실패 아님)은 warning 알림. 커밋 불일치만 있는
+# 경우는 알림 생략(정상 상태) — EQ_NOTIFY_COMMIT=1 로 강제 가능.
 # =============================================================================
 set -uo pipefail
 
@@ -88,52 +90,28 @@ echo ""
 echo " [2/4] 헬스 동치"
 H_A="$(curl -s -m 20 "$ENV_A/api/health")"
 H_B="$(curl -s -m 20 "$ENV_B/api/health")"
-export H_A H_B
-HEALTH_DIFF="$(python3 <<PYEOF
-import json, os
-try:
-    a = json.loads(os.environ.get('H_A', '{}'))
-    b = json.loads(os.environ.get('H_B', '{}'))
-except Exception as e:
-    print(f'parse error: {e}')
-    raise SystemExit(1)
-ba, bb = a.get('backends', {}), b.get('backends', {})
-diffs, info = [], []
-for host in sorted(set(ba) | set(bb)):
-    sa = ba.get(host, {}).get('status')
-    sb = bb.get(host, {}).get('status')
-    # 방안 B (2026-08-14) 이후 DO 인스턴스는 환경별로 독립이라, 한쪽에만
-    # 회로가 있는 건 트래픽 누적 차이(캐시 히트 시 백엔드 fetch 없음 → 미추적)로
-    # 코드 동치와 무관하다 — 정보성으로만 남기고 실패로 보지 않는다.
-    if sa is None or sb is None:
-        info.append(f'{host}: {sa or "미추적"} vs {sb or "미추적"}')
-        continue
-    # 양쪽 공통 호스트 — 'down' 여부만 실질 신호로 본다. degraded/operational
-    # 차이는 독립 인스턴스의 트래픽 누적·시점 차이(캐시 미스 버스트 등)로 코드
-    # 동치와 무관 — 정보성. 한쪽만 down 이면 해당 환경이 백엔드에 도달하지
-    # 못한다는 실질 장애 신호라 실패 처리.
-    down_a, down_b = sa == 'down', sb == 'down'
-    if down_a != down_b:
-        diffs.append(f'{host}: {sa} vs {sb}')
-    elif sa != sb:
-        info.append(f'{host}: {sa} vs {sb}')
-if diffs:
-    print('DIFF: ' + '; '.join(diffs))
-elif info:
-    print('INFO: ' + '; '.join(info))
-else:
-    print('OK')
-PYEOF
-)"
+H_A_TMP="$(mktemp)"; H_B_TMP="$(mktemp)"
+trap 'rm -f "$H_A_TMP" "$H_B_TMP"' EXIT
+printf '%s' "$H_A" > "$H_A_TMP"
+printf '%s' "$H_B" > "$H_B_TMP"
+HEALTH_DIFF="$(python3 "$(dirname "${BASH_SOURCE[0]}")/verify-env-health-diff.py" "$H_A_TMP" "$H_B_TMP")"
+HEALTH_WARN=0; HEALTH_WARN_DETAIL=""
 if echo "$HEALTH_DIFF" | grep -q '^OK$'; then
   echo "   ✅ 백엔드 status 전부 동치 (공통 호스트)"
 elif echo "$HEALTH_DIFF" | grep -q '^INFO:'; then
   echo "   ℹ️  공통 호스트 status 동치 — 한쪽만 추적 중인 호스트는 정보성: ${HEALTH_DIFF#INFO: }"
-elif echo "$HEALTH_DIFF" | grep -q '^DIFF:'; then
-  echo "   ❌ ${HEALTH_DIFF#DIFF: }" >&2
+elif echo "$HEALTH_DIFF" | grep -q '^WARN:'; then
+  # 방안 B (2026-08-14): DO 인스턴스가 환경별로 독립이라 '한쪽만 down' 은 해당
+  # 환경 DO 서킷만 트립된 런타임 상태 — 코드 동치 실패가 아니다. 경고로 보고
+  # (Slack warning 알림) 하고 게이트(FAIL)는 통과시킨다.
+  HEALTH_WARN=1
+  HEALTH_WARN_DETAIL="${HEALTH_DIFF#WARN: }"
+  echo "   ⚠️  한쪽만 down (방안 B 독립 서킷 — 환경별 런타임 상태, 동치 실패 아님): $HEALTH_WARN_DETAIL" >&2
+elif echo "$HEALTH_DIFF" | grep -q '^ERROR'; then
+  echo "   ⚠️  헬스 비교 실패: $HEALTH_DIFF" >&2
   FAIL=1; HEALTH_FAIL=1
 else
-  echo "   ⚠️  헬스 비교 실패: $HEALTH_DIFF" >&2
+  echo "   ⚠️  헬스 비교 실패 (알 수 없는 출력): $HEALTH_DIFF" >&2
   FAIL=1; HEALTH_FAIL=1
 fi
 
@@ -183,6 +161,9 @@ fi
 # ── 요약 ──────────────────────────────────────────────────────────────────
 echo ""
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+if [ "$HEALTH_WARN" = "1" ] && [ "$FAIL" = "0" ]; then
+  echo " ⚠️  헬스 경고 (한쪽만 down — 서킷 독립, 동치 실패 아님): $HEALTH_WARN_DETAIL" >&2
+fi
 if [ "$FAIL" = "0" ]; then
   echo " ✅ 환경 동치 확인: $LABEL_A ↔ $LABEL_B 모두 일치"
   echo "    (배포 커밋 · 헬스 · 검색 top-5 · gold 회수)"
@@ -196,16 +177,17 @@ echo "━━━━━━━━━━━━━━━━━━━━━━━━�
 # 단독은 staging 배포 직후 production 미배포의 정상 상태이므로 알림 생략
 # (EQ_NOTIFY_COMMIT=1 로 강제 가능). Webhook 미설정이면 no-op — 코드베이스의
 # "webhook 없으면 조용히 skip" 컨벤션을 따른다 (src/lib/slack-alert.ts 참고).
-if [ "$FAIL" = "1" ] && [ "${EQ_NOTIFY:-1}" = "1" ]; then
+if { [ "$FAIL" = "1" ] || [ "$HEALTH_WARN" = "1" ]; } && [ "${EQ_NOTIFY:-1}" = "1" ]; then
   RUNTIME_FAIL=$((HEALTH_FAIL + SEARCH_FAIL + GOLD_FAIL))
-  if [ "$RUNTIME_FAIL" -gt 0 ] || [ "${EQ_NOTIFY_COMMIT:-0}" = "1" ]; then
+  if [ "$RUNTIME_FAIL" -gt 0 ] || [ "$HEALTH_WARN" = "1" ] || [ "${EQ_NOTIFY_COMMIT:-0}" = "1" ]; then
     WEBHOOK="${SLACK_WEBHOOK:-${ALERT_SLACK_WEBHOOK:-}}"
     if [ -n "$WEBHOOK" ]; then
       SEVERITY="danger"
-      [ "$RUNTIME_FAIL" = "0" ] && SEVERITY="warning"  # 커밋 불일치 단독
+      [ "$RUNTIME_FAIL" = "0" ] && SEVERITY="warning"  # 헬스 경고 단독 / 커밋 불일치 단독
       DETAILS=""
       [ "$COMMIT_FAIL" = "1" ] && DETAILS="${DETAILS}- 배포 커밋 불일치: A=$COMMIT_A  B=$COMMIT_B\n"
-      [ "$HEALTH_FAIL" = "1" ] && DETAILS="${DETAILS}- 헬스 불일치: ${HEALTH_DIFF#DIFF: }\n"
+      [ "$HEALTH_FAIL" = "1" ] && DETAILS="${DETAILS}- 헬스 불일치: ${HEALTH_DIFF#ERROR: }\n"
+      [ "$HEALTH_WARN" = "1" ] && DETAILS="${DETAILS}- 헬스 경고 (한쪽만 down): $HEALTH_WARN_DETAIL\n"
       [ "$SEARCH_FAIL" = "1" ] && DETAILS="${DETAILS}${SEARCH_DETAIL}"
       [ "$GOLD_FAIL" = "1" ] && DETAILS="${DETAILS}- gold 회수 불일치: $LABEL_A=${GOLD_A:-?}  $LABEL_B=${GOLD_B:-?}\n"
       export LABEL_A LABEL_B ENV_A ENV_B SEVERITY COMMIT_A COMMIT_B DETAILS RUNTIME_FAIL

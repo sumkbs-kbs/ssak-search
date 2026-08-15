@@ -947,6 +947,20 @@
 - **검증**: rate-limiter-do **39/39** · 전체 unit 138파일 **2,698/2,698 PASS** · tsc 0 · prettier clean · 프로브 워커는 검증 후 삭제 (컨벤션)
 - **잔존 노트**: 서킷 맵에 `workers_ai`(내부 바인딩 pseudo-host) 존재 — 트립 시 robots.txt 프로브가 DNS 실패로 stuck-open 될 수 있는 사전 존재 이슈 (404-alive 와 무관, 별도 추적)
 
+### 수정 72: 드라이런 검증을 staging 디스패치에 연결 — CI 실패 시 [13] Notify 가 캡처 서버로 POST (2026-08-15)
+- **작업 ID**: FIX-2026-08-15-20 (구현 + 테스트 + 실측)
+- **요청**: 드라이런 검증을 staging 디스패치에 연결해, CI 실패 시 [13] 알림 스텝이 실제로 캡처 서버로 POST 하는지 workflow_run 로그로 확인
+- **수정** (`.github/workflows/deploy.yml`):
+  - **`workflow_dispatch` 입력 `notify_dry_run` (boolean, 기본 false) 추가** — true 면 [13] Notify 스텝이 웹훅 대신 **러너 내부 캡처 서버**로 POST
+  - Notify 스텝 env 에 `SLACK_DRY_RUN`/`SLACK_DRY_RUN_URL` 배선 — `inputs.notify_dry_run == true && '1' || ''` 패턴. **workflow_run 트리거에서는 inputs 가 비어 항상 실 웹훅/기존 경로 유지 (회귀 없음)**
+  - Notify 스텝 run 을 블록으로 확장 — 드라이런 시 `capture-webhook.py`(러너 내부, :18080) 기동 → notify 스크립트 실행 → **수신 페이로드를 workflow_run 로그로 출력** (`━━━ capture-webhook 로그 (드라이런 수신 실측) ━━━`)
+- **회귀 체크** (`scripts/verify-deploy-workflow.ts` +7): notify_dry_run 입력 선언 시 Notify 스텝의 SLACK_DRY_RUN/SLACK_DRY_RUN_URL 배선 필수 — 배선 누락이 조용히 웹훅/no-op 경로로 빠지는 회귀 차단. 기존 6체크에 추가 (테스트 +4, 27/27 PASS)
+- **실측**:
+  - 로컬 — 캡처 서버(:18081) + `SLACK_DRY_RUN=1` → **389B 페이로드 수신** + `✅ DRY-RUN 알림 전송됨 (캡처 서버)` exit 0
+  - CI (staging 디스패치 `notify_dry_run=true`) — guard 실패(무효 CF 토큰) → [13] Notify 발화 → 캡처 서버 POST → workflow_run 로그에서 마커 실측 (아래 절차로 재현)
+- **사용**: `gh workflow run deploy.yml -f environment=staging -f notify_dry_run=true` → run 로그 [13] Notify 스텝에서 `✅ DRY-RUN 알림 전송됨 (캡처 서버)` + 수신 페이로드 확인
+- **검증**: verify-deploy-workflow **PASS** (기존 6 + notify-dry-run-wiring) · 유닛 27/27 (파일) · 전체 unit 139 파일 **2,720/2,720 PASS** · tsc 0 · prettier clean
+
 ### 수정 71: 알림 배선 검증 절차 가이드 — 수정 62/63 검증 경로 통합 문서 (2026-08-15)
 - **작업 ID**: FIX-2026-08-15-19 (문서)
 - **요청**: 수정 62/63 의 검증 경로(드라이런 캡처 + 실 웹훅 E2E)를 한 문서로 묶어 알림 배선 검증 절차 가이드 작성

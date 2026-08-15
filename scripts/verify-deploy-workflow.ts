@@ -256,6 +256,30 @@ export function verifyDeployWorkflow(repoDir: string): GateOutcome {
     }
   }
 
+  // ── 7. notify dry-run wiring (수정 72) ─────────────────────────────────
+  // workflow_dispatch 의 notify_dry_run 입력이 선언되면, [13] Notify 스텝이
+  // SLACK_DRY_RUN / SLACK_DRY_RUN_URL 을 inputs 에서 배선해야 한다. 배선이
+  // 빠지면 드라이런 검증이 조용히 실 웹훅(또는 no-op) 경로로 빠져, CI 실패 시
+  // 캡처 서버로 POST 하는 경로가 검증되지 않는다.
+  const dispatchInputs = (doc as { on?: Record<string, unknown> }).on?.workflow_dispatch as
+    { inputs?: Record<string, unknown> } | undefined
+  if (dispatchInputs?.inputs?.notify_dry_run !== undefined) {
+    const notifyStep = (jobs['deploy-staging']?.steps ?? []).find((s) => (s.name ?? '').includes('Notify'))
+    if (!notifyStep) {
+      findings.push(`deploy-staging: notify_dry_run 입력이 선언됐지만 [13] Notify 스텝이 없다`)
+    } else {
+      const env = (notifyStep.env ?? {}) as Record<string, unknown>
+      const dryRun = String(env.SLACK_DRY_RUN ?? '')
+      const dryRunUrl = String(env.SLACK_DRY_RUN_URL ?? '')
+      if (!dryRun.includes('inputs.notify_dry_run')) {
+        findings.push(`deploy-staging Notify: SLACK_DRY_RUN 이 inputs.notify_dry_run 에서 배선돼야 한다 (수정 72)`)
+      }
+      if (!dryRunUrl.includes('inputs.notify_dry_run')) {
+        findings.push(`deploy-staging Notify: SLACK_DRY_RUN_URL 이 inputs.notify_dry_run 에서 배선돼야 한다 (수정 72)`)
+      }
+    }
+  }
+
   // ── 6. eval.yml baseline auto-commit permission ────────────────────────
   // S104-③-⑧ (2026-08-12): the repo default workflow permission is read-only,
   // and eval.yml declared no permissions:, so the plain `git push` in
@@ -299,7 +323,7 @@ export function verifyDeployWorkflow(repoDir: string): GateOutcome {
   }
   return {
     status: 'PASS',
-    detail: `${DEPLOY_WF} + ${GUARD_SCRIPT} pass all 6 S104-③-⑥-④/⑧ regression checks (secrets / guard-masking / artifact / node / needs / eval-baseline-permission)`,
+    detail: `${DEPLOY_WF} + ${GUARD_SCRIPT} pass all S104-③-⑥-④/⑧ regression checks (secrets / guard-masking / artifact / node / needs / eval-baseline-permission / notify-dry-run-wiring)`,
   }
 }
 

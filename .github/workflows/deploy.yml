@@ -16,6 +16,14 @@ on:
         options:
           - staging
           - production
+      # 수정 72 (2026-08-15): 알림 드라이런을 staging 디스패치에 연결 — true 면
+      # [13] Notify 스텝이 웹훅 대신 **러너 내부 캡처 서버**로 POST 하고, 수신된
+      # 페이로드를 workflow_run 로그로 출력한다 (실 Slack 수신 없이 종단 검증).
+      notify_dry_run:
+        description: "Notify step 을 캡처 서버 드라이런으로 검증 (웹훅 미사용)"
+        required: false
+        default: "false"
+        type: boolean
 
 env:
   # S104-③-⑥-④ (2026-08-12): wrangler 4.121.0 (installed by
@@ -230,6 +238,11 @@ jobs:
         if: steps.equivalence.outcome == 'skipped' && !cancelled()
         env:
           SLACK_WEBHOOK: ${{ secrets.ALERT_SLACK_WEBHOOK || secrets.SLACK_WEBHOOK }}
+          # 수정 72 (2026-08-15): workflow_dispatch 의 notify_dry_run=true 일 때만
+          # 드라이런 모드 — workflow_run 트리거에서는 inputs 가 비어 있어 항상
+          # 실 웹훅/기존 경로를 유지한다 (회귀 없음).
+          SLACK_DRY_RUN: ${{ inputs.notify_dry_run == true && '1' || '' }}
+          SLACK_DRY_RUN_URL: ${{ inputs.notify_dry_run == true && 'http://127.0.0.1:18080/' || '' }}
           REPO: ${{ github.repository }}
           RUN_URL: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
         # 수정 62 (2026-08-15): 인라인 로직을 scripts/notify-pipeline-failure.sh 로
@@ -237,7 +250,26 @@ jobs:
         # (scripts/capture-webhook.py) 에 POST 해 페이로드를 검증할 수 있다
         # (로컬: python3 scripts/capture-webhook.py --port 18080 + SLACK_DRY_RUN=1).
         # 페이로드 구조는 수정 51 과 동일 (text + attachments[danger].blocks).
-        run: bash scripts/notify-pipeline-failure.sh
+        #
+        # 수정 72 (2026-08-15): notify_dry_run=true 시 러너 내부에서 캡처 서버를
+        # 띄우고 드라이런 POST 를 실행한 뒤, **수신된 페이로드를 workflow_run 로그로
+        # 출력**한다 — CI 실패 → [13] 알림 스텝 → 캡처 서버 수신까지를 로그로 실측.
+        run: |
+          if [ "${SLACK_DRY_RUN:-0}" = "1" ]; then
+            python3 scripts/capture-webhook.py --port 18080 > /tmp/capture-webhook.log 2>&1 &
+            CAPTURE_PID=$!
+            sleep 1
+          fi
+          bash scripts/notify-pipeline-failure.sh
+          NOTIFY_STATUS=$?
+          if [ "${SLACK_DRY_RUN:-0}" = "1" ]; then
+            sleep 1
+            kill "$CAPTURE_PID" 2>/dev/null || true
+            echo "━━━ capture-webhook 로그 (드라이런 수신 실측) ━━━"
+            cat /tmp/capture-webhook.log 2>/dev/null || true
+            echo "━━━ end capture log ━━━"
+          fi
+          exit $NOTIFY_STATUS
 
   deploy-production:
     name: Deploy to Cloudflare Pages (Production)

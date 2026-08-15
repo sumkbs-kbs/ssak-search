@@ -101,7 +101,7 @@ function expectStatus(outcome: GateOutcome, status: GateOutcome['status']): void
   expect(outcome.status, outcome.detail).toBe(status)
 }
 
-describe('verify-deploy-workflow — 6 S104-③-⑥-④/⑧ regression checks', () => {
+describe('verify-deploy-workflow — S104-③-⑥-④/⑧ regression checks (+ 수정 72 notify-dry-run wiring)', () => {
   it('PASSes the CURRENT repo deploy.yml (reproducible proof HEAD is green)', () => {
     // Repo root: tests/unit → ../.. (same resolution as analyze-429-loss tests).
     const outcome = verifyDeployWorkflow(join(__dirname, '..', '..'))
@@ -310,6 +310,81 @@ jobs:
       )
       const outcome = verifyDeployWorkflow(writeRepo({ workflow }))
       expectStatus(outcome, 'PASS')
+    })
+  })
+
+  describe('8. notify dry-run wiring (수정 72)', () => {
+    const DRY_RUN_WORKFLOW = `name: Deploy
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        type: choice
+        options: [staging, production]
+      notify_dry_run:
+        type: boolean
+        default: "false"
+env:
+  NODE_VERSION: "22"
+jobs:
+  deploy-staging:
+    permissions:
+      actions: read
+      contents: read
+    runs-on: ubuntu-latest
+    steps:
+      - name: Notify staging pipeline failure (Slack)
+        if: steps.equivalence.outcome == 'skipped' && !cancelled()
+        env:
+          SLACK_WEBHOOK: \${{ secrets.ALERT_SLACK_WEBHOOK || secrets.SLACK_WEBHOOK }}
+          SLACK_DRY_RUN: \${{ inputs.notify_dry_run == true && '1' || '' }}
+          SLACK_DRY_RUN_URL: \${{ inputs.notify_dry_run == true && 'http://127.0.0.1:18080/' || '' }}
+          REPO: \${{ github.repository }}
+          RUN_URL: https://github.com/\${{ github.repository }}/actions/runs/\${{ github.run_id }}
+        run: bash scripts/notify-pipeline-failure.sh
+`
+
+    // 라인 단위 제거 헬퍼 — replace 패턴의 ${{ }} 이스케이프 불일치를 피한다.
+    function dropLine(wf: string, needle: string): string {
+      return wf
+        .split('\n')
+        .filter((l) => !l.includes(needle))
+        .join('\n')
+    }
+
+    it('PASSes when notify_dry_run 입력이 선언되고 Notify 스텝이 inputs 에서 배선한다', () => {
+      const outcome = verifyDeployWorkflow(writeRepo({ workflow: DRY_RUN_WORKFLOW }))
+      expectStatus(outcome, 'PASS')
+    })
+
+    it('FAILs when SLACK_DRY_RUN 배선이 빠진다 (드라이런이 조용히 웹훅/no-op 경로로 빠짐)', () => {
+      // 'SLACK_DRY_RUN:' 는 'SLACK_DRY_RUN_URL:' 의 부분 문자열이 아니다 (다음
+      // 문자가 ':' 가 아니라 '_') — 정확히 SLACK_DRY_RUN 라인만 제거된다.
+      const workflow = dropLine(DRY_RUN_WORKFLOW, 'SLACK_DRY_RUN:')
+      const outcome = verifyDeployWorkflow(writeRepo({ workflow }))
+      expectStatus(outcome, 'FAIL')
+      expect(outcome.detail).toContain('SLACK_DRY_RUN')
+      expect(outcome.detail).toContain('inputs.notify_dry_run')
+    })
+
+    it('FAILs when SLACK_DRY_RUN_URL 배선이 빠진다', () => {
+      const workflow = dropLine(DRY_RUN_WORKFLOW, 'SLACK_DRY_RUN_URL:')
+      const outcome = verifyDeployWorkflow(writeRepo({ workflow }))
+      expectStatus(outcome, 'FAIL')
+      expect(outcome.detail).toContain('SLACK_DRY_RUN_URL')
+    })
+
+    it('FAILs when notify_dry_run 입력이 선언됐지만 Notify 스텝이 없다', () => {
+      // 스텝 이름 라인만 제거하면 steps: 가 mapping 으로 파싱돼 깨진다 —
+      // Notify 스텝 블록 전체(이름부터 run 까지)를 다른 스텝으로 교체한다.
+      const notifyStart = '      - name: Notify staging pipeline failure (Slack)\n'
+      const runLine = '        run: bash scripts/notify-pipeline-failure.sh\n'
+      const start = DRY_RUN_WORKFLOW.indexOf(notifyStart)
+      const end = DRY_RUN_WORKFLOW.indexOf(runLine, start) + runLine.length
+      const workflow = DRY_RUN_WORKFLOW.slice(0, start) + '      - run: echo ok\n' + DRY_RUN_WORKFLOW.slice(end)
+      const outcome = verifyDeployWorkflow(writeRepo({ workflow }))
+      expectStatus(outcome, 'FAIL')
+      expect(outcome.detail).toContain('Notify')
     })
   })
 })

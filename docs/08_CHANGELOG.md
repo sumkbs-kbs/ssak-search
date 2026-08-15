@@ -868,6 +868,17 @@
 - **검증**: specialized 176/176 · probe-wikipedia-budget + retry-budget-simulation 20/20 · 통합 orchestrator 22/22 (S35/S36/S38 wikipedia 429 미러 테스트 유지) · 전체 unit 136파일 PASS · tsc 0 · eslint 0 · prettier clean
 - **참고**: B1 cooldown 가드는 유지 (REST 429 시 다음 쿼리 체인 스킵) — 창 내 쿼리는 여전히 빈 결과지만 실패는 누적되지 않음(네트워크 미호출). Action 을 창 내에서도 시도하도록 가드 완화는 후속 검토 항목
 
+### 수정 59: rateLimitedFetch 의 429 를 서킷 실패 카운트에서 제외 — 중립 releaseTransient (2026-08-15)
+- **작업 ID**: FIX-2026-08-15-07 (구현 + 테스트)
+- **요청**: rateLimitedFetch 의 429 를 서킷 실패 카운트에서 제외(transient 처리)해 rate-limit 이 트립을 유발하지 않게 함
+- **배경 (수정 57/58 연쇄)**: rateLimitedFetch 는 `success = status !== 429 && status !== 503` — **429 를 실패로 집계**해 wikipedia REST 429 버스트가 release(host,false) 누적(쿼리당 3회)으로 서킷을 트립시켰다. 수정 58 이 wikipedia 체인을 Action 우선으로 바꿨지만, 429 자체가 실패로 집계되는 구조는 다른 백엔드(naver/bing/openalex 등)에도 동일 리스크
+- **수정**:
+  - `src/lib/rate-limiter-do.ts` — **`releaseTransient(host)` RPC 신규**: inflight 슬롯만 정리하고 **실패를 올리지도, 성공으로 리셋하지도 않음** (중립). 하프오픈 프로브 응답이면 서킷을 닫음 (429 도 백엔드 생존 증명 — alarm 프로브의 429=alive 의미론과 일치). RPC 인터페이스에 추가
+  - `src/lib/rate-limiter.ts` — 클라이언트 인터페이스 + 모듈 `releaseTransient(env, url)` (로컬 폴백 포함) + **rateLimitedFetch: 429 → releaseTransient**, 503 은 그대로 실패 집계
+- **의미론**: 429 는 백엔드 장애가 아니라 제한 신호 — 실패도 아니고 성공도 아님. 500/429 교차 시나리오에서도 실패 누적을 방해하지 않음(리셋 없음) → 실제 장애 트립은 그대로 동작
+- **테스트**: DO — 중립성(4회 실패 후 transient → 4 유지, 다음 실패 1회로 정확히 트립) + 하프오픈 프로브 429 → 서킷 닫힘 · 클라이언트 — 429 → releaseTransient 라우팅 + 503 은 release(false) 유지 (신규 4건)
+- **검증**: rate-limiter-do + rate-limiter 66/66 · 전체 unit 136파일 PASS · tsc 0 · eslint 0 · prettier clean
+
 ### 수정 29: 배포 파이프라인 자동 검증 확장 — gold 회수 + staging↔production 동치 대조 (2026-08-14)
 - **작업 ID**: FIX-2026-08-14-12 (구현 + 실측)
 - **배경**: 로컬 worktree 배포 스크립트(수정 27)에 검증 단계 추가 — 배포 후 "동작하는가"를 자동 확인

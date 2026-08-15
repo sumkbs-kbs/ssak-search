@@ -171,6 +171,8 @@ interface RateLimiterDOClient {
   /** S105 후속: acquire RPC 실패 시 슬롯만 되돌리는 보상 RPC (서킷 미변경). */
   cancelAcquire(host: string): Promise<void>
   release(host: string, success: boolean): Promise<void>
+  /** 수정 59: 429/rate-limit 응답용 중립 release — inflight 슬롯만 정리, 서킷 실패 카운트 미변경. */
+  releaseTransient(host: string): Promise<void>
   getAllHealth(): Promise<Record<string, HostHealth>>
   getRateLimitStatus(host: string): Promise<RateLimitResult>
   forceOpen(host: string): Promise<void>
@@ -346,6 +348,40 @@ export async function release(env: AppBindings, url: string, success: boolean): 
 }
 
 /**
+ * 429/rate-limit 응답용 중립 release (수정 59, 2026-08-15).
+ *
+ * rateLimitedFetch 가 429 를 받았을 때 호출 — inflight 슬롯만 정리하고 서킷 실패
+ * 카운트를 올리지도, 성공으로 리셋하지도 않는다 (rate-limit 은 백엔드 장애가
+ * 아니다; 수정 57 실측: wikipedia REST 429 버스트가 서킷을 트립시킨 직접 원인).
+ * 하프오픈 프로브 응답이면 서킷을 닫는다 (어떤 HTTP 응답이든 백엔드 생존 증명).
+ */
+export async function releaseTransient(env: AppBindings, url: string): Promise<void> {
+  const host = hostname(url)
+  const client = getDOClient(env)
+  if (client) {
+    await client.releaseTransient(host)
+    return
+  }
+  // Local fallback
+  const current = LOCAL_INFLIGHT.get(host) ?? 0
+  LOCAL_INFLIGHT.set(host, Math.max(0, current - 1))
+
+  const circuit = getLocalCircuit(host)
+  if (isEvalMode(env)) {
+    if (circuit.probeInFlight) circuit.probeInFlight = false
+    return
+  }
+  if (circuit.probeInFlight) {
+    circuit.probeInFlight = false
+    circuit.tripped = false
+    circuit.failures = 0
+    circuit.tripCount = 0
+    circuit.openedAt = 0
+  }
+  // 비-프로브 경로: circuit.failures 를 건드리지 않는다 (중립).
+}
+
+/**
  * Wrap a fetch call with rate limiting and circuit breaker.
  * Returns null if rejected (circuit open or at capacity).
  * Throws on network errors (caller should catch).
@@ -374,7 +410,20 @@ export async function rateLimitedFetch(
     const response = await fetch(url, { ...init, signal: controller.signal })
     clearTimeout(timer)
 
-    const success = response.status !== 429 && response.status !== 503
+    if (response.status === 429) {
+      // 수정 59: 429 는 rate-limit(transient) — 서킷 실패 카운트에서 제외한다.
+      // releaseTransient 는 inflight 슬롯만 정리하고 실패를 올리지도, 성공으로
+      // 리셋하지도 않는다. rate-limit 은 백엔드 장애가 아니다 (수정 57 실측:
+      // wikipedia REST 429 버스트가 release(host,false) 누적으로 서킷을
+      // 트립시킨 직접 원인). 503 은 그대로 실패로 집계한다.
+      await releaseTransient(env, url).catch(() => {
+        logger.warn(`[rate-limiter] releaseTransient RPC failed for ${hostname(url)} — TTL reaper will normalize`)
+      })
+      logger.warn(`[rate-limiter] ${url} returned 429 (rate limited — transient, circuit unaffected)`)
+      return response
+    }
+
+    const success = response.status !== 503
     // release는 정확히 한 번 시도. RPC 실패 시 DO-측에서 pop이 됐을 수 있어
     // 재시도(이중 release)는 FIFO로 다른 요청의 슬롯을 pop할 수 있다 — 잔여는
     // S105 TTL 리퍼가 정규화한다.

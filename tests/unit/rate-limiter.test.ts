@@ -445,6 +445,68 @@ describe('DO-client acquire failure — compensating cancelAcquire (S105 후속 
       vi.unstubAllGlobals()
     }
   })
+
+  it('routes a 429 to releaseTransient — circuit failure count untouched (수정 59)', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => new Response('rate limited', { status: 429 })),
+    )
+    try {
+      const client = {
+        canRequest: vi.fn(async () => ({ allowed: true })),
+        acquire: vi.fn(async () => {}),
+        cancelAcquire: vi.fn(async () => {}),
+        release: vi.fn(async () => {}),
+        releaseTransient: vi.fn(async () => {}),
+        getAllHealth: vi.fn(async () => ({})),
+        getRateLimitStatus: vi.fn(async () => ({ allowed: true, remaining: 60, resetInMs: 0 })),
+        forceOpen: vi.fn(async () => {}),
+        setCooldown: vi.fn(async () => {}),
+        getCooldown: vi.fn(async () => 0),
+      }
+      const env = doEnv(client)
+
+      const res = await rateLimitedFetch(env, URL, {}, 1000)
+      expect(res?.status).toBe(429)
+      // 429 → 중립 releaseTransient — 실패(release false)로 집계되지 않는다
+      expect(client.releaseTransient).toHaveBeenCalledTimes(1)
+      expect(client.releaseTransient).toHaveBeenCalledWith('www.bing.com')
+      expect(client.release).not.toHaveBeenCalled()
+    } finally {
+      vi.unstubAllGlobals()
+    }
+  })
+
+  it('keeps 503 as a circuit failure — only 429 is transient (수정 59)', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => new Response('unavailable', { status: 503 })),
+    )
+    try {
+      const client = {
+        canRequest: vi.fn(async () => ({ allowed: true })),
+        acquire: vi.fn(async () => {}),
+        cancelAcquire: vi.fn(async () => {}),
+        release: vi.fn(async () => {}),
+        releaseTransient: vi.fn(async () => {}),
+        getAllHealth: vi.fn(async () => ({})),
+        getRateLimitStatus: vi.fn(async () => ({ allowed: true, remaining: 60, resetInMs: 0 })),
+        forceOpen: vi.fn(async () => {}),
+        setCooldown: vi.fn(async () => {}),
+        getCooldown: vi.fn(async () => 0),
+      }
+      const env = doEnv(client)
+
+      const res = await rateLimitedFetch(env, URL, {}, 1000)
+      expect(res?.status).toBe(503)
+      // 503 → 실패 release(false) — 서킷 실패 카운트 증가
+      expect(client.release).toHaveBeenCalledTimes(1)
+      expect(client.release).toHaveBeenCalledWith('www.bing.com', false)
+      expect(client.releaseTransient).not.toHaveBeenCalled()
+    } finally {
+      vi.unstubAllGlobals()
+    }
+  })
 })
 
 describe('DO 인스턴스 분리 (방안 B — DEPLOY_ENV 주입)', () => {

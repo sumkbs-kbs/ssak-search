@@ -92,6 +92,41 @@ describe('RateLimiterDO self-healing circuit breaker (D.2)', () => {
     expect(result).toEqual({ allowed: false, reason: 'circuit_open', retryAfter: 30 })
   })
 
+  it('releaseTransient does NOT increment nor reset the failure count (중립, 수정 59)', async () => {
+    instantiate()
+    // 4회 실패 → failures=4 (임계값 5 직전)
+    for (let i = 0; i < FAILURE_THRESHOLD - 1; i++) await doInstance.release(HOST, false)
+
+    // 429(transient) release — 실패도 성공도 아님: 4 유지 (트립 없음, 리셋 없음)
+    await doInstance.releaseTransient(HOST)
+    let result = await doInstance.canRequest(HOST)
+    expect(result).toEqual({ allowed: true })
+
+    const before = await doInstance.getAllHealth()
+    expect(before[HOST].failures).toBe(FAILURE_THRESHOLD - 1)
+
+    // 리셋되지 않았으므로 다음 실패 1회로 정확히 임계값 도달 → 트립
+    await doInstance.release(HOST, false)
+    result = await doInstance.canRequest(HOST)
+    expect(result).toEqual({ allowed: false, reason: 'circuit_open', retryAfter: 30 })
+  })
+
+  it('releaseTransient closes the circuit on a half-open probe (429 = server alive, 수정 59)', async () => {
+    instantiate()
+    for (let i = 0; i < FAILURE_THRESHOLD; i++) await doInstance.release(HOST, false)
+
+    vi.advanceTimersByTime(30_000)
+    const probe = await doInstance.canRequest(HOST)
+    expect(probe.allowed).toBe(true)
+
+    // 하프오픈 프로브가 429 응답 → 백엔드 생존 증명 → 서킷 닫힘
+    await doInstance.releaseTransient(HOST)
+    const health = await doInstance.getAllHealth()
+    expect(health[HOST].tripped).toBe(false)
+    expect(health[HOST].tripCount).toBe(0)
+    expect(health[HOST].failures).toBe(0)
+  })
+
   it('applies exponential backoff stages 30s → 5min → 30min', async () => {
     instantiate()
     // First trip: 30s backoff

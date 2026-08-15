@@ -496,6 +496,39 @@ export class RateLimiterDO extends DurableObject<Env> {
   }
 
   /**
+   * 429/rate-limit 응답용 중립 release (수정 59, 2026-08-15).
+   *
+   * rate-limit 은 백엔드 장애가 아니라 **제한 신호**다 — 실패 카운트를 올리지도,
+   * 성공으로 리셋하지도 않는다 (중립). 그 전에는 429 가 실패로 집계되어 wikipedia
+   * REST 429 버스트가 서킷을 트립시켰다 (수정 57/58 실측: zh.wikipedia.org 5/5
+   * 트립 = REST 3회 + Action 2회 연속 429). inflight 슬롯은 정리하고, 하프오픈
+   * 프로브 응답이면 서킷을 닫는다 — 어떤 HTTP 응답(429 포함)이든 백엔드가
+   * 살아있음을 증명하기 때문이다 (alarm 프로브도 429 를 alive 로 취급, 동일 의미론).
+   */
+  async releaseTransient(host: string): Promise<void> {
+    const now = Date.now()
+    this.reapInflight(host, now)
+    // FIFO: 가장 오래된 슬롯 제거 (리핑 후 남은 최고령 = 이 요청의 슬롯) — release 와 동일.
+    const slots = this.state.inflightSlots.get(host) ?? []
+    if (slots.length > 0) slots.shift()
+    this.state.inflightSlots.set(host, slots)
+    this.state.inflight.set(host, slots.length)
+
+    const circuit = this.getCircuit(host)
+    if (circuit.probeInFlight) {
+      circuit.probeInFlight = false
+      circuit.probeStartedAt = 0
+      circuit.tripped = false
+      circuit.failures = 0
+      circuit.tripCount = 0
+      circuit.openedAt = 0
+      logger.info(`[DO-rate-limiter] Circuit closed for ${host} after transient (429) probe response`)
+    }
+    // 비-프로브 경로: circuit.failures 를 건드리지 않는다 (중립 — 실패도 리셋도 없음).
+    await this.persist()
+  }
+
+  /**
    * Schedule the next periodic health-check alarm for open circuits.
    * No-op when a probe alarm is already pending.
    */
@@ -759,6 +792,7 @@ export interface RateLimiterRPC {
   canRequest(host: string): Promise<{ allowed: boolean; reason?: string; retryAfter?: number }>
   acquire(host: string): Promise<void>
   release(host: string, success: boolean): Promise<void>
+  releaseTransient(host: string): Promise<void>
   getAllHealth(): Promise<Record<string, HostHealth>>
   getRateLimitStatus(host: string): Promise<RateLimitResult>
   forceOpen(host: string): Promise<void>

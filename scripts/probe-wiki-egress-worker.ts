@@ -51,6 +51,19 @@ async function handle(request: Request): Promise<Response> {
   const url = new URL(request.url)
   const c = url.searchParams.get('case') ?? 'en_rest'
 
+  // 수정 65 (2026-08-15): 범용 robots.txt 전수 점검 — ?host=<host> 로 임의 호스트의
+  // robots.txt 를 프로브 UA 로 fetch (호스트 고정 목록에서만, SSRF 방지는 조회 목록으로
+  // 한정 — 스크립트가 호스트 목록을 넘긴다).
+  if (c === 'robots_host') {
+    const host = url.searchParams.get('host')
+    if (!host) return Response.json({ status: -1, ok: false, error: 'missing host' })
+    return Response.json(
+      await tryFetch(`https://${host}/robots.txt`, {
+        headers: { 'User-Agent': UA, Accept: '*/*' },
+      }),
+    )
+  }
+
   const cases: Record<string, () => Promise<unknown>> = {
     en_rest: () =>
       tryFetch('https://en.wikipedia.org/w/rest.php/v1/search/page?q=quantum%20computing&limit=3', {

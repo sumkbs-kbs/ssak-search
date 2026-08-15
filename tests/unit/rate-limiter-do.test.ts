@@ -438,6 +438,30 @@ describe('RateLimiterDO self-healing circuit breaker (D.2)', () => {
     expect(health[SE_HOST].tripped).toBe(true) // 404 = alive 아님
   })
 
+  // ── api.search.brave.com 특수화 (수정 65 — robots.txt 403 봇 챌린지, dormant 예방) ──
+
+  const BRAVE_HOST = 'api.search.brave.com'
+
+  it('brave probe uses the real API path — 키 없는 422 응답도 alive (서버 생존 증명)', async () => {
+    instantiate()
+    for (let i = 0; i < FAILURE_THRESHOLD; i++) await doInstance.release(BRAVE_HOST, false)
+
+    // 키 없는 프로브 실측 (2026-08-15 egress): 422 JSON validation error
+    fetchMock.mockResolvedValue({
+      ok: false,
+      status: 422,
+      text: async () => '{"error":{"code":"VALIDATION","detail":"Unable to validate request parameter(s)"}}',
+    })
+    vi.advanceTimersByTime(30_000)
+    await doInstance.alarm()
+
+    // robots.txt 가 아니라 실제 API 경로로 프로브
+    expect(fetchMock).toHaveBeenCalledWith('https://api.search.brave.com/res/v1/web/search?q=test', expect.anything())
+    expect(fetchMock).not.toHaveBeenCalledWith('https://api.search.brave.com/robots.txt', expect.anything())
+    const health = await doInstance.getAllHealth()
+    expect(health[BRAVE_HOST].tripped).toBe(false) // 422 = alive → 서킷 닫힘
+  })
+
   // ── wikipedia suffix sharing (S9: ko/zh/ja share one upstream IP budget) ──
 
   it('shares ONE rate window across all wikipedia language subdomains', async () => {

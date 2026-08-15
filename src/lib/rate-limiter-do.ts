@@ -644,7 +644,9 @@ export class RateLimiterDO extends DurableObject<Env> {
         ? 'https://api.stackexchange.com/2.3/info?site=stackoverflow'
         : host === 'lookup.dbpedia.org'
           ? 'https://lookup.dbpedia.org/api/search?query=test&format=json&maxResults=1'
-          : `https://${host}/robots.txt`
+          : host === 'api.search.brave.com'
+            ? 'https://api.search.brave.com/res/v1/web/search?q=test'
+            : `https://${host}/robots.txt`
       const resp = await fetch(url, {
         signal: controller.signal,
         headers: { 'User-Agent': 'SearchAPI/1.0 (https://search-engine-api.pages.dev; contact: admin@example.com)' },
@@ -658,7 +660,13 @@ export class RateLimiterDO extends DurableObject<Env> {
       // api.github.com/hn.algolia.com/lookup.dbpedia.org 는 robots.txt 404 + 실제
       // API 200 — robots.txt 404 는 'robots 파일 없음' 신호일 뿐 백엔드 헬스와
       // 무관하므로, 이 3개 호스트의 회복은 이 한정으로도 그대로 보장된다.
-      const isRobotsProbe = !this.isStackExchangeHost(host) && host !== 'lookup.dbpedia.org'
+      // 수정 65 (2026-08-15): api.search.brave.com 은 robots.txt 가 **403 봇
+      // 챌린지** (egress 실측) — 실제 API 경로로 프로브하고, 키 없는 프로브에도
+      // API 가 400/401/403/422 JSON 오류로 응답하는 것(서버 생존 증명)을 alive 로
+      // 인정한다 (현재 BRAVE_API_KEY 미설정으로 dormant — 키 추가 시에도 같은
+      // 고착 패턴이 재발하지 않도록 예방).
+      const isRobotsProbe =
+        !this.isStackExchangeHost(host) && host !== 'lookup.dbpedia.org' && host !== 'api.search.brave.com'
       let alive =
         resp.ok ||
         resp.status === 429 ||
@@ -668,6 +676,8 @@ export class RateLimiterDO extends DurableObject<Env> {
       if (this.isStackExchangeHost(host) && resp.status === 400) {
         // SE API: 400 + error_id 502 = egress IP rate-limit (throttle_violation).
         alive = /error_id["']?\s*[:=]\s*502/.test(text)
+      } else if (host === 'api.search.brave.com' && [400, 401, 403, 422].includes(resp.status)) {
+        alive = true
       }
       return {
         alive,

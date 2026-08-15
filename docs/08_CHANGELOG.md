@@ -947,6 +947,21 @@
 - **검증**: rate-limiter-do **39/39** · 전체 unit 138파일 **2,698/2,698 PASS** · tsc 0 · prettier clean · 프로브 워커는 검증 후 삭제 (컨벤션)
 - **잔존 노트**: 서킷 맵에 `workers_ai`(내부 바인딩 pseudo-host) 존재 — 트립 시 robots.txt 프로브가 DNS 실패로 stuck-open 될 수 있는 사전 존재 이슈 (404-alive 와 무관, 별도 추적)
 
+### 수정 65: 백엔드 호스트 robots.txt 전수 조사 — brave 403 dormant 리스크 예방 (2026-08-15)
+- **작업 ID**: FIX-2026-08-15-13 (전수 조사 + 예방 구현 + 테스트)
+- **요청**: SE/dbpedia 외에 robots.txt 가 404 이거나 API 가 아닌 다른 백엔드 호스트 전수 조사 — 같은 고착 패턴 예방
+- **조사 방법**: 코드의 `fetchWithTimeout`(→rateLimitedFetch, 서킷 게이트) 경유 호스트 38 개를 Workers egress 프로브 워커(범용 `robots_host` 케이스)로 robots.txt 실측
+- **전수 분류 (38개)**:
+  - **200 (robots 정상, 30개)**: openalex · dbpedia.org · wikipedia 5종(ko/en/zh/ja/wikidata) · arxiv/export.arxiv · naver 계열(finance/m.search/m.stock/media) · news.google · yahoo · reddit · bing · duckduckgo 계열(com/html/lite/api) · csdn(so/blog) · qiita · jina(s) · flickr · unsplash · youtubetranscript · producthunt · g2 · youtube · ja.dbpedia.org
+  - **404 (robots 부재, 4개)**: api.github.com · hn.algolia.com · lookup.dbpedia.org · **api.juejin.cn** — 전부 수정 60/64 의 404-alive 로 처리됨 (추가 조치 불필요)
+  - **400 (API 왜곡, 1개)**: api.stackexchange.com (error_id:502) — 방안 A 특수화 기존 처리
+  - **403 (봇 챌린지 — stuck-open 리스크, 1개)**: **api.search.brave.com** — 신규 발견
+- **brave 리스크 실측**: robots.txt 403 (WAF 봇 챌린지) · 실제 API 는 키 없이 **422 JSON** 응답 (서버 생존 증명). 단 `braveSearch` 는 **BRAVE_API_KEY 미설정 시 네트워크 호출 없이 skip** → 현재 **dormant** (서킷 추적 자체가 안 됨, Pages 시크릿 실측으로 키 미설정 확정)
+- **예방 수정** (`src/lib/rate-limiter-do.ts` probeHost): brave 를 SE/dbpedia 와 동일하게 특수화 — 실제 API 경로(`/res/v1/web/search?q=test`)로 프로브, **400/401/403/422 응답 = alive** (키 없는 프로브도 API 가 JSON 오류로 응답 = 서버 생존). 키 추가 시에도 같은 고착 패턴 재발 방지
+- **테스트** (+1): brave 프로브가 robots.txt 가 아닌 API 경로를 호출 + 422 → 서킷 닫힘
+- **검증**: rate-limiter-do **40/40** · 전체 unit 138파일 **2,699/2,699 PASS** · tsc 0 · prettier clean · 프로브 워커 삭제 (컨벤션)
+- **잔존 노트**: workers_ai pseudo-host 이슈는 수정 64 와 동일하게 미해결 (별도 추적)
+
 ### 수정 29: 배포 파이프라인 자동 검증 확장 — gold 회수 + staging↔production 동치 대조 (2026-08-14)
 - **작업 ID**: FIX-2026-08-14-12 (구현 + 실측)
 - **배경**: 로컬 worktree 배포 스크립트(수정 27)에 검증 단계 추가 — 배포 후 "동작하는가"를 자동 확인

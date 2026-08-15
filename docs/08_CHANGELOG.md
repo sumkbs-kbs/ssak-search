@@ -947,6 +947,16 @@
 - **검증**: rate-limiter-do **39/39** · 전체 unit 138파일 **2,698/2,698 PASS** · tsc 0 · prettier clean · 프로브 워커는 검증 후 삭제 (컨벤션)
 - **잔존 노트**: 서킷 맵에 `workers_ai`(내부 바인딩 pseudo-host) 존재 — 트립 시 robots.txt 프로브가 DNS 실패로 stuck-open 될 수 있는 사전 존재 이슈 (404-alive 와 무관, 별도 추적)
 
+### 수정 78: CI 경로 런타임 번들 검증 — deploy.yml staging Pages 배포 직후 build_commit 대조 스텝 (2026-08-15)
+- **작업 ID**: FIX-2026-08-15-26 (구현 + 테스트 + 로컬 스모크)
+- **요청**: deploy.yml 의 staging Pages 배포 직후에 배포 URL 의 /api/health build_commit 을 github.sha 와 대조하는 스텝을 추가해 CI 경로에서도 런타임 번들 검증이 돌게
+- **구현**:
+  - **`scripts/verify-pages-bundle.sh` 신규** — 로컬 deploy-local-worktree.sh 의 수정 56 과 동일한 검증을 CI 에서도 수행: deployment list 의 **고유 배포 URL**(별칭 아님) 조회 → `/api/health` build_commit → `--expected-commit` 과 대조. 전파 지연(배포 직후 빈 응답 — 2026-08-15 실측 오탐 사례) 대비 조회/대조 재시도(5회/3회). 실패 시 exit 1
+  - **deploy.yml** — staging Pages 배포 직후 **"Verify deployed bundle commit (runtime, staging)"** 스텝 추가: `bash scripts/verify-pages-bundle.sh --expected-commit "${{ github.sha }}" --branch staging`. 실패 시 후속 스텝(scheduler 등) 스킵 → 동치 대조 skipped → [13] Notify 알림으로 이어짐
+  - **회귀 체크** (`scripts/verify-deploy-workflow.ts` 8번): staging 잡이 Pages 배포를 하면 (a) 검증 스텝 존재, (b) `verify-pages-bundle.sh` + `--expected-commit` + `github.sha` + `--branch staging` 배선, (c) 스크립트가 커밋에 존재 + build_commit/deployment list 로직 포함, (d) **검증 스텝이 Pages 배포보다 뒤** — 4개 조건. 테스트 +6 → 35/35 PASS
+- **⚠️ YAML 파서 함정 회피 (2026-08-15 실측)**: 처음엔 검증 로직을 deploy.yml `run: |` 블록 스칼라에 인라인했는데, `DEPLOY_URL="$( … python3 - <<'PY' …"` 다중 행 구조가 **GitHub/YAML 파서를 깨뜨렸다** (`Implicit keys need to be on a single line` — 작은따옴표 시작이 implicit key 로 해석). 로직을 스크립트 파일로 추출해 원천 회피 — deploy.yml 은 단순 호출만 남김
+- **검증**: verify-deploy-workflow 실 repo **PASS** (8체크) · 유닛 35/35 · 로컬 스모크 (가짜 npx/curl) — 일치 케이스 `✅ 번들 커밋 검증 exit 0` · 불일치 케이스 `❌ exit 1` · 전체 unit 146 파일 **2,827/2,827 PASS** (integration api.test.ts 14건 401 은 세션 사전 존재) · tsc 0 · prettier clean · bash -n OK
+
 ### 수정 77: rollback_pages OAuth 토큰 읽기 크로스플랫폼 견고화 + 토큰 누수 차단 (2026-08-15)
 - **작업 ID**: FIX-2026-08-15-25 (구현 + 테스트 + 실측)
 - **요청**: rollback_pages 헬퍼가 OAuth 토큰을 읽는 경로를 크로스플랫폼(Windows 포함)으로 견고화하고, 토큰 누수(로그 출력) 위험 점검

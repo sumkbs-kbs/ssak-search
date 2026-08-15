@@ -287,6 +287,75 @@ export function verifyDeployWorkflow(repoDir: string): GateOutcome {
     }
   }
 
+  // ── 8. runtime bundle-commit verification (수정 78) ─────────────────────
+  // staging Pages 배포 직후, 배포 URL 의 /api/health build_commit 이
+  // github.sha 와 일치하는지 대조하는 스텝(수정 78, 로컬 deploy-local-worktree.sh
+  // 의 수정 56 과 동일)이 있어야 한다. 배포된 번들이 빌드 캐시로 스테일인 사고를
+  // CI 경로에서도 배포 즉시 잡는다. 배선이 빠지면 (또는 github.sha 대조가
+  // 빠지면) 검증이 조용히 생략된다.
+  const stagingJob = jobs['deploy-staging']
+  if (stagingJob) {
+    const stagingSteps = stagingJob.steps ?? []
+    const hasPagesDeploy = stagingSteps.some(
+      (s) => (s.uses ?? '').startsWith('cloudflare/wrangler-action') && String(s.with?.command ?? '').includes('pages deploy'),
+    )
+    if (hasPagesDeploy) {
+      const verifyStep = stagingSteps.find((s) => (s.name ?? '').includes('Verify deployed bundle commit'))
+      if (!verifyStep) {
+        findings.push(
+          `deploy-staging: Pages 배포 직후 'Verify deployed bundle commit' 스텝이 없다 — /api/health build_commit 과 github.sha 를 대조하는 런타임 번들 검증이 CI 경로에서 생략된다 (수정 78)`,
+        )
+      } else {
+        const run = verifyStep.run ?? ''
+        // 검증 로직은 scripts/verify-pages-bundle.sh 로 추출 (수정 78) — deploy.yml
+        // 블록 스칼라에 다중 행 셸을 두면 YAML 파서가 깨지는 문제 회피.
+        if (!run.includes('verify-pages-bundle.sh')) {
+          findings.push(
+            `deploy-staging 'Verify deployed bundle commit': scripts/verify-pages-bundle.sh 호출이 빠졌다 (수정 78)`,
+          )
+        }
+        if (!run.includes('--expected-commit')) {
+          findings.push(
+            `deploy-staging 'Verify deployed bundle commit': --expected-commit 가 빠졌다 — 기대 커밋이 하드코딩/부재면 검증이 무의미하다 (수정 78)`,
+          )
+        }
+        if (!run.includes('github.sha')) {
+          findings.push(
+            `deploy-staging 'Verify deployed bundle commit': github.sha 와의 대조가 빠졌다 — 기대 커밋이 하드코딩/부재면 검증이 무의미하다 (수정 78)`,
+          )
+        }
+        if (!run.includes('--branch staging')) {
+          findings.push(
+            `deploy-staging 'Verify deployed bundle commit': --branch staging 이 빠졌다 — 다른 브랜치 배포를 검증하면 오탐/미탐 (수정 78)`,
+          )
+        }
+        const verifyScript = join(repoDir, 'scripts/verify-pages-bundle.sh')
+        if (!existsSync(verifyScript)) {
+          findings.push(
+            `scripts/verify-pages-bundle.sh 이 deploy.yml 에서 참조되지만 커밋에 없다 (수정 78)`,
+          )
+        } else {
+          const script = readFileSync(verifyScript, 'utf8')
+          if (!script.includes('build_commit') || !script.includes('deployment list')) {
+            findings.push(
+              `scripts/verify-pages-bundle.sh: build_commit 조회·대조 로직이 없다 (수정 78)`,
+            )
+          }
+        }
+        // Pages 배포 스텝보다 뒤에 있어야 한다 (배포 직후 검증).
+        const pagesIdx = stagingSteps.findIndex((s) =>
+          (s.uses ?? '').startsWith('cloudflare/wrangler-action') && String(s.with?.command ?? '').includes('pages deploy'),
+        )
+        const verifyIdx = stagingSteps.indexOf(verifyStep)
+        if (verifyIdx < pagesIdx) {
+          findings.push(
+            `deploy-staging 'Verify deployed bundle commit': Pages 배포 스텝(${pagesIdx + 1})보다 앞(${verifyIdx + 1})에 있다 — 배포 직후 검증이 아니다 (수정 78)`,
+          )
+        }
+      }
+    }
+  }
+
   // ── 6. eval.yml baseline auto-commit permission ────────────────────────
   // S104-③-⑧ (2026-08-12): the repo default workflow permission is read-only,
   // and eval.yml declared no permissions:, so the plain `git push` in
@@ -330,7 +399,7 @@ export function verifyDeployWorkflow(repoDir: string): GateOutcome {
   }
   return {
     status: 'PASS',
-    detail: `${DEPLOY_WF} + ${GUARD_SCRIPT} pass all S104-③-⑥-④/⑧ regression checks (secrets / guard-masking / artifact / node / needs / eval-baseline-permission / notify-dry-run-wiring)`,
+    detail: `${DEPLOY_WF} + ${GUARD_SCRIPT} pass all S104-③-⑥-④/⑧ regression checks (secrets / guard-masking / artifact / node / needs / eval-baseline-permission / notify-dry-run-wiring / runtime-bundle-verify)`,
   }
 }
 

@@ -74,8 +74,26 @@ fi
 
 const created: string[] = []
 
+/** 수정 78: 런타임 번들 검증 스크립트의 최소 마커 (build_commit 대조 포함). */
+const GOOD_BUNDLE_SCRIPT = `#!/usr/bin/env bash
+set -u
+# build_commit 조회·대조 (수정 78)
+npx wrangler pages deployment list --project-name=search-engine-api --json > /tmp/deployments.json 2>/dev/null || true
+if [ "$BUNDLE_COMMIT" = "$EXPECTED" ]; then
+  echo " ✅ 번들 커밋 검증: build_commit=ok"
+  exit 0
+fi
+exit 1
+`
+
 function writeRepo(
-  opts: { workflow?: string; guard?: string; skipGuard?: boolean; evalWorkflow?: string } = {},
+  opts: {
+    workflow?: string
+    guard?: string
+    skipGuard?: boolean
+    evalWorkflow?: string
+    skipBundleScript?: boolean
+  } = {},
 ): string {
   const dir = mkdtempSync(join(tmpdir(), 'vdf-'))
   mkdirSync(join(dir, '.github', 'workflows'), { recursive: true })
@@ -86,6 +104,9 @@ function writeRepo(
   }
   if (!opts.skipGuard) {
     writeFileSync(join(dir, 'scripts', 'verify-do-binding.sh'), opts.guard ?? GOOD_GUARD, 'utf-8')
+  }
+  if (!opts.skipBundleScript) {
+    writeFileSync(join(dir, 'scripts', 'verify-pages-bundle.sh'), GOOD_BUNDLE_SCRIPT, 'utf-8')
   }
   created.push(dir)
   return dir
@@ -430,6 +451,105 @@ ${PROD_NOTIFY}
       expectStatus(outcome, 'FAIL')
       expect(outcome.detail).toContain('deploy-production Notify')
       expect(outcome.detail).toContain('SLACK_DRY_RUN')
+    })
+  })
+
+  describe('9. runtime bundle-commit verification (수정 78)', () => {
+    const STAGING_PAGES_DEPLOY = `      - name: Deploy to Pages (Staging)
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: \${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: \${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: pages deploy dist/ --project-name=search-engine-api --branch=staging
+`
+
+    const BUNDLE_VERIFY_STEP = `      - name: Verify deployed bundle commit (runtime, staging)
+        env:
+          npm_config_yes: "true"
+        run: bash scripts/verify-pages-bundle.sh --expected-commit "\${{ github.sha }}" --branch staging
+`
+
+    const BUNDLE_VERIFY_WORKFLOW = `name: Deploy
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        type: choice
+        options: [staging, production]
+env:
+  NODE_VERSION: "22"
+jobs:
+  deploy-staging:
+    permissions:
+      actions: read
+      contents: read
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy do-worker (Staging)
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: \${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: \${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: deploy --config=wrangler.do.jsonc
+${STAGING_PAGES_DEPLOY}${BUNDLE_VERIFY_STEP}      - name: Deploy probe-scheduler (Staging)
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: \${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: \${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: deploy --config=wrangler.cron.staging.jsonc
+`
+
+    it('PASSes when staging Pages 배포 직후 build_commit 대조 스텝이 있다', () => {
+      const outcome = verifyDeployWorkflow(writeRepo({ workflow: BUNDLE_VERIFY_WORKFLOW }))
+      expectStatus(outcome, 'PASS')
+    })
+
+    it('FAILs when staging Pages 배포 뒤 검증 스텝이 없다 (스테일 번들 사고를 CI 에서 못 잡음)', () => {
+      const workflow = BUNDLE_VERIFY_WORKFLOW.replace(BUNDLE_VERIFY_STEP, '')
+      const outcome = verifyDeployWorkflow(writeRepo({ workflow }))
+      expectStatus(outcome, 'FAIL')
+      expect(outcome.detail).toContain("Verify deployed bundle commit' 스텝이 없다")
+    })
+
+    it('FAILs when --expected-commit (github.sha) 대조가 빠진다', () => {
+      const workflow = BUNDLE_VERIFY_WORKFLOW.replace(
+        'run: bash scripts/verify-pages-bundle.sh --expected-commit "${{ github.sha }}" --branch staging',
+        'run: bash scripts/verify-pages-bundle.sh --expected-commit "deadbeef" --branch staging',
+      )
+      const outcome = verifyDeployWorkflow(writeRepo({ workflow }))
+      expectStatus(outcome, 'FAIL')
+      expect(outcome.detail).toContain('github.sha 와의 대조가 빠졌다')
+    })
+
+    it('FAILs when verify-pages-bundle.sh 스크립트가 커밋에 없다', () => {
+      const outcome = verifyDeployWorkflow(writeRepo({ workflow: BUNDLE_VERIFY_WORKFLOW, skipBundleScript: true }))
+      expectStatus(outcome, 'FAIL')
+      expect(outcome.detail).toContain('verify-pages-bundle.sh')
+    })
+
+    it('FAILs when verify-pages-bundle.sh 에 build_commit 대조 로직이 없다', () => {
+      // skipBundleScript 로 스크립트를 안 쓰고, 직접 빈 스크립트를 만든다.
+      const dir = writeRepo({ workflow: BUNDLE_VERIFY_WORKFLOW, skipBundleScript: true })
+      writeFileSync(join(dir, 'scripts', 'verify-pages-bundle.sh'), '#!/usr/bin/env bash\nexit 0\n', 'utf-8')
+      const outcome = verifyDeployWorkflow(dir)
+      expectStatus(outcome, 'FAIL')
+      expect(outcome.detail).toContain('build_commit 조회·대조 로직이 없다')
+    })
+
+    it('FAILs when 검증 스텝이 Pages 배포보다 앞에 있다 (배포 직후 검증이 아님)', () => {
+      // 검증 스텝을 (원래 위치에서 제거하고) Pages 배포 블록 바로 앞으로 이동 —
+      // steps: 시퀀스 내부이므로 YAML 이 깨지지 않는다.
+      const start = BUNDLE_VERIFY_WORKFLOW.indexOf(BUNDLE_VERIFY_STEP)
+      const end = start + BUNDLE_VERIFY_STEP.length
+      const pagesIdx2 = BUNDLE_VERIFY_WORKFLOW.indexOf(STAGING_PAGES_DEPLOY)
+      const moved =
+        BUNDLE_VERIFY_WORKFLOW.slice(0, pagesIdx2) +
+        BUNDLE_VERIFY_STEP +
+        BUNDLE_VERIFY_WORKFLOW.slice(pagesIdx2, start) +
+        BUNDLE_VERIFY_WORKFLOW.slice(end)
+      const outcome = verifyDeployWorkflow(writeRepo({ workflow: moved }))
+      expectStatus(outcome, 'FAIL')
+      expect(outcome.detail).toContain('보다 앞')
     })
   })
 })

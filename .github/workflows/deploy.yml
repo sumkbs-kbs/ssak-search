@@ -155,6 +155,24 @@ jobs:
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           command: pages deploy dist/ --project-name=${{ env.PROJECT_NAME }} --branch=staging
 
+      - name: Verify deployed bundle commit (runtime, staging)
+        # 수정 78 (2026-08-15): CI 경로에서도 런타임 번들 검증 — 로컬
+        # deploy-local-worktree.sh 의 수정 56 과 동일하게, 배포 직후 배포 URL(고유
+        # 해시) 의 /api/health build_commit 이 github.sha 와 일치하는지 대조한다.
+        # 배포된 번들이 빌드 캐시로 스테일인 사고를 배포 즉시 잡는다. 로직은
+        # scripts/verify-pages-bundle.sh 로 추출 — deploy.yml 블록 스칼라에 다중
+        # 행 셸(heredoc) 을 두면 GitHub/YAML 파서가 깨지는 문제(2026-08-15 실측)
+        # 를 회피한다.
+        #
+        # 배포 URL 을 쓰는 이유: main/staging 별칭 URL 은 라우팅/캐시로 이전 배포를
+        # 가리킬 수 있어, 반드시 deployment list 의 고유 URL 을 쓴다. 전파 지연
+        # (배포 직후 빈 응답 — 2026-08-15 실측 오탐 사례) 에 대비해 조회/대조에
+        # 재시도를 넣는다. 실패 시 후속 스텝(scheduler 등) 이 스킵되고 동치 대조도
+        # skipped → [13] Notify 알림으로 이어진다.
+        env:
+          npm_config_yes: "true"
+        run: bash scripts/verify-pages-bundle.sh --expected-commit "${{ github.sha }}" --branch staging
+
       - name: Deploy probe-scheduler (Staging)
         # S104-③-fix (2026-08-11): Pages cannot host cron triggers, so the
         # 15-min deep-probe scheduler is a separate Workers script. Deploy

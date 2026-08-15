@@ -947,6 +947,20 @@
 - **검증**: rate-limiter-do **39/39** · 전체 unit 138파일 **2,698/2,698 PASS** · tsc 0 · prettier clean · 프로브 워커는 검증 후 삭제 (컨벤션)
 - **잔존 노트**: 서킷 맵에 `workers_ai`(내부 바인딩 pseudo-host) 존재 — 트립 시 robots.txt 프로브가 DNS 실패로 stuck-open 될 수 있는 사전 존재 이슈 (404-alive 와 무관, 별도 추적)
 
+### 수정 76: staging 번들 불일치 자동 재배포 — --auto-redeploy (캐시 무효화 포함) (2026-08-15)
+- **작업 ID**: FIX-2026-08-15-24 (검토 + 구현 + 테스트)
+- **요청**: staging 번들 불일치에서 Pages 롤백 대신 '올바른 번들로 자동 재배포'하는 --auto-redeploy 모드 검토 (빌드 캐시 무효화 포함)
+- **검토 결론**: staging(preview) 은 Pages Rollback API 대상 불가(Cloudflare 제약) 라 기존엔 재배포 안내만 출력했다 — 스테일 원인(빌드 캐시) 을 무효화한 자동 재배포가 유일한 복구 경로. production 은 롤백(--auto-rollback) 이 우선이라 이 옵션은 무시
+- **구현** (`scripts/deploy-local-worktree.sh`):
+  - **`--auto-redeploy` 플래그** — staging 번들 커밋 불일치 시 `REDEPLOY_PENDING=1` → cron/[6/6] 생략 후 재배포 분기
+  - **캐시 무효화 3종**: `dist/` 제거 + `node_modules/.vite` (vite 캐시) 삭제 + **ISOLATED_BUILD=1 강제** (심링크 node_modules 가 스테일 원인일 수 있음 — worktree 내부 npm ci, 대상 커밋 lockfile 기준 재현 빌드)
+  - **재배포 루프** — 최대 2회 시도: 재빌드 → Pages 재배포 → 배포 URL /api/health build_commit 재검증 → 일치 시 복구 완료. **불일치 지속 시 수동 안내 + exit 1** (배포된 채 방치 금지)
+  - 재배포 성공 시 cron 도 함께 배포 (DO+Pages 가 올바른 새 버전이므로) — exit 0
+  - 드라이런 계획에 auto-redeploy 문구 + 헤더 문서화
+- **테스트**: 셀프테스트 **9/9 → 10/10** — `auto_redeploy` 신규 (가짜 curl 이 첫 /api/health 만 불일치, 재배포 후 검증은 일치 반환 — 카운터 파일 기반) · 캐시 무효화 문구 + 복구 완료 단언 + exit 0. 유닛 **10/10 → 11/11** (드라이런 계획 문구)
+- **검증**: 셀프테스트 10/10 · 유닛 11/11 · 전체 unit 139 파일 **2,727/2,727 PASS** · tsc 0 · bash -n OK · 수동 재현 (캐시 무효화 → 재배포 → build_commit=7679a70 복구 → cron 배포)
+- **사용**: `bash scripts/deploy-local-worktree.sh <commit> staging --auto-redeploy` — 번들 불일치 시 캐시 무효화 후 자동 복구, 지속 실패 시 수동 안내
+
 ### 수정 75: Pages Rollback API 라이브 검증 테스트 모드 — --rollback-e2e (2026-08-15)
 - **작업 ID**: FIX-2026-08-15-23 (설계 + 구현 + 테스트)
 - **요청**: 수정 61 의 Pages Rollback API 호출을 실제로 검증할 수 있는 안전한 방법 설계 (배포 직전 임시 의도적 불일치 → 실패 시 자동 복구 확인)

@@ -146,6 +146,12 @@ describe.skipIf(!BASH_AVAILABLE)('deploy-local-worktree.sh --dry-run (오프라�
     expect(r.out).toContain('preview deployments are not valid rollback targets')
   })
 
+  it('--auto-redeploy 드라이런: 캐시 무효화 재배포 계획을 출력한다 (수정 76)', () => {
+    const r = runDryRun(['--dry-run', '--auto-redeploy'])
+    expect(r.exit).toBe(0)
+    expect(r.out).toContain('auto-redeploy: staging 번들 불일치 시 캐시 무효화(dist/제거 + .vite 삭제 + npm ci) 후 Pages 자동 재배포')
+  })
+
   it('ISOLATED_BUILD=1 이면 심링크 대신 worktree 내부 npm ci 격리 계획을 출력한다', () => {
     const r = runDryRun(['--dry-run'], { ISOLATED_BUILD: '1' })
     expect(r.exit).toBe(0)

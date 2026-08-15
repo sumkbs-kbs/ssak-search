@@ -781,6 +781,16 @@
 - **검증**: 유닛 테스트 **+7** (verify-env-health-diff.py 스폰 테스트 — parse-cron-health.test.ts 패턴: 한쪽-down WARN/한쪽-추적 INFO/degraded-vs-op INFO/동일 OK/빈 OK/파싱 ERROR exit 1/usage exit 2) → 전체 **2,679건 / 136파일** · eslint 0 · prettier clean · tsc 0 · bash -n OK
 - **참고**: production 의 lookup.dbpedia.org down 은 동치 실패가 아니라 **production 쪽 실장애 신호** — 딥 프로브/Slack alert 가 별도로 커버 (이번 변경은 게이트 오탐 방지)
 
+### 수정 51: 동치 대조 알림 CI 연결 — staging 파이프라인 실패 Slack 알림 (2026-08-15)
+- **작업 ID**: OPS-2026-08-15-02 (구현 + 실측)
+- **요청**: 동치 대조 알림을 GitHub Actions staging 배포 파이프라인에도 연결해 CI 실패 시 Slack 알림이 가게
+- **실측**: ① deploy.yml `deploy-staging` 에 동치 대조 post-deploy gate 는 **이미 등록돼 있음** (수정 33/34 — `SLACK_WEBHOOK: ${{ secrets.ALERT_SLACK_WEBHOOK }}` + 최종 시도 EQ_NOTIFY=1) ② 그러나 **repo GitHub Actions 시크릿 `ALERT_SLACK_WEBHOOK` 미존재** (실측: CLOUDFLARE_ACCOUNT_ID/CLOUDFLARE_API_TOKEN 만 존재) → env 가 비어 no-op ③ 구조적 갭 — 동치 대조는 배포 성공 후에만 실행되므로 **이전 단계(guard/배포/post-deploy gate) 실패 시 알림이 전혀 없음**
+- **수정** (`.github/workflows/deploy.yml` staging job):
+  - 동치 대조 스텝 — 웹훅 시크릿 이름 **양쪽 지원**: `SLACK_WEBHOOK`(Pages 프로젝트 관례) + `ALERT_SLACK_WEBHOOK`(docs 관례) 모두 env 매핑 (어느 쪽이든 설정되면 동작), `id: equivalence` 부여
+  - **`Notify staging pipeline failure (Slack)` 스텝 신규** (`if: failure() && steps.equivalence.outcome != 'failure'`) — 파이프라인 어느 단계든 실패 시 danger 알림 (run URL 링크 포함). 동치 대조 실패는 상세 알림(호스트 diff/gold)과 중복 방지
+- **검증**: YAML 파싱 OK (12 스텝, if 조건 확인) · 페이로드 생성 로컬 시뮬레이션 (python3 json.dumps → 유효한 Slack blocks JSON) · no-op 분기 (시크릿 미설정 시 조용히 스킵) 확인
+- **⚠️ 잔여 (사용자 조치 필요)**: 웹훅 URL 값이 없어 GitHub Actions 시크릿 생성 불가 — `gh secret set ALERT_SLACK_WEBHOOK` (또는 SLACK_WEBHOOK) 에 URL 1개 필요. 설정되면: 동치 대조 실패 → 상세 danger 알림 / 그 외 단계 실패 → 일반 danger 알림
+
 ### 수정 29: 배포 파이프라인 자동 검증 확장 — gold 회수 + staging↔production 동치 대조 (2026-08-14)
 - **작업 ID**: FIX-2026-08-14-12 (구현 + 실측)
 - **배경**: 로컬 worktree 배포 스크립트(수정 27)에 검증 단계 추가 — 배포 후 "동작하는가"를 자동 확인

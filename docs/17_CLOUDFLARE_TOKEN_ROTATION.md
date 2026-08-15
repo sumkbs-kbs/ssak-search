@@ -262,12 +262,21 @@ bash scripts/watch-secret-rotation.sh --dry-run    # 감지만 — 디스패치 
   top-5 + gold 회수. 비교 로직은 `scripts/verify-env-health-diff.py` (순수 헬퍼,
   유닛 테스트 7건) — 한쪽-down 단독은 Slack warning 알림, 게이트(FAIL)는 통과.
 
-  **CI 등록 (2026-08-14)**: deploy.yml 의 `deploy-staging` job 에 동치 대조를
-  post-deploy gate 로 등록 — **매 staging 배포 후 자동 실행**된다. `SKIP_COMMIT=1`
-  (커밋 일치는 verify-do-binding.sh post-deploy gate 가 이미 검증) + 최종 시도에서만
-  Slack 알림(EQ_NOTIFY, ALERT_SLACK_WEBHOOK 시크릿 — 미설정 no-op). 실패 시 job
-  실패 처리. workflow_run 에서 production 배포가 동시 진행될 수 있어 45s 간격 1회
-  재시도. 배포 이전 단계가 실패하면 동치 대조는 실행되지 않는다.
+  **CI 등록 (2026-08-14, 수정 51 갱신)**: deploy.yml 의 `deploy-staging` job 에
+  동치 대조를 post-deploy gate 로 등록 — **매 staging 배포 후 자동 실행**된다.
+  `SKIP_COMMIT=1` (커밋 일치는 verify-do-binding.sh post-deploy gate 가 이미
+  검증) + 최종 시도에서만 Slack 알림(EQ_NOTIFY). 실패 시 job 실패 처리.
+  workflow_run 에서 production 배포가 동시 진행될 수 있어 45s 간격 1회 재시도.
+  배포 이전 단계가 실패하면 동치 대조는 실행되지 않는다. **수정 51 (2026-08-15)**:
+  ① 웹훅 시크릿 이름 양쪽 지원 — `SLACK_WEBHOOK`(Pages 프로젝트 관례) 또는
+  `ALERT_SLACK_WEBHOOK`(docs 관례) 어느 쪽이든 GitHub Actions 시크릿으로 설정하면
+  동작 (env 에 두 이름 모두 매핑, resolveWebhookUrl: SLACK_WEBHOOK 우선). ② 동치
+  대조 이전 단계(guard/배포/post-deploy gate) 실패 시엔 동치 대조가 실행되지 않아
+  알림이 전혀 없던 갭을 보완 — `Notify staging pipeline failure` 스텝
+  (`if: failure() && steps.equivalence.outcome != 'failure'`)이 파이프라인 어느
+  단계 실패든 danger 알림 전송 (동치 대조 실패는 상세 알림과 중복 방지). ⚠️ GitHub
+  Actions 시크릿 `ALERT_SLACK_WEBHOOK`(또는 SLACK_WEBHOOK) 미설정 상태 — 실측
+  (2026-08-15) repo secrets 는 CLOUDFLARE_ACCOUNT_ID/CLOUDFLARE_API_TOKEN 만 존재.
 
   **셀프테스트 (수정 40, 2026-08-14)**: `bash scripts/deploy-local-worktree.sh
   --self-test` — 가짜 npx/curl 바이너리로 모든 wrangler/curl 호출을 스텁하고

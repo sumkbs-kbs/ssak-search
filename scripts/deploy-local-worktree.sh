@@ -227,6 +227,24 @@ if [[ "$*" == *"/api/health"* ]]; then
   fi
   exit 0
 fi
+# 수정 77: -K <config> — Rollback API 가 curl config 파일로 토큰을 주입한다.
+# 실제 curl 과 동일하게 config 파일을 읽어 URL/헤더를 로그에 남긴다 (실제 호출은
+# 없음). argv 에 토큰이 없음을 self-test 가 단언한다. -X POST 체크보다 먼저
+# 평가해야 한다 (curl -K cfg -X POST 호출이 -K 분기로 들어가도록).
+if [[ "$*" == *"-K "* ]]; then
+  for a in "$@"; do
+    if [ -f "$a" ]; then
+      echo "[curl -K config] $a:" >> "${FAKE_NPX_LOG:?}"
+      # url 라인(rollback 엔드포인트) 과 Authorization 헤더 마스킹을 로그에 남긴다
+      # — 실제 토큰은 절대 출력하지 않는다 (config 파일 내부에만 존재).
+      sed -n 's/^\(url = .*rollback.*\)$/[curl -K config] \1/p' "$a" >> "${FAKE_NPX_LOG:?}" || true
+      sed -n 's/^header = "Authorization: Bearer \(.*\)"/[curl -K config] header: Authorization: Bearer <token> (config 파일 내부)/p' "$a" >> "${FAKE_NPX_LOG:?}" || true
+      break
+    fi
+  done
+  echo '{"success":true}'
+  exit 0
+fi
 if [[ "$*" == *"-X POST"* ]]; then echo '{"success":true}'; exit 0; fi
 exit 0
 FAKEEOF
@@ -252,10 +270,15 @@ FAKEEOF
     else
       grep -q "wrangler rollback" "$FAKE_NPX_LOG" && ok=0
     fi
+    # 수정 77: Pages Rollback 은 curl -K config 로 호출 — argv 에 URL/토큰이 없고
+    # config 로그에 url = .*rollback 이 남는다 (토큰은 config 파일 내부, 마스킹).
     if [ "$expect_pages_rollback" = "yes" ]; then
-      grep -q "curl .*rollback" "$FAKE_NPX_LOG" || ok=0
+      grep -q 'curl .*-K ' "$FAKE_NPX_LOG" || ok=0
+      grep -q 'url = .*rollback' "$FAKE_NPX_LOG" || ok=0
+      # argv/로그에 토큰 노출 금지 (curl -H "Authorization: Bearer $token" 금지)
+      if grep -q 'Bearer fake-token' "$FAKE_NPX_LOG"; then ok=0; fi
     else
-      grep -q "curl .*rollback" "$FAKE_NPX_LOG" && ok=0
+      grep -q 'url = .*rollback' "$FAKE_NPX_LOG" && ok=0
     fi
     # 수정 67: DO 버전 미변경 시 Pages 를 배포하지 않아야 한다 ('wrangler pages deploy ' —
     # 'pages deployment' 목록 조회와 구분해 공백으로 끝나는 호출만 매칭).
@@ -339,11 +362,19 @@ FAKEEOF
   E2E_RC=$?
   E2E_OK=1
   grep -q "wrangler rollback 0532d4a2-1111-4222-8333-444455556666" "$FAKE_NPX_LOG" || E2E_OK=0
-  grep -q "curl .*rollback" "$FAKE_NPX_LOG" || E2E_OK=0
+  # 수정 77: Rollback API 는 curl -K config 로 토큰을 주입해야 한다 — argv 에
+  # 토큰(fake-token) 이 남으면 ps/로그 누수이므로 FAIL. URL 이 config 파일로
+  # 이동했으므로 rollback 엔드포인트도 config 로그에서 확인한다.
+  grep -q 'curl .*-K ' "$FAKE_NPX_LOG" || { echo "   ❌ rollback_pages 가 curl -K config 를 쓰지 않음 (argv 토큰 누수 위험)" >&2; E2E_OK=0; }
+  grep -q 'url = .*rollback' "$FAKE_NPX_LOG" || { echo "   ❌ curl config 에 rollback URL 부재" >&2; E2E_OK=0; }
+  if grep -q 'Bearer fake-token\|fake-token' "$FAKE_NPX_LOG"; then
+    echo "   ❌ 토큰이 curl argv/로그에 노출됨 — config 파일 주입이어야 함" >&2
+    E2E_OK=0
+  fi
   grep -q "E2E_FORCE_BUNDLE_MISMATCH=1 — 번들 커밋 검증을 의도적으로 불일치로 취급" "$E2E_OUT" || E2E_OK=0
   grep -q "rollback-e2e: Pages 최신 배포 == 이전 배포(11111111-1111-4222-8333-444455556666)" "$E2E_OUT" || E2E_OK=0
   if [ "$E2E_OK" = "1" ] && [ "$E2E_RC" = "1" ]; then
-    echo " ✅ rollback_e2e: DO+Pages 롤백 + 최신 배포==PREV 복구 대조 확인 (exit 1 = 번들 불일치 보고)"
+    echo " ✅ rollback_e2e: DO+Pages 롤백 + 최신 배포==PREV 복구 대조 + curl -K config 토큰 비노출 확인"
   else
     echo " ❌ rollback_e2e: rc=$E2E_RC 복구대조=$(grep -c '최신 배포 == 이전 배포' "$E2E_OUT" || true)건" >&2
     tail -30 "$E2E_OUT" >&2
@@ -858,20 +889,56 @@ rollback_do() {
   return 1
 }
 
+# ── wrangler OAuth 토큰 읽기 (크로스플랫폼, 수정 77) ──────────────────────
+# wrangler login 이 남기는 oauth_token 을 TOML 에서 추출한다. 경로는 플랫폼별로
+# 다르므로 후보를 순회한다:
+#   macOS/Linux: $HOME/.wrangler/config/default.toml (WRANGLER_HOME 우선)
+#   Windows     : $USERPROFILE/.wrangler/... (Git Bash) / $APPDATA/wrangler/...
+# python3 정규식으로 TOML 기본 문자열("…")만 파싱 — GNU sed 의존 제거 (Windows
+# Git Bash 에서도 동작). 토큰은 stdout 으로만 반환하며 로그에는 절대 출력하지 않는다.
+read_wrangler_oauth_token() {
+  WRANGLER_HOME_CANDIDATES="${WRANGLER_HOME:-} ${HOME:-} ${USERPROFILE:-} ${APPDATA:-}"
+  for base in $WRANGLER_HOME_CANDIDATES; do
+    [ -n "$base" ] || continue
+    # Windows %APPDATA% 는 wrangler\config 하위, 나머지는 .wrangler/config 하위
+    if [ "$base" = "$APPDATA" ] && [ -n "$APPDATA" ]; then
+      cfg="$base/wrangler/config/default.toml"
+    else
+      cfg="$base/.wrangler/config/default.toml"
+    fi
+    [ -f "$cfg" ] || continue
+    TOKEN_OUT="$(python3 -c '
+import re, sys
+s = open(sys.argv[1], encoding="utf-8", errors="replace").read()
+m = re.search(r"^\s*oauth_token\s*=\s*\"([^\"]*)\"\s*$", s, re.M)
+print(m.group(1) if m else "")
+' "$cfg" 2>/dev/null)"
+    if [ -n "$TOKEN_OUT" ]; then
+      printf '%s' "$TOKEN_OUT"
+      return 0
+    fi
+  done
+  return 1
+}
+
 # ── 롤백 헬퍼: Pages 를 이전 배포로 (공식 Rollback API, 수정 61) ────────────
 # POST /accounts/{acct}/pages/projects/{proj}/deployments/{target}/rollback —
 # 대시보드 'Rollback to this deployment' 와 동일한 엔드포인트. target 은 이번
 # 배포 직전의 동일 브랜치 배포 ID (PREV_PAGES_ID). 토큰은 CLOUDFLARE_API_TOKEN
-# 우선, 없으면 wrangler OAuth 토큰(~/.wrangler/config/default.toml oauth_token —
-# pages:write 스코프 포함). Cloudflare 제약상 **production(브랜치 main) 배포만**
-# Rollback 대상 (preview/staging 은 불가 — 'preview deployments are not valid
-# rollback targets'). 호출부에서 production 전용으로 게이트한다.
+# 우선, 없으면 wrangler OAuth 토큰(read_wrangler_oauth_token — pages:write
+# 스코프 포함). Cloudflare 제약상 **production(브랜치 main) 배포만** Rollback
+# 대상 (preview/staging 은 불가 — 'preview deployments are not valid rollback
+# targets'). 호출부에서 production 전용으로 게이트한다.
+#
+# 토큰 누수 방지 (수정 77): 토큰을 curl argv 에 절대 두지 않는다 — 임시 curl
+# config 파일(-K) 에 URL/헤더를 주입해 전달한다. curl -H 로 argv 를 쓰면 ps
+# 프로세스 목록과 bash -x 로그에 토큰이 그대로 노출된다 (수정 70 과 동일 패턴).
 rollback_pages() {
   local target="$1"
   local token="${CLOUDFLARE_API_TOKEN:-}"
   local acct="${CLOUDFLARE_ACCOUNT_ID:-}"
   if [ -z "$token" ]; then
-    token="$(sed -n 's/^[[:space:]]*oauth_token[[:space:]]*=[[:space:]]*"\([^"]*\)".*/\1/p' "$HOME/.wrangler/config/default.toml" 2>/dev/null | head -1)"
+    token="$(read_wrangler_oauth_token)"
   fi
   if [ -z "$acct" ]; then
     acct="$(npx wrangler whoami 2>/dev/null | grep -oE '[0-9a-f]{32}' | head -1)"
@@ -882,9 +949,15 @@ rollback_pages() {
     echo "    (또는 대시보드: Deployments → 해당 배포 ⋯ → Rollback to this deployment)" >&2
     return 1
   fi
+  local curl_cfg
+  curl_cfg="$(mktemp)"
+  chmod 600 "$curl_cfg"
+  # curl config 파일에 URL/헤더 주입 — argv 에 토큰을 남기지 않는다 (ps/log 노출 차단).
+  printf 'url = "https://api.cloudflare.com/client/v4/accounts/%s/pages/projects/search-engine-api/deployments/%s/rollback"\nheader = "Authorization: Bearer %s"\nheader = "Content-Type: application/json"\n' \
+    "$acct" "$target" "$token" > "$curl_cfg"
   local resp
-  resp="$(curl -s -m 30 -X POST "https://api.cloudflare.com/client/v4/accounts/$acct/pages/projects/search-engine-api/deployments/$target/rollback" \
-    -H "Authorization: Bearer $token" -H 'Content-Type: application/json' 2>&1 || true)"
+  resp="$(curl -s -m 30 -K "$curl_cfg" -X POST 2>&1 || true)"
+  rm -f "$curl_cfg"
   if printf '%s' "$resp" | grep -q '"success"[[:space:]]*:[[:space:]]*true'; then
     echo " ✅ Pages 롤백 완료 → $target (이전 배포로 production 전환)"
     return 0

@@ -947,6 +947,17 @@
 - **검증**: rate-limiter-do **39/39** · 전체 unit 138파일 **2,698/2,698 PASS** · tsc 0 · prettier clean · 프로브 워커는 검증 후 삭제 (컨벤션)
 - **잔존 노트**: 서킷 맵에 `workers_ai`(내부 바인딩 pseudo-host) 존재 — 트립 시 robots.txt 프로브가 DNS 실패로 stuck-open 될 수 있는 사전 존재 이슈 (404-alive 와 무관, 별도 추적)
 
+### 수정 77: rollback_pages OAuth 토큰 읽기 크로스플랫폼 견고화 + 토큰 누수 차단 (2026-08-15)
+- **작업 ID**: FIX-2026-08-15-25 (구현 + 테스트 + 실측)
+- **요청**: rollback_pages 헬퍼가 OAuth 토큰을 읽는 경로를 크로스플랫폼(Windows 포함)으로 견고화하고, 토큰 누수(로그 출력) 위험 점검
+- **토큰 누수 점검 결과 — 실제 위험 1건 발견**: 기존 `curl -H "Authorization: Bearer $token"` 는 토큰이 **curl argv 에 남아 ps 프로세스 목록과 bash -x 로그에 노출**됐다. 수동 지침은 `<TOKEN>` 플레이스홀더라 안전, whoami/grep 은 토큰 미출력, 실패 응답(resp|head -c 300) 에는 토큰 미포함 확인
+- **수정** (`scripts/deploy-local-worktree.sh`):
+  - **curl -K config 주입** — 토큰·URL 을 임시 config 파일(chmod 600, 사용 후 삭제) 에 주입해 argv 에 토큰을 절대 두지 않음 (수정 70 과 동일 패턴). argv 는 `-K <cfg> -X POST` 만 남음
+  - **`read_wrangler_oauth_token()` 신규** — 플랫폼별 후보 경로 순회: `$WRANGLER_HOME` > `$HOME`(macOS/Linux, `~/.wrangler/config/default.toml`) > `$USERPROFILE`(Git Bash) > `$APPDATA`(Windows, `wrangler/config/default.toml`). python3 정규식으로 TOML 기본 문자열 파싱 — GNU sed 의존 제거 (Windows Git Bash 에서도 동작), 로그에 토큰 미출력
+- **테스트**: 셀프테스트 단언 강화 — rollback_pages 가 `curl .*-K ` + config 내부 `url = .*rollback` 사용 + **argv/로그에 `Bearer fake-token` 미노출 단언** (누수 시 FAIL). 10/10 유지
+- **실측**: 실제 로컬 OAuth 토큰 추출 성공(길이 93, 마스킹만 표시) · HOME 경로(macOS/Linux) 추출 · **APPDATA 경로(Windows) 시뮬레이션 추출** · curl argv 에 토큰 미노출 확인
+- **검증**: 셀프테스트 10/10 · 유닛 11/11 · 전체 unit 139 파일 **2,727/2,727 PASS** · tsc 0 · bash -n OK
+
 ### 수정 76: staging 번들 불일치 자동 재배포 — --auto-redeploy (캐시 무효화 포함) (2026-08-15)
 - **작업 ID**: FIX-2026-08-15-24 (검토 + 구현 + 테스트)
 - **요청**: staging 번들 불일치에서 Pages 롤백 대신 '올바른 번들로 자동 재배포'하는 --auto-redeploy 모드 검토 (빌드 캐시 무효화 포함)

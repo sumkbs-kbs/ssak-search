@@ -221,7 +221,11 @@ jobs:
         # (이미 EQ_NOTIFY 상세 알림 발송) → 여기선 스킵. `failure()` 를 쓰지 않는
         # 이유: 다운로드 스텝(continue-on-error) 이후 `if: failure()` 는 발화하지
         # 않을 수 있어 verify-deploy-workflow 가 거부한다 (S104-③-⑦-③ 실측).
-        if: !cancelled() && steps.equivalence.outcome == 'skipped'
+        # ⚠️ `!cancelled()` 를 **앞에** 쓰지 말 것 — YAML 1.2 에서 ! 로 시작하는
+        # plain scalar 는 tag 로 해석돼 GitHub 파서가 deploy.yml 전체를 로드 실패
+        # (workflow_run 미발화, 2026-08-15 실측) → `!` 가 scalar 시작이 아니도록
+        # 뒤로 배치 (논리적 동치: A && B == B && A).
+        if: steps.equivalence.outcome == 'skipped' && !cancelled()
         env:
           SLACK_WEBHOOK: ${{ secrets.ALERT_SLACK_WEBHOOK || secrets.SLACK_WEBHOOK }}
         run: |

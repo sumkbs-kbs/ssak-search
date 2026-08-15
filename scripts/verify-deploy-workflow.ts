@@ -44,7 +44,7 @@
  */
 import { existsSync, readFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
-import { parse } from 'yaml'
+import { parseDocument } from 'yaml'
 
 export interface GateOutcome {
   status: 'PASS' | 'FAIL' | 'SKIP' | 'ERROR'
@@ -97,7 +97,24 @@ export function verifyDeployWorkflow(repoDir: string): GateOutcome {
 
   let doc: WorkflowDoc
   try {
-    doc = parse(readFileSync(wfPath, 'utf8')) as unknown as WorkflowDoc
+    const yamlDoc = parseDocument(readFileSync(wfPath, 'utf8'))
+    // GitHub 파서 정합 (2026-08-15 실측): `yaml` 패키지 기본 파서는 알 수 없는
+    // tag 를 경고로만 남기고 통과시킨다 — GitHub 파서는 하드 실패로 처리해
+    // deploy.yml 전체를 로드 못 하고 workflow_run 이 영영 발화하지 않는다
+    // (예: `if: !cancelled() && …` — YAML 1.2 에서 ! 로 시작하는 plain scalar 는
+    // tag 로 해석됨). TAG_RESOLVE_FAILED 경고를 ERROR 로 승격해 같은 회귀를
+    // CI/per-commit replay 에서 잡는다.
+    if (yamlDoc.errors.length > 0) {
+      return { status: 'ERROR', detail: `${DEPLOY_WF} is not parseable YAML: ${yamlDoc.errors[0].message}` }
+    }
+    const unresolved = yamlDoc.warnings.filter((w) => w.code === 'TAG_RESOLVE_FAILED')
+    if (unresolved.length > 0) {
+      return {
+        status: 'ERROR',
+        detail: `${DEPLOY_WF}: GitHub parser rejects ${unresolved.length} unresolved YAML tag(s) — ${unresolved[0].message.split('\n')[0]} (a plain scalar starting with '!' is parsed as a tag; reorder the expression so '!' is not at the start)`,
+      }
+    }
+    doc = yamlDoc.toJS() as unknown as WorkflowDoc
   } catch (err) {
     return { status: 'ERROR', detail: `${DEPLOY_WF} is not parseable YAML: ${String(err)}` }
   }
@@ -249,7 +266,11 @@ export function verifyDeployWorkflow(repoDir: string): GateOutcome {
   const evalPath = join(repoDir, EVAL_WF)
   if (existsSync(evalPath)) {
     try {
-      const evalDoc = parse(readFileSync(evalPath, 'utf8')) as unknown as WorkflowDoc
+      const evalYaml = parseDocument(readFileSync(evalPath, 'utf8'))
+      if (evalYaml.errors.length > 0) {
+        throw evalYaml.errors[0]
+      }
+      const evalDoc = evalYaml.toJS() as unknown as WorkflowDoc
       const evalJob = evalDoc.jobs?.eval
       if (evalJob && (evalJob.steps ?? []).some((s) => (s.name ?? '').includes('Commit updated baseline'))) {
         const jobPerms = evalJob.permissions as Record<string, unknown> | undefined

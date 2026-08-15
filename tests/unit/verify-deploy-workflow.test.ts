@@ -290,4 +290,26 @@ jobs:
       expect(outcome.detail).toContain('not parseable YAML')
     })
   })
+
+  describe('7. GitHub parser compatibility (unresolved YAML tags, 2026-08-15 실측)', () => {
+    it("ERRORs on `if: !cancelled() && …` — a plain scalar starting with '!' is parsed as a YAML tag by GitHub's parser (workflow_run never fires)", () => {
+      const workflow = GOOD_WORKFLOW.replace(
+        '      - uses: actions/checkout@v4\n        with:\n          fetch-depth: 0',
+        "      - uses: actions/checkout@v4\n        if: !cancelled() && steps.download.outcome == 'skipped'\n        with:\n          fetch-depth: 0",
+      )
+      const outcome = verifyDeployWorkflow(writeRepo({ workflow }))
+      expectStatus(outcome, 'ERROR')
+      expect(outcome.detail).toContain('GitHub parser rejects')
+      expect(outcome.detail).toContain('!cancelled')
+    })
+
+    it('PASSes when the same condition is reordered so `!` is not at the scalar start', () => {
+      const workflow = GOOD_WORKFLOW.replace(
+        '      - uses: actions/checkout@v4\n        with:\n          fetch-depth: 0',
+        "      - uses: actions/checkout@v4\n        if: steps.download.outcome == 'skipped' && !cancelled()\n        with:\n          fetch-depth: 0",
+      )
+      const outcome = verifyDeployWorkflow(writeRepo({ workflow }))
+      expectStatus(outcome, 'PASS')
+    })
+  })
 })

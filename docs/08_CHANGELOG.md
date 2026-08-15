@@ -812,6 +812,18 @@
   - **Pages 배포 스텝**: wrangler 출력을 변수로 캡처해 성공 판정 + **'Uploaded 0 files' 감지 시 "(정적 에셋 3개 불변 … 스테일 아님)" 안내 라인 출력** — 운영자가 로그에서 바로 해석 가능. 실패 시에는 이제 wrangler 실제 오류 출력(tail -20)을 stderr로 노출 (기존엔 grep 필터로 오류 메시지가 숨겨짐)
 - **검증**: bash -n OK · `--self-test` 5/5 (가짜 pages deploy 는 'Uploaded 0 files' 미출력 → 힌트 라인 미발화, 성공 판정 회귀 없음) · deploy-local-worktree.test.ts 8건 통과
 
+### 수정 54: deploy.yml GitHub 파서 호환 회귀 수정 — `if: !cancelled()` YAML tag 문제로 workflow_run 미발화 (2026-08-15)
+- **작업 ID**: FIX-2026-08-15-04 (실측 + 수정 + 검증)
+- **요청**: 28d4f7e~f3511e4 push 후 CI → workflow_run 배포 파이프라인이 알림 스텝 포함 실제 실행되는지 검증
+- **실측 (핵심 발견)**: 28d4f7e/f3511e4는 이미 push돼 있었지만 **f3511e4 push의 CI가 Per-commit gate replay에서 실패**했고(28d4f7e 단독의 `if: failure()` 조건 — 수정 51 원형 — 이 repo 회귀 체크에 걸림), 그보다 근본적으로 **f3511e4부터 GitHub가 deploy.yml을 로드 실패** — workflow object의 name이 경로 폴백(".github/workflows/deploy.yml"), push마다 **0잡 실패 phantom run**(event=push)만 생성되고 **workflow_run이 영영 발화하지 않음** (11b4dbf까지는 Deploy/workflow_run 정상 발화)
+- **근본 원인**: f3511e4가 `if: failure() && …` 를 `if: !cancelled() && …` 로 바꾸면서 — **YAML 1.2 에서 `!` 로 시작하는 plain scalar 는 tag 로 해석** (`unknown tag !<!cancelled()>`). js-yaml(YAML 1.2)이 GitHub와 동일하게 재현. repo의 verify-deploy-workflow 는 `yaml` 패키지를 쓰는데 이 패키지는 unresolved tag 를 **경고로만** 남기고 통과시켜 CI 가 green 이었음 (GitHub 파서만 실패)
+- **수정**:
+  - `deploy.yml` — 조건을 `if: steps.equivalence.outcome == 'skipped' && !cancelled()` 로 **재배열** (`!` 가 scalar 시작이 아니게, 논리 동치) + 주석에 YAML tag 함정 명시
+  - `scripts/verify-deploy-workflow.ts` — `parse` → `parseDocument` 로 교체, **TAG_RESOLVE_FAILED 경고를 ERROR 로 승격** (GitHub 파서 정합). eval.yml 분기도 errors 명시 체크로 통일
+  - `tests/unit/verify-deploy-workflow.test.ts` — 신규 2건: `!cancelled()` 선두 ERROR + 재배열 PASS (총 23건)
+- **검증**: 유닛 23/23 · 전체 unit 프로젝트 136파일 통과 (통합 테스트 14건 실패는 사전 존재/환경 — auth 401, CI 게이트 밖) · eslint 0 · prettier clean · tsc 0 · 실파일 verify-deploy-workflow PASS
+- **후속**: push → CI green → workflow_run Deploy 재발화 확인 (알림 스텝 포함, guard 무효 토큰으로 차단 예상)
+
 ### 수정 29: 배포 파이프라인 자동 검증 확장 — gold 회수 + staging↔production 동치 대조 (2026-08-14)
 - **작업 ID**: FIX-2026-08-14-12 (구현 + 실측)
 - **배경**: 로컬 worktree 배포 스크립트(수정 27)에 검증 단계 추가 — 배포 후 "동작하는가"를 자동 확인

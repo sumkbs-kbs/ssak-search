@@ -158,6 +158,12 @@ jobs:
       - name: Notify script self-test (fake curl)
         run: bash scripts/notify-pipeline-failure.sh --self-test
 
+      # 수정 63 (2026-08-15): 알림 종단 검증 스크립트(verify-slack-alert-e2e.sh)도
+      # 오프라인 회귀 — 가짜 gh/curl 로 시크릿 생성→디스패치→알림 수신 전 흐름을
+      # 검증한다 (실 웹훅/시크릿/디스패치 없음).
+      - name: Slack alert E2E script self-test (fake gh/curl)
+        run: bash scripts/verify-slack-alert-e2e.sh --self-test
+
   binding-verify:
     name: Binding Verification
     runs-on: ubuntu-latest

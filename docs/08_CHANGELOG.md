@@ -919,6 +919,22 @@
 - **검증**: self-test 5/5 · 유닛 5건 · 전체 unit 137파일 **2,692/2,692 PASS** · tsc 0 · prettier clean · verify-deploy-workflow **PASS (6체크)**
 - **사용법**: `python3 scripts/capture-webhook.py --port 18080` → 다른 터미널에서 `SLACK_DRY_RUN=1 bash scripts/notify-pipeline-failure.sh` — 실 웹훅 없이 알림 경로 검증
 
+### 수정 63: 웹훅 URL 1개로 시크릿 생성→staging 디스패치→알림 수신 종단 검증 스크립트 (2026-08-15)
+- **작업 ID**: FIX-2026-08-15-11 (구현 + 테스트)
+- **요청**: 웹훅 URL 을 받으면 자동으로 시크릿 생성 → staging 디스패치 → 알림 수신까지 한 번에 검증하는 스크립트
+- **수정** (`scripts/verify-slack-alert-e2e.sh` 신규):
+  - ① 사전 확인 — gh 인증(GH_TOKEN 또는 gh auth login) · repo · 웹훅 URL 형식 (`https://hooks.slack.com/services/T…/B…/…`)
+  - ② 웹훅 유효성 — 테스트 메시지 POST → **HTTP 200** (Slack 수락 시맨틱)
+  - ③ 시크릿 생성 — `gh secret set ALERT_SLACK_WEBHOOK` (repo) + `secret list` 로 갱신 실측
+  - ④ staging 디스패치 — `gh workflow run deploy.yml -f environment=staging` + 배포 전 baseline 과 다른 새 run ID 탐지
+  - ⑤ run 모니터링 — 완료까지 폴링(`--wait-min`, 기본 15분) → [13] Notify 스텝 로그에서 **`✅ Slack 알림 전송됨 (danger)`** 실측
+  - ⑥ 결과 보고 — 알림 마커 발견 → ✅ 종단 검증 통과 / 파이프라인 성공 시 미발화(정상) 보고 / 마커 부재 시 exit 1 + 수동 확인 명령
+  - **URL 은 시크릿 처리** — 출력 시 마스킹(예: `T01***…***123456`), 전체 URL 미노출
+  - `--dry-run` 계획 모드 + `--self-test` 오프라인 회귀 (가짜 gh/curl: 알림 전달 → exit 0 / 미발화 → exit 1, 2/2)
+- **테스트** (`tests/unit/verify-slack-alert-e2e.test.ts` 신규 4건): 드라이런 계획 + URL 마스킹(전체 URL 미노출 단언) · 잘못된 형식 거부 · URL 누락 · --self-test 2/2
+- **검증**: self-test 2/2 (폴링 인터벌 env 튜닝으로 1s) · 유닛 4건 · 전체 unit **2,696/2,696 PASS** · tsc 0 · prettier clean · ci.yml deploy-selftest 에 스텝 추가
+- **사용법**: `echo '<URL>' | bash scripts/verify-slack-alert-e2e.sh` (또는 `--url '<URL>'`) — 마지막 ⑥ 에서 Slack 채널 수신만 사용자 확인
+
 ### 수정 29: 배포 파이프라인 자동 검증 확장 — gold 회수 + staging↔production 동치 대조 (2026-08-14)
 - **작업 ID**: FIX-2026-08-14-12 (구현 + 실측)
 - **배경**: 로컬 worktree 배포 스크립트(수정 27)에 검증 단계 추가 — 배포 후 "동작하는가"를 자동 확인

@@ -497,18 +497,35 @@ describe('wikipediaSearch', () => {
     expect(results[0].title).toBe('Fallback Result')
   })
 
-  it('skips the Action API fallback when REST is rate-limited (429)', async () => {
-    // wikipedia.org rate-limits the IP across BOTH the REST and Action endpoints
-    // (verified live: Action keeps returning 429 for 8s+ after REST trips). Firing
-    // the Action fallback on REST-429 amplifies the block with wasted requests, so
-    // it is skipped — 3 REST attempts, ZERO Action attempts. (S35: the DBpedia
-    // mirror that S28 added here now lives in the standalone dbpediaSearch,
-    // fired by the orchestrator only when the wikipedia backend is missing.)
+  it('tries Action API FIRST on REST 429 — recovers results when Action succeeds', async () => {
+    // 수정 58: REST 429 시 Action 을 먼저 시도한다 — REST 재시도는 429 구간에서
+    // 재-429 만 반복(쿼리당 3회 실패 누적 → 서킷 트립, 수정 57 실측)이고,
+    // Action 은 REST 429 중에도 200 임이 Workers egress 실측으로 확인됐다.
+    mockFetchWithTimeout.mockResolvedValueOnce({ ok: false, status: 429 })
+    mockFetchWithTimeout.mockResolvedValueOnce({
+      ok: true,
+      json: () =>
+        Promise.resolve({
+          query: { search: [{ title: 'ActionRecovered', snippet: 'ok' }] },
+        }),
+    })
+    const results = await wikipediaSearch('what is quantum computing')
+    expect(results).toHaveLength(1)
+    expect(results[0].title).toBe('ActionRecovered')
+    // REST 1회(429, 재시도 없음) + Action 1회(성공) = 2회 — 3회 REST 재시도가 아님
+    expect(mockFetchWithTimeout).toHaveBeenCalledTimes(2)
+  })
+
+  it('returns empty when REST AND Action both 429 — but only 3 failures max (1 REST + 2 Action, no trip at threshold 5)', async () => {
+    // 수정 58: REST 429 는 재시도하지 않고(1회) Action 으로 즉시 전환 — Action 은
+    // 자체 1회 재시도가 있어 최악 REST 1 + Action 2 = 3 failures 로 임계값(5) 미만.
+    // 구 동작(REST 3회 재시도 + Action skip)과 달리 단일 쿼리로 트립할 수 없다.
     mockFetchWithTimeout.mockResolvedValueOnce({ ok: false, status: 429 })
     mockFetchWithTimeout.mockResolvedValueOnce({ ok: false, status: 429 })
     mockFetchWithTimeout.mockResolvedValueOnce({ ok: false, status: 429 })
     const results = await wikipediaSearch('what is quantum computing')
     expect(results).toEqual([])
+    // REST 1회 + Action 2회(재시도 1회 포함) = 3회
     expect(mockFetchWithTimeout).toHaveBeenCalledTimes(3)
   })
 
@@ -540,13 +557,13 @@ describe('wikipediaSearch', () => {
     expect(results[0].title).toBe('NetworkRecovered')
   })
 
-  it('returns empty when REST (429) — Action is skipped on REST-429', async () => {
+  it('returns empty when REST (429) and Action also 429 — Action still attempted (수정 58)', async () => {
     mockFetchWithTimeout.mockResolvedValueOnce({ ok: false, status: 429 })
     mockFetchWithTimeout.mockResolvedValueOnce({ ok: false, status: 429 })
     mockFetchWithTimeout.mockResolvedValueOnce({ ok: false, status: 429 })
     const results = await wikipediaSearch('anything')
     expect(results).toEqual([])
-    // 3 REST attempts only — no Action (429), no internal DBpedia (S35 moved it out).
+    // REST 1회(재시도 없음) + Action 2회 = 3회 — 구 동작은 REST 3회 + Action 0회
     expect(mockFetchWithTimeout).toHaveBeenCalledTimes(3)
   })
 

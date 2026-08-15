@@ -408,7 +408,6 @@ export async function wikipediaSearch(
     // instantly instead of burning its own 429 attempts. The intra-query
     // retry chain is kept for the DISCOVERY query only (the one that finds
     // the window) — later queries are skipped at the top by the guard.
-    let restRateLimited = false
     let restError: unknown = null
     let restAttemptNo = 0
     const response = await withRetry(
@@ -435,11 +434,18 @@ export async function wikipediaSearch(
         })
         if (res.ok) return res
         if (res.status === 429) {
-          restRateLimited = true
           recordWikipediaRateLimit(res, language)
           // Share the window with other isolates (best-effort DO mirror).
           await mirrorWikipediaCooldown(env, language)
-          throw new WikipediaHttpError(res.status, true)
+          // 수정 58 (2026-08-15): REST 429 시 **Action 을 먼저** 시도한다 — REST
+          // 재시도는 429 구간에서 거의 항상 재-429 (B1 실측) 인 데다, 재시도마다
+          // rateLimitedFetch 가 release(host,false) 로 실패를 누적해 쿼리당 3회
+          // 실패가 쌓여 failureThreshold(5) 트립의 직접 원인이 됐다 (수정 57:
+          // zh.wikipedia.org 5/5 트립 실측). 반면 Action 은 REST 429 중에도 200
+          // 임이 Workers egress 실측으로 확인됐다. → non-transient 로 즉시
+          // 실패시켜(재시도 없이) Action fallback 으로 내려간다 — 실패 1회에
+          // 그치고 Action 성공 시 서킷 실패 카운트가 리셋된다.
+          throw new WikipediaHttpError(res.status, false)
         }
         // Non-429 error (5xx, 4xx) — fail fast, exactly like the old `break`.
         throw new WikipediaHttpError(res.status, false)
@@ -499,18 +505,12 @@ export async function wikipediaSearch(
     // 200 responses that returned 0 pages (e.g. zh REST returning empty for a
     // Chinese query), where it can genuinely succeed.
     //
-    // SKIPPED when REST was rate-limited (429): wikipedia.org rate-limits the
-    // IP across BOTH the REST and Action endpoints (verified live: Action keeps
-    // returning 429 for 8s+ after REST trips). Firing the fallback on REST-429
-    // just amplifies the block with wasted requests and delays window recovery.
-    if (!restRateLimited) {
-      await actionApiFallback()
-    } else {
-      logger.warn(
-        `Wikipedia REST search rate-limited (429) — skipping Action API fallback so the window can recover:`,
-        { query },
-      )
-    }
+    // 수정 58: REST 429 시에도 **항상 Action 을 시도**한다 — 구 S73 가정
+    // ("Action 도 REST 와 함께 429 — fallback 이 블록을 증폭") 은 2026-08-15
+    // Workers egress 실측으로 뒤집혔다 (zh_rest 429 동안 zh_action 200).
+    // REST 재시도를 없앴으므로 최악(REST 1×429 + Action 2×429)에도 3 failures
+    // 로 임계값(5) 미만 — 단일 쿼리로는 절대 트립하지 않는다.
+    await actionApiFallback()
   } catch (err) {
     logger.warn('Wikipedia search failed:', { error: toError(err) })
     // Even when the REST path throws, try the Action API before giving up.

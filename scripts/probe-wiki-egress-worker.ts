@@ -64,6 +64,15 @@ async function handle(request: Request): Promise<Response> {
       tryFetch('https://en.wikipedia.org/w/api.php?action=query&list=search&srsearch=quantum&format=json&srlimit=3', {
         headers: { 'User-Agent': UA },
       }),
+    zh_action: () =>
+      tryFetch(
+        'https://zh.wikipedia.org/w/api.php?action=query&list=search&srsearch=' +
+          encodeURIComponent('量子计算') +
+          '&format=json&srlimit=3',
+        {
+          headers: { 'User-Agent': UA, Accept: 'application/json' },
+        },
+      ),
     wikidata: () =>
       tryFetch('https://www.wikidata.org/w/api.php?action=wbsearchentities&search=quantum&language=en&format=json', {
         headers: { 'User-Agent': UA },
@@ -83,6 +92,21 @@ async function handle(request: Request): Promise<Response> {
     se_robots: () =>
       tryFetch('https://stackoverflow.com/robots.txt', {
         headers: { 'User-Agent': UA },
+      }),
+    se_api_robots: () =>
+      tryFetch('https://api.stackexchange.com/robots.txt', {
+        headers: { 'User-Agent': UA },
+      }),
+    se_api_search: () =>
+      tryFetch(
+        'https://api.stackexchange.com/2.3/search/advanced?site=stackoverflow&q=python&pagesize=2&order=desc&sort=relevance',
+        {
+          headers: { 'User-Agent': UA, Accept: 'application/json' },
+        },
+      ),
+    se_api_info: () =>
+      tryFetch('https://api.stackexchange.com/2.3/info?site=stackoverflow', {
+        headers: { 'User-Agent': UA, Accept: 'application/json' },
       }),
   }
 

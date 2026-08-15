@@ -842,6 +842,32 @@
   - `.github/workflows/ci.yml` + `deploy.yml` — 빌드에 `BUILD_COMMIT=${{ github.sha }}` 주입 (CI 아티팩트/폴백 빌드 모두 동일 동작)
 - **검증**: 스모크 — `BUILD_COMMIT=<sha> npm run build` → dist/_worker.js 에 SHA 포함 확인 · bash -n OK · `--self-test` 5/5 (가짜 pages deploy 는 URL 미출력 → 번들 검증 생략, exit 회귀 없음) · deploy-local-worktree.test.ts 8건 · health-status/index 31건 · 전체 unit 136파일 PASS · tsc 0 · eslint 0 · prettier clean · verify-deploy-workflow PASS
 
+### 수정 57: production zh.wikipedia.org 서킷 5/5 트립 원인 진단 — Workers egress REST/Action 간헐 429 (2026-08-15)
+- **작업 ID**: DIAG-2026-08-15-01 (실측 진단)
+- **요청**: production 에서만 zh.wikipedia.org 서킷이 5/5 실패로 트립된 원인을 프로브 실패 응답 캡처로 진단
+- **실측**:
+  - 서킷은 **이미 자동 복구됨** (operational — 트립 후 30s backoff → robots.txt 프로브 200 → 닫힘). tripCount=0, failures=0, totalRequests=5/totalFailures=5
+  - **Workers egress 프로브** (s73-wiki-probe 재배포 + zh_action 케이스 추가): `zh_rest` **429** "You are making too many requests to the API" · `zh_action` **200** · `zh_robots` **200** · `en_rest`도 429
+  - **429는 지속이 아니라 간헐(버스트)**: 3회 연속 실측 `200 → 429 → 429`, action도 `200 → 429` — 연속 요청 시 rate-limit, 간격 두면 통과 (Workers egress 공유 IP)
+  - **라이브 재현**: production zh 검색 1회 → totalFailures 5→7 (REST 429×3 실패 누적 → Action 200 으로 failures 리셋) — DO 통계로 메커니즘 확정
+- **메커니즘**: wikipediaSearch 는 REST(rest.php, maxRetries=2 → 3회 시도) → Action(w/api.php, retry 1회 → 2회 시도) 체인. rateLimitedFetch 는 **429/503 을 실패로 release(host,false)** → circuit.failures++. failureThreshold=5 (기본값). **단일 쿼리의 5연속 429(REST 3+Action 2)가 정확히 임계값 도달 → 트립** (wikimedia 가 두 엔드포인트를 동시에 rate-limit 한 순간)
+- **현재 상태**: Action API 200 으로 fallback 생존 → production zh 검색 정상 (zh.wikipedia.org 결과 반환 실측). REST 429 는 매 쿼리 3회 실패를 쌓지만 Action 성공이 리셋
+- **리스크**: REST+Action 동시 429 버스트가 오면 재트립 → 트립 동안 wikipedia 백엔드 제외 (zh.wikipedia.org gold 미회수 위험). 완화: ① robots 프로브로 30s 내 자동 복구 ② cooldown 가드(B1)로 버스트 중 스킵 ③ en.wikipedia 도 동일 429지만 Action 200 리셋으로 205 failures 누적에도 미트립
+- **산출물**: scripts/probe-wiki-egress-worker.ts 에 `zh_action` 케이스 추가 (Action API 실측 경로 — 재사용 가능). 프로브 워커는 검증 후 삭제 (컨벤션)
+- **후속 제안**: 429 버스트 완화 — wikipedia REST 체인에서 연속 429 시 Action 을 먼저 시도하는 순서 반전, 또는 rateLimitedFetch 의 429 를 실패 카운트에서 제외(transient) 검토
+
+### 수정 58: wikipedia REST 429 시 Action API 우선 시도 — 체인 순서 반전으로 재트립 방지 (2026-08-15)
+- **작업 ID**: FIX-2026-08-15-06 (구현 + 테스트)
+- **요청**: wikipedia REST 429 시 Action API 를 먼저 시도하도록 체인 순서를 반전해 재트립 확률을 낮춤
+- **배경 (수정 57 실측)**: REST 429 는 버스트성이고 Action 은 REST 429 중에도 200. 그런데 구 코드는 ① REST 429 를 transient 로 재시도(쿼리당 최대 3회 — 매 시도마다 rateLimitedFetch 가 release(host,false) 로 실패 누적) ② REST-429 시 Action fallback 을 **스킵**(S73 가정 "Action 도 429" — 실측으로 반증됨) → 쿼리당 3회 실패가 쌓여 failureThreshold(5) 트립의 직접 원인 (zh.wikipedia.org 5/5 트립 = REST 3+Action 2 연속 429)
+- **수정** (`src/lib/specialized.ts` wikipediaSearch):
+  - REST 429 → **non-transient 로 즉시 실패** (REST 재시도 제거 — 429 구간에서 재-429 반복이 실측) → **Action fallback 을 항상 시도** (스킵 제거)
+  - 최악(REST 1×429 + Action 2×429)에도 **3 failures 로 임계값(5) 미만** — 단일 쿼리로는 절대 트립 불가. Action 200 시 서킷 실패 카운트 리셋
+  - `restRateLimited` 변수/스킵 분기 제거, 주석 갱신
+- **테스트** (`tests/unit/specialized.test.ts`): 429-skip 2건 → **Action 우선** 기대로 갱신 (REST 1회 + Action 2회 = 3호출) + **신규: REST 429 → Action 200 결과 회복** (2호출, ActionRecovered)
+- **검증**: specialized 176/176 · probe-wikipedia-budget + retry-budget-simulation 20/20 · 통합 orchestrator 22/22 (S35/S36/S38 wikipedia 429 미러 테스트 유지) · 전체 unit 136파일 PASS · tsc 0 · eslint 0 · prettier clean
+- **참고**: B1 cooldown 가드는 유지 (REST 429 시 다음 쿼리 체인 스킵) — 창 내 쿼리는 여전히 빈 결과지만 실패는 누적되지 않음(네트워크 미호출). Action 을 창 내에서도 시도하도록 가드 완화는 후속 검토 항목
+
 ### 수정 29: 배포 파이프라인 자동 검증 확장 — gold 회수 + staging↔production 동치 대조 (2026-08-14)
 - **작업 ID**: FIX-2026-08-14-12 (구현 + 실측)
 - **배경**: 로컬 worktree 배포 스크립트(수정 27)에 검증 단계 추가 — 배포 후 "동작하는가"를 자동 확인

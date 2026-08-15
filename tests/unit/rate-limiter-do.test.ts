@@ -261,7 +261,9 @@ describe('RateLimiterDO self-healing circuit breaker (D.2)', () => {
     instantiate()
     for (let i = 0; i < FAILURE_THRESHOLD; i++) await doInstance.release(HOST, false)
 
-    fetchMock.mockResolvedValue({ ok: false, status: 503, text: async () => 'Service Unavailable' })
+    // 수정 66: 503 은 alive 가 되었으므로, 프로브 실패(escalation) 테스트는
+    // 여전히 dead 인 500 으로 재현한다.
+    fetchMock.mockResolvedValue({ ok: false, status: 500, text: async () => 'Internal Server Error' })
     vi.advanceTimersByTime(30_000)
     await doInstance.alarm()
 
@@ -276,6 +278,18 @@ describe('RateLimiterDO self-healing circuit breaker (D.2)', () => {
     for (let i = 0; i < FAILURE_THRESHOLD; i++) await doInstance.release(HOST, false)
 
     fetchMock.mockResolvedValue({ ok: false, status: 429, text: async () => 'rate limited' })
+    vi.advanceTimersByTime(30_000)
+    await doInstance.alarm()
+
+    const health = await doInstance.getAllHealth()
+    expect(health[HOST].tripped).toBe(false)
+  })
+
+  it('alarm treats 503 as alive too (server responding busy — 수정 66)', async () => {
+    instantiate()
+    for (let i = 0; i < FAILURE_THRESHOLD; i++) await doInstance.release(HOST, false)
+
+    fetchMock.mockResolvedValue({ ok: false, status: 503, text: async () => 'server is busy' })
     vi.advanceTimersByTime(30_000)
     await doInstance.alarm()
 

@@ -947,6 +947,20 @@
 - **검증**: rate-limiter-do **39/39** · 전체 unit 138파일 **2,698/2,698 PASS** · tsc 0 · prettier clean · 프로브 워커는 검증 후 삭제 (컨벤션)
 - **잔존 노트**: 서킷 맵에 `workers_ai`(내부 바인딩 pseudo-host) 존재 — 트립 시 robots.txt 프로브가 DNS 실패로 stuck-open 될 수 있는 사전 존재 이슈 (404-alive 와 무관, 별도 추적)
 
+### 수정 66: rateLimitedFetch 의 503 도 transient 로 재분류 — request/probe 일관 (2026-08-15)
+- **작업 ID**: FIX-2026-08-15-14 (재평가 + 구현 + 테스트)
+- **요청**: rateLimitedFetch 의 503 도 transient 로 분류할지 재평가 — 429 만 제외한 현재 결정(수정 59) 검증
+- **재평가 결론: 503 도 transient 로 전환**. 근거 (실측 + 코드 교차):
+  - ① **retry 계층과의 모순**: arxiv/openalex 의 `withRetry` 가 이미 5xx/503 을 **transient 로 분류해 1회 재시도** (docs/16 §3.4/§3.5, specialized.ts 2209). 회로가 503 을 영구 실패로 집계하면 **재시도 축적(쿼리당 2실패)이 thr=3 호스트(export.arxiv.org 등)를 wikipedia 429 와 동일한 방식으로 트립** (수정 57 버그 클래스)
+  - ② **503 = 서버가 응답했다는 증거**: liveness 논리상 429 와 동일 (alarm 프로브가 429 를 alive 로 취급하는 것과 같은 근거). 실측: export.arxiv.org 'server is busy' 503 이 잦지만 alive · ja.dbpedia.org SPARQL 도 healthy 상태에서 2/3 프로브 503
+  - ③ **진짜 장애 감지는 유지**: 네트워크 오류(타임아웃/연결 거부 — catch 경로) 는 여전히 `release(host,false)` 로 실패 집계 → 다운 백엔드의 회로 개방 역할은 그대로
+  - ④ 참고: 수정 59 이후 HTTP 상태 기반 실패는 503 이 유일했음 → 이번 전환으로 **HTTP 상태 기반 실패는 0, 네트워크 오류만 실패** 라는 단순 의미론 (500/502 는 원래 success)
+- **수정** (`src/lib/rate-limiter.ts` rateLimitedFetch): `429 || 503` → `releaseTransient` (중립 — 실패도 리셋도 없음) + 경고 로그 메시지 통일. 나머지 상태는 `release(host,true)`
+- **수정** (`src/lib/rate-limiter-do.ts` probeHost): **503 을 alive 에 추가** — request 경로의 transient 재분류와 일관 (429 와 동일 논리, 주석 갱신)
+- **테스트**: rate-limiter — 503 → releaseTransient 라우팅 (기존 release(false) 단언 교체) + **신규 네트워크 오류 → release(false) + rethrow** (실패 경로 유지 증명) · rate-limiter-do — alarm 503 → 서킷 닫힘 신규 + 기존 '503 프로브 실패 → backoff escalation' 테스트를 500(여전히 dead) 으로 갱신
+- **검증**: rate-limiter + rate-limiter-do 73/73 · 전체 unit 138 파일 **2,701/2,701 PASS** · tsc 0 · prettier clean
+- **잔여 노트**: 503-중립의 모니터링 손실(503 플러딩 호스트가 totalFailures 에 안 잡힘) 은 rateLimitedFetch 의 warn 로그(`[rate-limiter] ... returned 503 (transient)`) 로 보완
+
 ### 수정 65: 백엔드 호스트 robots.txt 전수 조사 — brave 403 dormant 리스크 예방 (2026-08-15)
 - **작업 ID**: FIX-2026-08-15-13 (전수 조사 + 예방 구현 + 테스트)
 - **요청**: SE/dbpedia 외에 robots.txt 가 404 이거나 API 가 아닌 다른 백엔드 호스트 전수 조사 — 같은 고착 패턴 예방

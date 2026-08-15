@@ -667,9 +667,14 @@ export class RateLimiterDO extends DurableObject<Env> {
       // 고착 패턴이 재발하지 않도록 예방).
       const isRobotsProbe =
         !this.isStackExchangeHost(host) && host !== 'lookup.dbpedia.org' && host !== 'api.search.brave.com'
+      // 수정 66: 503 도 alive — 서버가 "busy" 로 응답한 것이므로 생존 증명.
+      // 429 와 동일한 liveness 논리 (request 경로의 503-transient 재분류와
+      // 일관). 실측: export.arxiv.org 'server is busy' 503 이 잦지만 alive,
+      // ja.dbpedia.org SPARQL 도 healthy 상태에서 2/3 프로브 503.
       let alive =
         resp.ok ||
         resp.status === 429 ||
+        resp.status === 503 ||
         resp.status === 301 ||
         resp.status === 302 ||
         (isRobotsProbe && resp.status === 404)

@@ -410,30 +410,37 @@ export async function rateLimitedFetch(
     const response = await fetch(url, { ...init, signal: controller.signal })
     clearTimeout(timer)
 
-    if (response.status === 429) {
+    if (response.status === 429 || response.status === 503) {
       // 수정 59: 429 는 rate-limit(transient) — 서킷 실패 카운트에서 제외한다.
+      // 수정 66: 503 도 동일하게 transient 로 재분류. 근거:
+      //   ① retry 계층이 이미 503(5xx) 을 transient 로 분류 — arxiv/openalex 의
+      //      withRetry 가 5xx 에 1회 재시도. 회로가 이를 영구 실패로 집계하면
+      //      재시도 축적(쿼리당 2실패)이 thr=3 호스트(export.arxiv.org 등)를
+      //      wikipedia 429 와 동일한 방식으로 트립시킨다 (수정 57 버그 클래스).
+      //   ② 503 은 서버가 "busy" 로 응답했다는 증거 — 429 와 같은 liveness 논리
+      //      (실측: export.arxiv.org 'server is busy' 가 잦음, ja.dbpedia.org
+      //      SPARQL 도 healthy 상태에서 2/3 프로브 503).
+      //   ③ 진짜 장애(다운/타임아웃) 는 네트워크 오류(throw) 가 여전히 실패로
+      //      집계 — 회로의 고장 감지 역할은 유지된다.
       // releaseTransient 는 inflight 슬롯만 정리하고 실패를 올리지도, 성공으로
-      // 리셋하지도 않는다. rate-limit 은 백엔드 장애가 아니다 (수정 57 실측:
-      // wikipedia REST 429 버스트가 release(host,false) 누적으로 서킷을
-      // 트립시킨 직접 원인). 503 은 그대로 실패로 집계한다.
+      // 리셋하지도 않는다. rate-limit/일시적 과부하는 백엔드 장애가 아니다
+      // (수정 57 실측: wikipedia REST 429 버스트가 release(host,false) 누적으로
+      // 서킷을 트립시킨 직접 원인).
       await releaseTransient(env, url).catch(() => {
         logger.warn(`[rate-limiter] releaseTransient RPC failed for ${hostname(url)} — TTL reaper will normalize`)
       })
-      logger.warn(`[rate-limiter] ${url} returned 429 (rate limited — transient, circuit unaffected)`)
+      logger.warn(`[rate-limiter] ${url} returned ${response.status} (transient — circuit unaffected)`)
       return response
     }
 
-    const success = response.status !== 503
+    // 429/503 외의 응답은 성공으로 간주 (수정 66 전까지 '503 만 실패' 였던
+    // 보수적 의미론 — 이제 HTTP 상태 기반 실패는 없고 네트워크 오류만 실패).
     // release는 정확히 한 번 시도. RPC 실패 시 DO-측에서 pop이 됐을 수 있어
     // 재시도(이중 release)는 FIFO로 다른 요청의 슬롯을 pop할 수 있다 — 잔여는
     // S105 TTL 리퍼가 정규화한다.
-    await release(env, url, success).catch(() => {
+    await release(env, url, true).catch(() => {
       logger.warn(`[rate-limiter] release RPC failed for ${hostname(url)} — TTL reaper will normalize`)
     })
-
-    if (!success) {
-      logger.warn(`[rate-limiter] ${url} returned ${response.status}`)
-    }
     return response
   } catch (err) {
     clearTimeout(timer)

@@ -220,7 +220,7 @@ jobs:
           fi
 
       - name: Upload dist artifact (production)
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: worker-bundle-production
           path: dist/
@@ -230,7 +230,7 @@ jobs:
         run: BUILD_COMMIT=${{ github.sha }} DEPLOY_ENV=staging npm run build
 
       - name: Upload dist artifact (staging)
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: worker-bundle-staging
           path: dist/

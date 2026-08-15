@@ -14,6 +14,16 @@
 #   REPO              저장소 "owner/name" (기본 ${GITHUB_REPOSITORY:-unknown/repo})
 #   RUN_URL           실행 URL (기본 GITHUB_SERVER_URL/.../actions/runs/GITHUB_RUN_ID)
 #
+# 커스터마이즈 (선택 — Slack Incoming Webhook 공식 스키마의 최상위 필드):
+#   SLACK_CHANNEL     대상 채널 오버라이드 (예: #deploy-alerts 또는 @someone)
+#   SLACK_USERNAME    표시 이름 오버라이드
+#   SLACK_ICON_EMOJI  아이콘 이모지 (예: :rotating_light: — icon_url 과 상호배타)
+#   SLACK_ICON_URL    아이콘 URL (icon_emoji 와 상호배타)
+#   ⚠️ 공식 문서 (docs.slack.dev/messaging/sending-messages-using-incoming-webhooks):
+#      **현행 Incoming Webhook 은 channel/username/icon 오버라이드를 무시**하고
+#      Slack 앱 설정에서 상속한다. 위 필드는 레거시 웹훅에서만 반영된다 — 무해한
+#      스키마 호환 필드로 포함되며, 무시돼도 알림 자체는 정상 동작한다.
+#
 # 사용:
 #   python3 scripts/capture-webhook.py --port 18080          # ① 캡처 서버 기동
 #   SLACK_DRY_RUN=1 bash scripts/notify-pipeline-failure.sh   # ② 드라이런 POST
@@ -77,8 +87,9 @@ FAKEEOF
   # 웹훅 설정 → 실 웹훅 URL 로 POST
   run_case "webhook_set" 0 "https://hooks.slack.com/services/T" env SLACK_WEBHOOK=https://hooks.slack.com/services/T000/B000/xxx bash "$REPO_ROOT/scripts/notify-pipeline-failure.sh"
 
-  # 페이로드 구조: 드라이런 출력에서 페이로드 JSON 을 추출해 필드 검증
-  # (json.dumps 가 한글을 \uXXXX 로 이스케이프하므로 grep 이 아닌 JSON 파서 사용)
+  # 페이로드 구조: 드라이런 출력에서 페이로드 JSON 을 추출해 Slack Incoming
+  # Webhook 스키마 준수 여부를 검증 (수정 73). json.dumps 가 한글을 \uXXXX 로
+  # 이스케이프하므로 grep 이 아닌 JSON 파서 사용.
   : > "$FAKE_CURL_LOG"
   DRY_OUT="$(PATH="$FAKE_BIN:$PATH" SLACK_DRY_RUN=1 REPO=acme/repo RUN_URL=https://github.com/acme/repo/actions/runs/123 bash "$REPO_ROOT/scripts/notify-pipeline-failure.sh" 2>&1)"
   if printf '%s' "$DRY_OUT" | python3 -c '
@@ -88,16 +99,50 @@ line = next((l for l in text.splitlines() if l.strip().startswith("페이로드:
 if not line:
     sys.exit(1)
 payload = json.loads(line.split("페이로드: ", 1)[1])
+# Slack Incoming Webhook 스키마 (docs.slack.dev):
+#   - 최상위 text (필수, 문자열)
+#   - attachments[]: color (선택) + blocks (Block Kit 배열)
+assert isinstance(payload["text"], str) and payload["text"], "최상위 text 필수"
 assert "staging 배포 파이프라인 실패" in payload["text"], payload["text"]
 assert payload["attachments"][0]["color"] == "danger"
-blocks = json.dumps(payload["attachments"][0]["blocks"], ensure_ascii=False)
-assert "actions/runs/123" in blocks
-assert "*staging 배포 실패*" in blocks
+blocks = payload["attachments"][0]["blocks"]
+assert isinstance(blocks, list) and blocks, "attachments[0].blocks 는 비어있지 않은 배열"
+assert blocks[0]["type"] == "section" and blocks[0]["text"]["type"] == "mrkdwn"
+assert blocks[1]["type"] == "context"
+assert "actions/runs/123" in json.dumps(blocks)
+assert "*staging 배포 실패*" in json.dumps(blocks, ensure_ascii=False)
+# 커스터마이즈 미설정 → 최상위 커스터마이즈 키 부재 (기존 페이로드와 동일)
+for k in ("channel", "username", "icon_emoji", "icon_url"):
+    assert k not in payload, f"미설정 시 {k} 키가 없어야 함"
 '; then
-    echo " ✅ payload_structure: text+danger+run_url+blocks 포함"
+    echo " ✅ payload_schema: text+attachments[danger].blocks (Incoming Webhook 스키마) + 커스터마이즈 미설정 시 키 부재"
   else
-    echo " ❌ payload_structure: 페이로드 누락 필드" >&2
+    echo " ❌ payload_schema: 페이로드 스키마 위반" >&2
     printf '%s\n' "$DRY_OUT" | tail -10 >&2
+    FAILURES=$((FAILURES + 1))
+  fi
+
+  # 커스터마이즈 필드: 설정 시 최상위 키가 포함된다 (스키마 호환, 수정 73)
+  : > "$FAKE_CURL_LOG"
+  CUST_OUT="$(PATH="$FAKE_BIN:$PATH" SLACK_DRY_RUN=1 REPO=acme/repo RUN_URL=https://github.com/acme/repo/actions/runs/123 \
+    SLACK_CHANNEL=#deploy-alerts SLACK_USERNAME=ci-bot SLACK_ICON_EMOJI=:rotating_light: \
+    bash "$REPO_ROOT/scripts/notify-pipeline-failure.sh" 2>&1)"
+  if printf '%s' "$CUST_OUT" | python3 -c '
+import json, sys
+text = sys.stdin.read()
+line = next((l for l in text.splitlines() if l.strip().startswith("페이로드: ")), "")
+if not line:
+    sys.exit(1)
+payload = json.loads(line.split("페이로드: ", 1)[1])
+assert payload["channel"] == "#deploy-alerts", payload.get("channel")
+assert payload["username"] == "ci-bot", payload.get("username")
+assert payload["icon_emoji"] == ":rotating_light:", payload.get("icon_emoji")
+assert "icon_url" not in payload  # 미설정 필드는 포함 안 됨
+'; then
+    echo " ✅ payload_customize: channel/username/icon_emoji 최상위 키 포함 (스키마 호환)"
+  else
+    echo " ❌ payload_customize: 커스터마이즈 필드 누락/오류" >&2
+    printf '%s\n' "$CUST_OUT" | tail -10 >&2
     FAILURES=$((FAILURES + 1))
   fi
 
@@ -106,18 +151,21 @@ assert "*staging 배포 실패*" in blocks
     echo " ❌ notify-pipeline-failure.sh self-test FAIL: $FAILURES case(s) 실패"
     exit 1
   fi
-  echo " ✅ notify-pipeline-failure.sh self-test: all PASS (5/5)"
+  echo " ✅ notify-pipeline-failure.sh self-test: all PASS (6/6)"
   exit 0
 fi
 
 REPO="${REPO:-${GITHUB_REPOSITORY:-unknown/repo}}"
 RUN_URL="${RUN_URL:-${GITHUB_SERVER_URL:-https://github.com}/${GITHUB_REPOSITORY:-unknown/repo}/actions/runs/${GITHUB_RUN_ID:-0}}"
 
-# ── 페이로드 빌드 (수정 51 구조 유지: text + attachments[danger].blocks) ────
+# ── 페이로드 빌드 (수정 51 구조 유지 + 커스터마이즈 필드, 수정 73) ─────────
+# Slack Incoming Webhook 공식 스키마 (docs.slack.dev): 최상위 text 는 필수,
+# attachments[].color/blocks 는 유효한 Block Kit 조합. channel/username/
+# icon_emoji/icon_url 은 선택 필드 — 설정된 것만 포함 (설정 안 하면 기존과 동일).
 PAYLOAD="$(python3 -c '
 import json, sys
-repo, run_url = sys.argv[1], sys.argv[2]
-print(json.dumps({
+repo, run_url, channel, username, icon_emoji, icon_url = sys.argv[1:7]
+msg = {
   "text": f"❌ staging 배포 파이프라인 실패 — {repo}",
   "attachments": [{
     "color": "danger",
@@ -126,7 +174,19 @@ print(json.dumps({
       {"type": "context", "elements": [{"type": "mrkdwn", "text": f"run: <{run_url}>"}]},
     ],
   }],
-}))' "$REPO" "$RUN_URL")"
+}
+# 커스터마이즈 필드 — 스키마 호환 최상위 키. 현행 Incoming Webhook 은 앱
+# 설정에서 상속하므로 무시될 수 있다 (레거시 웹훅에서만 반영, 헤더 참고).
+if channel:
+    msg["channel"] = channel
+if username:
+    msg["username"] = username
+if icon_emoji:
+    msg["icon_emoji"] = icon_emoji
+if icon_url:
+    msg["icon_url"] = icon_url
+print(json.dumps(msg))
+' "$REPO" "$RUN_URL" "${SLACK_CHANNEL:-}" "${SLACK_USERNAME:-}" "${SLACK_ICON_EMOJI:-}" "${SLACK_ICON_URL:-}")"
 
 # ── ① 드라이런: 로컬 캡처 서버로 POST (웹훅 URL 불필요 — 수정 62) ────────────
 # 실 웹훅 시크릿이 없어도 알림 페이로드가 실제로 구성·전송되는지를 검증한다.

@@ -947,6 +947,16 @@
 - **검증**: rate-limiter-do **39/39** · 전체 unit 138파일 **2,698/2,698 PASS** · tsc 0 · prettier clean · 프로브 워커는 검증 후 삭제 (컨벤션)
 - **잔존 노트**: 서킷 맵에 `workers_ai`(내부 바인딩 pseudo-host) 존재 — 트립 시 robots.txt 프로브가 DNS 실패로 stuck-open 될 수 있는 사전 존재 이슈 (404-alive 와 무관, 별도 추적)
 
+### 수정 73: notify-pipeline-failure.sh 드라이런 페이로드 스키마 검증 + 채널/아이콘 커스터마이즈 (2026-08-15)
+- **작업 ID**: FIX-2026-08-15-21 (구현 + 테스트 + 실측)
+- **요청**: 드라이런 페이로드가 실제 Slack Incoming Webhook 스키마와 일치하는지 검증하고, 채널/아이콘 커스터마이즈 옵션 추가
+- **스키마 검증 (공식 문서 기준)**: Slack Incoming Webhook 최상위 `text`(필수 문자열) + `attachments[].color` + `attachments[].blocks`(Block Kit 배열) — 기존 페이로드가 이미 준수. self-test 의 payload_structure 검증을 **payload_schema 로 강화** (text 타입 · blocks 배열/section+context 구조 · 커스터마이즈 미설정 시 키 부재 단언)
+- **커스터마이즈 추가**: `SLACK_CHANNEL`(예: #deploy-alerts/@someone) · `SLACK_USERNAME` · `SLACK_ICON_EMOJI` · `SLACK_ICON_URL` — 설정된 필드만 최상위 키로 포함 (icon_emoji/icon_url 상호배타는 호출 측 책임)
+- **⚠️ 공식 문서 사실 명시**: docs.slack.dev 는 **현행 Incoming Webhook 이 channel/username/icon 오버라이드를 무시**하고 Slack 앱 설정에서 상속한다고 명시 — 위 필드는 레거시 웹훅에서만 반영. 헤더/주석에 명확히 문서화 (무해한 스키마 호환 필드, 무시돼도 알림 정상)
+- **테스트**: self-test **+1 (payload_customize) → 6/6** · 유닛 **+2** (커스터마이즈 키 포함/미포함) → 7/7
+- **실측**: 캡처 서버(:18082) 라이브 수신 — `channel=#deploy-alerts · username=ci-bot · icon_emoji=:rotating_light: · icon_url=None · text·danger 유지` exit 0
+- **검증**: 전체 unit 139 파일 **2,722/2,722 PASS** · tsc 0 · bash -n OK
+
 ### 수정 72: 드라이런 검증을 staging 디스패치에 연결 — CI 실패 시 [13] Notify 가 캡처 서버로 POST (2026-08-15)
 - **작업 ID**: FIX-2026-08-15-20 (구현 + 테스트 + 실측)
 - **요청**: 드라이런 검증을 staging 디스패치에 연결해, CI 실패 시 [13] 알림 스텝이 실제로 캡처 서버로 POST 하는지 workflow_run 로그로 확인

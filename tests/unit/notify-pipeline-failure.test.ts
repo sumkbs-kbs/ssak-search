@@ -105,11 +105,43 @@ describe.skipIf(!BASH_AVAILABLE)('notify-pipeline-failure.sh (웹훅 불필요 �
     expect(r.out).toContain('Slack 알림 전송됨 (danger)')
   })
 
-  it('--self-test 오프라인 회귀 5/5 통과', () => {
+  it('커스터마이즈: SLACK_CHANNEL/USERNAME/ICON_EMOJI 설정 시 페이로드에 최상위 키 포함 (Incoming Webhook 스키마)', () => {
+    const r = runNotify({
+      SLACK_DRY_RUN: '1',
+      SLACK_CHANNEL: '#deploy-alerts',
+      SLACK_USERNAME: 'ci-bot',
+      SLACK_ICON_EMOJI: ':rotating_light:',
+    })
+    expect(r.exit).toBe(0)
+    // 드라이런 출력에서 페이로드 JSON 을 추출해 스키마 필드 검증
+    const line = r.out.split('\n').find((l) => l.trim().startsWith('페이로드: '))
+    expect(line).toBeDefined()
+    const payload = JSON.parse(line!.split('페이로드: ', 2)[1]) as Record<string, unknown>
+    expect(payload.channel).toBe('#deploy-alerts')
+    expect(payload.username).toBe('ci-bot')
+    expect(payload.icon_emoji).toBe(':rotating_light:')
+    expect(payload.icon_url).toBeUndefined()
+    // 핵심 스키마: 최상위 text + attachments[0].color/blocks 유지
+    expect(typeof payload.text).toBe('string')
+    const att = (payload.attachments as Array<{ color: string; blocks: unknown[] }>)[0]
+    expect(att.color).toBe('danger')
+    expect(Array.isArray(att.blocks)).toBe(true)
+  })
+
+  it('커스터마이즈 미설정 → 최상위 커스터마이즈 키 부재 (기존 페이로드와 동일)', () => {
+    const r = runNotify({ SLACK_DRY_RUN: '1' })
+    const line = r.out.split('\n').find((l) => l.trim().startsWith('페이로드: '))
+    const payload = JSON.parse(line!.split('페이로드: ', 2)[1]) as Record<string, unknown>
+    for (const k of ['channel', 'username', 'icon_emoji', 'icon_url']) {
+      expect(payload[k]).toBeUndefined()
+    }
+  })
+
+  it('--self-test 오프라인 회귀 6/6 통과', () => {
     const out = execFileSync('bash', [SCRIPT, '--self-test'], {
       encoding: 'utf8',
       maxBuffer: 10 * 1024 * 1024,
     })
-    expect(out).toContain('all PASS (5/5)')
+    expect(out).toContain('all PASS (6/6)')
   })
 })

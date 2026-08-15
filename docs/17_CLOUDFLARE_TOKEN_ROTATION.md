@@ -203,6 +203,20 @@ bash scripts/watch-secret-rotation.sh --dry-run    # 감지만 — 디스패치 
   npx 래퍼로 Pages 실패 시나리오 실측 — 정확한 PREV_DO_VERSION 으로 롤백 호출
   확인 (이후 실제 rollback 으로 테스트 부작용 원상 복구).
 
+  **--auto-rollback ②: 번들 커밋 불일치 롤백 (2026-08-15, 수정 61)**: Pages 배포
+  직후 번들 커밋 검증(build_commit == 대상 SHA)이 실패하면 — DO+Pages 는 새
+  버전인데 배포 URL 번들이 대상 커밋을 담지 않은 스테일 상태 — cron/[6/6] 검증을
+  생략하고 **DO 와 Pages 를 이전 버전으로 자동 롤백**한다. 배포 전에 동일
+  브랜치의 직전 배포 ID(PREV_PAGES_ID)를 캡처해 두고, Pages 는 공식 Rollback
+  API(`POST /accounts/{acct}/pages/projects/search-engine-api/deployments/
+  {PREV_ID}/rollback` — 대시보드 'Rollback to this deployment' 와 동일)로
+  production 을 이전 배포로 전환한다. 토큰은 `CLOUDFLARE_API_TOKEN` 우선, 없으면
+  wrangler OAuth 토큰(`~/.wrangler/config/default.toml` oauth_token — pages:write
+  스코프)을 쓴다. **staging(preview) 은 Cloudflare 제약**('preview deployments are
+  not valid rollback targets' + 브랜치 최신 배포는 삭제 불가)으로 Pages 자동 롤백이
+  불가 — DO 는 롤백하고 Pages 는 올바른 번들로 재배포를 안내한다 (스테일 원인이
+  빌드 캐시면 `ISOLATED_BUILD=1` 권장).
+
   **배포 후 gold 회수 자동 검증 (2026-08-14)**: Pages 배포 성공 후
   `scripts/verify-deployed-gold.sh`가 6개 대표 gold 쿼리(kr-stock/zh-travel/
   en-fact/gk/en-tech/ja-news)를 배포 URL에 보내 top-10에서 gold 도메인 회수를

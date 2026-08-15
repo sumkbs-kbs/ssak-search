@@ -12,8 +12,14 @@
 #     commit   : 배포할 SHA (기본: 현재 HEAD)
 #     env      : production(기본) | staging
 #   --dry-run: 아무것도 실행하지 않고 실행 계획만 출력 (인자 순서 무관)
-#   --auto-rollback: Pages 배포 실패로 DO 가 새 버전만 남은 정합 불일치가 되면,
-#                    DO 를 배포 직전 버전으로 자동 롤백한다 (부분 배포 방지).
+#   --auto-rollback: 정합 불일치 시 이전 버전으로 자동 롤백한다 (부분 배포 방지):
+#                     ① Pages 배포 실패 → DO 만 새 버전 → DO 를 배포 직전 버전으로
+#                     ② **번들 커밋 검증 실패** (수정 61) → DO+Pages 가 새 버전인데 배포 URL
+#                       번들이 대상 커밋을 담지 않음 → DO 와 Pages 를 이전 버전으로.
+#                       Pages 롤백은 공식 Rollback API 를 쓴다 — production(브랜치 main)만
+#                       대상 (preview/staging 은 Cloudflare 제약으로 롤백 불가 — 재배포 권장).
+#                       토큰은 CLOUDFLARE_API_TOKEN 우선, 없으면 wrangler OAuth 토큰
+#                       (~/.wrangler/config/default.toml oauth_token) 사용.
 #   --self-test: 가짜 npx/curl 로 부분 배포 판정 + 자동 롤백 조건을 검증하는
 #                오프라인 회귀 테스트 (실제 배포 없음, node 불필요).
 #
@@ -137,9 +143,19 @@ case "${1:-}" in
       if [ "${FAKE_NPX_SCENARIO:-}" = "pages_fail" ]; then
         echo "✗ Error: pages deploy failed (simulated)" >&2; exit 1
       fi
-      echo "✨ Success! Deployment complete."; exit 0
+      echo "✨ Success! Deployment complete."
+      # bundle_mismatch 시나리오: 배포 URL 출력 → 번들 커밋 검증 발동 (수정 61)
+      if [ "${FAKE_NPX_SCENARIO:-}" = "bundle_mismatch" ]; then
+        echo "Deployment complete! https://abc12345.search-engine-api.pages.dev"
+      fi
+      exit 0
     fi
     if [ "${2:-}" = "deployment" ]; then
+      if [[ "$*" == *"--json"* ]]; then
+        # pages deployment list --json — 배포 전 PREV_PAGES_ID 캡처용
+        echo '[{"Id":"11111111-1111-4222-8333-444455556666","Environment":"Production","Branch":"main","Source":"prevsha","Deployment":"https://11111111.search-engine-api.pages.dev"}]'
+        exit 0
+      fi
       # pages deployment list — Source 커밋 검증용 테이블 행 (컬럼 5 = SHA)
       FULL="$(git rev-parse HEAD 2>/dev/null || echo 0000000000000000000000000000000000000000)"
       echo "│ $(date +%F) │ abc │ main │ ${FULL:0:7} │"
@@ -166,21 +182,31 @@ FAKEEOF
 
   cat > "$FAKE_BIN/curl" <<'FAKEEOF'
 #!/usr/bin/env bash
-# 셀프테스트용 가짜 curl — 헬스 확인(-w http_code)은 200, 그 외 no-op.
+# 셀프테스트용 가짜 curl:
+#   -w http_code (헬스 확인) → 200
+#   /api/health (번들 커밋 검증) → bundle_mismatch 시나리오만 불일치 SHA 반환
+#   -X POST (Pages Rollback API) → {"success":true}
 echo "curl $*" >> "${FAKE_NPX_LOG:?}"
-if [[ "$*" == *"-w"* ]]; then echo "200"; fi
+if [[ "$*" == *"-w"* ]]; then echo "200"; exit 0; fi
+if [[ "$*" == *"/api/health"* ]]; then
+  if [ "${FAKE_NPX_SCENARIO:-}" = "bundle_mismatch" ]; then echo '{"build_commit":"0000000"}'; fi
+  exit 0
+fi
+if [[ "$*" == *"-X POST"* ]]; then echo '{"success":true}'; exit 0; fi
 exit 0
 FAKEEOF
   chmod +x "$FAKE_BIN/curl"
 
   FAILURES=0
   run_scenario() {
-    local name="$1" opts="$2" expect_exit="$3" expect_rollback="$4"
+    local name="$1" opts="$2" expect_exit="$3" expect_rollback="$4" expect_pages_rollback="${5:-no}"
     : > "$FAKE_NPX_LOG"
     local out="$SELFTEST_TMP/$name.out"
     (
       export PATH="$FAKE_BIN:$PATH" FAKE_NPX_SCENARIO="$name"
       export GOLD_CHECK=0 EQ_CHECK=0 COMMIT_SYNC_CHECK=0 SELFTEST_TARGET_RUN=1
+      # Rollback API 경로를 결정적으로 만들기 위한 가짜 인증 (수정 61)
+      export CLOUDFLARE_ACCOUNT_ID=0123456789abcdef0123456789abcdef CLOUDFLARE_API_TOKEN=fake-token
       bash "$REPO_ROOT/scripts/deploy-local-worktree.sh" HEAD production $opts
     ) > "$out" 2>&1
     local got=$?
@@ -191,27 +217,35 @@ FAKEEOF
     else
       grep -q "wrangler rollback" "$FAKE_NPX_LOG" && ok=0
     fi
-    if [ "$ok" = "1" ]; then
-      echo " ✅ $name: exit=$got rollback=$expect_rollback"
+    if [ "$expect_pages_rollback" = "yes" ]; then
+      grep -q "curl .*rollback" "$FAKE_NPX_LOG" || ok=0
     else
-      echo " ❌ $name: exit=$got (기대 $expect_exit) rollback=$(grep -c 'wrangler rollback' "$FAKE_NPX_LOG" || true)건 (기대 $expect_rollback)"
+      grep -q "curl .*rollback" "$FAKE_NPX_LOG" && ok=0
+    fi
+    if [ "$ok" = "1" ]; then
+      echo " ✅ $name: exit=$got rollback=$expect_rollback pages_rollback=$expect_pages_rollback"
+    else
+      echo " ❌ $name: exit=$got (기대 $expect_exit) rollback=$(grep -c 'wrangler rollback' "$FAKE_NPX_LOG" || true)건 (기대 $expect_rollback) pages_rollback=$(grep -c 'curl .*rollback' "$FAKE_NPX_LOG" || true)건 (기대 $expect_pages_rollback)"
       tail -30 "$out" >&2
       FAILURES=$((FAILURES + 1))
     fi
   }
 
-  run_scenario pages_fail "--auto-rollback" 1 yes   # Pages 실패 → DO 자동 롤백 (PREV_DO_VERSION)
-  run_scenario pages_fail ""               1 no    # 플래그 없으면 롤백 안 함 (수동 안내만)
-  run_scenario cron_fail  ""               1 no    # DO+Pages 일치 — 롤백하면 오히려 틀림
-  run_scenario do_fail    ""               1 no    # 아무것도 배포 안 됨 — 롤백 대상 없음
-  run_scenario success    ""               0 no    # 전체 성공 — 롤백 없음, exit 0
+  run_scenario pages_fail "--auto-rollback" 1 yes no    # Pages 실패 → DO 자동 롤백 (PREV_DO_VERSION)
+  run_scenario pages_fail ""               1 no  no    # 플래그 없으면 롤백 안 함 (수동 안내만)
+  run_scenario cron_fail  ""               1 no  no    # DO+Pages 일치 — 롤백하면 오히려 틀림
+  run_scenario do_fail    ""               1 no  no    # 아무것도 배포 안 됨 — 롤백 대상 없음
+  run_scenario success    ""               0 no  no    # 전체 성공 — 롤백 없음, exit 0
+  # 번들 커밋 불일치 (수정 61): --auto-rollback → DO + Pages Rollback API 자동 롤백
+  run_scenario bundle_mismatch "--auto-rollback" 1 yes yes
+  run_scenario bundle_mismatch ""               1 no  no    # 플래그 없으면 롤백 없이 실패 보고만
 
   rm -rf "$SELFTEST_TMP"
   if [ "$FAILURES" != "0" ]; then
     echo " ❌ deploy-local-worktree.sh self-test FAIL: $FAILURES case(s) 실패"
     exit 1
   fi
-  echo " ✅ deploy-local-worktree.sh self-test: all PASS (5/5)"
+  echo " ✅ deploy-local-worktree.sh self-test: all PASS (7/7)"
   exit 0
 fi
 
@@ -323,7 +357,7 @@ if [ "$DRY_RUN" = 1 ]; then
   fi
   echo "   부분배포 : 각 단계 성공/실패를 추적해 중간 실패 시 상태를 요약 (DO 롤백 명령 포함)"
   if [ "$AUTO_ROLLBACK" = "1" ]; then
-    echo "   auto-rollback: Pages 실패 시 DO 를 이전 버전(${PREV_DO_VERSION:-알 수 없음})으로 자동 롤백 (--auto-rollback)"
+    echo "   auto-rollback: ① Pages 실패(DO 롤백) ② 번들 커밋 불일치(DO + production 은 Pages 까지 롤백) (--auto-rollback)"
   fi
   echo "   정리     : trap으로 worktree 제거 (실패 시에도)"
   echo ""
@@ -341,6 +375,23 @@ trap cleanup EXIT
 # ── 배포 전 이전 DO 버전 캡처 (부분 배포 시 롤백 안내용) ─────────────────
 PREV_DO_VERSION="$(npx wrangler deployments list --config=wrangler.do.jsonc 2>/dev/null | grep -m1 'Version(s):' | grep -oE '[0-9a-f]{8}-[0-9a-f-]{27}' | head -1 || true)"
 echo "   이전 DO 버전: ${PREV_DO_VERSION:-알 수 없음}"
+
+# ── 배포 전 이전 Pages 배포 ID 캡처 (번들 커밋 불일치 자동 롤백용, 수정 61) ──
+# 같은 브랜치의 직전 배포 = 이번 배포의 '이전' (Rollback API 대상). 프로젝트에
+# staging/production 이 혼재하므로 --json 의 Branch 필드로 같은 브랜치만 뽑는다.
+PREV_PAGES_ID="$(npx wrangler pages deployment list --project-name=search-engine-api --json 2>/dev/null | python3 -c "
+import json, sys
+try:
+    d = json.load(sys.stdin)
+except Exception:
+    sys.exit(0)
+branch = '$PAGES_BRANCH'
+for dep in d:
+    if dep.get('Branch') == branch:
+        print(dep.get('Id', ''))
+        break
+" 2>/dev/null || true)"
+echo "   이전 Pages 배포: ${PREV_PAGES_ID:-알 수 없음}"
 
 echo " [1/6] worktree 생성: $WORKTREE_DIR"
 if [ -d "$WORKTREE_DIR" ]; then
@@ -407,6 +458,7 @@ fi
 # ── ② Pages 배포 ────────────────────────────────────────────────────────
 PAGES_DEPLOY_URL=""
 PAGES_BUNDLE_OK=2  # 0=실패 1=통과 2=검증 생략 (URL 미추출 등)
+ROLLBACK_PENDING=0  # 번들 커밋 불일치 + --auto-rollback → cron/[6/6] 생략 후 롤백
 if [ "$DO_DEPLOYED" = "1" ]; then
   echo " [4/6] ② Pages 배포 (branch=$PAGES_BRANCH)"
   # ⚠️ "Uploaded 0 files (3 already uploaded)"는 스테일이 아님 — 카운트는 정적
@@ -440,6 +492,10 @@ print(h.get("build_commit",""))' 2>/dev/null || echo '')"
         PAGES_BUNDLE_OK=0
         echo " ❌ 번들 커밋 불일치: 배포 URL build_commit='${BUNDLE_COMMIT:-비어있음}' vs 대상 $SHORT_SHA" >&2
         echo "    배포된 번들이 스테일일 수 있습니다 — deployment list Source 와 대조 후 재배포 권장." >&2
+        if [ "$AUTO_ROLLBACK" = "1" ]; then
+          ROLLBACK_PENDING=1
+          echo "    --auto-rollback: DO + Pages 를 이전 버전으로 되돌립니다 (cron/검증 생략, 아래)." >&2
+        fi
       fi
     else
       echo " ⚠️  배포 URL 추출 실패 — 번들 커밋 검증 생략 (수동: wrangler pages deployment list)" >&2
@@ -451,7 +507,9 @@ print(h.get("build_commit",""))' 2>/dev/null || echo '')"
 fi
 
 # ── ③ cron 스케줄러 배포 ────────────────────────────────────────────────
-if [ "$PAGES_DEPLOYED" = "1" ]; then
+# 번들 커밋 불일치 + auto-rollback 이면 cron 은 배포하지 않는다 — DO/Pages 를
+# 이전 버전으로 되돌릴 예정이므로 새 버전 cron 을 남기면 오히려 정합이 깨진다.
+if [ "$PAGES_DEPLOYED" = "1" ] && [ "$ROLLBACK_PENDING" = "0" ]; then
   echo " [5/6] ③ cron 스케줄러 배포 ($CRON_CONFIG)"
   if npx wrangler deploy --config="$CRON_CONFIG" 2>&1 | grep -E 'Uploaded|Current Version ID'; then
     CRON_DEPLOYED=1
@@ -461,10 +519,10 @@ if [ "$PAGES_DEPLOYED" = "1" ]; then
   fi
 fi
 
-# ── Source commit 검증 (Pages가 배포된 경우에만) ────────────────────────
+# ── Source commit 검증 (Pages가 배포된 경우에만 — 롤백 예정이면 생략) ────
 PAGES_COMMIT_OK=0
 GOLD_OK=0
-if [ "$PAGES_DEPLOYED" = "1" ]; then
+if [ "$PAGES_DEPLOYED" = "1" ] && [ "$ROLLBACK_PENDING" = "0" ]; then
   echo " [6/6] 배포 검증"
   cd "$REPO_ROOT"
   sleep 5
@@ -571,6 +629,8 @@ if [ "$DO_DEPLOYED" = "1" ] && [ "$PAGES_DEPLOYED" = "1" ] && [ "$CRON_DEPLOYED"
     echo "   번들 커밋 검증: ❌ 불일치 (아래 참조) — 배포는 완료됐지만 배포 URL 번들이 스테일일 수 있음"
   fi
   echo "   로그: npx wrangler tail ssak-do-worker --config wrangler.do.jsonc"
+elif [ "$ROLLBACK_PENDING" = "1" ]; then
+  echo " ⚠️  번들 커밋 불일치 — DO + Pages 를 이전 버전으로 되돌립니다 (아래)"
 elif [ "$DO_DEPLOYED" = "1" ] && [ "$PAGES_DEPLOYED" = "1" ] && [ "$CRON_DEPLOYED" = "0" ]; then
   echo " ⚠️  부분 배포: DO + Pages 는 $SHORT_SHA, cron 만 이전 버전"
   echo "    다음 중 하나를 진행하세요:"
@@ -596,24 +656,87 @@ else
 fi
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 
-# ── --auto-rollback: Pages 실패 시 DO 를 이전 버전으로 자동 롤백 ────────────
-# 정합 불일치(DO=새 버전, Pages=이전)일 때만 롤백이 옳다 — cron 실패(DO+Pages
-# 일치)나 DO 실패(아무것도 배포 안 됨)에서는 롤백하지 않는다. 롤백 대상은
+# ── 롤백 헬퍼: DO 를 배포 직전 버전으로 (wrangler rollback) ───────────────
 # 배포 전에 캡처한 PREV_DO_VERSION (배포 직전 최신 = 이번 배포의 '이전').
+rollback_do() {
+  local reason="$1"
+  if [ -n "${PREV_DO_VERSION:-}" ]; then
+    if npx wrangler rollback "$PREV_DO_VERSION" --config=wrangler.do.jsonc \
+      -m "auto-rollback by deploy-local-worktree.sh: $reason ($SHORT_SHA → $ENV_NAME)" 2>&1 | tail -3; then
+      DO_ROLLED_BACK=1
+      echo " ✅ DO 롤백 완료 → ${PREV_DO_VERSION}"
+      return 0
+    fi
+    echo " ❌ DO 롤백 실패 — 수동 롤백 필요: npx wrangler rollback $PREV_DO_VERSION --config=wrangler.do.jsonc" >&2
+    return 1
+  fi
+  echo " ⚠️  이전 DO 버전을 확인하지 못해 자동 롤백 생략 — 수동: npx wrangler rollback --config=wrangler.do.jsonc" >&2
+  return 1
+}
+
+# ── 롤백 헬퍼: Pages 를 이전 배포로 (공식 Rollback API, 수정 61) ────────────
+# POST /accounts/{acct}/pages/projects/{proj}/deployments/{target}/rollback —
+# 대시보드 'Rollback to this deployment' 와 동일한 엔드포인트. target 은 이번
+# 배포 직전의 동일 브랜치 배포 ID (PREV_PAGES_ID). 토큰은 CLOUDFLARE_API_TOKEN
+# 우선, 없으면 wrangler OAuth 토큰(~/.wrangler/config/default.toml oauth_token —
+# pages:write 스코프 포함). Cloudflare 제약상 **production(브랜치 main) 배포만**
+# Rollback 대상 (preview/staging 은 불가 — 'preview deployments are not valid
+# rollback targets'). 호출부에서 production 전용으로 게이트한다.
+rollback_pages() {
+  local target="$1"
+  local token="${CLOUDFLARE_API_TOKEN:-}"
+  local acct="${CLOUDFLARE_ACCOUNT_ID:-}"
+  if [ -z "$token" ]; then
+    token="$(sed -n 's/^[[:space:]]*oauth_token[[:space:]]*=[[:space:]]*"\([^"]*\)".*/\1/p' "$HOME/.wrangler/config/default.toml" 2>/dev/null | head -1)"
+  fi
+  if [ -z "$acct" ]; then
+    acct="$(npx wrangler whoami 2>/dev/null | grep -oE '[0-9a-f]{32}' | head -1)"
+  fi
+  if [ -z "$token" ] || [ -z "$acct" ]; then
+    echo " ⚠️  Pages 롤백에 필요한 인증 정보 없음 (CLOUDFLARE_API_TOKEN/CLOUDFLARE_ACCOUNT_ID 또는 wrangler OAuth) — 수동 롤백 필요:" >&2
+    echo "    curl -X POST \"https://api.cloudflare.com/client/v4/accounts/<ACCOUNT_ID>/pages/projects/search-engine-api/deployments/$target/rollback\" \" -H 'Authorization: Bearer <TOKEN>'" >&2
+    echo "    (또는 대시보드: Deployments → 해당 배포 ⋯ → Rollback to this deployment)" >&2
+    return 1
+  fi
+  local resp
+  resp="$(curl -s -m 30 -X POST "https://api.cloudflare.com/client/v4/accounts/$acct/pages/projects/search-engine-api/deployments/$target/rollback" \
+    -H "Authorization: Bearer $token" -H 'Content-Type: application/json' 2>&1 || true)"
+  if printf '%s' "$resp" | grep -q '"success"[[:space:]]*:[[:space:]]*true'; then
+    echo " ✅ Pages 롤백 완료 → $target (이전 배포로 production 전환)"
+    return 0
+  fi
+  echo " ❌ Pages 롤백 실패: $(printf '%s' "$resp" | head -c 300)" >&2
+  return 1
+}
+
+# ── --auto-rollback ①: Pages 배포 실패 → DO 만 이전 버전으로 ───────────────
+# 정합 불일치(DO=새 버전, Pages=이전)일 때만 롤백이 옳다 — cron 실패(DO+Pages
+# 일치)나 DO 실패(아무것도 배포 안 됨)에서는 롤백하지 않는다.
 DO_ROLLED_BACK=0
+PAGES_ROLLED_BACK=0
 if [ "$AUTO_ROLLBACK" = "1" ] && [ "$DO_DEPLOYED" = "1" ] && [ "$PAGES_DEPLOYED" = "0" ]; then
   echo ""
   echo " [자동 롤백] Pages 배포 실패 → DO 를 이전 버전으로 되돌립니다"
-  if [ -n "${PREV_DO_VERSION:-}" ]; then
-    if npx wrangler rollback "$PREV_DO_VERSION" --config=wrangler.do.jsonc \
-      -m "auto-rollback by deploy-local-worktree.sh: Pages deploy failed ($SHORT_SHA → $ENV_NAME)" 2>&1 | tail -3; then
-      DO_ROLLED_BACK=1
-      echo " ✅ DO 롤백 완료 → ${PREV_DO_VERSION}"
+  rollback_do "Pages deploy failed"
+fi
+
+# ── --auto-rollback ②: 번들 커밋 불일치 → DO + Pages 를 이전 버전으로 (수정 61) ──
+# DO+Pages 는 새 버전인데 배포 URL 번들이 대상 커밋을 담지 않음(스테일) — 두
+# 컴포넌트 모두 이전 버전으로 되돌린다. Pages 롤백은 production(Rollback API
+# 대상)만 자동 — staging(preview) 은 Cloudflare 제약상 불가라 재배포를 안내한다.
+if [ "$AUTO_ROLLBACK" = "1" ] && [ "$ROLLBACK_PENDING" = "1" ]; then
+  echo ""
+  echo " [자동 롤백] 번들 커밋 불일치 (배포 URL 번들이 $SHORT_SHA 미포함) → DO + Pages 를 이전 버전으로 되돌립니다"
+  rollback_do "bundle commit mismatch"
+  if [ "$ENV_NAME" = "production" ]; then
+    if [ -n "${PREV_PAGES_ID:-}" ]; then
+      rollback_pages "$PREV_PAGES_ID" && PAGES_ROLLED_BACK=1
     else
-      echo " ❌ DO 롤백 실패 — 수동 롤백 필요: npx wrangler rollback $PREV_DO_VERSION --config=wrangler.do.jsonc" >&2
+      echo " ⚠️  이전 Pages 배포 ID 를 확인하지 못해 Pages 롤백 생략 — 수동: 대시보드 Deployments → Rollback" >&2
     fi
   else
-    echo " ⚠️  이전 DO 버전을 확인하지 못해 자동 롤백 생략 — 수동: npx wrangler rollback --config=wrangler.do.jsonc" >&2
+    echo " ⚠️  staging(preview) 은 Pages Rollback 대상 불가 (Cloudflare 제약 — 'preview deployments are not valid rollback targets') — Pages 는 스테일 배포 유지:" >&2
+    echo "    올바른 번들로 재배포: bash scripts/deploy-local-worktree.sh $SHORT_SHA staging (스테일 원인: 빌드 캐시 의심 → ISOLATED_BUILD=1 권장)" >&2
   fi
 fi
 

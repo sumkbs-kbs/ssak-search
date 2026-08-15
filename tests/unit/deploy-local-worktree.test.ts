@@ -122,10 +122,12 @@ describe.skipIf(!BASH_AVAILABLE)('deploy-local-worktree.sh --dry-run (오프라�
     expect(r.out).toContain('(GOLD_FAIL_HARD=1)')
   })
 
-  it('--auto-rollback 이면 자동 롤백 계획을 출력한다', () => {
+  it('--auto-rollback 이면 자동 롤백 계획을 출력한다 (Pages 실패 + 번들 불일치, 수정 61)', () => {
     const r = runDryRun(['--dry-run', '--auto-rollback'])
     expect(r.exit).toBe(0)
-    expect(r.out).toContain('auto-rollback: Pages 실패 시 DO 를 이전 버전')
+    expect(r.out).toContain(
+      'auto-rollback: ① Pages 실패(DO 롤백) ② 번들 커밋 불일치(DO + production 은 Pages 까지 롤백)',
+    )
     expect(r.out).toContain('(--auto-rollback)')
   })
 

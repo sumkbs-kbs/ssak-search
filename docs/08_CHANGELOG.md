@@ -892,6 +892,19 @@
 - **검증**: rate-limiter-do **37/37** (SE 방안 A 패턴과 동일 구조) · 전체 unit 136파일 **2,687/2,687 PASS** · tsc 0 · eslint 0 · prettier clean
 - **산출물**: scripts/probe-wiki-egress-worker.ts 에 `dbpedia_lookup`/`dbpedia_robots`/`dbpedia_root` 케이스 추가 (재사용 가능, 프로브 후 삭제 컨벤션)
 
+### 수정 61: build_commit 검증 실패 시 DO+Pages 자동 롤백 — --auto-rollback 연동 (2026-08-15)
+- **작업 ID**: FIX-2026-08-15-09 (구현 + 테스트)
+- **요청**: build_commit 검증 실패 시 자동으로 DO/Pages 를 이전 버전으로 롤백하도록 --auto-rollback 과 연동
+- **배경**: 수정 56 의 번들 커밋 검증은 불일치 시 exit 1 로 보고만 했고 롤백은 없었다 — DO+Pages 가 새 버전인데 배포 URL 번들이 대상 커밋을 담지 않은(스테일) 정합 불일치가 남을 수 있음
+- **수정** (`scripts/deploy-local-worktree.sh`):
+  - **PREV_PAGES_ID 캡처** — 배포 전 `wrangler pages deployment list --json` 으로 동일 브랜치 직전 배포 ID 를 캡처 (staging/production 혼재 대비 Branch 필터)
+  - **ROLLBACK_PENDING 플래그** — 번들 검증 실패 + --auto-rollback 이면 cron/[6/6] 검증을 **생략**하고 롤백으로 직행 (새 버전 cron 을 남기면 오히려 정합 파괴)
+  - **rollback_pages 헬퍼** — 공식 Rollback API `POST /accounts/{acct}/pages/projects/search-engine-api/deployments/{PREV_ID}/rollback` (대시보드 'Rollback to this deployment' 와 동일). 토큰: `CLOUDFLARE_API_TOKEN` 우선 → wrangler OAuth 토큰(`~/.wrangler/config/default.toml` oauth_token, pages:write 스코프) 폴백. DO 롤백은 기존 `rollback_do` 로 통합
+  - **제약 명시**: Cloudflare 상 preview(staging) 배포는 Rollback 대상 불가('preview deployments are not valid rollback targets') + 브랜치 최신 배포는 삭제 불가 → staging 은 DO 만 롤백하고 Pages 는 재배포 안내 (`ISOLATED_BUILD=1` 권장)
+- **테스트**: 셀프테스트 **5/5 → 7/7** — `bundle_mismatch` 시나리오 신규 (가짜 pages deploy 가 배포 URL 출력 → 가짜 curl 이 불일치 build_commit 반환 → DO `wrangler rollback` + Pages `curl -X POST .../rollback` 둘 다 호출 단언 + 플래그 없으면 롤백 없이 exit 1). 유닛 드라이런 단언 문구 갱신 (8건)
+- **검증**: bash -n OK · 셀프테스트 7/7 · deploy-local-worktree.test.ts 8/8 · 전체 unit 136파일 **2,687/2,687 PASS** · tsc 0 · prettier clean · 수동 시뮬레이션으로 전체 흐름 확인 (PREV 캡처 → 번들 불일치 → cron/검증 생략 → DO+Pages 롤백 → 정리)
+- **문서**: docs/17 §5 --auto-rollback 절에 ② 번들 불일치 롤백 + staging 제약 추가
+
 ### 수정 29: 배포 파이프라인 자동 검증 확장 — gold 회수 + staging↔production 동치 대조 (2026-08-14)
 - **작업 ID**: FIX-2026-08-14-12 (구현 + 실측)
 - **배경**: 로컬 worktree 배포 스크립트(수정 27)에 검증 단계 추가 — 배포 후 "동작하는가"를 자동 확인

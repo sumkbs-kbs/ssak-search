@@ -131,6 +131,21 @@ describe.skipIf(!BASH_AVAILABLE)('deploy-local-worktree.sh --dry-run (오프라�
     expect(r.out).toContain('(--auto-rollback)')
   })
 
+  it('--rollback-e2e 드라이런: 라이브 롤백 검증 계획을 출력한다 (수정 75)', () => {
+    const r = runDryRun(['--dry-run', '--rollback-e2e'])
+    expect(r.exit).toBe(0)
+    expect(r.out).toContain('rollback-e2e: 의도적 번들 불일치(E2E_FORCE_BUNDLE_MISMATCH=1) 후 DO + Pages Rollback API 자동 복구를 라이브 검증')
+    // --rollback-e2e 는 --auto-rollback 을 내포한다
+    expect(r.out).toContain('auto-rollback:')
+  })
+
+  it('--rollback-e2e 는 staging 에서 거부된다 (preview 는 Rollback 대상 불가, 수정 75)', () => {
+    const r = runDryRun(['--dry-run', '--rollback-e2e', 'staging'])
+    expect(r.exit).toBe(1)
+    expect(r.out).toContain('--rollback-e2e 는 production 전용')
+    expect(r.out).toContain('preview deployments are not valid rollback targets')
+  })
+
   it('ISOLATED_BUILD=1 이면 심링크 대신 worktree 내부 npm ci 격리 계획을 출력한다', () => {
     const r = runDryRun(['--dry-run'], { ISOLATED_BUILD: '1' })
     expect(r.exit).toBe(0)

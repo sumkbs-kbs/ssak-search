@@ -158,6 +158,8 @@ case "${1:-}" in
     if [ "${2:-}" = "deployment" ]; then
       if [[ "$*" == *"--json"* ]]; then
         # pages deployment list --json — 배포 전 PREV_PAGES_ID 캡처용
+        # rollback_e2e 시나리오 (수정 75): 첫 호출(배포 전 PREV 캡처)은 이전 배포
+        # ID, 롤백 후 복구 대조 호출도 같은 ID 를 반환해 '복구 확인' 을 성공시킨다.
         echo '[{"Id":"11111111-1111-4222-8333-444455556666","Environment":"Production","Branch":"main","Source":"prevsha","Deployment":"https://11111111.search-engine-api.pages.dev"}]'
         exit 0
       fi
@@ -260,29 +262,76 @@ FAKEEOF
   run_scenario bundle_mismatch "--auto-rollback" 1 yes yes
   run_scenario bundle_mismatch ""               1 no  no    # 플래그 없으면 롤백 없이 실패 보고만
 
+  # rollback-e2e (수정 75): staging 거부 게이트 — production 만 허용.
+  : > "$FAKE_NPX_LOG"
+  if (
+    export PATH="$FAKE_BIN:$PATH" FAKE_NPX_SCENARIO=bundle_mismatch
+    export GOLD_CHECK=0 EQ_CHECK=0 COMMIT_SYNC_CHECK=0 SELFTEST_TARGET_RUN=1
+    export CLOUDFLARE_ACCOUNT_ID=0123456789abcdef0123456789abcdef CLOUDFLARE_API_TOKEN=fake-token
+    bash "$REPO_ROOT/scripts/deploy-local-worktree.sh" HEAD staging --rollback-e2e
+  ) > "$SELFTEST_TMP/e2e-staging.out" 2>&1; then
+    echo " ❌ rollback_e2e_staging: staging --rollback-e2e 가 거부되지 않음 (production 전용이어야 함)" >&2
+    FAILURES=$((FAILURES + 1))
+  else
+    echo " ✅ rollback_e2e_staging: staging --rollback-e2e 거부 (production 전용 게이트)"
+  fi
+
+  # rollback-e2e 성공 경로: bundle_mismatch 시나리오 + E2E 훅 → DO+Pages 롤백 →
+  # 최신 배포 대조(PREV_PAGES_ID) → exit 1 (번들 불일치이므로 — 롤백 복구 확인은 별도 메시지).
+  : > "$FAKE_NPX_LOG"
+  E2E_OUT="$SELFTEST_TMP/e2e.out"
+  (
+    export PATH="$FAKE_BIN:$PATH" FAKE_NPX_SCENARIO=bundle_mismatch
+    export GOLD_CHECK=0 EQ_CHECK=0 COMMIT_SYNC_CHECK=0 SELFTEST_TARGET_RUN=1
+    export E2E_FORCE_BUNDLE_MISMATCH=1
+    export CLOUDFLARE_ACCOUNT_ID=0123456789abcdef0123456789abcdef CLOUDFLARE_API_TOKEN=fake-token
+    bash "$REPO_ROOT/scripts/deploy-local-worktree.sh" HEAD production --rollback-e2e
+  ) > "$E2E_OUT" 2>&1
+  E2E_RC=$?
+  E2E_OK=1
+  grep -q "wrangler rollback 0532d4a2-1111-4222-8333-444455556666" "$FAKE_NPX_LOG" || E2E_OK=0
+  grep -q "curl .*rollback" "$FAKE_NPX_LOG" || E2E_OK=0
+  grep -q "E2E_FORCE_BUNDLE_MISMATCH=1 — 번들 커밋 검증을 의도적으로 불일치로 취급" "$E2E_OUT" || E2E_OK=0
+  grep -q "rollback-e2e: Pages 최신 배포 == 이전 배포(11111111-1111-4222-8333-444455556666)" "$E2E_OUT" || E2E_OK=0
+  if [ "$E2E_OK" = "1" ] && [ "$E2E_RC" = "1" ]; then
+    echo " ✅ rollback_e2e: DO+Pages 롤백 + 최신 배포==PREV 복구 대조 확인 (exit 1 = 번들 불일치 보고)"
+  else
+    echo " ❌ rollback_e2e: rc=$E2E_RC 복구대조=$(grep -c '최신 배포 == 이전 배포' "$E2E_OUT" || true)건" >&2
+    tail -30 "$E2E_OUT" >&2
+    FAILURES=$((FAILURES + 1))
+  fi
+
   rm -rf "$SELFTEST_TMP"
   if [ "$FAILURES" != "0" ]; then
     echo " ❌ deploy-local-worktree.sh self-test FAIL: $FAILURES case(s) 실패"
     exit 1
   fi
-  echo " ✅ deploy-local-worktree.sh self-test: all PASS (7/7)"
+  echo " ✅ deploy-local-worktree.sh self-test: all PASS (9/9)"
   exit 0
 fi
 
-# ── 인자 파싱 (commit/env/--dry-run/--auto-rollback 순서 무관) ────────────
+# ── 인자 파싱 (commit/env/--dry-run/--auto-rollback/--rollback-e2e 순서 무관) ─
 DRY_RUN=0
 AUTO_ROLLBACK=0
+ROLLBACK_E2E=0
 TARGET_COMMIT="HEAD"
 ENV_NAME="production"
 for arg in "$@"; do
   case "$arg" in
     --dry-run) DRY_RUN=1 ;;
     --auto-rollback) AUTO_ROLLBACK=1 ;;
+    --rollback-e2e) ROLLBACK_E2E=1 ;;
     production|staging) ENV_NAME="$arg" ;;
-    -*) echo " ❌ 알 수 없는 옵션: $arg (지원: [commit] [production|staging] [--dry-run] [--auto-rollback] [--self-test])" >&2; exit 1 ;;
+    -*) echo " ❌ 알 수 없는 옵션: $arg (지원: [commit] [production|staging] [--dry-run] [--auto-rollback] [--rollback-e2e] [--self-test])" >&2; exit 1 ;;
     *) TARGET_COMMIT="$arg" ;;
   esac
 done
+
+# 수정 75: --rollback-e2e 는 자동 롤백을 내포한다 (실패 시 복구를 검증하는 것이
+# 목적이므로 플래그 없이 롤백이 일어나면 테스트가 무의미하다).
+if [ "$ROLLBACK_E2E" = "1" ]; then
+  AUTO_ROLLBACK=1
+fi
 
 case "$ENV_NAME" in
   production)
@@ -301,10 +350,22 @@ case "$ENV_NAME" in
     ;;
 esac
 
+# 수정 75: --rollback-e2e 는 Pages Rollback API 를 라이브 검증하는 테스트 모드 —
+# staging(preview) 배포는 Cloudflare 제약상 Rollback 대상이 될 수 없다
+# ('preview deployments are not valid rollback targets'). production 에서만 허용.
+if [ "$ROLLBACK_E2E" = "1" ] && [ "$ENV_NAME" != "production" ]; then
+  echo " ❌ --rollback-e2e 는 production 전용입니다 — staging(preview) 배포는 Pages Rollback API 대상이 될 수 없습니다 (Cloudflare 제약: 'preview deployments are not valid rollback targets')." >&2
+  echo "    staging 에서는 DO 롤백만 검증하려면 --auto-rollback 을 쓰세요 (Pages 는 재배포 안내)." >&2
+  exit 1
+fi
+
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo " 로컬 worktree 배포 시작$([ "$DRY_RUN" = 1 ] && echo ' (DRY-RUN — 실행 안 함)')"
 echo "   커밋 : $TARGET_COMMIT"
 echo "   환경 : $ENV_NAME (Pages branch=$PAGES_BRANCH, cron=$CRON_CONFIG)"
+if [ "$ROLLBACK_E2E" = "1" ]; then
+  echo "   모드 : --rollback-e2e (Pages Rollback API 라이브 검증 — 의도적 번들 불일치 후 자동 복구 확인)"
+fi
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 
 # ── 0. 사전 확인 ────────────────────────────────────────────────────────
@@ -380,6 +441,9 @@ if [ "$DRY_RUN" = 1 ]; then
   echo "   부분배포 : 각 단계 성공/실패를 추적해 중간 실패 시 상태를 요약 (DO 롤백 명령 포함)"
   if [ "$AUTO_ROLLBACK" = "1" ]; then
     echo "   auto-rollback: ① Pages 실패(DO 롤백) ② 번들 커밋 불일치(DO + production 은 Pages 까지 롤백) (--auto-rollback)"
+  fi
+  if [ "$ROLLBACK_E2E" = "1" ]; then
+    echo "   rollback-e2e: 의도적 번들 불일치(E2E_FORCE_BUNDLE_MISMATCH=1) 후 DO + Pages Rollback API 자동 복구를 라이브 검증 (수정 75)"
   fi
   echo "   정리     : trap으로 worktree 제거 (실패 시에도)"
   echo ""
@@ -533,6 +597,14 @@ if [ "$DO_DEPLOYED" = "1" ]; then
       BUNDLE_COMMIT="$(curl -s -m 20 "$PAGES_DEPLOY_URL/api/health" | python3 -c 'import json,sys
 h=json.load(sys.stdin)
 print(h.get("build_commit",""))' 2>/dev/null || echo '')"
+      # 수정 75 (--rollback-e2e): E2E_FORCE_BUNDLE_MISMATCH=1 이면 실제 검증 결과와
+      # 무관하게 번들 커밋을 **의도적으로 불일치로 취급**한다 — 배포는 정상 수행됐지만
+      # Rollback API 의 자동 복구 경로를 라이브로 발동시키기 위한 테스트 훅. 실제
+      # 배포에는 영향 없음 (이미 새 버전으로 배포됨 — 롤백으로 되돌려질 뿐).
+      if [ "${E2E_FORCE_BUNDLE_MISMATCH:-0}" = "1" ]; then
+        echo "   (rollback-e2e) E2E_FORCE_BUNDLE_MISMATCH=1 — 번들 커밋 검증을 의도적으로 불일치로 취급 (테스트 훅)" >&2
+        BUNDLE_COMMIT="e2e-forced-mismatch"
+      fi
       if [ "$BUNDLE_COMMIT" = "$FULL_SHA" ]; then
         PAGES_BUNDLE_OK=1
         echo "   ✅ 번들 커밋 검증: $PAGES_DEPLOY_URL → build_commit=$SHORT_SHA (배포된 번들이 대상 커밋 포함)"
@@ -789,6 +861,45 @@ if [ "$AUTO_ROLLBACK" = "1" ] && [ "$ROLLBACK_PENDING" = "1" ]; then
   else
     echo " ⚠️  staging(preview) 은 Pages Rollback 대상 불가 (Cloudflare 제약 — 'preview deployments are not valid rollback targets') — Pages 는 스테일 배포 유지:" >&2
     echo "    올바른 번들로 재배포: bash scripts/deploy-local-worktree.sh $SHORT_SHA staging (스테일 원인: 빌드 캐시 의심 → ISOLATED_BUILD=1 권장)" >&2
+  fi
+fi
+
+# ── --rollback-e2e: Pages Rollback API 라이브 검증 (수정 75) ───────────────
+# 의도적 불일치(E2E_FORCE_BUNDLE_MISMATCH) → 자동 롤백 발동 → 위에서 DO+Pages
+# 롤백 실행. 여기서 **복구가 실제로 적용됐는지** 확인한다: Rollback API 가
+# success 를 반환했고(PAGES_ROLLED_BACK), DO 롤백도 성공했으며, production 의
+# 최신 배포가 PREV_PAGES_ID 로 복귀했는지 deployment list 로 대조한다. 검증
+# 실패 시 수동 롤백 지침을 남기고 exit 1 (배포된 채 방치 금지).
+E2E_ROLLBACK_OK=0
+if [ "$ROLLBACK_E2E" = "1" ] && [ "$ROLLBACK_PENDING" = "1" ]; then
+  echo ""
+  echo " [rollback-e2e] Pages Rollback API 라이브 검증 — 복구 상태 확인"
+  if [ "$PAGES_ROLLED_BACK" != "1" ]; then
+    echo " ❌ Pages Rollback API 가 success 를 반환하지 않음 (수동 확인 필요)" >&2
+    echo "    대시보드: Deployments → ⋯ → Rollback to this deployment ($PREV_PAGES_ID)" >&2
+  elif [ "$DO_ROLLED_BACK" != "1" ]; then
+    echo " ❌ DO 롤백이 적용되지 않음 (수동: npx wrangler rollback $PREV_DO_VERSION --config=wrangler.do.jsonc)" >&2
+  else
+    # 최신 production 배포 == PREV_PAGES_ID 대조 — Rollback API 가 이전 배포로
+    # 전환했는지 배포 목록으로 확인한다.
+    E2E_LATEST_ID="$(npx wrangler pages deployment list --project-name=search-engine-api --json 2>/dev/null | python3 -c 'import json,sys
+try:
+  d=json.load(sys.stdin)
+  print(d[0].get("Id",""))
+except Exception:
+  print("")
+' 2>/dev/null || echo '')"
+    if [ -n "$E2E_LATEST_ID" ] && [ "$E2E_LATEST_ID" = "$PREV_PAGES_ID" ]; then
+      E2E_ROLLBACK_OK=1
+      echo " ✅ rollback-e2e: Pages 최신 배포 == 이전 배포($PREV_PAGES_ID) — Rollback API 로 복구 확인"
+    else
+      echo " ❌ rollback-e2e: Pages 최신 배포(${E2E_LATEST_ID:-알 수 없음}) != 이전 배포($PREV_PAGES_ID) — 복구 미적용" >&2
+      echo "    수동: 대시보드 Deployments → Rollback to this deployment ($PREV_PAGES_ID)" >&2
+    fi
+  fi
+  if [ "$E2E_ROLLBACK_OK" != "1" ]; then
+    echo " ❌ rollback-e2e 실패 — 배포된 새 버전을 그대로 두지 않도록 수동 롤백 후 재검증하세요." >&2
+    exit 1
   fi
 fi
 

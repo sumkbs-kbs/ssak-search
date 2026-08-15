@@ -947,6 +947,19 @@
 - **검증**: rate-limiter-do **39/39** · 전체 unit 138파일 **2,698/2,698 PASS** · tsc 0 · prettier clean · 프로브 워커는 검증 후 삭제 (컨벤션)
 - **잔존 노트**: 서킷 맵에 `workers_ai`(내부 바인딩 pseudo-host) 존재 — 트립 시 robots.txt 프로브가 DNS 실패로 stuck-open 될 수 있는 사전 존재 이슈 (404-alive 와 무관, 별도 추적)
 
+### 수정 75: Pages Rollback API 라이브 검증 테스트 모드 — --rollback-e2e (2026-08-15)
+- **작업 ID**: FIX-2026-08-15-23 (설계 + 구현 + 테스트)
+- **요청**: 수정 61 의 Pages Rollback API 호출을 실제로 검증할 수 있는 안전한 방법 설계 (배포 직전 임시 의도적 불일치 → 실패 시 자동 복구 확인)
+- **설계 원칙**: Rollback API 는 성공한 **production 배포만** 대상 (Cloudflare docs — preview/staging 은 'preview deployments are not valid rollback targets'). 실제 라이브 검증은 production 에서만 가능하므로, **의도적 불일치 + 자동 복구 확인** 구조로 안전하게 설계
+- **구현** (`scripts/deploy-local-worktree.sh`):
+  - **`--rollback-e2e` 플래그** — `--auto-rollback` 내포. **production 전용 강제** (staging 이면 거부 + 제약 문구)
+  - **`E2E_FORCE_BUNDLE_MISMATCH=1` 훅** — 번들 커밋 검증 단계에서 build_commit 을 **의도적으로 불일치로 취급** (실제 검증 결과 무관). 배포는 정상 수행된 뒤 롤백으로 되돌아감 — 실제 배포 영향 없음
+  - **복구 확인 게이트** — Rollback API success(PAGES_ROLLED_BACK) + DO 롤백 성공 + **production 최신 배포가 PREV_PAGES_ID 로 복귀**했는지 deployment list 로 대조. 실패 시 수동 롤백 지침 + exit 1 (배포된 채 방치 금지)
+  - 드라이런 계획에 rollback-e2e 문구 + 모드 표시
+- **테스트**: 셀프테스트 **7/7 → 9/9** — `rollback_e2e_staging` (production 전용 게이트 거부) + `rollback_e2e` (DO+Pages 롤백 호출 + E2E 훅 로그 + 최신 배포==PREV 복구 대조 단언). 유닛 **8/8 → 10/10** (드라이런 계획 문구 + staging 거부)
+- **검증**: 셀프테스트 9/9 · 유닛 10/10 · 전체 unit 139 파일 **2,726/2,726 PASS** · tsc 0 · bash -n OK · 수동 시뮬레이션 (production 계획 출력 / staging 거부)
+- **사용**: `E2E_FORCE_BUNDLE_MISMATCH=1 bash scripts/deploy-local-worktree.sh <commit> production --rollback-e2e` — 실제 배포 후 의도적 불일치 → 자동 롤백 → 복구 대조까지 라이브 검증 (가짜 npx 없이)
+
 ### 수정 74: 알림 스크립트 production 잡 재사용 — 환경별(SLACK_ENV) 메시지 분리 (2026-08-15)
 - **작업 ID**: FIX-2026-08-15-22 (구현 + 테스트 + 실측)
 - **요청**: 수정 62 로 추출한 알림 스크립트를 deploy.yml 의 production 잡 실패 알림에도 재사용해, 환경별 알림 메시지를 분리

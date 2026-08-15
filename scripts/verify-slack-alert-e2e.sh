@@ -12,16 +12,20 @@
 #   ⑤ run 모니터링 — 완료까지 폴링, [13] Notify 스텝 로그에서
 #                    '✅ Slack 알림 전송됨 (danger)' 실측
 #   ⑥ 결과 보고   — Slack 채널 실제 수신은 사용자 확인 (Slack 수신 기록은 읽기 불가)
+##  사용법 (웹훅 URL 은 **프로세스 인자로 전달 금지** — 셸 히스토리/ps 노출 방지, 수정 70):
+#   SLACK_WEBHOOK_URL='<URL>' scripts/verify-slack-alert-e2e.sh [--repo owner/repo] [--wait-min N]
+#   scripts/verify-slack-alert-e2e.sh --webhook-file <경로> [--repo owner/repo] [--wait-min N]
+#   printf '%s' '<URL>' | scripts/verify-slack-alert-e2e.sh [--repo owner/repo] [--wait-min N]
+#   scripts/verify-slack-alert-e2e.sh --webhook-file <경로> --dry-run   # 계획만 출력
+#   scripts/verify-slack-alert-e2e.sh --self-test                        # 오프라인 회귀
 #
-# 사용법:
-#   echo '<WEBHOOK_URL>' | scripts/verify-slack-alert-e2e.sh [--repo owner/repo] [--wait-min N]
-#   scripts/verify-slack-alert-e2e.sh --url '<WEBHOOK_URL>' [--repo owner/repo] [--wait-min N]
-#   scripts/verify-slack-alert-e2e.sh --url '<URL>' --dry-run   # 계획만 출력
-#   scripts/verify-slack-alert-e2e.sh --self-test                # 오프라인 회귀
+#   주입 순서: --webhook-file > SLACK_WEBHOOK_URL env > stdin. 파일은 600 권한 권장.
+#   --url '<URL>' (구 방식) 은 argv 에 URL 이 남아 거부된다.
 #
 # Env:
 #   GH_TOKEN   GitHub PAT (repo scope 이상 — 시크릿 생성에 repo admin 권한 필요).
 #              미설정 시 gh auth login 상태를 사용한다.
+#   SLACK_WEBHOOK_URL  웹훅 URL (권장 주입 경로 1)
 #   REPO       저장소 "owner/name" (기본 sumkbs-kbs/ssak-search)
 #   WAIT_MIN   run 완료 대기 시간 (분, 기본 15)
 #
@@ -118,8 +122,8 @@ FAKEEOF
     (
       export PATH="$FAKE_BIN:$PATH"
       export GH_TOKEN=fake-token FAKE_E2E_SCENARIO="$scenario" FAKE_RUNLIST_COUNT="$FAKE_RUNLIST_COUNT"
-      export DISPATCH_WAIT_INTERVAL=0 RUN_POLL_INTERVAL=0
-      bash "$REPO_ROOT/scripts/verify-slack-alert-e2e.sh" --url 'https://hooks.slack.com/services/T000/B000/xxxyyy' --wait-min 1
+      export DISPATCH_WAIT_INTERVAL=0 RUN_POLL_INTERVAL=0 SLACK_WEBHOOK_URL='https://hooks.slack.com/services/T000/B000/xxxyyy'
+      bash "$REPO_ROOT/scripts/verify-slack-alert-e2e.sh" --wait-min 1
     ) > "$out" 2>&1
     local got=$?
     if [ "$got" = "$expect_exit" ]; then
@@ -143,14 +147,16 @@ FAKEEOF
   exit 0
 fi
 
-# ── 인자 파싱 (--url 값 / --url= / --repo= / --wait-min= / --dry-run) ──
+# ── 인자 파싱 (--webhook-file / --repo= / --wait-min= / --dry-run) ──
+# 웹훅 URL 은 argv 로 받지 않는다 — 셸 히스토리/ps 에 남기지 않도록 (수정 70).
 DRY_RUN=0
 WEBHOOK_URL=""
+WEBHOOK_FILE=""
 PREV=""
 for arg in "$@"; do
   if [ -n "$PREV" ]; then
     case "$PREV" in
-      --url) WEBHOOK_URL="$arg" ;;
+      --webhook-file) WEBHOOK_FILE="$arg" ;;
       --repo) REPO="$arg" ;;
       --wait-min) WAIT_MIN="$arg" ;;
     esac
@@ -159,20 +165,21 @@ for arg in "$@"; do
   fi
   case "$arg" in
     --dry-run) DRY_RUN=1 ;;
-    --url|--repo|--wait-min) PREV="$arg" ;;
-    --url=*) WEBHOOK_URL="${arg#--url=}" ;;
+    --webhook-file|--repo|--wait-min) PREV="$arg" ;;
+    --webhook-file=*) WEBHOOK_FILE="${arg#--webhook-file=}" ;;
     --repo=*) REPO="${arg#--repo=}" ;;
     --wait-min=*) WAIT_MIN="${arg#--wait-min=}" ;;
+    --url|--url=*)
+      echo " ❌ --url 인자는 argv 에 웹훅 URL 이 남아 제거됐습니다 (보안, 수정 70)." >&2
+      echo "    안전한 주입 방식을 사용하세요:" >&2
+      echo "      env:   SLACK_WEBHOOK_URL='<URL>' bash scripts/verify-slack-alert-e2e.sh" >&2
+      echo "      file:  bash scripts/verify-slack-alert-e2e.sh --webhook-file <경로>  (파일 권한 600 권장)" >&2
+      echo "      stdin: printf '%s' '<URL>' | bash scripts/verify-slack-alert-e2e.sh" >&2
+      exit 1 ;;
     *) echo " ❌ 알 수 없는 옵션/인자: $arg" >&2; exit 1 ;;
   esac
 done
 if [ -n "$PREV" ]; then echo " ❌ $PREV 값이 누락됐습니다" >&2; exit 1; fi
-
-# 인자/옵션으로 없으면 stdin (파이프)에서 읽기
-if [ -z "$WEBHOOK_URL" ] && [ ! -t 0 ]; then
-  read -r WEBHOOK_URL
-fi
-WEBHOOK_URL="$(printf '%s' "$WEBHOOK_URL" | tr -d '[:space:]')"
 
 mask_url() {
   # URL 은 시크릿 — 출력 시 앞부분 + 끝 6자만 노출
@@ -187,11 +194,23 @@ mask_url() {
 
 fail() { echo " ❌ $*" >&2; exit 1; }
 
+# ── URL 주입: --webhook-file > SLACK_WEBHOOK_URL env > stdin (수정 70) ──
+# argv(--url) 는 거부됨 — 셸 히스토리/ps 에 URL 을 남기지 않는다.
+if [ -n "$WEBHOOK_FILE" ]; then
+  [ -r "$WEBHOOK_FILE" ] || fail "웹훅 파일을 읽을 수 없습니다: $WEBHOOK_FILE"
+  WEBHOOK_URL="$(cat "$WEBHOOK_FILE")"
+elif [ -n "${SLACK_WEBHOOK_URL:-}" ]; then
+  WEBHOOK_URL="$SLACK_WEBHOOK_URL"
+elif [ ! -t 0 ]; then
+  read -r WEBHOOK_URL
+fi
+WEBHOOK_URL="$(printf '%s' "$WEBHOOK_URL" | tr -d '[:space:]')"
+
 # ── ① 사전 확인 ───────────────────────────────────────────────────────────
 echo "━━━ Slack 알림 배선 종단 검증 (verify-slack-alert-e2e) ━━━"
 echo "  repo: $REPO · 대기: ${WAIT_MIN}분 · 드라이런: $DRY_RUN"
 
-[ -n "$WEBHOOK_URL" ] || fail "웹훅 URL 필요 — --url '<URL>' 또는 stdin 파이프로 전달"
+[ -n "$WEBHOOK_URL" ] || fail "웹훅 URL 필요 — --webhook-file <경로> / SLACK_WEBHOOK_URL env / stdin 파이프"
 if ! [[ "$WEBHOOK_URL" =~ ^https://hooks\.slack\.com/services/[A-Za-z0-9]+/[A-Za-z0-9]+/[A-Za-z0-9]+$ ]]; then
   fail "웹훅 URL 형식이 아닙니다 (https://hooks.slack.com/services/T…/B…/…): $(mask_url "$WEBHOOK_URL")"
 fi
@@ -217,8 +236,14 @@ fi
 # ── ② 웹훅 유효성 (테스트 메시지 → HTTP 200 = Slack 수락) ─────────────────
 echo ""
 echo " [1/4] 웹훅 유효성 확인 — 테스트 메시지 POST"
+# URL 은 프로세스 인자(ps)에 노출되지 않게 curl config 파일로 주입한다 (수정 70).
+# curl -K config 는 `url = "…"` 지시어를 지원 — argv 에 URL 이 남지 않는다.
+CURL_CFG="$(mktemp "${TMPDIR:-/tmp}/ssak-curl.XXXXXX")"
+chmod 600 "$CURL_CFG"
+printf 'url = "%s"\n' "$WEBHOOK_URL" > "$CURL_CFG"
 CODE="$(curl -s -o /dev/null -w '%{http_code}' -m 15 -X POST -H 'Content-Type: application/json' \
-  -d '{"text":"🔔 ssak-search 알림 배선 테스트 (verify-slack-alert-e2e)"}' "$WEBHOOK_URL" 2>/dev/null || echo 000)"
+  -d '{"text":"🔔 ssak-search 알림 배선 테스트 (verify-slack-alert-e2e)"}' -K "$CURL_CFG" 2>/dev/null || echo 000)"
+rm -f "$CURL_CFG"
 echo "   HTTP $CODE"
 [ "$CODE" = "200" ] || fail "웹훅이 메시지를 거부 (HTTP $CODE) — URL/권한 확인 (Slack 앱 관리자)"
 

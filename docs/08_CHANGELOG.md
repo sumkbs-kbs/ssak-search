@@ -947,6 +947,19 @@
 - **검증**: rate-limiter-do **39/39** · 전체 unit 138파일 **2,698/2,698 PASS** · tsc 0 · prettier clean · 프로브 워커는 검증 후 삭제 (컨벤션)
 - **잔존 노트**: 서킷 맵에 `workers_ai`(내부 바인딩 pseudo-host) 존재 — 트립 시 robots.txt 프로브가 DNS 실패로 stuck-open 될 수 있는 사전 존재 이슈 (404-alive 와 무관, 별도 추적)
 
+### 수정 70: verify-slack-alert-e2e.sh 웹훅 URL 주입 보안 강화 — argv/히스토리/ps 노출 제거 (2026-08-15)
+- **작업 ID**: FIX-2026-08-15-18 (구현 + 테스트)
+- **요청**: verify-slack-alert-e2e.sh 가 웹훅 URL 을 셸 히스토리/프로세스 인자에 남기지 않도록 (stdin·파일·env 로 주입) 보안 강화
+- **배경**: `--url '<URL>'` argv 방식은 URL 이 ① 셸 히스토리(.bash_history) ② `ps` 프로세스 인자 ③ 감사 로그에 그대로 남는다. Slack 웹훅 URL 은 채널 쓰기 권한을 부여하는 시크릿 — 노출 시 웹훅 탈취로 이어질 수 있다
+- **수정** (`scripts/verify-slack-alert-e2e.sh`):
+  - **`--url` argv 제거** — 거부 메시지와 함께 env/파일/stdin 대체 주입 경로 안내 (레거시 사용자 안내 포함)
+  - **주입 경로 3종 (우선순위)**: `--webhook-file <경로>` (파일 권한 600 권장) > `SLACK_WEBHOOK_URL` env > **stdin 파이프** (`echo '<URL>' | bash …`)
+  - **curl URL config 파일 주입** — `curl -K <config>` 의 `url = "…"` 지시어로 URL 을 argv 에 두지 않고 전달 (ps 노출 차단). gh secret set 은 이미 stdin 주입
+  - 헤더 사용법/문서 갱신 (기존 `--url` 예시 제거)
+- **테스트**: 유닛 **+2** — ① `--url` argv 거부 단언 ② env/파일/stdin 주입 경로 단언 (실행 계획 출력 검증). 전체 6/6 PASS
+- **검증**: 유닛 6/6 · 전체 unit 139 파일 **2,716/2,716 PASS** · tsc 0 · bash -n OK · curl `-K` config 문법 실검증 (URL 미노출 확인)
+- **참고**: 통합 api.test.ts 14건 401 실패는 세션의 미커밋 변경 (routes/search.ts 의 validateApiKeyWithTenant 도입 + vitest.config.ts DO 바인딩 교체) 에 기인 — 본 변경 파일(스크립트+유닛 테스트)과 무관하며 사전 존재 상태
+
 ### 수정 69: wikipedia REST↔Action 429 가용성 주기 모니터 — egress 프로브 + 이력 추적 (2026-08-15)
 - **작업 ID**: FIX-2026-08-15-17 (구현 + 테스트)
 - **요청**: 위키미디어 429 버스트를 주기적으로 모니터링해 REST↔Action 가용성을 추적하는 스크립트

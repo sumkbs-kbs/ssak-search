@@ -879,6 +879,19 @@
 - **테스트**: DO — 중립성(4회 실패 후 transient → 4 유지, 다음 실패 1회로 정확히 트립) + 하프오픈 프로브 429 → 서킷 닫힘 · 클라이언트 — 429 → releaseTransient 라우팅 + 503 은 release(false) 유지 (신규 4건)
 - **검증**: rate-limiter-do + rate-limiter 66/66 · 전체 unit 136파일 PASS · tsc 0 · eslint 0 · prettier clean
 
+### 수정 60: lookup.dbpedia.org 지속 down(tripCount=2) 원인 진단 — robots.txt 404 고착 + 프로브 특수화 (2026-08-15)
+- **작업 ID**: FIX-2026-08-15-08 (진단 + 구현 + 테스트)
+- **요청**: production 에서만 지속 down(tripCount=2, 30분 backoff) 인 lookup.dbpedia.org 원인을 별도 진단
+- **실측 확정** (로컬 + Workers egress 프로브 교차):
+  - 서비스는 **정상** — lookup API `/api/search` 200×3, 루트 `/` 200 (Workers egress 에서도). robots.txt 만 **404**
+  - **근본 원인**: `probeHost()` 는 `resp.ok || 429 || 301 || 302` 만 alive 로 판정 — **404 를 실패**로 처리. lookup.dbpedia.org 는 robots.txt 가 **404** (파일 자체 부재) 라 alarm 프로브가 **영원히 실패** → 서비스는 정상인데 서킷이 재오픈 고착 (tripCount=2 누적 + 30분 backoff 로 강등)
+- **수정** (`src/lib/rate-limiter-do.ts` probeHost):
+  - ① `lookup.dbpedia.org` 는 SE 와 동일하게 **실제 API 경로로 프로브** — `https://lookup.dbpedia.org/api/search?query=test&format=json&maxResults=1` (robots.txt 404 함정 제거)
+  - ② **404 를 alive 에 추가** — robots.txt 가 없는 일반 호스트도 404 는 "서버가 응답했다" 는 뜻 (liveness 프로브 목적 = 응답하는가). 400/403/5xx 는 여전히 실패
+- **테스트** (+2, `tests/unit/rate-limiter-do.test.ts`): ① dbpedia 프로브가 `/api/search` 를 호출하고 200 → 서킷 닫힘 (robots.txt 미호출 단언) ② 일반 호스트 robots.txt 404 → alive (트립 해제, tripCount 0)
+- **검증**: rate-limiter-do **37/37** (SE 방안 A 패턴과 동일 구조) · 전체 unit 136파일 **2,687/2,687 PASS** · tsc 0 · eslint 0 · prettier clean
+- **산출물**: scripts/probe-wiki-egress-worker.ts 에 `dbpedia_lookup`/`dbpedia_robots`/`dbpedia_root` 케이스 추가 (재사용 가능, 프로브 후 삭제 컨벤션)
+
 ### 수정 29: 배포 파이프라인 자동 검증 확장 — gold 회수 + staging↔production 동치 대조 (2026-08-14)
 - **작업 ID**: FIX-2026-08-14-12 (구현 + 실측)
 - **배경**: 로컬 worktree 배포 스크립트(수정 27)에 검증 단계 추가 — 배포 후 "동작하는가"를 자동 확인

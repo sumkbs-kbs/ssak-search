@@ -108,6 +108,18 @@ async function handle(request: Request): Promise<Response> {
       tryFetch('https://api.stackexchange.com/2.3/info?site=stackoverflow', {
         headers: { 'User-Agent': UA, Accept: 'application/json' },
       }),
+    dbpedia_lookup: () =>
+      tryFetch('https://lookup.dbpedia.org/api/search?query=quantum%20computing&format=json&maxResults=3', {
+        headers: { 'User-Agent': UA, Accept: 'application/json' },
+      }),
+    dbpedia_robots: () =>
+      tryFetch('https://lookup.dbpedia.org/robots.txt', {
+        headers: { 'User-Agent': UA },
+      }),
+    dbpedia_root: () =>
+      tryFetch('https://lookup.dbpedia.org/', {
+        headers: { 'User-Agent': UA },
+      }),
   }
 
   const fn = cases[c] ?? cases.en_rest

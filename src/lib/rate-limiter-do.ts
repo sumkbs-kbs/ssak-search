@@ -628,6 +628,13 @@ export class RateLimiterDO extends DurableObject<Env> {
    * requests from this IP") 는 서버가 살아있는 일시적 egress rate-limit 이므로
    * alive 로 인정 — 서킷을 down 이 아니라 실제 상태로 정직화하고, rate-limit
    * 리셋 후 자동으로 닫히게 한다. (실측: egress /2.3/search → error_id:502.)
+   *
+   * 수정 60 (2026-08-15): ① lookup.dbpedia.org 는 robots.txt 가 **404** (로컬 +
+   * Workers egress 실측) 라 robots.txt 프로브가 영원히 실패해 서비스는 정상인데
+   * down 으로 고착됐다 (tripCount=2, 30분 backoff — 2026-08-15 production 실측).
+   * SE 와 동일하게 실제 API 경로(/api/search) 로 프로브한다. ② robots.txt 가
+   * 없는 일반 호스트도 404 = **서버가 응답했다**는 뜻이므로 alive 로 인정한다
+   * (404 를 alive 에 추가 — liveness 프로브의 목적은 '응답하는가').
    */
   private async probeHost(host: string): Promise<{ alive: boolean; status: number; snippet: string }> {
     try {
@@ -635,14 +642,17 @@ export class RateLimiterDO extends DurableObject<Env> {
       const timer = setTimeout(() => controller.abort(), CIRCUIT_PROBE_TIMEOUT_MS)
       const url = this.isStackExchangeHost(host)
         ? 'https://api.stackexchange.com/2.3/info?site=stackoverflow'
-        : `https://${host}/robots.txt`
+        : host === 'lookup.dbpedia.org'
+          ? 'https://lookup.dbpedia.org/api/search?query=test&format=json&maxResults=1'
+          : `https://${host}/robots.txt`
       const resp = await fetch(url, {
         signal: controller.signal,
         headers: { 'User-Agent': 'SearchAPI/1.0 (https://search-engine-api.pages.dev; contact: admin@example.com)' },
       })
       clearTimeout(timer)
       const text = await resp.text().catch(() => '')
-      let alive = resp.ok || resp.status === 429 || resp.status === 301 || resp.status === 302
+      // 수정 60: 404(robots.txt 부재) 도 alive — 서버가 응답했기 때문.
+      let alive = resp.ok || resp.status === 429 || resp.status === 301 || resp.status === 302 || resp.status === 404
       if (this.isStackExchangeHost(host) && resp.status === 400) {
         // SE API: 400 + error_id 502 = egress IP rate-limit (throttle_violation).
         alive = /error_id["']?\s*[:=]\s*502/.test(text)

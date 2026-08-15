@@ -371,6 +371,47 @@ describe('RateLimiterDO self-healing circuit breaker (D.2)', () => {
     expect(fetchMock).toHaveBeenCalledWith('https://www.bing.com/robots.txt', expect.anything())
   })
 
+  // ── lookup.dbpedia.org 특수화 (수정 60 — robots.txt 404 고착 진단) ──
+
+  const DBPEDIA_HOST = 'lookup.dbpedia.org'
+
+  it('dbpedia probe uses the real API path /api/search (robots.txt is 404 → probe stuck forever)', async () => {
+    instantiate()
+    for (let i = 0; i < FAILURE_THRESHOLD; i++) await doInstance.release(DBPEDIA_HOST, false)
+
+    // 실제 API 경로 응답 (2026-08-15 로컬+Workers egress 실측: 200)
+    fetchMock.mockResolvedValue({
+      ok: true,
+      status: 200,
+      text: async () => '{"docs":[{"resource":[{"label":"Quantum computing"}]}]}',
+    })
+    vi.advanceTimersByTime(30_000)
+    await doInstance.alarm()
+
+    // robots.txt 가 아니라 /api/search 로 프로브
+    expect(fetchMock).toHaveBeenCalledWith(
+      'https://lookup.dbpedia.org/api/search?query=test&format=json&maxResults=1',
+      expect.anything(),
+    )
+    expect(fetchMock).not.toHaveBeenCalledWith('https://lookup.dbpedia.org/robots.txt', expect.anything())
+    const health = await doInstance.getAllHealth()
+    expect(health[DBPEDIA_HOST].tripped).toBe(false) // 정상 서비스 → 서킷 닫힘
+  })
+
+  it('robots.txt 404 counts as alive (server responded — liveness, 수정 60)', async () => {
+    instantiate()
+    for (let i = 0; i < FAILURE_THRESHOLD; i++) await doInstance.release(HOST, false)
+
+    // robots.txt 부재 호스트 (404 = 서버가 응답, 파일만 없음)
+    fetchMock.mockResolvedValue({ ok: false, status: 404, text: async () => '404 Not Found' })
+    vi.advanceTimersByTime(30_000)
+    await doInstance.alarm()
+
+    const health = await doInstance.getAllHealth()
+    expect(health[HOST].tripped).toBe(false) // 404 = alive → 서킷 닫힘
+    expect(health[HOST].tripCount).toBe(0)
+  })
+
   // ── wikipedia suffix sharing (S9: ko/zh/ja share one upstream IP budget) ──
 
   it('shares ONE rate window across all wikipedia language subdomains', async () => {

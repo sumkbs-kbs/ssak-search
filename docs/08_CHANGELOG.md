@@ -947,6 +947,18 @@
 - **검증**: rate-limiter-do **39/39** · 전체 unit 138파일 **2,698/2,698 PASS** · tsc 0 · prettier clean · 프로브 워커는 검증 후 삭제 (컨벤션)
 - **잔존 노트**: 서킷 맵에 `workers_ai`(내부 바인딩 pseudo-host) 존재 — 트립 시 robots.txt 프로브가 DNS 실패로 stuck-open 될 수 있는 사전 존재 이슈 (404-alive 와 무관, 별도 추적)
 
+### 수정 74: 알림 스크립트 production 잡 재사용 — 환경별(SLACK_ENV) 메시지 분리 (2026-08-15)
+- **작업 ID**: FIX-2026-08-15-22 (구현 + 테스트 + 실측)
+- **요청**: 수정 62 로 추출한 알림 스크립트를 deploy.yml 의 production 잡 실패 알림에도 재사용해, 환경별 알림 메시지를 분리
+- **배경**: production 잡(deploy-production)에는 실패 알림이 없었다 (staging 의 [13] Notify 만 존재). workflow_dispatch production 배포가 실패해도 Slack 알림이 전혀 가지 않음
+- **수정** (`scripts/notify-pipeline-failure.sh` + `.github/workflows/deploy.yml`):
+  - **`SLACK_ENV` env 추가** (기본 staging) — 메시지의 "{env} 배포 파이프라인 실패 / *{env} 배포 실패*" 부분이 환경별로 분리. mrkdwn 인젝션 방지로 특수문자 제거(`tr -cd '[:alnum:]_-'`, 최대 20자). 미설정 시 기존 staging 메시지와 동일 (회귀 없음)
+  - **production 잡에 Notify 스텝 추가** — staging 패턴 그대로 재사용: post-deploy gate 에 `id: postdeploy` 부여 → `if: steps.postdeploy.outcome == 'skipped' && !cancelled()` 로 **이전 단계 실패 시에만 발화**. `SLACK_ENV=production` + 수정 72 의 드라이런(notify_dry_run) 지원 포함
+- **회귀 체크** (`scripts/verify-deploy-workflow.ts`): 7번 체크를 staging+production **양쪽 Notify** 로 확장 — production Notify 는 SLACK_DRY_RUN/URL 배선 + **SLACK_ENV=production 필수** 단언 (테스트 +2, 29/29)
+- **실측**: 캡처 서버(:18083) — `SLACK_ENV=production` → `text: ❌ production 배포 파이프라인 실패 — acme/repo` + blocks `*production 배포 실패*` exit 0
+- **검증**: self-test **+1 (payload_env) → 7/7** · 유닛 **+1 → 7/7** · verify-deploy-workflow **PASS** · 전체 unit 139 파일 **2,724/2,724 PASS** · tsc 0 · bash -n OK
+- **사용**: production 배포 실패 시 Slack 에 "production 배포 실패" 알림, staging 은 기존 "staging 배포 실패" 유지 — 동일 스크립트를 SLACK_ENV 로 분리
+
 ### 수정 73: notify-pipeline-failure.sh 드라이런 페이로드 스키마 검증 + 채널/아이콘 커스터마이즈 (2026-08-15)
 - **작업 ID**: FIX-2026-08-15-21 (구현 + 테스트 + 실측)
 - **요청**: 드라이런 페이로드가 실제 Slack Incoming Webhook 스키마와 일치하는지 검증하고, 채널/아이콘 커스터마이즈 옵션 추가

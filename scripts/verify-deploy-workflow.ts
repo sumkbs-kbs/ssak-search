@@ -256,26 +256,33 @@ export function verifyDeployWorkflow(repoDir: string): GateOutcome {
     }
   }
 
-  // ── 7. notify dry-run wiring (수정 72) ─────────────────────────────────
-  // workflow_dispatch 의 notify_dry_run 입력이 선언되면, [13] Notify 스텝이
-  // SLACK_DRY_RUN / SLACK_DRY_RUN_URL 을 inputs 에서 배선해야 한다. 배선이
-  // 빠지면 드라이런 검증이 조용히 실 웹훅(또는 no-op) 경로로 빠져, CI 실패 시
-  // 캡처 서버로 POST 하는 경로가 검증되지 않는다.
+  // ── 7. notify dry-run wiring (수정 72/74) ──────────────────────────────
+  // workflow_dispatch 의 notify_dry_run 입력이 선언되면, 각 잡(staging +
+  // production)의 Notify 스텝이 SLACK_DRY_RUN / SLACK_DRY_RUN_URL 을 inputs
+  // 에서 배선해야 한다. 배선이 빠지면 드라이런 검증이 조용히 실 웹훅(또는
+  // no-op) 경로로 빠져, CI 실패 시 캡처 서버로 POST 하는 경로가 검증되지
+  // 않는다. production Notify 는 수정 74 — SLACK_ENV=production 으로 메시지를
+  // 분리한다.
   const dispatchInputs = (doc as { on?: Record<string, unknown> }).on?.workflow_dispatch as
     { inputs?: Record<string, unknown> } | undefined
   if (dispatchInputs?.inputs?.notify_dry_run !== undefined) {
-    const notifyStep = (jobs['deploy-staging']?.steps ?? []).find((s) => (s.name ?? '').includes('Notify'))
-    if (!notifyStep) {
-      findings.push(`deploy-staging: notify_dry_run 입력이 선언됐지만 [13] Notify 스텝이 없다`)
-    } else {
+    for (const jobName of ['deploy-staging', 'deploy-production']) {
+      const notifyStep = (jobs[jobName]?.steps ?? []).find((s) => (s.name ?? '').includes('Notify'))
+      if (!notifyStep) {
+        findings.push(`${jobName}: notify_dry_run 입력이 선언됐지만 Notify 스텝이 없다`)
+        continue
+      }
       const env = (notifyStep.env ?? {}) as Record<string, unknown>
       const dryRun = String(env.SLACK_DRY_RUN ?? '')
       const dryRunUrl = String(env.SLACK_DRY_RUN_URL ?? '')
       if (!dryRun.includes('inputs.notify_dry_run')) {
-        findings.push(`deploy-staging Notify: SLACK_DRY_RUN 이 inputs.notify_dry_run 에서 배선돼야 한다 (수정 72)`)
+        findings.push(`${jobName} Notify: SLACK_DRY_RUN 이 inputs.notify_dry_run 에서 배선돼야 한다 (수정 72)`)
       }
       if (!dryRunUrl.includes('inputs.notify_dry_run')) {
-        findings.push(`deploy-staging Notify: SLACK_DRY_RUN_URL 이 inputs.notify_dry_run 에서 배선돼야 한다 (수정 72)`)
+        findings.push(`${jobName} Notify: SLACK_DRY_RUN_URL 이 inputs.notify_dry_run 에서 배선돼야 한다 (수정 72)`)
+      }
+      if (jobName === 'deploy-production' && String(env.SLACK_ENV ?? '') !== 'production') {
+        findings.push(`deploy-production Notify: SLACK_ENV=production 이 설정돼야 한다 (환경별 메시지 분리, 수정 74)`)
       }
     }
   }

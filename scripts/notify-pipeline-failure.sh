@@ -11,6 +11,8 @@
 #   SLACK_DRY_RUN=1   웹훅 대신 **로컬 캡처 서버**(SLACK_DRY_RUN_URL)로 POST —
 #                     웹훅 URL 없이 페이로드를 검증 (기본 http://127.0.0.1:18080/)
 #   SLACK_DRY_RUN_URL 드라이런 POST 대상 (기본 http://127.0.0.1:18080/)
+#   SLACK_ENV         대상 환경 (기본 staging — 메시지의 "staging 배포" 부분에
+#                     사용, 수정 74: production 잡에서 재사용 시 production 전달)
 #   REPO              저장소 "owner/name" (기본 ${GITHUB_REPOSITORY:-unknown/repo})
 #   RUN_URL           실행 URL (기본 GITHUB_SERVER_URL/.../actions/runs/GITHUB_RUN_ID)
 #
@@ -122,6 +124,27 @@ for k in ("channel", "username", "icon_emoji", "icon_url"):
     FAILURES=$((FAILURES + 1))
   fi
 
+  # 환경 분리 (수정 74): SLACK_ENV=production → 메시지가 "production 배포" 로
+  # 바뀐다. 기본값은 staging (기존 메시지와 동일 — 회귀 없음).
+  ENV_OUT="$(PATH="$FAKE_BIN:$PATH" SLACK_DRY_RUN=1 REPO=acme/repo RUN_URL=https://github.com/acme/repo/actions/runs/123 \
+    SLACK_ENV=production bash "$REPO_ROOT/scripts/notify-pipeline-failure.sh" 2>&1)"
+  if printf '%s' "$ENV_OUT" | python3 -c '
+import json, sys
+text = sys.stdin.read()
+line = next((l for l in text.splitlines() if l.strip().startswith("페이로드: ")), "")
+if not line:
+    sys.exit(1)
+payload = json.loads(line.split("페이로드: ", 1)[1])
+assert "production 배포 파이프라인 실패" in payload["text"], payload["text"]
+assert "*production 배포 실패*" in json.dumps(payload["attachments"][0]["blocks"], ensure_ascii=False)
+'; then
+    echo " ✅ payload_env: SLACK_ENV=production → 'production 배포' 메시지 분리"
+  else
+    echo " ❌ payload_env: 환경별 메시지 분리 실패" >&2
+    printf '%s\n' "$ENV_OUT" | tail -10 >&2
+    FAILURES=$((FAILURES + 1))
+  fi
+
   # 커스터마이즈 필드: 설정 시 최상위 키가 포함된다 (스키마 호환, 수정 73)
   : > "$FAKE_CURL_LOG"
   CUST_OUT="$(PATH="$FAKE_BIN:$PATH" SLACK_DRY_RUN=1 REPO=acme/repo RUN_URL=https://github.com/acme/repo/actions/runs/123 \
@@ -151,26 +174,30 @@ assert "icon_url" not in payload  # 미설정 필드는 포함 안 됨
     echo " ❌ notify-pipeline-failure.sh self-test FAIL: $FAILURES case(s) 실패"
     exit 1
   fi
-  echo " ✅ notify-pipeline-failure.sh self-test: all PASS (6/6)"
+  echo " ✅ notify-pipeline-failure.sh self-test: all PASS (7/7)"
   exit 0
 fi
 
 REPO="${REPO:-${GITHUB_REPOSITORY:-unknown/repo}}"
 RUN_URL="${RUN_URL:-${GITHUB_SERVER_URL:-https://github.com}/${GITHUB_REPOSITORY:-unknown/repo}/actions/runs/${GITHUB_RUN_ID:-0}}"
+# 수정 74: 환경 분리 — 메시지의 "{env} 배포" 부분 (기본 staging, production
+# 잡에서 SLACK_ENV=production 으로 재사용). 사용자 입력이므로 mrkdwn 인젝션
+# 방지를 위해 특수문자를 제거한다.
+SLACK_ENV="$(printf '%s' "${SLACK_ENV:-staging}" | tr -cd '[:alnum:]_-' | cut -c1-20)"
 
-# ── 페이로드 빌드 (수정 51 구조 유지 + 커스터마이즈 필드, 수정 73) ─────────
+# ── 페이로드 빌드 (수정 51 구조 유지 + 커스터마이즈 필드, 수정 73/74) ──────
 # Slack Incoming Webhook 공식 스키마 (docs.slack.dev): 최상위 text 는 필수,
 # attachments[].color/blocks 는 유효한 Block Kit 조합. channel/username/
 # icon_emoji/icon_url 은 선택 필드 — 설정된 것만 포함 (설정 안 하면 기존과 동일).
 PAYLOAD="$(python3 -c '
 import json, sys
-repo, run_url, channel, username, icon_emoji, icon_url = sys.argv[1:7]
+repo, run_url, channel, username, icon_emoji, icon_url, env = sys.argv[1:8]
 msg = {
-  "text": f"❌ staging 배포 파이프라인 실패 — {repo}",
+  "text": f"❌ {env} 배포 파이프라인 실패 — {repo}",
   "attachments": [{
     "color": "danger",
     "blocks": [
-      {"type": "section", "text": {"type": "mrkdwn", "text": f"*staging 배포 실패* — {repo}"}},
+      {"type": "section", "text": {"type": "mrkdwn", "text": f"*{env} 배포 실패* — {repo}"}},
       {"type": "context", "elements": [{"type": "mrkdwn", "text": f"run: <{run_url}>"}]},
     ],
   }],
@@ -186,7 +213,7 @@ if icon_emoji:
 if icon_url:
     msg["icon_url"] = icon_url
 print(json.dumps(msg))
-' "$REPO" "$RUN_URL" "${SLACK_CHANNEL:-}" "${SLACK_USERNAME:-}" "${SLACK_ICON_EMOJI:-}" "${SLACK_ICON_URL:-}")"
+' "$REPO" "$RUN_URL" "${SLACK_CHANNEL:-}" "${SLACK_USERNAME:-}" "${SLACK_ICON_EMOJI:-}" "${SLACK_ICON_URL:-}" "$SLACK_ENV")"
 
 # ── ① 드라이런: 로컬 캡처 서버로 POST (웹훅 URL 불필요 — 수정 62) ────────────
 # 실 웹훅 시크릿이 없어도 알림 페이로드가 실제로 구성·전송되는지를 검증한다.

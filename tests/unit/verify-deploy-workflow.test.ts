@@ -313,7 +313,33 @@ jobs:
     })
   })
 
-  describe('8. notify dry-run wiring (수정 72)', () => {
+  describe('8. notify dry-run wiring (수정 72/74)', () => {
+    const PROD_NOTIFY = `  deploy-production:
+    permissions:
+      actions: read
+      contents: read
+    runs-on: ubuntu-latest
+    steps:
+      - name: Verify deployed commit matches repo (post-deploy gate)
+        id: postdeploy
+        env:
+          CLOUDFLARE_API_TOKEN: \${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: \${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          ENVIRONMENT: production
+          EXPECTED_COMMIT: \${{ github.sha }}
+        run: bash scripts/verify-do-binding.sh
+      - name: Notify production pipeline failure (Slack)
+        if: steps.postdeploy.outcome == 'skipped' && !cancelled()
+        env:
+          SLACK_WEBHOOK: \${{ secrets.ALERT_SLACK_WEBHOOK || secrets.SLACK_WEBHOOK }}
+          SLACK_DRY_RUN: \${{ inputs.notify_dry_run == true && '1' || '' }}
+          SLACK_DRY_RUN_URL: \${{ inputs.notify_dry_run == true && 'http://127.0.0.1:18080/' || '' }}
+          SLACK_ENV: production
+          REPO: \${{ github.repository }}
+          RUN_URL: https://github.com/\${{ github.repository }}/actions/runs/\${{ github.run_id }}
+        run: bash scripts/notify-pipeline-failure.sh
+`
+
     const DRY_RUN_WORKFLOW = `name: Deploy
 on:
   workflow_dispatch:
@@ -342,6 +368,7 @@ jobs:
           REPO: \${{ github.repository }}
           RUN_URL: https://github.com/\${{ github.repository }}/actions/runs/\${{ github.run_id }}
         run: bash scripts/notify-pipeline-failure.sh
+${PROD_NOTIFY}
 `
 
     // 라인 단위 제거 헬퍼 — replace 패턴의 ${{ }} 이스케이프 불일치를 피한다.
@@ -385,6 +412,24 @@ jobs:
       const outcome = verifyDeployWorkflow(writeRepo({ workflow }))
       expectStatus(outcome, 'FAIL')
       expect(outcome.detail).toContain('Notify')
+    })
+
+    it('FAILs when production Notify 스텝이 SLACK_ENV=production 을 누락한다 (환경별 메시지 미분리)', () => {
+      const workflow = DRY_RUN_WORKFLOW.replace('          SLACK_ENV: production\n', '')
+      const outcome = verifyDeployWorkflow(writeRepo({ workflow }))
+      expectStatus(outcome, 'FAIL')
+      expect(outcome.detail).toContain('SLACK_ENV=production')
+    })
+
+    it('FAILs when production Notify 스텝이 드라이런 배선을 누락한다', () => {
+      // PROD_NOTIFY 블록에서 SLACK_DRY_RUN 라인만 제거 — staging 배선은 유지.
+      // 'SLACK_DRY_RUN:' 는 'SLACK_DRY_RUN_URL:' 의 부분 문자열이 아니다.
+      const prodBlock = dropLine(PROD_NOTIFY, 'SLACK_DRY_RUN:')
+      const workflow = DRY_RUN_WORKFLOW.replace(PROD_NOTIFY, prodBlock)
+      const outcome = verifyDeployWorkflow(writeRepo({ workflow }))
+      expectStatus(outcome, 'FAIL')
+      expect(outcome.detail).toContain('deploy-production Notify')
+      expect(outcome.detail).toContain('SLACK_DRY_RUN')
     })
   })
 })

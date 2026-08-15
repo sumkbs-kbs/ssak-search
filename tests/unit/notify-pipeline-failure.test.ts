@@ -137,11 +137,11 @@ describe.skipIf(!BASH_AVAILABLE)('notify-pipeline-failure.sh (웹훅 불필요 �
     }
   })
 
-  it('--self-test 오프라인 회귀 6/6 통과', () => {
+  it('--self-test 오프라인 회귀 7/7 통과', () => {
     const out = execFileSync('bash', [SCRIPT, '--self-test'], {
       encoding: 'utf8',
       maxBuffer: 10 * 1024 * 1024,
     })
-    expect(out).toContain('all PASS (6/6)')
+    expect(out).toContain('all PASS (7/7)')
   })
 })

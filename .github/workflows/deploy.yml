@@ -404,6 +404,10 @@ jobs:
         # (FAIL_ON_COMMIT_DRIFT=1, no ALLOW_BEHIND). Catches a deploy that
         # pushed a stale/wrong bundle while still reporting success. Sleep lets
         # Cloudflare record the new deployment before the list query.
+        # id (수정 74): 아래 Notify 스텝이 이 게이트의 outcome 을 본다 — production
+        # 잡의 마지막 게이트로, 실패 시 후속 스텝이 skipped 되면 알림이 발화한다
+        # (staging 의 equivalence 스텝과 동일 패턴).
+        id: postdeploy
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
@@ -415,3 +419,43 @@ jobs:
         run: |
           sleep 5
           bash scripts/verify-do-binding.sh
+
+      - name: Notify production pipeline failure (Slack)
+        # 수정 74 (2026-08-15): production 잡 실패 알림 — staging 의 Notify
+        # 스텝(수정 51/62)과 동일한 패턴을 재사용한다. scripts/notify-pipeline-failure.sh
+        # 에 SLACK_ENV=production 을 전달해 메시지를 "production 배포" 로 분리한다.
+        #
+        # 조건: `steps.postdeploy.outcome == 'skipped'` — postdeploy 는 마지막
+        # 게이트이고 if 조건이 없으므로, 'skipped' 는 곧 **이전 단계 실패**(실패 시
+        # 후속 스텝 스킵)를 의미한다. postdeploy 가 실행돼 실패하면 outcome='failure'
+        # → 여기선 스킵 (알림은 이전 단계 실패 커버). `failure()` 를 쓰지 않는 이유는
+        # staging 과 동일 — 다운로드 스텝(continue-on-error) 이후 `if: failure()` 는
+        # 발화하지 않을 수 있다 (S104-③-⑦-③ 실측).
+        # ⚠️ `!cancelled()` 를 앞에 쓰지 말 것 — YAML tag 해석 문제 (staging 주석 참고).
+        if: steps.postdeploy.outcome == 'skipped' && !cancelled()
+        env:
+          SLACK_WEBHOOK: ${{ secrets.ALERT_SLACK_WEBHOOK || secrets.SLACK_WEBHOOK }}
+          # 수정 72: notify_dry_run=true (workflow_dispatch) 시 드라이런 캡처 모드
+          SLACK_DRY_RUN: ${{ inputs.notify_dry_run == true && '1' || '' }}
+          SLACK_DRY_RUN_URL: ${{ inputs.notify_dry_run == true && 'http://127.0.0.1:18080/' || '' }}
+          # 수정 74: 환경별 메시지 분리
+          SLACK_ENV: production
+          REPO: ${{ github.repository }}
+          RUN_URL: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        # 수정 62/72 재사용 — 알림 스크립트 + 러너 내부 캡처 서버 드라이런.
+        run: |
+          if [ "${SLACK_DRY_RUN:-0}" = "1" ]; then
+            python3 scripts/capture-webhook.py --port 18080 > /tmp/capture-webhook.log 2>&1 &
+            CAPTURE_PID=$!
+            sleep 1
+          fi
+          bash scripts/notify-pipeline-failure.sh
+          NOTIFY_STATUS=$?
+          if [ "${SLACK_DRY_RUN:-0}" = "1" ]; then
+            sleep 1
+            kill "$CAPTURE_PID" 2>/dev/null || true
+            echo "━━━ capture-webhook 로그 (드라이런 수신 실측) ━━━"
+            cat /tmp/capture-webhook.log 2>/dev/null || true
+            echo "━━━ end capture log ━━━"
+          fi
+          exit $NOTIFY_STATUS

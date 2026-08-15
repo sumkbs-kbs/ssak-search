@@ -947,6 +947,18 @@
 - **검증**: rate-limiter-do **39/39** · 전체 unit 138파일 **2,698/2,698 PASS** · tsc 0 · prettier clean · 프로브 워커는 검증 후 삭제 (컨벤션)
 - **잔존 노트**: 서킷 맵에 `workers_ai`(내부 바인딩 pseudo-host) 존재 — 트립 시 robots.txt 프로브가 DNS 실패로 stuck-open 될 수 있는 사전 존재 이슈 (404-alive 와 무관, 별도 추적)
 
+### 수정 67: 배포 순서 DO-first 강제 + 배포 창 Pages-신/DO-구 불일치 감지 (2026-08-15)
+- **작업 ID**: FIX-2026-08-15-15 (구현 + 테스트)
+- **요청**: 배포 창의 Pages-신/DO-구 불일치를 감지해 DO 를 먼저 배포하도록 deploy-local-worktree.sh 순서 조정
+- **배경**: 새 Pages 가 구 DO 에 없는 RPC(예: releaseTransient, 수정 59)를 호출하면 배포 창 동안 RPC 실패가 난다. 새 DO 는 모든 구 RPC 를 하위호환으로 구현하므로 **DO 를 먼저 배포하면 창이 원천적으로 생기지 않는다**
+- **수정** (`scripts/deploy-local-worktree.sh`):
+  - **① DO 배포 단계 강화** — 배포 출력의 `Current Version ID` 를 캡처해 **이전(PREV_DO_VERSION)과 실제로 다른지 검증**. grep 성공만으로는 배포 적용을 알 수 없었다. 버전 동일 감지 시 `DO_UNCHANGED=1` → **Pages 배포 중단** (exit 1, 아무것도 배포 안 됨 — 창 차단)
+  - **배포 전 사전 감지** — live Pages 커밋이 이미 대상 커밋이면 (이전 부분 배포가 Pages-신/DO-구 상태를 남긴 경우) 경고 + DO-first 순서로 자동 교정됨을 안내
+  - **요약 분기 추가** — DO 버전 미변경을 DO 실패와 구분해 정확한 메시지 제공
+  - 헤더 + 드라이런 계획에 DO-first 보장/이유 문서화
+- **테스트**: 셀프테스트 **+1 시나리오 (do_unchanged)** — 가짜 DO 배포가 이전과 같은 Version ID 반환 → exit 1 + **Pages 미배포 단언** (`wrangler pages deploy ` 호출 부재) + 롤백 없음. run_scenario 에 `expect_pages` 파라미터 추가. **8/8 PASS** · 유닛 8/8 (드라이런 문구 회귀 없음) · 전체 unit 138 파일 **2,701/2,701** · tsc 0
+- **참고**: 정상 재배포(같은 커밋 반복)에서도 wrangler deploy 는 매번 새 버전을 만들므로 NEW≠PREV 가 유지됨 — 미변경 감지는 실제 이상(배포 거부/미적용) 신호
+
 ### 수정 66: rateLimitedFetch 의 503 도 transient 로 재분류 — request/probe 일관 (2026-08-15)
 - **작업 ID**: FIX-2026-08-15-14 (재평가 + 구현 + 테스트)
 - **요청**: rateLimitedFetch 의 503 도 transient 로 분류할지 재평가 — 429 만 제외한 현재 결정(수정 59) 검증

@@ -12,6 +12,11 @@
 #     commit   : 배포할 SHA (기본: 현재 HEAD)
 #     env      : production(기본) | staging
 #   --dry-run: 아무것도 실행하지 않고 실행 계획만 출력 (인자 순서 무관)
+#   배포 순서는 반드시 ① DO → ② Pages → ③ cron (수정 67). 새 Pages 가 구 DO 에
+#   없는 RPC(예: releaseTransient, 수정 59)를 호출하면 배포 창 동안 실패하므로,
+#   하위호환인 새 DO 를 먼저 배포해 'Pages-신/DO-구' 창을 원천 차단한다. DO
+#   배포 후 Current Version ID 가 이전과 다를 때만 Pages 로 진행한다 (미변경 감지
+#   시 중단). 배포 전 live Pages 가 대상 커밋이면 사전 경고를 낸다.
 #   --auto-rollback: 정합 불일치 시 이전 버전으로 자동 롤백한다 (부분 배포 방지):
 #                     ① Pages 배포 실패 → DO 만 새 버전 → DO 를 배포 직전 버전으로
 #                     ② **번들 커밋 검증 실패** (수정 61) → DO+Pages 가 새 버전인데 배포 URL
@@ -170,6 +175,13 @@ case "${1:-}" in
     if [ "${FAKE_NPX_SCENARIO:-}" = "cron_fail" ] && [[ "$*" != *"wrangler.do.jsonc"* ]]; then
       echo "✗ Error: cron deploy failed (simulated)" >&2; exit 1
     fi
+    # do_unchanged (수정 67): DO 배포가 성공 출력이지만 이전과 같은 Version ID
+    # 를 반환 — 배포가 적용되지 않은 상태를 시뮬레이션 (PREV_DO_VERSION=0532d4a2…)
+    if [ "${FAKE_NPX_SCENARIO:-}" = "do_unchanged" ]; then
+      echo "Uploaded ssak-do-worker (v0.0.0-selftest)"
+      echo "Current Version ID: 0532d4a2-1111-4222-8333-444455556666"
+      exit 0
+    fi
     echo "Uploaded ssak-do-worker (v0.0.0-selftest)"
     echo "Current Version ID: abc12345-1111-4222-8333-444455556666"
     exit 0 ;;
@@ -199,7 +211,7 @@ FAKEEOF
 
   FAILURES=0
   run_scenario() {
-    local name="$1" opts="$2" expect_exit="$3" expect_rollback="$4" expect_pages_rollback="${5:-no}"
+    local name="$1" opts="$2" expect_exit="$3" expect_rollback="$4" expect_pages_rollback="${5:-no}" expect_pages="${6:-yes}"
     : > "$FAKE_NPX_LOG"
     local out="$SELFTEST_TMP/$name.out"
     (
@@ -222,10 +234,15 @@ FAKEEOF
     else
       grep -q "curl .*rollback" "$FAKE_NPX_LOG" && ok=0
     fi
+    # 수정 67: DO 버전 미변경 시 Pages 를 배포하지 않아야 한다 ('wrangler pages deploy ' —
+    # 'pages deployment' 목록 조회와 구분해 공백으로 끝나는 호출만 매칭).
+    if [ "$expect_pages" = "no" ]; then
+      grep -q "wrangler pages deploy " "$FAKE_NPX_LOG" && ok=0
+    fi
     if [ "$ok" = "1" ]; then
-      echo " ✅ $name: exit=$got rollback=$expect_rollback pages_rollback=$expect_pages_rollback"
+      echo " ✅ $name: exit=$got rollback=$expect_rollback pages_rollback=$expect_pages_rollback pages=$expect_pages"
     else
-      echo " ❌ $name: exit=$got (기대 $expect_exit) rollback=$(grep -c 'wrangler rollback' "$FAKE_NPX_LOG" || true)건 (기대 $expect_rollback) pages_rollback=$(grep -c 'curl .*rollback' "$FAKE_NPX_LOG" || true)건 (기대 $expect_pages_rollback)"
+      echo " ❌ $name: exit=$got (기대 $expect_exit) rollback=$(grep -c 'wrangler rollback' "$FAKE_NPX_LOG" || true)건 (기대 $expect_rollback) pages_rollback=$(grep -c 'curl .*rollback' "$FAKE_NPX_LOG" || true)건 (기대 $expect_pages_rollback) pages=$(grep -c 'wrangler pages deploy ' "$FAKE_NPX_LOG" || true)건 (기대 $expect_pages)"
       tail -30 "$out" >&2
       FAILURES=$((FAILURES + 1))
     fi
@@ -235,6 +252,9 @@ FAKEEOF
   run_scenario pages_fail ""               1 no  no    # 플래그 없으면 롤백 안 함 (수동 안내만)
   run_scenario cron_fail  ""               1 no  no    # DO+Pages 일치 — 롤백하면 오히려 틀림
   run_scenario do_fail    ""               1 no  no    # 아무것도 배포 안 됨 — 롤백 대상 없음
+  # 수정 67: DO 배포가 버전을 바꾸지 않으면 (이전과 동일 Version ID) Pages 를
+  # 배포하지 않고 중단 — Pages-신/DO-구 배포 창 원천 차단.
+  run_scenario do_unchanged ""               1 no  no no
   run_scenario success    ""               0 no  no    # 전체 성공 — 롤백 없음, exit 0
   # 번들 커밋 불일치 (수정 61): --auto-rollback → DO + Pages Rollback API 자동 롤백
   run_scenario bundle_mismatch "--auto-rollback" 1 yes yes
@@ -341,7 +361,9 @@ if [ "$DRY_RUN" = 1 ]; then
     echo "   build    : DEPLOY_ENV=$ENV_NAME npm run build (worktree 내부, node_modules는 main repo 심링크)"
   fi
   echo "             ⚠️  DO 인스턴스 키를 환경별로 분리 — staging 은 'staging', production 은 'production' 인스턴스 사용 (방안 B)"
-  echo "   ① DO     : npx wrangler deploy --config=wrangler.do.jsonc"
+  echo "   ① DO     : npx wrangler deploy --config=wrangler.do.jsonc (Pages 보다 먼저 — 새 Pages 의 신규 RPC 를 구 DO 가)"
+  echo "             이해 못 하는 배포 창 불일치 방지, 수정 67. 배포 출력의 Current Version ID 가 이전과"
+  echo "             다를 때만 ②로 진행 — 미변경 감지 시 Pages 배포 중단"
   echo "   ② Pages  : npx wrangler pages deploy dist/ --project-name=search-engine-api --branch=$PAGES_BRANCH"
   echo "             ⚠️  'Uploaded 0 files (3 already uploaded)' 는 스테일 아님 — 카운트는 정적 에셋 3개(배포 간 불변)만 집계,"
   echo "                 _worker.js Functions 번들은 별도 경로로 업로드 (신선도는 배포 URL + Source commit 검증으로 확인, 헤더 '출력 해석' 절 참조)"
@@ -392,6 +414,17 @@ for dep in d:
         break
 " 2>/dev/null || true)"
 echo "   이전 Pages 배포: ${PREV_PAGES_ID:-알 수 없음}"
+
+# ── 배포 전 DO↔Pages 정합 감지 (수정 67) ─────────────────────────────────
+# 이전 부분 배포가 'Pages=신/DO=구' 상태를 남겼다면 감지한다: live Pages 커밋이
+# 이미 대상 커밋인데 DO 는 뒤처져 있다는 뜻 — 이번 배포의 DO-first 순서가 자동
+# 교정한다 (감지만 하고 중단하지 않음).
+CURRENT_PAGES_COMMIT="$(npx wrangler pages deployment list --project-name=search-engine-api 2>/dev/null | grep -E '│' | grep -vE 'Id|─' | head -1 | awk -F'│' '{gsub(/ /,"",$5); print $5}' || true)"
+if [ -n "$CURRENT_PAGES_COMMIT" ] && [ "$CURRENT_PAGES_COMMIT" = "$SHORT_SHA" ]; then
+  echo " ⚠️  사전 감지: live Pages 가 이미 대상 커밋($SHORT_SHA) — 이전 부분 배포로"
+  echo "    DO 가 뒤처진 'Pages-신/DO-구' 상태일 수 있습니다. DO-first 순서로 이번"
+  echo "    배포가 DO 를 먼저 전진시켜 배포 창의 불일치를 차단합니다."
+fi
 
 echo " [1/6] worktree 생성: $WORKTREE_DIR"
 if [ -d "$WORKTREE_DIR" ]; then
@@ -444,15 +477,30 @@ fi
 DO_DEPLOYED=0
 PAGES_DEPLOYED=0
 CRON_DEPLOYED=0
+DO_UNCHANGED=0  # 수정 67: DO 배포가 버전을 바꾸지 않음 (Pages 배포 차단 사유)
 
-# ── ① DO 워커 배포 ──────────────────────────────────────────────────────
-echo " [3/6] ① DO 워커 배포 (wrangler.do.jsonc)"
-if npx wrangler deploy --config=wrangler.do.jsonc 2>&1 | grep -E 'Uploaded|Current Version ID'; then
+# ── ① DO 워커 배포 (Pages 보다 반드시 먼저 — 수정 67) ─────────────────────
+# DO-first 보장: 새 Pages 가 구 DO 에 없는 RPC(예: releaseTransient, 수정 59)를
+# 호출하면 배포 창 동안 RPC 실패가 난다. 반대로 새 DO 는 모든 구 RPC 를 그대로
+# 구현하므로(하위호환), DO 를 먼저 배포하면 'Pages-신/DO-구' 창이 원천적으로
+# 생기지 않는다.
+echo " [3/6] ① DO 워커 배포 (wrangler.do.jsonc) — Pages 보다 먼저"
+DO_OUT="$(npx wrangler deploy --config=wrangler.do.jsonc 2>&1)"
+printf '%s\n' "$DO_OUT" | grep -E 'Uploaded|Current Version ID' || true
+# 배포 출력의 Current Version ID 를 캡처해 '실제로 버전이 바뀌었는지' 확인한다.
+# grep 성공만으로는 배포가 적용됐는지 알 수 없다 — 버전이 이전과 같으면 (또는
+# ID 가 안 나오면) 배포가 적용되지 않은 것이므로 Pages 를 배포하지 않는다.
+NEW_DO_VERSION="$(printf '%s\n' "$DO_OUT" | grep -oE '[0-9a-f]{8}-[0-9a-f-]{27}' | head -1 || true)"
+if [ -n "$NEW_DO_VERSION" ] && [ "$NEW_DO_VERSION" != "$PREV_DO_VERSION" ]; then
   DO_DEPLOYED=1
-  echo "   ✓ DO 워커 배포 성공"
+  echo "   ✓ DO 워커 배포 성공 (버전 ${NEW_DO_VERSION:0:8}… ≠ 이전 ${PREV_DO_VERSION:0:8}… — 새 버전 확인)"
+elif [ -n "$NEW_DO_VERSION" ] && [ "$NEW_DO_VERSION" = "$PREV_DO_VERSION" ]; then
+  DO_UNCHANGED=1
+  echo " ❌ DO 버전 미변경 감지: Current Version ID == 이전($PREV_DO_VERSION)" >&2
+  echo "    배포가 적용되지 않았습니다 — Pages 를 배포하지 않습니다 (Pages-신/DO-구 불일치 창 방지)." >&2
+  echo "    수동 확인(wrangler deployments list) 후 재실행하세요." >&2
 else
-  echo " ❌ DO 워커 배포 실패 — 이후 단계를 건너뜁니다 (아무것도 배포되지 않음)." >&2
-  # set -uo pipefail이지만 if 조건 안에서는 실패가 종료로 이어지지 않음
+  echo " ❌ DO 워커 배포 실패/버전 미확인 — 이후 단계를 건너뜁니다 (아무것도 배포되지 않음)." >&2
 fi
 
 # ── ② Pages 배포 ────────────────────────────────────────────────────────
@@ -650,6 +698,10 @@ elif [ "$DO_DEPLOYED" = "1" ] && [ "$PAGES_DEPLOYED" = "0" ]; then
     echo "      또는 --auto-rollback 플래그로 자동화 가능"
   fi
   echo "      또는 Pages 재시도: bash scripts/deploy-local-worktree.sh $SHORT_SHA $ENV_NAME (DO 재배포 포함)"
+elif [ "$DO_UNCHANGED" = "1" ]; then
+  echo " ⚠️  DO 버전 미변경 감지 — 배포가 적용되지 않아 아무것도 배포하지 않았습니다 (이전 상태 유지)."
+  echo "    Pages 는 배포하지 않았으므로 Pages-신/DO-구 불일치 창이 없습니다."
+  echo "    wrangler deployments list 로 DO 상태 확인 후 재실행: bash scripts/deploy-local-worktree.sh $SHORT_SHA $ENV_NAME"
 else
   echo " ❌ DO 배포 실패 — 아무것도 배포되지 않았습니다 (이전 상태 유지)."
   echo "    원인 확인 후 재시도: bash scripts/deploy-local-worktree.sh $SHORT_SHA $ENV_NAME"

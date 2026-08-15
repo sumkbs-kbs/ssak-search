@@ -720,6 +720,13 @@ export class RateLimiterDO extends DurableObject<Env> {
 
   /**
    * Reset all state (admin/testing).
+   *
+   * 방안 B 마이그레이션 (2026-08-14): staging/production 이 환경별 인스턴스로
+   * 분리된 뒤에도 구 'global' 공유 인스턴스가 열린 서킷 + 주기 alarm 프로브를
+   * 남긴 채 계속 발화할 수 있다 (스케줄된 alarm 은 RPC 없이도 DO 를 깨워
+   * 업스트림 robots.txt 프로브를 쏜다). deleteAll() 이 alarm 도 지우지만,
+   * 클리너(scripts/clean-global-limiter-*)가 잔존 alarm 프로브 정리를 보장할 수
+   * 있도록 **명시적 deleteAlarm()** 을 수행한다 — 무해하며 self-documenting.
    */
   async reset(): Promise<void> {
     this.state = {
@@ -730,7 +737,17 @@ export class RateLimiterDO extends DurableObject<Env> {
       stats: new Map(),
       cooldowns: new Map(),
     }
+    await this.ctx.storage.deleteAlarm()
     await this.ctx.storage.deleteAll()
+  }
+
+  /**
+   * 현재 pending alarm 시각 (없으면 null) — 마이그레이션 클리너가 잔존 alarm
+   * 프로브의 정리 여부를 검증하기 위한 읽기 전용 RPC. alarm 은 getAlarm 으로만
+   * 확인 가능하며, 클리너는 reset() 호출 전후로 이 값을 대조한다.
+   */
+  async getAlarmInfo(): Promise<{ pendingAlarmAt: number | null }> {
+    return { pendingAlarmAt: await this.ctx.storage.getAlarm() }
   }
 }
 
@@ -747,6 +764,7 @@ export interface RateLimiterRPC {
   forceOpen(host: string): Promise<void>
   setCooldown(key: string, untilMs: number): Promise<void>
   getCooldown(key: string): Promise<number>
+  getAlarmInfo(): Promise<{ pendingAlarmAt: number | null }>
   reset(): Promise<void>
 }
 

@@ -222,7 +222,11 @@ bash scripts/watch-secret-rotation.sh --dry-run    # 감지만 — 디스패치 
   worker-bundle-production/staging) ③ deploy.yml 폴백 빌드. ⚠️ 배포 스크립트는
   **커밋의 clean 체크아웃**에서 빌드하므로 변경이 실배포되려면 먼저 커밋해야
   한다 (미커밋 상태에서 배포하면 이전 코드가 배포됨 — 2026-08-14 실측). 구
-  'global' 인스턴스는 스토리지에 잔존하며 기존 alarm 프로브만 주기 실행(무해).
+  'global' 인스턴스는 스토리지에 잔존하며, 열린 서킷이 있으면 60s 주기 alarm
+  프로브가 RPC 없이도 DO 를 깨워 업스트림 robots.txt 프로브를 계속 쏜다
+  (마이그레이션 클리너, 2026-08-14): `bash scripts/clean-global-limiter.sh`
+  (status = 대상 존재 확인 / reset = 정리 실행) — reset() RPC 가 상태 + alarm 을
+  모두 지우고, reset 전후 getAlarmInfo() 대조로 정리 완료를 검증한다.
 
   **--full-eval (2026-08-14)**: `bash scripts/verify-deployed-gold.sh --full-eval`
   로 eval/queries.ts 전체 497쿼리를 배포 URL에 순차 전송해 gold 회수율을 집계한다.

@@ -756,6 +756,19 @@
 - **✅ 파이프라인 활성화 확정**: deploy workflow_run **31819504226 이 처음으로 skipped 가 아니라 실행됨** → pre-deploy guard 가 `❌ CLOUDFLARE_API_TOKEN is INVALID/EXPIRED (verify HTTP 401)` 로 정확히 fail-fast (시크릿 미교체 — 기존 알려진 이슈, 수정 28/46 guard 설계 그대로). 시크릿 교체 후 guard green → 아티팩트 다운로드(worker-bundle-staging) → DO/Pages/cron 배포 → post-deploy 게이트 전체가 도는 첫 full 파이프라인 실행이 됨
 - **잔여**: 시크릿 교체(사용자 조치, docs/17) — 교체 즉시 watch-secret-rotation.sh(수정 47)가 감지해 staging 디스패치 자동 발사
 
+### 수정 49: 구 'global' 인스턴스 잔존 alarm 프로브 정리 — 마이그레이션 클리너 (2026-08-14)
+- **작업 ID**: FIX-2026-08-14-29 (구현 + 유닛 테스트)
+- **배경**: 방안 B(DO 인스턴스 분리) 후 staging/production 은 'staging'/'production' 인스턴스를 쓰지만, 분리 이전 공유 인스턴스 **'global'** 이 DO 스토리지에 잔존한다. 열린 서킷이 있으면 scheduleCircuitProbe() 가 60s 주기 alarm 을 (재)스케줄하고, alarm 은 RPC 없이도 DO 를 깨워 업스트림 robots.txt 프로브(egress 트래픽)를 영원히 쏜다 — 'global' 을 참조하는 워커가 더는 없어 멈출 수단이 없었음 (docs/17 방안 B 절에 "주기 실행(무해)" 로 기록돼 있던 상태)
+- **수정** (`src/lib/rate-limiter-do.ts`):
+  - `reset()` — 기존 deleteAll() 에 **명시적 `deleteAlarm()`** 추가 (deleteAll 이 alarm 도 지우지만, 클리너가 잔존 alarm 프로브 정리를 보장·자기문서화)
+  - **`getAlarmInfo()` RPC 신규** — pending alarm 시각 읽기 전용 조회. reset 전후 대조로 "알람 프로브가 실제로 정리됐는지"를 검증 가능
+- **산출물** (방안 B 마이그레이션 클리너, 프로브 워커 컨벤션):
+  - `scripts/clean-global-limiter-worker.ts` — ssak-do-worker 의 RateLimiterDO 를 script_name 원격 바인딩으로 지목, **'global' 인스턴스를 리터럴로** idFromName → `?mode=status|reset&instance=` 처리 (reset: before 대조 → reset() → after 대조 → `clean` 판정)
+  - `wrangler.probe-limiter.jsonc` — 격리 프로젝트 (Pages 패턴과 동일한 script_name 바인딩, migrations 불필요)
+  - `scripts/clean-global-limiter.sh` — 배포 → status → reset → after clean 검증(clean=false 면 exit 1) → **trap 으로 워커 강제 삭제** (실패 시에도 잔존 방지)
+- **검증**: ① 유닛 테스트 **+9** (DO 2건 — reset 이 alarm+상태 소거, getAlarmInfo 전후 대조 / 워커 7건 — status 잔존 보고·clean 판정·reset before/after·멱등 reset·instance 오버라이드·바인딩 누락 500·mode 기본값) → 전체 **2,671건 / 135파일** ② `wrangler deploy --dry-run` — `env.RATE_LIMITER (RateLimiterDO, defined in ssak-do-worker)` 바인딩 해석 + 번들 1.91 KiB ③ bash -n · eslint 0 · prettier clean · tsc 0 ④ `verify-jsonc.ts` 로 config 검증
+- **사용법**: `bash scripts/clean-global-limiter.sh` (reset) / `... status` (읽기 전용) — 실서버 재배포 불필요 (DO 클래스 코드는 다음 배포에 포함)
+
 ### 수정 29: 배포 파이프라인 자동 검증 확장 — gold 회수 + staging↔production 동치 대조 (2026-08-14)
 - **작업 ID**: FIX-2026-08-14-12 (구현 + 실측)
 - **배경**: 로컬 worktree 배포 스크립트(수정 27)에 검증 단계 추가 — 배포 후 "동작하는가"를 자동 확인

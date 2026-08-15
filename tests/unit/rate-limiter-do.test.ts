@@ -455,6 +455,29 @@ describe('RateLimiterDO shared cooldowns (cross-isolate 429 pacing guards)', () 
     await doInstance.reset()
     expect(await doInstance.getCooldown('cooldown:wikipedia')).toBe(0)
   })
+
+  it('reset() clears a pending alarm probe (마이그레이션 클리너 — 구 global 인스턴스 정리)', async () => {
+    // 잔존 alarm 상태 재현: 서킷 트립 → scheduleCircuitProbe 가 60s alarm 을 스케줄
+    for (let i = 0; i < FAILURE_THRESHOLD; i++) await doInstance.release(HOST, false)
+    expect((await doInstance.getAllHealth())[HOST].tripped).toBe(true)
+    expect(await doState.storage.getAlarm()).not.toBeNull()
+
+    await doInstance.reset()
+
+    expect(await doState.storage.getAlarm()).toBeNull()
+    expect(await doInstance.getAllHealth()).toEqual({})
+  })
+
+  it('getAlarmInfo reports the pending alarm and null after reset', async () => {
+    expect(await doInstance.getAlarmInfo()).toEqual({ pendingAlarmAt: null })
+
+    for (let i = 0; i < FAILURE_THRESHOLD; i++) await doInstance.release(HOST, false)
+    const info = await doInstance.getAlarmInfo()
+    expect(info.pendingAlarmAt).not.toBeNull()
+
+    await doInstance.reset()
+    expect(await doInstance.getAlarmInfo()).toEqual({ pendingAlarmAt: null })
+  })
 })
 
 describe('RateLimiterDO inflight slot lease reaper (S105)', () => {

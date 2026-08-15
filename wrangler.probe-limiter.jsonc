@@ -1,0 +1,19 @@
+{
+  // 방안 B 마이그레이션 클리너 (2026-08-14) — 구 'global' RATE_LIMITER 인스턴스 정리용
+  // 격리 Workers 프로젝트. 프로덕션(search-engine-api)/DO 워커(ssak-do-worker)와
+  // 무관한 임시 프로젝트로, 실행 후 삭제한다:
+  //   bash scripts/clean-global-limiter.sh
+  //   npx wrangler delete clean-global-limiter --config wrangler.probe-limiter.jsonc --force
+  //
+  // ssak-do-worker 의 RateLimiterDO 클래스를 script_name 으로 원격 바인딩한다 —
+  // Pages(wrangler.jsonc)가 11개 DO 를 script_name 으로 바인딩하는 것과 동일한
+  // 패턴이며, 로컬 main 에 클래스를 등록할 필요가 없다 (migrations 불필요).
+  "name": "clean-global-limiter",
+  "compatibility_date": "2026-08-14",
+  "main": "scripts/clean-global-limiter-worker.ts",
+  "durable_objects": {
+    "bindings": [
+      { "name": "RATE_LIMITER", "class_name": "RateLimiterDO", "script_name": "ssak-do-worker" }
+    ]
+  }
+}

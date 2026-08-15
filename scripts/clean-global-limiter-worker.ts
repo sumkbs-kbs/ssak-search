@@ -79,7 +79,16 @@ export async function handle(request: Request, env: ProbeEnv): Promise<Response>
 
 async function summarize(stub: LimiterStub) {
   const health = await stub.getAllHealth()
-  const alarm = await stub.getAlarmInfo()
+  let alarm: { pendingAlarmAt: number | null } = { pendingAlarmAt: null }
+  let alarmCheckFailed = false
+  try {
+    alarm = await stub.getAlarmInfo()
+  } catch {
+    // 0629eb8 이전 DO 코드에는 getAlarmInfo RPC 가 없다 — reset() 의 deleteAll()
+    // 이 alarm 도 지우므로, alarm 검증 없이 호스트 소거 여부로 정리를 판정한다
+    // (서킷 0 개면 alarm 을 재스케줄할 주체가 없음). 경고만 남기고 진행.
+    alarmCheckFailed = true
+  }
   const hosts = Object.keys(health)
   return {
     hosts: hosts.length,
@@ -87,6 +96,7 @@ async function summarize(stub: LimiterStub) {
     hostsList: hosts,
     alarmPending: alarm.pendingAlarmAt !== null,
     pendingAlarmAt: alarm.pendingAlarmAt,
+    alarmCheckFailed,
   }
 }
 

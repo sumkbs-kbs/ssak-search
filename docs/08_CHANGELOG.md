@@ -768,6 +768,7 @@
   - `scripts/clean-global-limiter.sh` — 배포 → status → reset → after clean 검증(clean=false 면 exit 1) → **trap 으로 워커 강제 삭제** (실패 시에도 잔존 방지)
 - **검증**: ① 유닛 테스트 **+9** (DO 2건 — reset 이 alarm+상태 소거, getAlarmInfo 전후 대조 / 워커 7건 — status 잔존 보고·clean 판정·reset before/after·멱등 reset·instance 오버라이드·바인딩 누락 500·mode 기본값) → 전체 **2,671건 / 135파일** ② `wrangler deploy --dry-run` — `env.RATE_LIMITER (RateLimiterDO, defined in ssak-do-worker)` 바인딩 해석 + 번들 1.91 KiB ③ bash -n · eslint 0 · prettier clean · tsc 0 ④ `verify-jsonc.ts` 로 config 검증
 - **사용법**: `bash scripts/clean-global-limiter.sh` (reset) / `... status` (읽기 전용) — 실서버 재배포 불필요 (DO 클래스 코드는 다음 배포에 포함)
+- **후속 견고화**: getAlarmInfo RPC 는 0629eb8 에서만 존재 — DO 워커가 아직 구 코드면 해당 RPC 가 500 을 내므로, summarize() 가 getAlarmInfo 실패를 `alarmCheckFailed: true` 로 우아하게 처리하고 호스트 소거로 정리 판정 (구 코드에서도 동작, 유닛 테스트 +1 → 8건)
 
 ### 수정 29: 배포 파이프라인 자동 검증 확장 — gold 회수 + staging↔production 동치 대조 (2026-08-14)
 - **작업 ID**: FIX-2026-08-14-12 (구현 + 실측)

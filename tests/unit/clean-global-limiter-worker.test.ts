@@ -140,4 +140,24 @@ describe('clean-global-limiter worker (방안 B 마이그레이션 클리너)', 
     expect(body.mode).toBe('status')
     expect(stub.reset).not.toHaveBeenCalled()
   })
+
+  it('구 DO 코드(0629eb8 이전, getAlarmInfo 미존재)에서도 reset 정리를 판정한다', async () => {
+    // 잔존 상태가 있지만 getAlarmInfo RPC 가 없는 구 코드 시나리오.
+    const stub = makeStub({ 'www.bing.com': { tripped: true } }, Date.now() + 60_000)
+    stub.getAlarmInfo.mockRejectedValue(new Error('Method getAlarmInfo not found'))
+    const env = makeEnv(stub)
+
+    const res = await handle(req('https://cleaner/?instance=global&mode=reset'), env)
+    expect(res.status).toBe(200)
+    const body = await res.json()
+
+    // 호스트 소거로 정리 판정 (alarm 검증 불가 경고 플래그). 500 이 아니라
+    // 진행돼야 구 코드에서도 클리너가 동작한다.
+    expect(body).toMatchObject({
+      clean: true,
+      before: { hosts: 1, openCircuits: 1, alarmCheckFailed: true },
+      after: { hosts: 0, openCircuits: 0, alarmCheckFailed: true },
+    })
+    expect(stub.reset).toHaveBeenCalledTimes(1)
+  })
 })

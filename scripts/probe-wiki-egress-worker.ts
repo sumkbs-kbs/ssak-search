@@ -120,6 +120,25 @@ async function handle(request: Request): Promise<Response> {
       tryFetch('https://lookup.dbpedia.org/', {
         headers: { 'User-Agent': UA },
       }),
+    // 수정 60 후속 검증 (오탐 리스크 점검): robots.txt 가 로컬 404 인 호스트들이
+    // egress(WAF) 에서도 404 를 주는지 — 404-alive 가 실제로 어느 호스트에
+    // 적용되는지 확정한다.
+    gh_robots: () =>
+      tryFetch('https://api.github.com/robots.txt', {
+        headers: { 'User-Agent': UA },
+      }),
+    algolia_robots: () =>
+      tryFetch('https://hn.algolia.com/robots.txt', {
+        headers: { 'User-Agent': UA },
+      }),
+    github_api: () =>
+      tryFetch('https://api.github.com/rate_limit', {
+        headers: { 'User-Agent': UA, Accept: 'application/vnd.github+json' },
+      }),
+    algolia_api: () =>
+      tryFetch('https://hn.algolia.com/api/v1/search?query=quantum&hitsPerPage=1', {
+        headers: { 'User-Agent': UA, Accept: 'application/json' },
+      }),
   }
 
   const fn = cases[c] ?? cases.en_rest

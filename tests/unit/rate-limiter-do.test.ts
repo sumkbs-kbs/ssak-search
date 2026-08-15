@@ -412,6 +412,32 @@ describe('RateLimiterDO self-healing circuit breaker (D.2)', () => {
     expect(health[HOST].tripCount).toBe(0)
   })
 
+  it('API 경로 프로브의 404 는 alive 아님 (dbpedia /api/search — endpoint gone, 수정 64)', async () => {
+    instantiate()
+    for (let i = 0; i < FAILURE_THRESHOLD; i++) await doInstance.release(DBPEDIA_HOST, false)
+
+    // /api/search 가 404 (엔드포인트 소멸) — robots.txt 가 아니므로 alive 아님
+    fetchMock.mockResolvedValue({ ok: false, status: 404, text: async () => '404 Not Found' })
+    vi.advanceTimersByTime(30_000)
+    await doInstance.alarm()
+
+    const health = await doInstance.getAllHealth()
+    expect(health[DBPEDIA_HOST].tripped).toBe(true) // 유지 — 서킷 닫힘 오탐 없음
+    expect(health[DBPEDIA_HOST].tripCount).toBe(1) // 에스컬레이션
+  })
+
+  it('SE API 경로 프로브의 404 도 alive 아님 (수정 64)', async () => {
+    instantiate()
+    for (let i = 0; i < FAILURE_THRESHOLD; i++) await doInstance.release(SE_HOST, false)
+
+    fetchMock.mockResolvedValue({ ok: false, status: 404, text: async () => '404 Not Found' })
+    vi.advanceTimersByTime(600_000) // SE 10분 간격
+    await doInstance.alarm()
+
+    const health = await doInstance.getAllHealth()
+    expect(health[SE_HOST].tripped).toBe(true) // 404 = alive 아님
+  })
+
   // ── wikipedia suffix sharing (S9: ko/zh/ja share one upstream IP budget) ──
 
   it('shares ONE rate window across all wikipedia language subdomains', async () => {

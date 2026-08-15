@@ -652,7 +652,19 @@ export class RateLimiterDO extends DurableObject<Env> {
       clearTimeout(timer)
       const text = await resp.text().catch(() => '')
       // 수정 60: 404(robots.txt 부재) 도 alive — 서버가 응답했기 때문.
-      let alive = resp.ok || resp.status === 429 || resp.status === 301 || resp.status === 302 || resp.status === 404
+      // 수정 64 (2026-08-15): 404-alive 는 **robots.txt 프로브(일반 호스트)에만**
+      // 적용한다 — SE /2.3/info 나 dbpedia /api/search 같은 **API 경로 프로브의
+      // 404 는 '엔드포인트 소멸'** 이므로 alive 가 아니다 (오탐 방지). egress 실측:
+      // api.github.com/hn.algolia.com/lookup.dbpedia.org 는 robots.txt 404 + 실제
+      // API 200 — robots.txt 404 는 'robots 파일 없음' 신호일 뿐 백엔드 헬스와
+      // 무관하므로, 이 3개 호스트의 회복은 이 한정으로도 그대로 보장된다.
+      const isRobotsProbe = !this.isStackExchangeHost(host) && host !== 'lookup.dbpedia.org'
+      let alive =
+        resp.ok ||
+        resp.status === 429 ||
+        resp.status === 301 ||
+        resp.status === 302 ||
+        (isRobotsProbe && resp.status === 404)
       if (this.isStackExchangeHost(host) && resp.status === 400) {
         // SE API: 400 + error_id 502 = egress IP rate-limit (throttle_violation).
         alive = /error_id["']?\s*[:=]\s*502/.test(text)

@@ -935,6 +935,18 @@
 - **검증**: self-test 2/2 (폴링 인터벌 env 튜닝으로 1s) · 유닛 4건 · 전체 unit **2,696/2,696 PASS** · tsc 0 · prettier clean · ci.yml deploy-selftest 에 스텝 추가
 - **사용법**: `echo '<URL>' | bash scripts/verify-slack-alert-e2e.sh` (또는 `--url '<URL>'`) — 마지막 ⑥ 에서 Slack 채널 수신만 사용자 확인
 
+### 수정 64: 404-alive 오탐 리스크 점검 — robots.txt 프로브에만 한정 (2026-08-15)
+- **작업 ID**: FIX-2026-08-15-12 (점검 + 하드닝 + 테스트)
+- **요청**: 수정 60 의 404-alive 가 잘못된 호스트/경로로 서킷을 오탐 닫지 않는지, 404+성공 프로브 조합의 오탐 리스크 점검
+- **실측 (Workers egress 프로브)**: robots.txt 404 는 3개 호스트에서 확인 — **api.github.com / hn.algolia.com / lookup.dbpedia.org** 모두 robots.txt 404 + **실제 API 200** (github rate_limit · algolia search). → 404-alive 는 오탐이 아니라 **이 3개 호스트의 영구 stuck-open(수정 60 이 고친 버그 클래스)을 막는 필수 로직**
+- **오탐 경로 분석**:
+  - false-close 는 "robots.txt 404 + 실제 API 가 404 로 응답" 조합에서만 가능 — 503/네트워크 오류는 release(false) → 실패 누적 → **재오픈(자가교정)**. 404/500/502 응답은 rateLimitedFetch 의 기존 의미론(503 만 실패)상 success → 재오픈 안 되는 좁은 잔여 창
+  - **잘못된 호스트 오탐 없음**: 호스트는 코드의 고정 백엔드 목록(21개)에서만 유래 — 잘못된 호스트는 DNS 실패 → alive=false → **stuck open(반대 방향)**. 경로 3종(robots.txt / SE /2.3/info / dbpedia /api/search) 모두 실측 검증됨
+- **하드닝** (`src/lib/rate-limiter-do.ts` probeHost): **404-alive 를 robots.txt 프로브(일반 호스트)에만 한정** — SE/dbpedia 같은 **API 경로 프로브의 404 는 '엔드포인트 소멸' 이므로 alive 아님** (기존엔 전 경로 404=alive). github/algolia/dbpedia 회복에는 영향 없음 (각각 robots.txt 404 / /api/search 200 으로 그대로 alive)
+- **테스트** (+2): dbpedia /api/search 404 → 서킷 유지 + tripCount 에스컬레이션 · SE /2.3/info 404 → alive 아님 (기존 robots.txt 404-alive 테스트는 유지 — 일반 호스트)
+- **검증**: rate-limiter-do **39/39** · 전체 unit 138파일 **2,698/2,698 PASS** · tsc 0 · prettier clean · 프로브 워커는 검증 후 삭제 (컨벤션)
+- **잔존 노트**: 서킷 맵에 `workers_ai`(내부 바인딩 pseudo-host) 존재 — 트립 시 robots.txt 프로브가 DNS 실패로 stuck-open 될 수 있는 사전 존재 이슈 (404-alive 와 무관, 별도 추적)
+
 ### 수정 29: 배포 파이프라인 자동 검증 확장 — gold 회수 + staging↔production 동치 대조 (2026-08-14)
 - **작업 ID**: FIX-2026-08-14-12 (구현 + 실측)
 - **배경**: 로컬 worktree 배포 스크립트(수정 27)에 검증 단계 추가 — 배포 후 "동작하는가"를 자동 확인

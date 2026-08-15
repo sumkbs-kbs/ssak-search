@@ -298,6 +298,8 @@ if [ "$DRY_RUN" = 1 ]; then
   echo "             ⚠️  DO 인스턴스 키를 환경별로 분리 — staging 은 'staging', production 은 'production' 인스턴스 사용 (방안 B)"
   echo "   ① DO     : npx wrangler deploy --config=wrangler.do.jsonc"
   echo "   ② Pages  : npx wrangler pages deploy dist/ --project-name=search-engine-api --branch=$PAGES_BRANCH"
+  echo "             ⚠️  'Uploaded 0 files (3 already uploaded)' 는 스테일 아님 — 카운트는 정적 에셋 3개(배포 간 불변)만 집계,"
+  echo "                 _worker.js Functions 번들은 별도 경로로 업로드 (신선도는 배포 URL + Source commit 검증으로 확인, 헤더 '출력 해석' 절 참조)"
   echo "   ③ cron   : npx wrangler deploy --config=$CRON_CONFIG"
   echo "   검증     : Pages Source commit == $SHORT_SHA + $HEALTH_URL HTTP 200"
   echo "   gold     : 6개 대표 쿼리 gold 회수 (top-10) — GOLD_CHECK=0 으로 생략 가능"

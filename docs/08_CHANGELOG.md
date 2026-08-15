@@ -905,6 +905,20 @@
 - **검증**: bash -n OK · 셀프테스트 7/7 · deploy-local-worktree.test.ts 8/8 · 전체 unit 136파일 **2,687/2,687 PASS** · tsc 0 · prettier clean · 수동 시뮬레이션으로 전체 흐름 확인 (PREV 캡처 → 번들 불일치 → cron/검증 생략 → DO+Pages 롤백 → 정리)
 - **문서**: docs/17 §5 --auto-rollback 절에 ② 번들 불일치 롤백 + staging 제약 추가
 
+### 수정 62: 알림 스텝 웹훅 불필요 드라이런 — 로컬 캡처 서버 POST (2026-08-15)
+- **작업 ID**: FIX-2026-08-15-10 (구현 + 테스트 + 실측)
+- **요청**: 웹훅 URL 없이도 검증 가능하도록, GH Actions 알림 스텝이 로컬 캡처 서버로 POST 하는 드라이런 모드를 추가
+- **배경**: 수정 51 의 알림 스텝은 `SLACK_WEBHOOK` 미설정이면 no-op — 실 웹훅 시크릿이 없는 동안 알림 페이로드/전송 경로를 검증할 방법이 없었다
+- **수정**:
+  - **`scripts/notify-pipeline-failure.sh` 신규** — deploy.yml 인라인 로직을 추출. `SLACK_DRY_RUN=1` 이면 웹훅 대신 **로컬 캡처 서버**(`SLACK_DRY_RUN_URL`, 기본 `http://127.0.0.1:18080/`)로 POST 하고 페이로드를 출력 — 웹훅 URL 없이 검증. 페이로드 구조는 수정 51 과 동일 (text + attachments[danger].blocks). `--self-test` 오프라인 회귀 포함
+  - **`scripts/capture-webhook.py` 신규** — 로컬 웹훅 캡처 서버 (POST 본문을 stdout 으로 출력 + 200, Slack 수락 시맨틱과 동일)
+  - **deploy.yml** — 알림 스텝 run 블록을 스크립트 호출로 교체 (+ REPO/RUN_URL env). `if:` 조건/웹훅 env 는 유지
+  - **ci.yml** — deploy-selftest 잡에 `notify-pipeline-failure.sh --self-test` 스텝 추가 (CI 에서도 오프라인 회귀 차단)
+  - **tests/unit/notify-pipeline-failure.test.ts** 신규 — 가짜 curl 로 ① 드라이런 캡처 POST ② 커스텀 URL ③ 웹훅 미설정 no-op ④ 웹훅 POST ⑤ --self-test 검증 (5건)
+- **실측 (웹훅 없이 종단 검증 완료)**: 캡처 서버 기동 → `SLACK_DRY_RUN=1` 실행 → 서버가 **424B 페이로드 수신** (`text`/`danger`/`run: <...999999>`) → 스크립트 `✅ DRY-RUN 알림 전송됨 (캡처 서버)` + exit 0
+- **검증**: self-test 5/5 · 유닛 5건 · 전체 unit 137파일 **2,692/2,692 PASS** · tsc 0 · prettier clean · verify-deploy-workflow **PASS (6체크)**
+- **사용법**: `python3 scripts/capture-webhook.py --port 18080` → 다른 터미널에서 `SLACK_DRY_RUN=1 bash scripts/notify-pipeline-failure.sh` — 실 웹훅 없이 알림 경로 검증
+
 ### 수정 29: 배포 파이프라인 자동 검증 확장 — gold 회수 + staging↔production 동치 대조 (2026-08-14)
 - **작업 ID**: FIX-2026-08-14-12 (구현 + 실측)
 - **배경**: 로컬 worktree 배포 스크립트(수정 27)에 검증 단계 추가 — 배포 후 "동작하는가"를 자동 확인

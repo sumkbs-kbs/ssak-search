@@ -230,31 +230,14 @@ jobs:
         if: steps.equivalence.outcome == 'skipped' && !cancelled()
         env:
           SLACK_WEBHOOK: ${{ secrets.ALERT_SLACK_WEBHOOK || secrets.SLACK_WEBHOOK }}
-        run: |
-          if [ -z "${SLACK_WEBHOOK:-}" ]; then
-            echo "ℹ️ SLACK_WEBHOOK 미설정 — 실패 알림 생략 (no-op)"
-            exit 0
-          fi
-          PAYLOAD=$(python3 -c '
-          import json, sys
-          repo, run_url = sys.argv[1], sys.argv[2]
-          print(json.dumps({
-            "text": f"❌ staging 배포 파이프라인 실패 — {repo}",
-            "attachments": [{
-              "color": "danger",
-              "blocks": [
-                {"type": "section", "text": {"type": "mrkdwn", "text": f"*staging 배포 실패* — {repo}"}},
-                {"type": "context", "elements": [{"type": "mrkdwn", "text": f"run: <{run_url}>"}]},
-              ],
-            }],
-          }))
-          '
-          "${{ github.repository }}" "https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}")
-          if curl -sf -m 10 -X POST -H 'Content-Type: application/json' -d "$PAYLOAD" "$SLACK_WEBHOOK"; then
-            echo "✅ Slack 알림 전송됨 (danger)"
-          else
-            echo "⚠️ Slack 알림 전송 실패 — 로그로만 남깁니다" >&2
-          fi
+          REPO: ${{ github.repository }}
+          RUN_URL: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        # 수정 62 (2026-08-15): 인라인 로직을 scripts/notify-pipeline-failure.sh 로
+        # 추출 — 웹훅 URL 없이도 SLACK_DRY_RUN=1 로 로컬 캡처 서버
+        # (scripts/capture-webhook.py) 에 POST 해 페이로드를 검증할 수 있다
+        # (로컬: python3 scripts/capture-webhook.py --port 18080 + SLACK_DRY_RUN=1).
+        # 페이로드 구조는 수정 51 과 동일 (text + attachments[danger].blocks).
+        run: bash scripts/notify-pipeline-failure.sh
 
   deploy-production:
     name: Deploy to Cloudflare Pages (Production)

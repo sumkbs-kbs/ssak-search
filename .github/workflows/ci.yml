@@ -152,6 +152,12 @@ jobs:
       - name: Deploy script self-test (fake npx simulation)
         run: bash scripts/deploy-local-worktree.sh --self-test
 
+      # 수정 62 (2026-08-15): 알림 스크립트(notify-pipeline-failure.sh)도 오프라인
+      # 회귀 테스트 — 가짜 curl 로 드라이런(로컬 캡처 서버 POST)/no-op/웹훅 POST
+      # 경로와 페이로드 구조를 실제 웹훅 URL 없이 검증한다.
+      - name: Notify script self-test (fake curl)
+        run: bash scripts/notify-pipeline-failure.sh --self-test
+
   binding-verify:
     name: Binding Verification
     runs-on: ubuntu-latest

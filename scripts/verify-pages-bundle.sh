@@ -19,6 +19,9 @@
 # Env:
 #   CLOUDFLARE_API_TOKEN / CLOUDFLARE_ACCOUNT_ID — wrangler API 호출용
 #     (미설정 시 npx wrangler OAuth 경로로 동작)
+#   BUNDLE_VERIFY_RETRIES     build_commit 조회 재시도 횟수 (기본 5 — 배포 직후
+#                             전파 레이스 오탐 제거, 수정 79. 조회 성공 시 즉시 종료)
+#   BUNDLE_VERIFY_RETRY_WAIT  재시도 사이 대기 초 (기본 10)
 #
 # exit code:
 #   0  PASS — build_commit == 기대 커밋
@@ -89,9 +92,14 @@ if [ -z "$DEPLOY_URL" ]; then
 fi
 echo "   배포 URL: $DEPLOY_URL"
 
-# ── ② build_commit 조회 (재시도 3회) ───────────────────────────────────────
+# ── ② build_commit 조회 (수정 79: 재시도 ${BUNDLE_VERIFY_RETRIES:-5}회 × ${BUNDLE_VERIFY_RETRY_WAIT:-10}s) ──
+# 배포 직후 에지 전파가 늦으면(빈 응답·HTTP 5xx·404) 일시적으로 build_commit 이
+# 안 보일 수 있다 — 단발 조회로 '스테일' 오판하는 전파 레이스 오탐을 방지.
+# 조회 성공(비어있지 않음) 하면 즉시 종료 — 일치 판정은 그 뒤 1회.
 BUNDLE_COMMIT=""
-for i in 1 2 3; do
+BUNDLE_ATTEMPT=0
+while [ "$BUNDLE_ATTEMPT" -lt "${BUNDLE_VERIFY_RETRIES:-5}" ]; do
+  BUNDLE_ATTEMPT=$((BUNDLE_ATTEMPT + 1))
   curl -s -m 20 "$DEPLOY_URL/api/health" > /tmp/health.json 2>/dev/null || true
   BUNDLE_COMMIT="$(python3 - <<'PY' 2>/dev/null || true
 import json
@@ -104,8 +112,8 @@ print(h.get("build_commit", ""))
 PY
 )"
   [ -n "$BUNDLE_COMMIT" ] && break
-  echo "⚠️  build_commit 조회 재시도 $i/3 (전파 지연)..."
-  sleep 5
+  echo "⚠️  build_commit 조회 재시도 $BUNDLE_ATTEMPT/${BUNDLE_VERIFY_RETRIES:-5} (배포 직후 전파 지연 — ${BUNDLE_VERIFY_RETRY_WAIT:-10}s 후 재시도)..."
+  sleep "${BUNDLE_VERIFY_RETRY_WAIT:-10}"
 done
 
 # ── ③ 대조 ─────────────────────────────────────────────────────────────────
@@ -114,5 +122,6 @@ if [ "$BUNDLE_COMMIT" = "$EXPECTED" ]; then
   exit 0
 fi
 echo " ❌ 번들 커밋 불일치: build_commit='${BUNDLE_COMMIT:-비어있음}' vs ${EXPECTED:0:7}" >&2
-echo "    배포된 번들이 스테일입니다 — staging 은 캐시 무효화 재배포(--auto-redeploy, 수정 76) 권장." >&2
+echo "    (재시도 ${BUNDLE_VERIFY_RETRIES:-5}회 후에도 조회 실패/불일치 — 전파 레이스가 아니라 스테일 의심)" >&2
+echo "    판정 전에 deployment list 의 Source commit 과 대조 권장 — staging 은 캐시 무효화 재배포(--auto-redeploy, 수정 76)." >&2
 exit 1

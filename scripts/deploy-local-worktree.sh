@@ -55,11 +55,13 @@
 #                     package-lock.json 기준으로 정확히 설치되므로, main repo 의
 #                     미커밋 package*.json 변경·stale node_modules 와 무관하게
 #                     재현 가능한 빌드를 보장한다. 느리지만 안전 (기본 사용 권장은
-#                     심링크 — CI/일상 배포는 npm ci 를 이미 수행한 node_modules 사용)
-#   COMMIT_SYNC_CHECK=0  배포 후 staging↔production 배포 커밋 동치 확인 생략
+#                     심링크 — CI/일상 배포는 npm ci 를 이미 수행한 node_modules 사용)#   COMMIT_SYNC_CHECK=0  배포 후 staging↔production 배포 커밋 동치 확인 생략
 #                     (기본 1=수행 — 경량: wrangler deployment list 만 조회,
-#                     검색/gold/헬스 부하 없음). 불일치는 배포 성공에 영향 없이
-#                     경고로만 (production 배포 직후 staging 미배포는 정상 상태)
+#                      검색/gold/헬스 부하 없음). 불일치는 배포 성공에 영향 없이
+#                      경고로만 (production 배포 직후 staging 미배포는 정상 상태)
+#   BUNDLE_VERIFY_RETRIES     번들 커밋 검증 build_commit 조회 재시도 횟수 (기본 5 —
+#                     배포 직후 전파 레이스 오탐 제거, 수정 79. 조회 성공 시 즉시 종료)
+#   BUNDLE_VERIFY_RETRY_WAIT  재시도 사이 대기 초 (기본 10)
 #
 # 예:
 #   scripts/deploy-local-worktree.sh                       # HEAD → production
@@ -158,7 +160,10 @@ case "${1:-}" in
       echo "✨ Success! Deployment complete."
       # bundle_mismatch 시나리오: 배포 URL 출력 → 번들 커밋 검증 발동 (수정 61)
       # auto_redeploy 시나리오: 동일하게 URL 출력 — 첫 검증 불일치 → 재배포 흐름 (수정 76)
-      if [ "${FAKE_NPX_SCENARIO:-}" = "bundle_mismatch" ] || [ "${FAKE_NPX_SCENARIO:-}" = "auto_redeploy" ]; then
+      # retry_race 시나리오 (수정 79): URL 출력 — 첫 조회 빈 응답 → 재시도 흐름
+      if [ "${FAKE_NPX_SCENARIO:-}" = "bundle_mismatch" ] \
+        || [ "${FAKE_NPX_SCENARIO:-}" = "auto_redeploy" ] \
+        || [ "${FAKE_NPX_SCENARIO:-}" = "retry_race" ]; then
         echo "Deployment complete! https://abc12345.search-engine-api.pages.dev"
       fi
       exit 0
@@ -221,6 +226,19 @@ if [[ "$*" == *"/api/health"* ]]; then
     HC=$((HC + 1))
     echo "$HC" > "$SELFTEST_TMP/.healthcount"
     if [ "$HC" = "1" ]; then echo '{"build_commit":"0000000"}'; exit 0; fi
+    FULLSHA="$(git rev-parse HEAD 2>/dev/null || echo 0000000000000000000000000000000000000000)"
+    echo "{\"build_commit\":\"$FULLSHA\"}"
+    exit 0
+  fi
+  if [ "${FAKE_NPX_SCENARIO:-}" = "retry_race" ]; then
+    # retry_race (수정 79): 배포 직후 전파 레이스 — 첫 /api/health 는 빈 응답
+    # (build_commit 미노출), 재시도 후에는 일치. 단발 조회면 '스테일' 오탐이
+    # 되지만 재시도 루프가 흡수해 통과해야 한다. 카운터 파일로 1회차만 빈 응답.
+    HC=0
+    [ -f "${SELFTEST_TMP:?}/.healthcount" ] && HC=$(cat "$SELFTEST_TMP/.healthcount")
+    HC=$((HC + 1))
+    echo "$HC" > "$SELFTEST_TMP/.healthcount"
+    if [ "$HC" = "1" ]; then echo '{}'; exit 0; fi
     FULLSHA="$(git rev-parse HEAD 2>/dev/null || echo 0000000000000000000000000000000000000000)"
     echo "{\"build_commit\":\"$FULLSHA\"}"
     exit 0
@@ -305,6 +323,30 @@ FAKEEOF
   # 번들 커밋 불일치 (수정 61): --auto-rollback → DO + Pages Rollback API 자동 롤백
   run_scenario bundle_mismatch "--auto-rollback" 1 yes yes
   run_scenario bundle_mismatch ""               1 no  no    # 플래그 없으면 롤백 없이 실패 보고만
+  # retry_race (수정 79): 배포 직후 전파 레이스 — 첫 build_commit 조회는 빈 응답
+  # (전파 지연), 재시도 후 일치 → 단발 조회였다면 '스테일' 오탐이지만 재시도 루프가
+  # 흡수해 통과해야 한다. rollback 없음 + exit 0 + 재시도 로그 + 일치 판정 단언.
+  : > "$FAKE_NPX_LOG"
+  rm -f "$SELFTEST_TMP/.healthcount"
+  RR_OUT="$SELFTEST_TMP/retry_race.out"
+  (
+    export PATH="$FAKE_BIN:$PATH" FAKE_NPX_SCENARIO=retry_race
+    export GOLD_CHECK=0 EQ_CHECK=0 COMMIT_SYNC_CHECK=0 SELFTEST_TARGET_RUN=1
+    bash "$REPO_ROOT/scripts/deploy-local-worktree.sh" HEAD production
+  ) > "$RR_OUT" 2>&1
+  RR_RC=$?
+  RR_OK=1
+  [ "$RR_RC" = "0" ] || RR_OK=0
+  grep -q 'build_commit 조회 재시도' "$RR_OUT" || RR_OK=0
+  grep -q '✅ 번들 커밋 검증: .*build_commit=' "$RR_OUT" || RR_OK=0
+  grep -q 'wrangler rollback' "$FAKE_NPX_LOG" && RR_OK=0
+  if [ "$RR_OK" = "1" ]; then
+    echo " ✅ retry_race: 전파 레이스(첫 조회 빈 응답) 를 재시도로 흡수 — 스테일 오탐 없이 통과 (exit 0)"
+  else
+    echo " ❌ retry_race: rc=$RR_RC 재시도로그=$(grep -c 'build_commit 조회 재시도' "$RR_OUT" || true)건 일치판정=$(grep -c '✅ 번들 커밋 검증' "$RR_OUT" || true)건" >&2
+    tail -30 "$RR_OUT" >&2
+    FAILURES=$((FAILURES + 1))
+  fi
   # auto_redeploy (수정 76): staging 번들 불일치 → 캐시 무효화 재배포로 복구.
   # 첫 /api/health 는 불일치, 재배포 후 검증은 일치 → exit 0 + 재배포 완료 단언.
   : > "$FAKE_NPX_LOG"
@@ -511,6 +553,7 @@ if [ "$DRY_RUN" = 1 ]; then
   echo "             ⚠️  'Uploaded 0 files (3 already uploaded)' 는 스테일 아님 — 카운트는 정적 에셋 3개(배포 간 불변)만 집계,"
   echo "                 _worker.js Functions 번들은 별도 경로로 업로드 (신선도는 배포 URL + Source commit 검증으로 확인, 헤더 '출력 해석' 절 참조)"
   echo "   번들검증 : 배포 URL(고유 해시)의 /api/health build_commit == $SHORT_SHA 대조 — 배포된 번들이 실제 새 코드인지 런타임 증명 (수정 56)"
+  echo "             조회 재시도 ${BUNDLE_VERIFY_RETRIES:-5}회 × ${BUNDLE_VERIFY_RETRY_WAIT:-10}s (배포 직후 전파 레이스 오탐 제거, 수정 79)"
   echo "   ③ cron   : npx wrangler deploy --config=$CRON_CONFIG"
   echo "   검증     : Pages Source commit == $SHORT_SHA + $HEALTH_URL HTTP 200"
   echo "   gold     : 6개 대표 쿼리 gold 회수 (top-10) — GOLD_CHECK=0 으로 생략 가능"
@@ -680,9 +723,24 @@ if [ "$DO_DEPLOYED" = "1" ]; then
     # 라우팅/캐시로 이전 배포를 가리킬 수 있으므로 반드시 배포 URL 을 쓴다.
     PAGES_DEPLOY_URL="$(printf '%s\n' "$PAGES_OUT" | grep -oE 'https://[a-z0-9]+\.search-engine-api\.pages\.dev' | head -1)"
     if [ -n "$PAGES_DEPLOY_URL" ]; then
-      BUNDLE_COMMIT="$(curl -s -m 20 "$PAGES_DEPLOY_URL/api/health" | python3 -c 'import json,sys
+      # 수정 79: 배포 직후 전파 레이스 오탐 제거 — 단발 curl 이 아니라
+      # BUNDLE_VERIFY_RETRIES(기본 5)회 × BUNDLE_VERIFY_RETRY_WAIT(기본 10s) 재시도
+      # 루프로 build_commit 을 조회한다. 배포 직후 라우팅/에지 전파가 늦으면
+      # (빈 응답·HTTP 5xx·404) 일시적으로 build_commit 이 안 보일 수 있는데,
+      # 단발 호출로는 '스테일'로 오판할 수 있다 (2026-08-15 실측 오탐 사례 —
+      # verify-pages-bundle.sh 의 재시도 3회는 이 함정에서 나왔다). 조회 성공
+      # (build_commit 이 비어있지 않음) 하면 즉시 종료 — 일치 판정은 그 뒤 1회.
+      BUNDLE_COMMIT=""
+      BUNDLE_ATTEMPT=0
+      while [ "$BUNDLE_ATTEMPT" -lt "${BUNDLE_VERIFY_RETRIES:-5}" ]; do
+        BUNDLE_ATTEMPT=$((BUNDLE_ATTEMPT + 1))
+        BUNDLE_COMMIT="$(curl -s -m 20 "$PAGES_DEPLOY_URL/api/health" | python3 -c 'import json,sys
 h=json.load(sys.stdin)
 print(h.get("build_commit",""))' 2>/dev/null || echo '')"
+        [ -n "$BUNDLE_COMMIT" ] && break
+        echo "   ⚠️  build_commit 조회 재시도 $BUNDLE_ATTEMPT/${BUNDLE_VERIFY_RETRIES:-5} (배포 직후 전파 지연 — ${BUNDLE_VERIFY_RETRY_WAIT:-10}s 후 재시도)" >&2
+        sleep "${BUNDLE_VERIFY_RETRY_WAIT:-10}"
+      done
       # 수정 75 (--rollback-e2e): E2E_FORCE_BUNDLE_MISMATCH=1 이면 실제 검증 결과와
       # 무관하게 번들 커밋을 **의도적으로 불일치로 취급**한다 — 배포는 정상 수행됐지만
       # Rollback API 의 자동 복구 경로를 라이브로 발동시키기 위한 테스트 훅. 실제
@@ -697,7 +755,8 @@ print(h.get("build_commit",""))' 2>/dev/null || echo '')"
       else
         PAGES_BUNDLE_OK=0
         echo " ❌ 번들 커밋 불일치: 배포 URL build_commit='${BUNDLE_COMMIT:-비어있음}' vs 대상 $SHORT_SHA" >&2
-        echo "    배포된 번들이 스테일일 수 있습니다 — deployment list Source 와 대조 후 재배포 권장." >&2
+        echo "    (재시도 ${BUNDLE_VERIFY_RETRIES:-5}회 후에도 조회 실패/불일치 — 전파 레이스가 아니라 스테일 의심)" >&2
+        echo "    판정 전에 deployment list 의 Source commit 과 대조 후 재배포 권장 — 단발 조회로 인한 오탐은 재시도로 흡수됩니다." >&2
         if [ "$AUTO_ROLLBACK" = "1" ]; then
           ROLLBACK_PENDING=1
           echo "    --auto-rollback: DO + Pages 를 이전 버전으로 되돌립니다 (cron/검증 생략, 아래)." >&2

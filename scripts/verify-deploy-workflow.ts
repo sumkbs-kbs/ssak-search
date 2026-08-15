@@ -297,7 +297,9 @@ export function verifyDeployWorkflow(repoDir: string): GateOutcome {
   if (stagingJob) {
     const stagingSteps = stagingJob.steps ?? []
     const hasPagesDeploy = stagingSteps.some(
-      (s) => (s.uses ?? '').startsWith('cloudflare/wrangler-action') && String(s.with?.command ?? '').includes('pages deploy'),
+      (s) =>
+        (s.uses ?? '').startsWith('cloudflare/wrangler-action') &&
+        String(s.with?.command ?? '').includes('pages deploy'),
     )
     if (hasPagesDeploy) {
       const verifyStep = stagingSteps.find((s) => (s.name ?? '').includes('Verify deployed bundle commit'))
@@ -331,20 +333,25 @@ export function verifyDeployWorkflow(repoDir: string): GateOutcome {
         }
         const verifyScript = join(repoDir, 'scripts/verify-pages-bundle.sh')
         if (!existsSync(verifyScript)) {
-          findings.push(
-            `scripts/verify-pages-bundle.sh 이 deploy.yml 에서 참조되지만 커밋에 없다 (수정 78)`,
-          )
+          findings.push(`scripts/verify-pages-bundle.sh 이 deploy.yml 에서 참조되지만 커밋에 없다 (수정 78)`)
         } else {
           const script = readFileSync(verifyScript, 'utf8')
           if (!script.includes('build_commit') || !script.includes('deployment list')) {
+            findings.push(`scripts/verify-pages-bundle.sh: build_commit 조회·대조 로직이 없다 (수정 78)`)
+          }
+          // 수정 79: 배포 직후 전파 레이스 오탐 방지 — 단발 조회가 아니라 재시도
+          // 루프로 build_commit 을 조회해야 한다 (조회 성공 시 즉시 종료).
+          if (!script.includes('BUNDLE_VERIFY_RETRIES')) {
             findings.push(
-              `scripts/verify-pages-bundle.sh: build_commit 조회·대조 로직이 없다 (수정 78)`,
+              `scripts/verify-pages-bundle.sh: build_commit 조회 재시도(BUNDLE_VERIFY_RETRIES) 가 없다 — 단발 조회면 배포 직후 전파 레이스 오탐 (수정 79)`,
             )
           }
         }
         // Pages 배포 스텝보다 뒤에 있어야 한다 (배포 직후 검증).
-        const pagesIdx = stagingSteps.findIndex((s) =>
-          (s.uses ?? '').startsWith('cloudflare/wrangler-action') && String(s.with?.command ?? '').includes('pages deploy'),
+        const pagesIdx = stagingSteps.findIndex(
+          (s) =>
+            (s.uses ?? '').startsWith('cloudflare/wrangler-action') &&
+            String(s.with?.command ?? '').includes('pages deploy'),
         )
         const verifyIdx = stagingSteps.indexOf(verifyStep)
         if (verifyIdx < pagesIdx) {

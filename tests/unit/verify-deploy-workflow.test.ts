@@ -74,10 +74,12 @@ fi
 
 const created: string[] = []
 
-/** 수정 78: 런타임 번들 검증 스크립트의 최소 마커 (build_commit 대조 포함). */
+/** 수정 78: 런타임 번들 검증 스크립트의 최소 마커 (build_commit 대조 + 수정 79 재시도 포함). */
 const GOOD_BUNDLE_SCRIPT = `#!/usr/bin/env bash
 set -u
-# build_commit 조회·대조 (수정 78)
+# build_commit 조회·대조 (수정 78) — 재시도 루프 (수정 79)
+BUNDLE_VERIFY_RETRIES=5
+BUNDLE_VERIFY_RETRY_WAIT=10
 npx wrangler pages deployment list --project-name=search-engine-api --json > /tmp/deployments.json 2>/dev/null || true
 if [ "$BUNDLE_COMMIT" = "$EXPECTED" ]; then
   echo " ✅ 번들 커밋 검증: build_commit=ok"

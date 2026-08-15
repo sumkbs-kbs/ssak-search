@@ -947,6 +947,18 @@
 - **검증**: rate-limiter-do **39/39** · 전체 unit 138파일 **2,698/2,698 PASS** · tsc 0 · prettier clean · 프로브 워커는 검증 후 삭제 (컨벤션)
 - **잔존 노트**: 서킷 맵에 `workers_ai`(내부 바인딩 pseudo-host) 존재 — 트립 시 robots.txt 프로브가 DNS 실패로 stuck-open 될 수 있는 사전 존재 이슈 (404-alive 와 무관, 별도 추적)
 
+### 수정 79: 번들 커밋 검증 재시도 — 배포 직후 전파 레이스 오탐 제거 + '스테일 의심' 보고 정정 (2026-08-15)
+- **작업 ID**: FIX-2026-08-15-27 (구현 + 테스트 + 스모크)
+- **요청**: 번들 커밋 검증에 재시도(예: 5회×10초)를 추가해 배포 직후 전파 레이스 오탐을 제거하고, 오탐 시 '스테일 의심' 보고를 정정
+- **수정** (`scripts/deploy-local-worktree.sh` 수정 56 + `scripts/verify-pages-bundle.sh` 수정 78):
+  - 단발 `curl` 조회를 **재시도 루프로 교체** — `BUNDLE_VERIFY_RETRIES`(기본 **5**)회 × `BUNDLE_VERIFY_RETRY_WAIT`(기본 **10s**). 조회 **성공(빈 응답 아님) 시 즉시 종료** — 일치 판정은 그 뒤 1회. 배포 직후 에지 전파 지연(빈 응답·HTTP 5xx·404) 으로 build_commit 이 일시적으로 안 보이는 전파 레이스를 흡수 (verify-pages-bundle.sh 의 기존 재시도 3회는 이 함정에서 나온 실측 사례)
+  - **보고 정정**: 실패 시 `배포된 번들이 스테일입니다`(확정) → **`전파 레이스가 아니라 스테일 의심`** + `판정 전에 deployment list Source commit 과 대조 권장` — 재시도 후에도 불일치면 의심으로 보고하고 수동 대조를 유도. --auto-rollback/--auto-redeploy 발동은 유지
+  - `verify-pages-bundle.sh` 도 동일한 `BUNDLE_VERIFY_RETRIES`/`BUNDLE_VERIFY_RETRY_WAIT` 환경변수 사용 — 로컬/CI 양쪽 일치
+- **회귀 체크**: verify-deploy-workflow.ts 8번에 **재시도 마커(`BUNDLE_VERIFY_RETRIES`) 단언 추가** — 단발 조회로 회귀하면 FAIL (테스트 픽스처도 재시도 포함으로 갱신, 35/35 유지)
+- **self-test +1 → 10/10**: `retry_race` 시나리오 — 첫 build_commit 조회는 빈 응답(`{}`), 재시도 후 일치 → **스테일 오탐 없이 exit 0 + 재시도 로그 + 일치 판정** 단언 (가짜 npx/curl 카운터 기반). 단발 조회였다면 여기서 오탐 실패했을 것
+- **스모크**: verify-pages-bundle.sh `BUNDLE_VERIFY_RETRIES=3×1s` — 첫 조회 빈 응답 → `⚠️ 재시도 1/3` → `✅ build_commit=1234567 exit 0` (레이스 흡수 실측)
+- **검증**: self-test 10/10 · verify-deploy-workflow 35/35 + 실 repo PASS · tsc 0 · prettier clean · bash -n OK
+
 ### 수정 78: CI 경로 런타임 번들 검증 — deploy.yml staging Pages 배포 직후 build_commit 대조 스텝 (2026-08-15)
 - **작업 ID**: FIX-2026-08-15-26 (구현 + 테스트 + 로컬 스모크)
 - **요청**: deploy.yml 의 staging Pages 배포 직후에 배포 URL 의 /api/health build_commit 을 github.sha 와 대조하는 스텝을 추가해 CI 경로에서도 런타임 번들 검증이 돌게

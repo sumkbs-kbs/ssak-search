@@ -630,14 +630,32 @@ describe('wikipediaSearch', () => {
 
   // ── B1 (Wave 4): wikipedia 429 pacing guard ────────────────────────
 
-  it('skips the network chain entirely while the pacing guard is armed (B1)', async () => {
-    // A previous 429 armed a 30s cooldown — wikipediaSearch must return empty
-    // WITHOUT touching the network (the orchestrator mirror covers the gold).
+  it('skips REST but still tries the Action API while the pacing guard is armed (B1 완화, 수정 68)', async () => {
+    // A previous 429 armed a 30s cooldown — the REST chain must be skipped
+    // (in-window REST retries only re-429), but the Action API is still
+    // attempted (수정 57/58 실측: REST 429 동안 Action 은 200 인 경우가 많다).
     recordWikipediaRateLimit()
     expect(isWikipediaRateLimited()).toBe(true)
     const results = await wikipediaSearch('anything')
-    expect(results).toEqual([])
-    expect(mockFetchWithTimeout).not.toHaveBeenCalled()
+    expect(results).toEqual([]) // mock 미설정 → Action 도 결과 없음
+    const urls = mockFetchWithTimeout.mock.calls.map((c) => String(c[1])) // [env, url, init, timeout]
+    expect(urls.some((u) => u.includes('/w/rest.php/'))).toBe(false) // REST 미호출
+    expect(urls.some((u) => u.includes('/w/api.php?'))).toBe(true) // Action 은 시도
+  })
+
+  it('recovers results from the Action API inside the 429 cooldown window (수정 68)', async () => {
+    recordWikipediaRateLimit()
+    mockFetchWithTimeout.mockResolvedValue({
+      ok: true,
+      json: () =>
+        Promise.resolve({ query: { search: [{ title: 'Recovered', snippet: 'action result during window' }] } }),
+    })
+    const results = await wikipediaSearch('during window')
+    expect(results).toHaveLength(1)
+    expect(results[0].title).toBe('Recovered')
+    const urls = mockFetchWithTimeout.mock.calls.map((c) => String(c[1])) // [env, url, init, timeout]
+    expect(urls.some((u) => u.includes('/w/rest.php/'))).toBe(false) // REST 미호출
+    expect(urls.some((u) => u.includes('/w/api.php?'))).toBe(true) // Action 결과 회복
   })
 
   it('serves a cached result even while the pacing guard is armed (B1)', async () => {
@@ -770,11 +788,13 @@ describe('Cross-isolate shared cooldowns (wikipedia/github 429 windows)', () => 
     expect(untilMs as number).toBeGreaterThan(Date.now())
   })
 
-  it('adopts a window another isolate armed — skips the network chain', async () => {
+  it('adopts a window another isolate armed — skips REST but tries Action (수정 68)', async () => {
     cooldownMocks.getSharedCooldown.mockResolvedValue(Date.now() + 30_000)
     const results = await wikipediaSearch('shared window', { env: {} as never })
-    expect(results).toEqual([])
-    expect(mockFetchWithTimeout).not.toHaveBeenCalled()
+    expect(results).toEqual([]) // mock 미설정 → Action 도 결과 없음
+    const urls = mockFetchWithTimeout.mock.calls.map((c) => String(c[1])) // [env, url, init, timeout]
+    expect(urls.some((u) => u.includes('/w/rest.php/'))).toBe(false) // REST 미호출
+    expect(urls.some((u) => u.includes('/w/api.php?'))).toBe(true) // Action 은 시도
   })
 
   it('adopts the shared window into the local guard state', async () => {

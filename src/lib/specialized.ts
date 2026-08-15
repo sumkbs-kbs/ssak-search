@@ -233,22 +233,15 @@ export async function wikipediaSearch(
   if (cached) return cached
 
   // B1 (Wave 4): pacing guard. When wikipedia recently 429'd (the wikimedia
-  // gateway blocks the IP across REST+Action for a minute+ under bursts),
-  // skip the network chain ENTIRELY — every attempt inside the window just
-  // re-429s and re-arms the cooldown, wasting requests and delaying window
-  // recovery. The orchestrator-level mirror (5b) covers the gold instead;
-  // once the cooldown expires the next call retries for real. The cache is
-  // checked BEFORE this guard so a pre-window result still serves. Mirrors
-  // the S23 GitHub rate-guard skip semantics.
+  // gateway blocks the IP for a minute+ under bursts), the REST chain is
+  // SKIPPED inside the window — every REST attempt just re-429s and re-arms
+  // the cooldown, wasting requests and delaying window recovery. The guard
+  // is applied below (after actionApiFallback is defined) so the **Action
+  // API is still tried inside the window** (수정 68) — 수정 57/58 실측:
+  // REST 429 동안 Action 은 200 인 경우가 많다 (Workers egress: zh_rest 429
+  // 중 zh_action 200). The cache is checked BEFORE this guard so a pre-window
+  // result still serves. Mirrors the S23 GitHub rate-guard skip semantics.
   const results: SearchResult[] = []
-  if (await isWikipediaRateLimitedShared(env, language)) {
-    logger.warn('Wikipedia search skipped (429 cooldown window):', {
-      resumeAt: new Date(wikipediaRateLimitedUntilByLang.get(language) ?? 0).toISOString(),
-      query,
-      language,
-    })
-    return results
-  }
 
   // Wikipedia REST API can return HTTP 429 (rate limit) under rapid sequential
   // calls. Retry with backoff that fits within fanout's wikipedia ceiling
@@ -395,6 +388,25 @@ export async function wikipediaSearch(
     } catch (err) {
       logger.warn('Wikipedia Action API fallback failed:', { error: toError(err) })
     }
+  }
+
+  // B1 (Wave 4) pacing guard — 수정 68 완화: 창 내에서도 Action API 는 시도한다.
+  // 구 동작: 창 내 전체 체인 스킵 → 빈 결과 (Action 도 버려짐). 새 동작: REST
+  // 체인만 생략하고 Action 으로 바로 내려간다 — Action 은 창 내에서도 200 인
+  // 경우가 실측됐기 때문 (수정 57/58: zh_rest 429 중 zh_action 200). 창 내
+  // REST 재시도는 재-429 만 반복해 창을 연장하므로 요청하지 않는다. Action 은
+  // 자체 1회 재시도(500ms beat) 로 최대 2회 네트워크 호출 — 실패 누적 없음
+  // (429 는 releaseTransient, 수정 59) 및 예산(≈1.5s) 은 4.5s fanout ceiling
+  // 내에 안전하게 들어온다 (probe-wikipedia-budget 실측: Action 1303~1380ms).
+  const wikipediaInCooldown = await isWikipediaRateLimitedShared(env, language)
+  if (wikipediaInCooldown) {
+    logger.warn('Wikipedia REST search skipped (429 cooldown window) — Action API only:', {
+      resumeAt: new Date(wikipediaRateLimitedUntilByLang.get(language) ?? 0).toISOString(),
+      query,
+      language,
+    })
+    await actionApiFallback().catch(() => {})
+    return results
   }
 
   try {

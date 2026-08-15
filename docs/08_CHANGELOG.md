@@ -947,6 +947,20 @@
 - **검증**: rate-limiter-do **39/39** · 전체 unit 138파일 **2,698/2,698 PASS** · tsc 0 · prettier clean · 프로브 워커는 검증 후 삭제 (컨벤션)
 - **잔존 노트**: 서킷 맵에 `workers_ai`(내부 바인딩 pseudo-host) 존재 — 트립 시 robots.txt 프로브가 DNS 실패로 stuck-open 될 수 있는 사전 존재 이슈 (404-alive 와 무관, 별도 추적)
 
+### 수정 68: B1 cooldown 가드 완화 — REST 429 창 내에서도 Action 경로 동작 (2026-08-15)
+- **작업 ID**: FIX-2026-08-15-16 (구현 + 테스트)
+- **요청**: B1 cooldown 가드를 완화해 REST 429 창 내에서도 Action 경로가 동작하도록
+- **배경**: 구 B1 가드는 창 내에서 **전체 체인(REST+Action)을 스킵**해 빈 결과를 반환했다 (수정 58 참고: "Action 을 창 내에서도 시도하도록 가드 완화는 후속 검토 항목"). 그런데 수정 57/58 실측 — **REST 429 동안 Action 은 200 인 경우가 많다** (Workers egress: zh_rest 429 중 zh_action 200). 전체 스킵은 Action 으로 회복 가능한 결과까지 버렸다
+- **수정** (`src/lib/specialized.ts` wikipediaSearch):
+  - B1 가드를 actionApiFallback 정의 **뒤로 이동**해, 창 내에서 **REST 체인만 생략**하고 Action API 로 바로 내려간다 (`await actionApiFallback()` 후 return)
+  - 창 내 REST 재시도는 재-429 만 반복해 창을 연장하므로 요청하지 않음. Action 은 자체 1회 재시도(500ms beat)로 최대 2회 네트워크 호출 — 429 는 releaseTransient(수정 59)로 실패 누적 없음, 예산 ≈1.5s 는 4.5s fanout ceiling 내 (probe-wikipedia-budget 실측 Action 1303~1380ms)
+  - 창 내 결과는 캐시하지 않음 (S35 shadowing 방지 — REST 회복 후 canonical 결과가 가려지지 않게)
+- **테스트**:
+  - 유닛 — 기존 '창 내 전체 스킵' 2건(REST+Action 미호출 단언) → **REST 미호출 + Action 시도** 의미론으로 갱신 + **신규: 창 내 Action 200 → 결과 회복** (REST 미호출 단언 포함)
+  - 통합 (orchestrator 22/22) — B1 병렬 미러 테스트: 기존 'wikipedia 체인 미호출' → **REST 미호출 + Action 시도(429) → mirror 가 gold 회복** 으로 갱신. S35(첫 쿼리 429 → DBpedia mirror) 는 무변경 통과
+- **검증**: specialized 유닛 146/146 · 통합 orchestrator 22/22 (워크트리에서 세션 미커밋 vitest 설정 복사로 실행 후 제거 — 워크트리 자체로는 workerd 미기동 사전 제약) · HEAD 전체 유닛 107 파일/1,987 PASS · tsc 0 · prettier clean
+- **참고**: 창 내에서도 Action 이 429 면 (게이트웨이 전체 블록) 기존과 동일하게 mirror/orchestrator 5b 가 gold 를 커버 — 회복 경로는 그대로
+
 ### 수정 67: 배포 순서 DO-first 강제 + 배포 창 Pages-신/DO-구 불일치 감지 (2026-08-15)
 - **작업 ID**: FIX-2026-08-15-15 (구현 + 테스트)
 - **요청**: 배포 창의 Pages-신/DO-구 불일치를 감지해 DO 를 먼저 배포하도록 deploy-local-worktree.sh 순서 조정

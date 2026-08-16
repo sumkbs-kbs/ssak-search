@@ -134,7 +134,9 @@ describe.skipIf(!BASH_AVAILABLE)('deploy-local-worktree.sh --dry-run (오프라�
   it('--rollback-e2e 드라이런: 라이브 롤백 검증 계획을 출력한다 (수정 75)', () => {
     const r = runDryRun(['--dry-run', '--rollback-e2e'])
     expect(r.exit).toBe(0)
-    expect(r.out).toContain('rollback-e2e: 의도적 번들 불일치(E2E_FORCE_BUNDLE_MISMATCH=1) 후 DO + Pages Rollback API 자동 복구를 라이브 검증')
+    expect(r.out).toContain(
+      'rollback-e2e: 의도적 번들 불일치(E2E_FORCE_BUNDLE_MISMATCH=1) 후 DO + Pages Rollback API 자동 복구를 라이브 검증',
+    )
     // --rollback-e2e 는 --auto-rollback 을 내포한다
     expect(r.out).toContain('auto-rollback:')
   })
@@ -149,7 +151,9 @@ describe.skipIf(!BASH_AVAILABLE)('deploy-local-worktree.sh --dry-run (오프라�
   it('--auto-redeploy 드라이런: 캐시 무효화 재배포 계획을 출력한다 (수정 76)', () => {
     const r = runDryRun(['--dry-run', '--auto-redeploy'])
     expect(r.exit).toBe(0)
-    expect(r.out).toContain('auto-redeploy: staging 번들 불일치 시 캐시 무효화(dist/제거 + .vite 삭제 + npm ci) 후 Pages 자동 재배포')
+    expect(r.out).toContain(
+      'auto-redeploy: staging 번들 불일치 시 캐시 무효화(dist/제거 + .vite 삭제 + npm ci) 후 Pages 자동 재배포',
+    )
   })
 
   it('ISOLATED_BUILD=1 이면 심링크 대신 worktree 내부 npm ci 격리 계획을 출력한다', () => {

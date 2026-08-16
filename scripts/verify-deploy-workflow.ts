@@ -363,6 +363,57 @@ export function verifyDeployWorkflow(repoDir: string): GateOutcome {
     }
   }
 
+  // ── 9. Rollback API token hygiene (수정 77) ──────────────────────────────
+  // deploy-local-worktree.sh 의 rollback_pages() 는 Pages Rollback API 호출 시
+  // 토큰을 curl argv 에 절대 두지 않아야 한다 — `curl -H "Authorization: Bearer
+  // $token"` 은 ps 프로세스 목록과 bash -x 로그에 토큰을 그대로 노출한다
+  // (수정 77 실측). 토큰·URL 은 임시 curl config 파일(-K, chmod 600, 사용 후
+  // rm -f) 로 주입해야 하고, 토큰은 크로스플랫폼 리더(read_wrangler_oauth_token
+  // — python3 TOML 파싱, WRANGLER_HOME/HOME/USERPROFILE/APPDATA 후보)로 읽어야
+  // 한다. 회귀하면 argv 누수가 재발한다.
+  const deployScriptPath = join(repoDir, 'scripts/deploy-local-worktree.sh')
+  if (existsSync(deployScriptPath)) {
+    const dl = readFileSync(deployScriptPath, 'utf8')
+    if (dl.includes('rollback_pages()')) {
+      // ① curl -K config 주입 — argv 에 URL/토큰 부재
+      if (!dl.includes('-K "$curl_cfg"')) {
+        findings.push(
+          'scripts/deploy-local-worktree.sh: rollback_pages() 가 curl -K config 를 쓰지 않는다 — argv 에 URL/토큰이 남아 ps/로그 노출 (수정 77)',
+        )
+      }
+      // ② argv Bearer 토큰 주입 금지 — 실재하는 curl 명령에서만 매치한다.
+      // 주석 라인(# 로 시작 — 금지 패턴을 문서화한 줄) 과 수동 지침의
+      // `-H 'Authorization: Bearer <TOKEN>'` 리터럴은 제외 (오탐 방지).
+      const argvLeak = dl.split('\n').some((line) => {
+        if (line.trim().startsWith('#')) return false
+        return /curl[^\n]*?-H "Authorization: Bearer \$\{?token/.test(line)
+      })
+      if (argvLeak) {
+        findings.push(
+          'scripts/deploy-local-worktree.sh: rollback_pages() 가 curl argv 에 Bearer 토큰을 주입한다 — ps/로그 토큰 누수 (수정 77)',
+        )
+      }
+      // ③ config 파일 보안 (600) — 토큰이 담긴 임시 파일 권한
+      if (!dl.includes('chmod 600 "$curl_cfg"')) {
+        findings.push(
+          'scripts/deploy-local-worktree.sh: rollback_pages() curl config 파일이 chmod 600 이 아니다 — 토큰이 담긴 임시 파일 권한이 열려 있다 (수정 77)',
+        )
+      }
+      // ④ config 정리 — 토큰이 담긴 임시 파일을 남기지 않는다
+      if (!dl.includes('rm -f "$curl_cfg"')) {
+        findings.push(
+          'scripts/deploy-local-worktree.sh: rollback_pages() 가 curl config 파일을 정리하지 않는다 (rm -f) — 토큰 잔존 (수정 77)',
+        )
+      }
+      // ⑤ 크로스플랫폼 OAuth 토큰 리더 — python3 TOML 파싱 + APPDATA 후보
+      if (!dl.includes('read_wrangler_oauth_token') || !dl.includes('oauth_token') || !dl.includes('APPDATA')) {
+        findings.push(
+          'scripts/deploy-local-worktree.sh: 크로스플랫폼 OAuth 토큰 리더(read_wrangler_oauth_token — python3 + APPDATA 후보) 가 없다 (수정 77)',
+        )
+      }
+    }
+  }
+
   // ── 6. eval.yml baseline auto-commit permission ────────────────────────
   // S104-③-⑧ (2026-08-12): the repo default workflow permission is read-only,
   // and eval.yml declared no permissions:, so the plain `git push` in
@@ -406,7 +457,7 @@ export function verifyDeployWorkflow(repoDir: string): GateOutcome {
   }
   return {
     status: 'PASS',
-    detail: `${DEPLOY_WF} + ${GUARD_SCRIPT} pass all S104-③-⑥-④/⑧ regression checks (secrets / guard-masking / artifact / node / needs / eval-baseline-permission / notify-dry-run-wiring / runtime-bundle-verify)`,
+    detail: `${DEPLOY_WF} + ${GUARD_SCRIPT} pass all S104-③-⑥-④/⑧ regression checks (secrets / guard-masking / artifact / node / needs / eval-baseline-permission / notify-dry-run-wiring / runtime-bundle-verify / rollback-token-hygiene)`,
   }
 }
 

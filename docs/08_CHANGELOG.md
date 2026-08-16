@@ -959,6 +959,16 @@
 - **스모크**: verify-pages-bundle.sh `BUNDLE_VERIFY_RETRIES=3×1s` — 첫 조회 빈 응답 → `⚠️ 재시도 1/3` → `✅ build_commit=1234567 exit 0` (레이스 흡수 실측)
 - **검증**: self-test 10/10 · verify-deploy-workflow 35/35 + 실 repo PASS · tsc 0 · prettier clean · bash -n OK
 
+### 수정 81: verify-deploy-workflow.ts에 Rollback API curl -K config 회귀 체크 추가 (2026-08-16)
+- **작업 ID**: FIX-2026-08-16-02 (구현 + 테스트)
+- **요청**: verify-deploy-workflow.ts에 Rollback API가 curl -K config를 쓰는지 회귀 체크를 추가
+- **구현** (`scripts/verify-deploy-workflow.ts` check 9 — rollback-token-hygiene):
+  - deploy-local-worktree.sh 의 `rollback_pages()` 가 **curl -K config 로 토큰·URL 을 주입**하는지 5개 하위 체크: ① `-K "$curl_cfg"` 사용 (argv 에 URL/토큰 부재), ② **argv Bearer 토큰 주입 금지** (`curl -H "Authorization: Bearer $token"` — 주석 라인과 수동 지침의 `<TOKEN>` 리터럴은 제외해 오탐 방지), ③ config `chmod 600`, ④ `rm -f` 정리, ⑤ 크로스플랫폼 OAuth 리더(`read_wrangler_oauth_token` + `oauth_token` + `APPDATA`)
+  - 스크립트가 없으면 체크 생략 (나머지 체크는 진행)
+- **테스트**: +7 (PASS / 스크립트 부재 SKIP / argv 누수·-K 부재·chmod 누락·rm 누락·리더 부재 각 FAIL) → **42/42** · 실 repo PASS
+- **실측 발견**: 처음엔 단일 정규식으로 argv 누수를 검사했는데 스크립트의 **주석**(금지 패턴 문서화 라인)이 매치돼 오탐 — 라인 단위 + 주석(# 시작) 제외로 정제
+- **검증**: tsc 0 · eslint 0 · prettier clean · 전체 unit 2,834/2,848 (14건 실패는 사전 존재 api.test.ts 401, 무관)
+
 ### 수정 80: watch-secret-rotation.sh watch 모드 top-level `local` 버그 수정 (2026-08-16)
 - **작업 ID**: FIX-2026-08-16-01 (발견 + 수정 + 검증)
 - **요청**: docs/17 절차대로 시크릿 교체가 끝나면 watch-secret-rotation.sh 로 updated_at 변경 감지 → staging 디스패치 자동 발사 → run 모니터링까지 이어가는 체계 구동

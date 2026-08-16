@@ -88,6 +88,33 @@ fi
 exit 1
 `
 
+/** 수정 77: rollback_pages 가 curl -K config 로 토큰을 주입하는 최소 마커. */
+// 템플릿 리터럴에서 `$` 는 이스케이프 불필요 — `${` 만 \${ 로 이스케이프한다.
+const GOOD_DEPLOY_SCRIPT = `#!/usr/bin/env bash
+# 크로스플랫폼 OAuth 토큰 리더 (수정 77) — APPDATA 후보 포함
+read_wrangler_oauth_token() {
+  for base in \${WRANGLER_HOME:-} \${HOME:-} \${USERPROFILE:-} \${APPDATA:-}; do
+    [ -n "$base" ] || continue
+    cfg="$base/.wrangler/config/default.toml"
+    [ -f "$cfg" ] || continue
+    TOKEN_OUT="$(grep -oE 'oauth_token\\s*=\\s*\\"[^\\"]*\\"' "$cfg" 2>/dev/null | head -1)"
+    [ -n "$TOKEN_OUT" ] && { printf '%s' "$TOKEN_OUT"; return 0; }
+  done
+  return 1
+}
+rollback_pages() {
+  local target="$1"
+  local token="\${CLOUDFLARE_API_TOKEN:-}"
+  [ -z "$token" ] && token="$(read_wrangler_oauth_token)"
+  local curl_cfg
+  curl_cfg="$(mktemp)"
+  chmod 600 "$curl_cfg"
+  printf 'url = "https://api.cloudflare.com/.../rollback"\\nheader = "Authorization: Bearer %s"\\n' "$acct" "$target" "$token" > "$curl_cfg"
+  resp="$(curl -s -m 30 -K "$curl_cfg" -X POST 2>&1 || true)"
+  rm -f "$curl_cfg"
+}
+`
+
 function writeRepo(
   opts: {
     workflow?: string
@@ -95,6 +122,8 @@ function writeRepo(
     skipGuard?: boolean
     evalWorkflow?: string
     skipBundleScript?: boolean
+    deployScript?: string
+    skipDeployScript?: boolean
   } = {},
 ): string {
   const dir = mkdtempSync(join(tmpdir(), 'vdf-'))
@@ -109,6 +138,9 @@ function writeRepo(
   }
   if (!opts.skipBundleScript) {
     writeFileSync(join(dir, 'scripts', 'verify-pages-bundle.sh'), GOOD_BUNDLE_SCRIPT, 'utf-8')
+  }
+  if (!opts.skipDeployScript) {
+    writeFileSync(join(dir, 'scripts', 'deploy-local-worktree.sh'), opts.deployScript ?? GOOD_DEPLOY_SCRIPT, 'utf-8')
   }
   created.push(dir)
   return dir
@@ -552,6 +584,52 @@ ${STAGING_PAGES_DEPLOY}${BUNDLE_VERIFY_STEP}      - name: Deploy probe-scheduler
       const outcome = verifyDeployWorkflow(writeRepo({ workflow: moved }))
       expectStatus(outcome, 'FAIL')
       expect(outcome.detail).toContain('보다 앞')
+    })
+  })
+
+  describe('10. rollback API token hygiene (수정 77)', () => {
+    it('PASSes when rollback_pages 가 curl -K config 로 토큰을 주입한다', () => {
+      expectStatus(verifyDeployWorkflow(writeRepo()), 'PASS')
+    })
+
+    it('SKIPs the rollback check when deploy-local-worktree.sh 가 없다 (나머지 체크는 진행)', () => {
+      const outcome = verifyDeployWorkflow(writeRepo({ skipDeployScript: true }))
+      expectStatus(outcome, 'PASS')
+    })
+
+    it('FAILs when curl argv 에 Bearer 토큰을 주입한다 (ps/로그 누수)', () => {
+      const leak = GOOD_DEPLOY_SCRIPT.replace('-K "$curl_cfg"', '-H "Authorization: Bearer $token"')
+      const outcome = verifyDeployWorkflow(writeRepo({ deployScript: leak }))
+      expectStatus(outcome, 'FAIL')
+      expect(outcome.detail).toContain('argv 에 Bearer 토큰을 주입')
+    })
+
+    it('FAILs when curl -K config 주입이 빠진다 (argv 에 URL/토큰 잔존)', () => {
+      const noK = GOOD_DEPLOY_SCRIPT.replace('-K "$curl_cfg"', '')
+      const outcome = verifyDeployWorkflow(writeRepo({ deployScript: noK }))
+      expectStatus(outcome, 'FAIL')
+      expect(outcome.detail).toContain('curl -K config 를 쓰지 않는다')
+    })
+
+    it('FAILs when curl config 파일이 chmod 600 이 아니다', () => {
+      const noChmod = GOOD_DEPLOY_SCRIPT.replace('  chmod 600 "$curl_cfg"\n', '')
+      const outcome = verifyDeployWorkflow(writeRepo({ deployScript: noChmod }))
+      expectStatus(outcome, 'FAIL')
+      expect(outcome.detail).toContain('chmod 600 이 아니다')
+    })
+
+    it('FAILs when curl config 파일 정리(rm -f) 가 없다 (토큰 잔존)', () => {
+      const noRm = GOOD_DEPLOY_SCRIPT.replace('  rm -f "$curl_cfg"\n', '')
+      const outcome = verifyDeployWorkflow(writeRepo({ deployScript: noRm }))
+      expectStatus(outcome, 'FAIL')
+      expect(outcome.detail).toContain('정리하지 않는다')
+    })
+
+    it('FAILs when 크로스플랫폼 OAuth 토큰 리더가 없다 (APPDATA/python3 미사용)', () => {
+      const noReader = GOOD_DEPLOY_SCRIPT.replaceAll('read_wrangler_oauth_token', 'read_token')
+      const outcome = verifyDeployWorkflow(writeRepo({ deployScript: noReader }))
+      expectStatus(outcome, 'FAIL')
+      expect(outcome.detail).toContain('크로스플랫폼 OAuth 토큰 리더')
     })
   })
 })

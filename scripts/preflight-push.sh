@@ -133,16 +133,38 @@ else
   echo "❌ ③ baseline 동등성 DRIFT/ERROR (exit $rc)"
   FAILED=1
 fi
+echo ""
+
+# ── ④ baseline 아티팩트 동시 커밋 검증 (수정 83) ────────────────────────
+# d33ce3b 사고: baseline 단독 커밋으로 run 아티팩트와 세대 불일치가 생겨 CI
+# 가 28건 가짜 regressions 을 보고했다. eval:median:save 후 baseline 이
+# 변경됐는데 run-*.json 이 clean(커밋된 이전 세대) 이면 DANGER(exit 1) —
+# baseline 만 커밋하려는 push 를 차단한다. run-only 변경은 WARN(비차단).
+echo "────────── ④ baseline 아티팩트 동시 커밋 검증 ──────────"
+(cd "$ROOT" && npx tsx scripts/verify-baseline-artifact-sync.ts)
+rc=$?
+if [[ $rc -eq 0 ]]; then
+  echo "✅ ④ baseline 아티팩트 동기 그린 (DANGER 없음)"
+elif [[ $rc -eq 1 ]]; then
+  echo "❌ ④ baseline 아티팩트 DANGER — baseline 만 커밋되면 세대 불일치 (eval.yml 수정 83 과 동일 게이트)"
+  FAILED=1
+elif [[ $rc -eq 3 ]]; then
+  echo "❌ ④ baseline 아티팩트 ERROR (git 실행 실패)"
+  FAILED=1
+else
+  echo "❌ ④ baseline 아티팩트 알 수 없는 exit $rc"
+  FAILED=1
+fi
 rm -rf "$WORKBASE"
 echo ""
 
 if [[ $FAILED -eq 1 ]]; then
-  echo "❌ 3중 점검 중 레드 항목 있음 — push 전 수정 필요"
+  echo "❌ 4중 점검 중 레드 항목 있음 — push 전 수정 필요"
   exit 1
 fi
 if [[ $WARNED -eq 1 ]]; then
-  echo "✅ 3중 점검 그린 (③ baseline DRIFT 경고 있음 — 위 ::warning:: 참조)"
+  echo "✅ 4중 점검 그린 (③ baseline DRIFT 경고 있음 — 위 ::warning:: 참조)"
   exit 0
 fi
-echo "✅ 3중 점검 전부 그린 — push 가능"
+echo "✅ 4중 점검 전부 그린 — push 가능"
 exit 0

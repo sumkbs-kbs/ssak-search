@@ -969,6 +969,33 @@
 - **실측 발견**: 처음엔 단일 정규식으로 argv 누수를 검사했는데 스크립트의 **주석**(금지 패턴 문서화 라인)이 매치돼 오탐 — 라인 단위 + 주석(# 시작) 제외로 정제
 - **검증**: tsc 0 · eslint 0 · prettier clean · 전체 unit 2,834/2,848 (14건 실패는 사전 존재 api.test.ts 401, 무관)
 
+### 수정 82: production 열린 서킷 회복 ETA 모니터 — openedAt+backoff 자동 산출 + Slack 알림 (2026-08-16)
+- **작업 ID**: FIX-2026-08-16-03 (구현 + 테스트 + 실측)
+- **요청**: production 에서 tripCount≥2 인 열린 서킷이 나타나면 openedAt+backoff 로 회복 예정 시각을 자동 산출해 Slack 으로 알리는 모니터
+- **전제 해결**: 헬스 응답이 openedAt 을 노출하지 않아 `openedAt+backoff` 계산이 불가능했음 — **`HostHealth.openedAt` 추가 노출** (src/lib/rate-limiter.ts 인터페이스 + 로컬 폴백, src/lib/rate-limiter-do.ts getAllHealth — epoch ms, 0=닫힘, additive). 테스트는 필드별 단언이라 영향 없음
+- **구현** (`scripts/monitor-circuit-recovery.ts` 신규 — monitor-wiki-429 컨벤션):
+  - 폴링 대상: production /api/health (기본, depth 불필요 — 서킷 상태는 제로 서브리퀘스트)
+  - **ETA = openedAt + backoffMs** (tripCount≥2 = 30분 스테이지, 기본 임계 — 5분/30초 스테이지는 알림 노이즈라 정보성만). openedAt 미노출(배포 전) 시 **firstSeen(첫 관측) 상한 추정** + source='firstSeen' 표시 — 배포 후 정확 ETA 활성화
+  - 상태 전이별 알림: **backoff**(ETA, warning) → **overdue**(backoff 경과 후에도 tripped — 프로브 미회복/스턱 S73 의심, danger) → **closed**(회복, good, RECOVERY_NOTIFY=1)
+  - **중복 방지**: JSONL 상태 파일에 host 별 마지막 기록 → 상태 전이(신규/backoff↔overdue/재오픈=openedAt 변경/회복) 시에만 알림
+  - Slack: SLACK_WEBHOOK/ALERT_SLACK_WEBHOOK env, 수정 73 스키마 (text + attachments[].color + blocks) — sendSlackAlert(src/lib/slack-alert.ts) 와 동일 블록 구조
+  - 옵션: --once / --interval / --iterations / --min-trip-count / --url / --state / --dry-run / --fixture / --report
+- **테스트**: `tests/unit/monitor-circuit-recovery.test.ts` 신규 **21건** — classifyCircuit(backoff/overdue/firstSeen 폴백/임계미달/닫힘/backoffMs 기본값) · shouldNotify 전이 dedup · formatRemaining · buildAlertPayload 스키마/색상 · parseStateLine · fixtureHealth
+- **실측**: ① production --once → `backends=21 open(tripCount>=2)=0 status=ok build=7dada19` (현재 트립 없음) ② fixture 드라이런 → en.wikipedia **backoff ETA 25분 후 (warning)** + lookup.dbpedia **overdue (danger)** + tripCount 1 stackexchange **미알림** + 상태 파일 2건 기록 ③ --report 정상. (fixture 는 openedAt 이 실행마다 상대값이라 2회차가 '재오픈'으로 재알림 — 실데이터는 openedAt 이 고정 epoch 라 dedup 유지, shouldNotify 유닛 검증)
+- **검증**: 전체 unit **140 파일 2,761/2,761 PASS** · tsc 0 · eslint 0 · prettier clean
+- **사용**: `npx tsx scripts/monitor-circuit-recovery.ts --once` (cron 등록용) / `--interval 60` (상시) — **운영 활성화 전 openedAt 노출 배포 필요** (src/lib/rate-limiter.* 변경 커밋 후 production 배포)
+
+### 수정 83: eval baseline 갱신 절차에 아티팩트 동시 커밋 검증 — d33ce3b 세대 불일치 예방 (2026-08-16)
+- **작업 ID**: FIX-2026-08-16-04 (구현 + 테스트 + 시뮬레이션)
+- **요청**: bot baseline 갱신(d33ce3b) 이 run 아티팩트를 함께 커밋하지 않아 생기는 세대 불일치를 예방하도록, eval baseline 갱신 절차에 아티팩트 동시 커밋 검증을 추가
+- **근본 원인 확정**: `.github/workflows/eval.yml` 의 "Commit updated baseline" 스텝이 `git add eval/baselines/latest.json` **단독**만 스테이징 — run 아티팩트(`eval/results/run-*.json`·`latest.json`)는 절대 커밋되지 않아 bot baseline 커밋마다 d33ce3b 와 동일한 세대 불일치(커밋된 runs ≠ 커밋된 baseline → CI replay 28건 가짜 regressions) 가 생기는 구조
+- **구현** (`scripts/verify-baseline-artifact-sync.ts` 신규):
+  - **git 상태 기준 분류** (git 실행 없이 순수 분류 가능 — 유닛 테스트 대상): baseline 변경 + 모든 run 변경 → **SYNC_PENDING** (exit 0, 함께 커밋 안내) · baseline 변경 + 일부 run clean → **DANGER** (exit 1, d33ce3b 패턴 차단 — ① 함께 커밋 ② stale run `git rm` 안내) · baseline clean + run 변경 → **WARN** (exit 0, stale baseline 경고) · baseline 변경 + run 부재 → **DANGER** (재현 불가 baseline 차단) · 전부 clean → **SYNC**
+  - eval.yml: commit 스텝 `git add` 에 `eval/results/latest.json eval/results/run-*.json` 포함 + **verify_sync 스텝**(`outcome == 'success'` 조건으로 커밋 게이트) 추가
+  - preflight-push.sh ④ 게이트로 로컬 수동 갱신도 동일 보호
+- **실측에서 잡은 버그**: `gitStatusPorcelain` 이 매칭 라인의 첫 글자(`l[0]`)만 반환해 dirty 판정(`trim !== ''`) 이 **항상 clean** 이었음 — 라인 전체 반환으로 수정. 시뮬레이션에서 DANGER 가 잡히지 않는 것으로 발견
+- **검증**: 유닛 **18건** (분류 6 + eval.yml 구조 가드 + preflight ④) · tsc 0 · eslint 0 · prettier clean · 전체 unit **141 파일 전부 PASS** · **worktree 시뮬레이션 3경로 실측**: d33ce3b 패턴(baseline 단독 수정) → `❌ DANGER exit=1` · 함께 커밋(baseline+run 동시) → `ℹ️ SYNC_PENDING exit=0` · run-only → `⚠️ WARN exit=0`
+
 ### 수정 80: watch-secret-rotation.sh watch 모드 top-level `local` 버그 수정 (2026-08-16)
 - **작업 ID**: FIX-2026-08-16-01 (발견 + 수정 + 검증)
 - **요청**: docs/17 절차대로 시크릿 교체가 끝나면 watch-secret-rotation.sh 로 updated_at 변경 감지 → staging 디스패치 자동 발사 → run 모니터링까지 이어가는 체계 구동

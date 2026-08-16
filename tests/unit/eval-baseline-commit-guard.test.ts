@@ -79,4 +79,29 @@ describe('eval.yml baseline-commit integrity guard (S86b)', () => {
     expect(commitIdx).toBeGreaterThanOrEqual(0)
     expect(checkIdx).toBeGreaterThan(commitIdx)
   })
+
+  // ── 수정 83 (2026-08-16): 세대 불일치(d33ce3b) 예방 가드 ──────────────
+  // baseline 단독 스테이징이 run 아티팩트와 세대 불일치를 만들었다 — 이제
+  // ① verify_sync 스텝이 baseline+run 동기 상태를 검증하고 ② commit 스텝이
+  // verify_sync 에 게이트되고 ③ git add 에 run 아티팩트가 포함된다. 셋 중
+  // 하나라도 빠지면 테스트가 CI 에서 실패한다.
+  it('verify_sync 스텝이 존재하고 id 를 가진다 (수정 83)', () => {
+    const sync = findStep(steps, 'Verify baseline artifact commit sync (수정 83)')
+    expect(sync.id).toBe('verify_sync')
+    expect(String(sync.run)).toContain('verify-baseline-artifact-sync.ts')
+  })
+
+  it('commit 스텝이 steps.verify_sync.outcome == success 에 게이트된다 (수정 83)', () => {
+    const commit = findStep(steps, 'Commit updated baseline')
+    const cond = String(commit.if)
+    expect(cond).toContain("&& steps.verify_sync.outcome == 'success'")
+  })
+
+  it('commit 스텝의 git add 가 run 아티팩트를 포함한다 (수정 83 — d33ce3b 원인)', () => {
+    const commit = findStep(steps, 'Commit updated baseline')
+    const run = String(commit.run)
+    expect(run).toContain('git add eval/baselines/latest.json')
+    expect(run).toContain('eval/results/run-*.json')
+    expect(run).toContain('eval/results/latest.json')
+  })
 })

@@ -231,17 +231,35 @@ jobs:
       # VALID artifacts still commits the baseline — the regression is
       # surfaced by the Check results / Fail workflow steps below instead,
       # and the baseline tracks the actual measured state (S73 G2 semantics).
+      #
+      # 수정 83 (2026-08-16): 세대 불일치 방지 — baseline 을 계산한 run
+      # 아티팩트가 함께 커밋되는지 검증한다. d33ce3b 사고: 이 스텝이
+      # `git add eval/baselines/latest.json` 단독만 스테이징해, 새 baseline 은
+      # 커밋됐지만 run 아티팩트는 이전 세대(08-14) 그대로 남아 CI 가 28건
+      # 가짜 regressions 을 보고했다. verify_sync 가 DANGER(exit 1) 를
+      # 반환하면(baseline 변경 + clean run 존재) 커밋을 건너뛴다.
+      - name: Verify baseline artifact commit sync (수정 83)
+        id: verify_sync
+        if: >
+          github.ref == 'refs/heads/main' &&
+          github.event_name != 'pull_request' &&
+          (github.event.inputs.save_baseline == 'true' || github.event_name == 'push')
+        run: npx tsx scripts/verify-baseline-artifact-sync.ts
+
       - name: Commit updated baseline
         if: >
           github.ref == 'refs/heads/main' &&
           github.event_name != 'pull_request' &&
           (github.event.inputs.save_baseline == 'true' || github.event_name == 'push') &&
-          steps.verify.outcome == 'success'
+          steps.verify.outcome == 'success' &&
+          steps.verify_sync.outcome == 'success'
         run: |
           if [ -f "eval/baselines/latest.json" ]; then
             git config user.name "github-actions[bot]"
             git config user.email "github-actions[bot]@users.noreply.github.com"
-            git add eval/baselines/latest.json
+            # 수정 83: baseline 과 함께 run 아티팩트(latest.json 포함) 를
+            # 커밋 — baseline 단독 스테이징이 세대 불일치(d33ce3b) 의 원인.
+            git add eval/baselines/latest.json eval/results/latest.json eval/results/run-*.json
             git diff --cached --quiet || git commit -m "chore: update eval baseline [skip ci]"
             git push
             echo "Baseline updated and committed"

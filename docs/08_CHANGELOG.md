@@ -959,6 +959,14 @@
 - **스모크**: verify-pages-bundle.sh `BUNDLE_VERIFY_RETRIES=3×1s` — 첫 조회 빈 응답 → `⚠️ 재시도 1/3` → `✅ build_commit=1234567 exit 0` (레이스 흡수 실측)
 - **검증**: self-test 10/10 · verify-deploy-workflow 35/35 + 실 repo PASS · tsc 0 · prettier clean · bash -n OK
 
+### 수정 80: watch-secret-rotation.sh watch 모드 top-level `local` 버그 수정 (2026-08-16)
+- **작업 ID**: FIX-2026-08-16-01 (발견 + 수정 + 검증)
+- **요청**: docs/17 절차대로 시크릿 교체가 끝나면 watch-secret-rotation.sh 로 updated_at 변경 감지 → staging 디스패치 자동 발사 → run 모니터링까지 이어가는 체계 구동
+- **발견**: `--watch` 실행 시 `scripts/watch-secret-rotation.sh: line 315: local: can only be used in a function` — 함수 밖(top-level) `local end_at=0` 이 bash 에러 출력 (루프는 계속 동작하지만 매 실행마다 오염 로그)
+- **수정**: `local end_at=0` → `end_at=0` (top-level 에서 local 불가) + 주석으로 이유 기록
+- **실측**: 8분 watch 윈도우(45s 간격 10회 폴링)에서 updated_at `2026-08-12T08:45:24Z` 유지(교체 미발생) — 오류 메시지가 매 폴링마다 반복되는 것 확인 후 수정. 수정 후 1분 watch 재실행으로 오류 소멸 확인
+- **검증**: bash -n OK · watch-secret-rotation 유닛 7/7 PASS
+
 ### 수정 78: CI 경로 런타임 번들 검증 — deploy.yml staging Pages 배포 직후 build_commit 대조 스텝 (2026-08-15)
 - **작업 ID**: FIX-2026-08-15-26 (구현 + 테스트 + 로컬 스모크)
 - **요청**: deploy.yml 의 staging Pages 배포 직후에 배포 URL 의 /api/health build_commit 을 github.sha 와 대조하는 스텝을 추가해 CI 경로에서도 런타임 번들 검증이 돌게

@@ -312,7 +312,7 @@ echo "   상태: $STATE_FILE | AUTO_DISPATCH=$AUTO_DISPATCH"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 
 if [ "$MODE" = "watch" ]; then
-  local end_at=0
+  end_at=0  # top-level — local 불가 (함수 밖)
   [ "$WATCH_MINUTES" -gt 0 ] && end_at=$(( $(date +%s) + WATCH_MINUTES * 60 ))
   while [ "$end_at" -eq 0 ] || [ "$(date +%s)" -lt "$end_at" ]; do
     poll_and_report || true

@@ -74,13 +74,11 @@ const app = new Hono<{ Bindings: AppBindings }>()
 // Captures request-level spans with method, path, and status code
 app.use('*', sentryMiddleware)
 
-// Structured logging middleware (must be first for full request coverage)
-app.use(
-  '*',
-  createLoggingMiddleware({
-    ddEnv: 'production', // Override via Cloudflare Pages env vsn to set 'preview' dynamically
-  }),
-)
+// 수정 90: ddEnv 를 여기서 하드코딩하지 않는다 — 빌드 타임 DEPLOY_ENV
+// (vite define: DEPLOY_ENV=staging → "staging", production → "production") 이
+// logger.ts resolveDdEnv 의 ③에서 환경을 결정한다. 하드코딩을 두면 context
+// 우선순위(①) 때문에 staging 번들도 'production' 을 로깅하게 된다.
+app.use('*', createLoggingMiddleware())
 app.use(
   '/api/*',
   cors({

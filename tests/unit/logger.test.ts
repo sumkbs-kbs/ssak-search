@@ -14,6 +14,7 @@ import {
   logBackendError,
   getLogBuffer,
   clearLogBuffer,
+  resolveDdEnv,
 } from '../../src/lib/logger'
 
 describe('Logger', () => {
@@ -155,6 +156,33 @@ describe('Logger', () => {
       const parsed = JSON.parse(spy.mock.calls[0][0])
       expect(parsed.ddEnv).toBe('staging')
       spy.mockRestore()
+    })
+  })
+
+  describe('resolveDdEnv (수정 90 — 빌드 타임 DEPLOY_ENV 주입)', () => {
+    it('명시적 context.ddEnv 가 최우선이다', () => {
+      expect(resolveDdEnv('preview', 'staging')).toBe('preview')
+    })
+    it('DEPLOY_ENV=staging 번들은 staging 을 로깅한다', () => {
+      expect(resolveDdEnv(undefined, 'staging')).toBe('staging')
+    })
+    it('DEPLOY_ENV=production 번들은 production 을 로깅한다', () => {
+      expect(resolveDdEnv(undefined, 'production')).toBe('production')
+    })
+    it('DEPLOY_ENV=global (vitest/로컬 define 미주입) 은 기존 동작대로 production 폴백', () => {
+      expect(resolveDdEnv(undefined, 'global')).toBe('production')
+    })
+    it('런타임 ENV.ENVIRONMENT var 가 빌드 타임보다 우선한다', () => {
+      const prev = (globalThis as { ENV?: { ENVIRONMENT?: string } }).ENV
+      ;(globalThis as { ENV?: { ENVIRONMENT?: string } }).ENV = { ENVIRONMENT: 'runtime-env' }
+      try {
+        expect(resolveDdEnv(undefined, 'staging')).toBe('runtime-env')
+      } finally {
+        ;(globalThis as { ENV?: { ENVIRONMENT?: string } }).ENV = prev
+      }
+    })
+    it('테스트 기본값 (define 미주입) 은 production 이다 — 기존 동작 보존', () => {
+      expect(resolveDdEnv()).toBe('production')
     })
   })
 

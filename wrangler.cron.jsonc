@@ -18,6 +18,12 @@
   "triggers": {
     "crons": ["*/15 * * * *"],
   },
+  // 수정 90: esbuild define 으로 __DEPLOY_ENV__ 주입 (vite 미경유 — wrangler
+  // 가 직접 번들). scheduler 로그의 ddEnv 가 production 으로 남던 원인 해결.
+  // 값은 문자열 리터럴로 치환되므로 이중 인용부호가 필요하다.
+  "define": {
+    "__DEPLOY_ENV__": "\"production\"",
+  },
   "vars": {
     // The Pages deployment this scheduler probes. Not a secret (public URL);
     // override per environment if needed.

@@ -16,6 +16,7 @@
 
 import type { Context } from 'hono'
 import type { AppBindings } from '../types'
+import { DEPLOY_ENV } from './deploy-env'
 
 export type LogLevel = 'debug' | 'info' | 'warn' | 'error'
 
@@ -65,6 +66,27 @@ const SERVICE_NAME = 'ssak-search'
 const SERVICE_VERSION = '2.0.0'
 
 /**
+ * Resolve the Datadog-compatible `ddEnv` for a log entry.
+ *
+ * 우선순위 (수정 90 — staging 로그가 ddEnv=production 으로 남던 원인 해결):
+ *   1. 명시적 context.ddEnv (request-scoped middleware/호출자 오버라이드 — 최우선)
+ *   2. 런타임 워커 var `ENV.ENVIRONMENT` (있을 때만; 현재 어느 배포도 설정 안 함)
+ *   3. **빌드 타임 DEPLOY_ENV** — vite define(Pages) / wrangler define(cron 스케줄러)
+ *      로 주입된 'staging'/'production'. 방안 B(DO 인스턴스 분리)와 같은 단일
+ *      진실 공급원이라 환경별 var 추가 없이 번들이 올바른 환경을 로깅한다.
+ *   4. 'production' 최후 폴백 — DEPLOY_ENV 가 'global'(vitest/로컬, define 미주입)
+ *      일 때만, 즉 기존 동작 보존 (테스트 무회귀).
+ */
+export function resolveDdEnv(contextDdEnv?: string, deployEnv: string = DEPLOY_ENV): string {
+  if (contextDdEnv) return contextDdEnv
+  const runtimeEnv =
+    typeof globalThis !== 'undefined' && (globalThis as { ENV?: { ENVIRONMENT?: string } }).ENV?.ENVIRONMENT
+  if (runtimeEnv) return runtimeEnv
+  if (deployEnv !== 'global') return deployEnv
+  return 'production'
+}
+
+/**
  * Format a log entry as a structured JSON line.
  * Output is compatible with Logpush, Datadog, Splunk, and oTel collectors.
  */
@@ -76,10 +98,7 @@ function formatLog(level: LogLevel, message: string, context: LogContext = {}): 
     // Datadog-compatible fields
     ddsource: 'cloudflare-workers',
     ddService: SERVICE_NAME,
-    ddEnv:
-      context.ddEnv ||
-      (typeof globalThis !== 'undefined' && (globalThis as { ENV?: { ENVIRONMENT?: string } }).ENV?.ENVIRONMENT) ||
-      'production',
+    ddEnv: resolveDdEnv(context.ddEnv),
     ddVersion: SERVICE_VERSION,
     // OpenTelemetry-compatible fields
     service: SERVICE_NAME,

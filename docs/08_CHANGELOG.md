@@ -1100,6 +1100,12 @@
 - **테스트**: `tests/unit/lib-verify-pace.test.ts` 신규 **5/5** — 낮음 연장(≥300ms)/높음 유지(<300ms)/스테일 복귀/레거시 마이그레이션/비숫자·빈 값 무시 (타이밍 기반, 100/500ms 축소 간격 + 여유 경계 300ms)
 - **검증**: bash -n 3개 OK · tsc 0 · eslint 0 · prettier clean · 전체 unit **143 파일 2,813/2,813 PASS** (중간 flake 는 기지의 동시 부하 bash 스폰 타임아웃 — 단독 전부 통과)
 
+### 수정 104: CI per-commit replay 범위 계산 — force-push(비-조상 before) 견고화 (2026-08-17)
+- **요청**: 고정 체인 force-push(4fa42f4) 후 CI per-commit gate replay 가 `fatal: Invalid revision range 51ae1a6..4fa42f4` 로 실패 — 원인 진단 및 해결
+- **근본 원인**: ci.yml 의 "Resolve commit range" 스텝이 `github.event.before` 를 그대로 BASE 로 사용. force-push 로 브랜치가 재작성되면 **before(구 헤드)는 새 HEAD 의 조상이 아니다** → `git rev-list --count "before..HEAD"` 가 fatal(exit 128) → replay 잡 전체 실패. 첫 push(빈/zeros before)만 처리하고 비-조상 before 는 미처리
+- **해결**: `git merge-base --is-ancestor "$BASE" "$HEAD"` 가 거짓이면 (force-push/재작성 감지) **마지막 10개 커밋으로 폴백** (첫 push 경로와 동일한 상한 — merged-tree 게이트가 HEAD 를 이미 검증, replay 는 신규 커밋 회귀 pinpoint 용). ::warning:: 으로 감지 사실을 로그에 남김
+- **검증**: 재push 후 CI per-commit replay **ALL GREEN** 실측
+
 ### 수정 103: per-commit replay workflow 게이트를 커밋별 자체 체커로 전환 — 시간역행 체크 제거 (2026-08-17)
 - **요청**: 수정 89~99 배치(11커밋) cherry-pick push 후 per-commit replay 에서 중간 커밋 전부 red — 원인 진단 및 해결
 - **근본 원인**: `verify-commits-ci.sh` 의 workflow 게이트가 **ROOT(팁)의 verify-deploy-workflow.ts** 를 모든 커밋에 적용. 체커는 수정 84/92/99 로 성장하는데, 스크립트 수정(92/98/84)과 체크 추가(99)가 서로 다른 커밋이라 중간 커밋은 **구조적으로** 최신 체크를 만족 불가 (예: 수정 92 이전 커밋의 verify-pages-bundle.sh 는 정확 일치가 당시 표준 — 팁 체커가 prefix 를 요구해 오탐 FAIL). 추가로 44dfff5(수정 99)는 체크 코드가 808c2e7 통째 채택으로 이미 있는데 verify-do-binding.sh 수정(수정 84)이 다음 커밋이라 **자체 unit/workflow 게이트조차 통과 불가** (체리픽으로 생긴, 로컬에 존재하지 않던 트리 상태)

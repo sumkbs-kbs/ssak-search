@@ -87,6 +87,14 @@ const MEMORY_CACHE_TTL_NEWS = 300_000 // 5 minutes (Cache API NEWS_TTL)
  */
 const INFLIGHT_SEARCHES = new Map<string, Promise<SearchResponse>>()
 
+/**
+ * P2-2 (2026-08-18): single-flight wedge 타임아웃. 1102 CPU-kill 로 죽은
+ * invocation 의 promise 는 settle 하지 않으므로, 이 시간 동안 안 풀리면 키를
+ * 비우고 새 execution 으로 대체한다. 정상적인 느린 팬아웃(30s+)과 겹칠 수
+ * 있지만 — 스탬피드 보호만 느슨해질 뿐, 잘못된 결과는 없다.
+ */
+const SINGLE_FLIGHT_WEDGE_TIMEOUT_MS = 15_000
+
 function getMemoryCacheKey(request: SearchRequest, variant?: string): string {
   // Fast deterministic key: all fields that affect search results.
   // The query MUST be canonicalized the SAME way as cache.ts:cacheKey does —
@@ -477,7 +485,26 @@ export async function executeSearch(request: SearchRequest, config: Orchestrator
   const inflight = INFLIGHT_SEARCHES.get(memCacheKey)
   if (inflight) {
     log.debug('search single-flight: awaiting in-flight request')
-    return inflight
+    // P2-2 (2026-08-18): 1102 CPU-kill 로 죽은 invocation 의 promise 는
+    // settle 되지 않아 이 키를 영구히 wedge 시킨다 — free plan 10ms CPU
+    // 한도에서 실측 (동일 쿼리 반복 시 'awaiting in-flight request' 로 45s+
+    // 행 후 canceled). 짧은 레이스 타임아웃으로 죽은 promise 를 감지하면
+    // 키를 비우고 새 execution 을 시작한다 (스탬피드 보호가 느슨해질 뿐
+    // 정확성은 유지 — 메모리 캐시가 중복 결과를 계속 흡수).
+    const settled = await Promise.race([
+      inflight.then(
+        (r) => ({ ok: true as const, value: r }),
+        () => ({ ok: false as const, value: undefined as never }),
+      ),
+      new Promise<{ ok: false; value: undefined }>((resolve) =>
+        setTimeout(() => resolve({ ok: false, value: undefined }), SINGLE_FLIGHT_WEDGE_TIMEOUT_MS),
+      ),
+    ])
+    if (settled.ok) return settled.value
+    INFLIGHT_SEARCHES.delete(memCacheKey)
+    log.warn('search single-flight: in-flight promise wedged — launching fresh execution', {
+      query: request.query,
+    })
   }
 
   // Register THIS execution as the single-flight for this key. We wrap the

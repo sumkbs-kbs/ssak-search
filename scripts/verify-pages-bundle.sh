@@ -16,6 +16,10 @@
 # 사용법:
 #   scripts/verify-pages-bundle.sh --expected-commit <SHA> --branch <main|staging>
 #
+#   --expected-commit 는 전체 SHA 또는 short SHA(예: 7자리) 모두 허용 — 대조는
+#   prefix 매칭 (수정 92). 전체 SHA 만 기대하는 정확 일치(==) 는 short 인자를
+#   받으면 /api/health 의 전체 build_commit 와 항상 불일치해 오탐이 났다.
+#
 # Env:
 #   CLOUDFLARE_API_TOKEN / CLOUDFLARE_ACCOUNT_ID — wrangler API 호출용
 #     (미설정 시 npx wrangler OAuth 경로로 동작)
@@ -116,12 +120,15 @@ PY
   sleep "${BUNDLE_VERIFY_RETRY_WAIT:-10}"
 done
 
-# ── ③ 대조 ─────────────────────────────────────────────────────────────────
-if [ "$BUNDLE_COMMIT" = "$EXPECTED" ]; then
-  echo " ✅ 번들 커밋 검증: build_commit=${EXPECTED:0:7} (배포된 번들이 대상 커밋 포함)"
+# ── ③ 대조 — prefix 매칭 (수정 92) ───────────────────────────────────────
+# EXPECTED 가 short SHA(예: 7자리)여도 전체 build_commit 의 접두사로 비교한다.
+# bash glob `"$EXPECTED"*` 은 EXPECTED 를 리터럴 접두사로 취급하므로
+# EXPECTED=전체 SHA 면 정확 일치와 동일하고, short 면 접두사 일치가 된다.
+if [[ "$BUNDLE_COMMIT" == "$EXPECTED"* ]]; then
+  echo " ✅ 번들 커밋 검증: build_commit=${BUNDLE_COMMIT:0:${#EXPECTED}}… (배포된 번들이 대상 커밋 포함 — prefix 매칭)"
   exit 0
 fi
-echo " ❌ 번들 커밋 불일치: build_commit='${BUNDLE_COMMIT:-비어있음}' vs ${EXPECTED:0:7}" >&2
+echo " ❌ 번들 커밋 불일치: build_commit='${BUNDLE_COMMIT:-비어있음}' vs ${EXPECTED:0:7} (prefix 매칭 실패)" >&2
 echo "    (재시도 ${BUNDLE_VERIFY_RETRIES:-5}회 후에도 조회 실패/불일치 — 전파 레이스가 아니라 스테일 의심)" >&2
 echo "    판정 전에 deployment list 의 Source commit 과 대조 권장 — staging 은 캐시 무효화 재배포(--auto-redeploy, 수정 76)." >&2
 exit 1

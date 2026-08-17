@@ -153,6 +153,7 @@ AUTH_OUT="$(gh auth status 2>&1 || true)"
 if printf '%s\n' "$AUTH_OUT" | grep -qi 'not logged in'; then
   echo " ❌ gh 미인증 — 'gh auth login -s repo,workflow' 실행 후 재시도 (이 상태에서" >&2
   echo "    gh secret set 은 조용히 실패/프롬프트 대기 — 사전 차단)" >&2
+  echo "    (참고: git credential helper 토큰은 gh secret set 을 대신할 수 없음 — gh 는 자체 토큰 저장소 사용, 수정 100)" >&2
   exit 1
 fi
 parse_scopes "$AUTH_OUT"; SCOPE_RC=$?
@@ -193,20 +194,53 @@ if [ ! -s "$SECRET_FILE" ]; then
 fi
 
 # API(updated_at 검증)용 GitHub 토큰: GH_TOKEN → gh auth token → git credential
+# helper. 수정 100 — 경로별 실패 사유를 구분해 안내한다 (기존: 3경로가 다르게
+# 실패해도 '모두 없음' 하나로 뭉뚱그려 원인·해법을 알 수 없었음. 실측: gh
+# 미인증이면 ① 에서 먼저 차단되고, credential helper(osxkeychain) 는 이 경로가
+# 실제로 동작하지만(라이브 검증 — GitHub API 5000 limit OK) gh 가 있어야 도달).
 GITHUB_API_TOKEN=""
+TOKEN_SOURCE=""
+GH_TOKEN_ERR=""   # gh auth token 실패 사유
+CRED_HELPER=""    # git credential.helper 값 (진단용)
 if [ -n "${GH_TOKEN:-}" ]; then
   GITHUB_API_TOKEN="$GH_TOKEN"
+  TOKEN_SOURCE="GH_TOKEN"
 elif command -v gh >/dev/null 2>&1; then
-  GITHUB_API_TOKEN="$(gh auth token 2>/dev/null || true)"
+  # gh auth token 은 성공 시 토큰만 / 실패 시 stderr 로 사유 — 2>&1 병합 + rc 로 구분.
+  GH_COMBINED="$(gh auth token 2>&1)"
+  GH_RC=$?
+  if [ "$GH_RC" = "0" ]; then
+    GITHUB_API_TOKEN="$GH_COMBINED"
+    TOKEN_SOURCE="gh auth token"
+  else
+    GH_TOKEN_ERR="$GH_COMBINED"
+  fi
 fi
 if [ -z "$GITHUB_API_TOKEN" ]; then
+  CRED_HELPER="$(git config --get credential.helper 2>/dev/null || true)"
   GITHUB_API_TOKEN="$(printf 'protocol=https\nhost=github.com\n\n' | git credential fill 2>/dev/null \
     | sed -n 's/^password=//p' | head -1)"
+  [ -n "$GITHUB_API_TOKEN" ] && TOKEN_SOURCE="git credential helper${CRED_HELPER:+ (${CRED_HELPER})}"
 fi
 if [ -z "$GITHUB_API_TOKEN" ]; then
-  echo " ❌ GitHub API 토큰 해석 실패 (GH_TOKEN / gh auth token / git credential 모두 없음)" >&2
+  echo " ❌ GitHub API 토큰 해석 실패 — 3개 경로 모두 토큰 없음:" >&2
+  echo "    ① GH_TOKEN       : ${GH_TOKEN:+설정됨}${GH_TOKEN:-미설정}" >&2
+  if command -v gh >/dev/null 2>&1; then
+    echo "    ② gh auth token  : 실패 (${GH_TOKEN_ERR:-사유 없음})" >&2
+    echo "       → 'gh auth login -s repo,workflow' 또는 GH_TOKEN 설정" >&2
+  else
+    echo "    ② gh auth token  : gh CLI 미설치 — 'brew install gh'" >&2
+  fi
+  if [ -n "$CRED_HELPER" ]; then
+    echo "    ③ git credential : helper=${CRED_HELPER} 가 password 를 반환하지 않음" >&2
+    echo "       → 'git credential approve' 로 토큰 등록 또는 GH_TOKEN 설정" >&2
+  else
+    echo "    ③ git credential : credential.helper 미설정" >&2
+    echo "       → 'git config --global credential.helper osxkeychain' 후 'git credential approve', 또는 GH_TOKEN 설정" >&2
+  fi
   exit 1
 fi
+echo "  ✅ GitHub API 토큰: ${TOKEN_SOURCE}"
 
 updated_at_before="$(curl -s -m 15 -H "Authorization: Bearer ${GITHUB_API_TOKEN}" -H "Accept: application/vnd.github+json" \
   "https://api.github.com/repos/${REPO}/actions/secrets/${SECRET_NAME}" 2>/dev/null \

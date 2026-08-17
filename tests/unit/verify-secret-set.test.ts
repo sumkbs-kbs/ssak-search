@@ -44,6 +44,10 @@ function runScript(
     cfBody?: string
     repoViewFail?: boolean
     skipCf?: boolean
+    /** GH_TOKEN env 값 — 수정 100 토큰 해석 경로 테스트용 (빈 값이면 gh/credential 로 폴백) */
+    ghToken?: string
+    /** gh auth token 이 실패하도록 강제 (수정 100 — 경로별 사유 안내 검증) */
+    authTokenFail?: boolean
   } = {},
 ): RunResult {
   const dir = mkdtempSync(join(tmpdir(), 'vss-'))
@@ -58,7 +62,7 @@ function runScript(
     'case "$1 $2" in',
     '  "auth status") printf "%s" "$FAKE_AUTH_STATUS"; exit 0 ;;',
     '  "repo view") [ -n "${FAKE_REPO_VIEW_FAIL:-}" ] && exit 1 || exit 0 ;;',
-    '  "auth token") printf "%s" "ghp_fake_token"; exit 0 ;;',
+    '  "auth token") [ -n "${FAKE_AUTH_TOKEN_FAIL:-}" ] && { echo "no oauth token found for github.com" >&2; exit 1; } || { printf "%s" "ghp_fake_token"; exit 0; } ;;',
     '  "secret set") exit "${FAKE_SECRET_SET_RC:-0}" ;;',
     'esac',
     'exit 1',
@@ -94,10 +98,25 @@ function runScript(
     '',
   ].join('\n')
 
+  // 가짜 git — 수정 100: gh auth token 이 실패한 뒤의 credential helper 폴백을
+  // 격리한다 (진짜 git credential fill 이 실제 osxkeychain 토큰을 반환하는 것을
+  // 차단 — 테스트는 오프라인·결정적이어야 한다). credential 미설정 + fill 무응답.
+  const fakeGit = [
+    '#!/usr/bin/env bash',
+    'case "$1 $2" in',
+    '  "config --get") exit 1 ;;',
+    '  "credential fill") exit 0 ;;',
+    'esac',
+    'exit 0',
+    '',
+  ].join('\n')
+
   writeFileSync(join(bin, 'gh'), fakeGh)
   chmodSync(join(bin, 'gh'), 0o755)
   writeFileSync(join(bin, 'curl'), fakeCurl)
   chmodSync(join(bin, 'curl'), 0o755)
+  writeFileSync(join(bin, 'git'), fakeGit)
+  chmodSync(join(bin, 'git'), 0o755)
 
   const tokenFile = join(dir, 'token.txt')
   writeFileSync(tokenFile, 'cf_test_token_value\n')
@@ -105,7 +124,7 @@ function runScript(
   const baseEnv = {
     ...process.env,
     PATH: `${bin}:${process.env.PATH ?? ''}`,
-    GH_TOKEN: 'ghp_test_pat',
+    GH_TOKEN: opts.ghToken ?? 'ghp_test_pat',
     FAKE_COUNT_DIR: dir,
     FAKE_AUTH_STATUS:
       opts.authStatus ?? "✓ Logged in to github.com account sumkbs@gmail.com\n- Token scopes: 'repo', 'workflow'\n",
@@ -114,6 +133,7 @@ function runScript(
     FAKE_CF_BODY: opts.cfBody ?? JSON.stringify({ success: true, result: { id: 'x', status: 'active' } }),
     FAKE_SECRET_SET_RC: String(opts.secretSetRc ?? 0),
     FAKE_REPO_VIEW_FAIL: opts.repoViewFail ? '1' : '',
+    FAKE_AUTH_TOKEN_FAIL: opts.authTokenFail ? '1' : '',
   }
   const args = ['--file', tokenFile, '--repo', 'sumkbs-kbs/ssak-search']
   if (opts.skipCf) args.push('--skip-cf-verify')
@@ -208,6 +228,25 @@ describe('verify-secret-set.sh (수정 93 — gh secret set 조용한 실패 사
       expect(r.exit).toBe(0)
       expect(r.out).toContain('updated_at 반영 확인')
       expect(r.out).toContain('반영 확인 완료')
+    },
+    TEST_TIMEOUT,
+  )
+
+  it(
+    'GitHub API 토큰 해석 실패 시 경로별 사유를 안내한다 (수정 100)',
+    () => {
+      if (!BASH_AVAILABLE) return
+      // GH_TOKEN 해제 + gh auth token 실패 + (fake) git credential 도 무응답 →
+      // 3경로 전부 실패. set 전에 차단되어야 하고 사유가 경로별로 보여야 한다.
+      const r = runScript({ ghToken: '', authTokenFail: true })
+      expect(r.exit).toBe(1)
+      expect(r.out).toContain('GitHub API 토큰 해석 실패')
+      expect(r.out).toContain('① GH_TOKEN')
+      expect(r.out).toContain('② gh auth token  : 실패')
+      expect(r.out).toContain('no oauth token found for github.com')
+      expect(r.out).toContain('③ git credential')
+      expect(r.out).toContain('credential.helper 미설정')
+      expect(r.out).not.toContain('gh secret set 실행됨') // set 에 도달하지 않음
     },
     TEST_TIMEOUT,
   )

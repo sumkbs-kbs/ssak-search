@@ -1036,7 +1036,6 @@
 - **테스트**: +2 → **12/12** — ① watch 3회 폴링 체인: secrets 조회 3회·디스패치 POST **정확히 1회**·최종 baseline=B·이력 3건([BASELINE]+[ROTATION]+[DISPATCH]) ② 디스패치 실패(500)→다음 폴링 재시도(204) 성공: POST 2회·최종 baseline=B
 - **검증**: tsc 0 · eslint 0 · prettier clean · bash -n OK · 전체 unit **141 파일 전부 PASS**
 
-=======
 ### 수정 92: verify-pages-bundle.sh short SHA 오탐 불일치 — 전체 SHA 비교를 prefix 매칭으로 완화 (2026-08-17)
 - **작업 ID**: FIX-2026-08-17-07 (구현 + 실측)
 - **요청**: verify-pages-bundle.sh 가 short SHA 를 받으면 전체 SHA build_commit 와 비교해 오탐 불일치를 내는 문제를 prefix 매칭으로 완화
@@ -1059,6 +1058,92 @@
 - **테스트**: `tests/unit/verify-secret-set.test.ts` 신규 **7/7** — fake gh(인증+repo scope / scope 부족 / 미인증 / 다른 repo) 분기 · fake curl(updated_at before→after 카운터 전환 — set 반영 시뮬레이션) · CF verify -K config 주입 분기(수정 84 패턴) · dry-run(set 미실행) · updated_at 미반영 → FAIL
 - **실측**: 이 셸은 gh 미인증 상태라 `--dry-run` 이 ①에서 정확히 차단됨 (이 스크립트가 잡으려는 핵심 케이스 라이브 확인) · `--self-test` 8 케이스 전부 PASS
 - **검증**: bash -n OK · tsc 0 · eslint 0 · prettier clean · 전체 unit **141 파일 전부 PASS**
+
+### 수정 94: 워처에 CF 토큰 이중 검증 — updated_at 회전 신호에 더해 /user/tokens/verify 로 새 토큰 값 자체를 확인 (2026-08-17)
+- **작업 ID**: FIX-2026-08-17-09 (구현 + 테스트 + 실측)
+- **요청**: CLOUDFLARE_API_TOKEN updated_at 폴링 대신 /user/tokens/verify 로 토큰 유효성을 직접 확인해 교체 여부를 이중 검증하게 워처를 확장
+- **설계**: updated_at 은 GitHub 시크릿 값 갱신 신호(값 자체는 API 로 읽을 수 없음) — 회전 **트리거** 로 유지하고, 운영자가 로컬에 둔 새 토큰 파일(gh secret set 에 쓴 그 파일 — 수정 93 의 verify-secret-set.sh --file 과 동일 값) 을 **/user/tokens/verify 로 이중 검증** 해 유효할 때만 디스패치
+- **구현** (`scripts/watch-secret-rotation.sh`):
+  - `CF_TOKEN_FILE` env + `--cf-token-file PATH` 인자 (값은 argv 로 받지 않음 — `verify_cf_token()` 이 curl -K config 주입, 수정 84 패턴)
+  - 회전 분기 흐름: **유효(PASS)** → `[CF-VERIFY]` + 기존 디스패치 · **무효+CF_VERIFY_HARD=1(기본)** → `[CF-VERIFY-FAILED]` + `[DISPATCH-BLOCKED]` + **baseline 유지** → 다음 폴링에서 토큰 파일이 고쳐지면 재검증 → 자동 디스패치 · **무효+CF_VERIFY_HARD=0** → `[CF-VERIFY-WARN]` + 디스패치 진행 (guard 가 최종 판정)
+  - **Slack 재통지 방지**: 동일 회전에 대한 retry(CF 하드 실패/디스패치 실패 재폴링) 는 첫 감지에서만 통지 (이력의 [ROTATION] 수로 판정 — 폴링마다 스팸 차단)
+  - 인자 파싱을 `for arg in "$@"` → `while [ $# -gt 0 ]` 로 전환 (--cf-token-file 의 shift 2 가 for 루프에선 동작 안 하는 버그 수정 — while 은 목록을 재평가)
+- **테스트**: `tests/unit/watch-secret-rotation.test.ts` **+4 → 16/16** — ① 회전+유효 토큰 → `[CF-VERIFY]`+디스패치+argv 미노출(`-K <config>` 패턴, URL 미노출 단언) ② 무효(하드) → 보류+baseline 유지 → 재검증 후 디스패치 ③ 무효+CF_VERIFY_HARD=0 → 경고+디스패치 ④ --watch 체인: CF 검증 1회 실패 → 보류 → 다음 폴링 유효 → 디스패치 1회 (상태 전이)
+- **디버깅 실측 (이스케이프 지뢰)**: 테스트 fake curl 의 sed 라인이 JS 문자열 이스케이프로 깨짐 — `\(`(무효 이스케이프 → `(`) 과 `\1`(8진수 → SOH ^A) 가 소스에 **백슬래시 1개** 로 들어가 URL 추출이 실패 → CF 분기 미도달 → verify 항상 FAIL. 동작하는 verify-secret-set.test.ts 의 동일 라인(백슬래시 2개) 을 바이트 단위로 복사해 해결 — curl.log 의 `-K <config>` 경유 발화 + `[CF-VERIFY]` 로 실측 확인
+- **실측 (수동 재현)**: 완전한 fake curl 로 run 1(BASELINE) → run 2(회전): `[ROTATION] → [CF-VERIFY] 새 토큰 유효 → [DISPATCH] HTTP 204 run=31814411821` · secrets 조회 1회 + CF verify 1회 + 디스패치 1회
+- **검증**: bash -n OK · tsc 0 · eslint 0 · prettier clean · 전체 unit **142 파일 2,806/2,806 PASS**
+
+### 수정 95: 워처 교체 감지 시각·지연 로깅 — 감지→디스패치 간격(ms) 측정 + 상태 영구 기록 (2026-08-17)
+- **작업 ID**: FIX-2026-08-17-10 (구현 + 테스트 + 실측)
+- **요청**: watch 모드에서 교체 감지 시점의 시각·지연(latency) 을 로그에 남겨 회전~디스패치 간격을 측정하게 확장
+- **갭**: 기존 이벤트는 전부 폴링 시각 하나로 스탬프되고, 감지 시각~디스패치 ack 간격을 산출할 수 없었음
+- **구현** (`scripts/watch-secret-rotation.sh`):
+  - `now_epoch_ms()` 헬퍼 (python3 time, 실패 시 0) + 회전 분기 진입 시 `rot_ms`/`rot_iso` 캡처
+  - **회전 발생 시점 상한 추정**: 상태의 `lastPollAt` 과의 간격을 계산해 `[ROTATION] ... (이전 폴링 Ns 후 감지)` — 실제 교체는 이전 폴링~지금 사이 어느 순간 (watch 간격 300s 시 상한 제공)
+  - **지연 측정**: 디스패치 ack 후 `lat_ms = now - rot_ms` 산출 — `[DISPATCH] ... (감지→디스패치 Nms)` / 실패 `(감지→Nms)` / CF 하드 보류 `(감지→판정 Nms)`
+  - **상태 영구 기록**: `last_rotation_detected_at`(ISO) + `last_rotation_latency_ms`(int) 저장 (분기 밖 `local rot_iso lat_ms` 선언 — set -u 안전)
+- **테스트**: +2 → **18/18** — ① 회전 이벤트에 `감지→디스패치 \d+ms` 마커 + 상태 detected_at(ISO 정규식)/latency_ms(number≥0) ② CF 하드 보류도 `감지→판정 \d+ms` + baseline 유지 (수정 94 동작 불변)
+- **실측 (수동 재현)**: run1(BASELINE) → sleep 1 → run2(회전): `[ROTATION] ... (이전 폴링 1s 후 감지)\n[CF-VERIFY] ...\n[DISPATCH] ... HTTP 204 run=31814411821 (감지→디스패치 181ms)` · 상태 `detected_at=2026-08-17T03:15:01Z` + `latency_ms=181` — 생산에서는 run id 캡처 대기(DISPATCH_RUN_SLEEP=5s) 포함되어 ~5s+ 간격 실측 예상
+- **검증**: bash -n OK · tsc 0 · eslint 0 · prettier clean · 전체 unit **142 파일 2,808/2,808 PASS** (중간 동시 부하 flake 2건 — verify-slack-alert-e2e/verify-do-binding-token execFileSync 5s 타임아웃, 단독 실행 전부 통과·재실행 all-green — 기지 패턴)
+
+### 수정 96: 검증 도구 자가 적응 페이싱 — X-RateLimit-Remaining 잔량이 낮으면 간격 자동 연장 (2026-08-17)
+- **작업 ID**: FIX-2026-08-17-11 (구현 + 기능 검증 + 라이브 실측)
+- **요청**: X-RateLimit-Remaining 헤더를 읽어 잔량이 낮으면 간격을 자동 연장하는 자가 적응 페이싱을 lib-verify-pace.sh 에 구현
+- **설계**: pace_request() 만으로는 연장 신호(잔량) 를 얻을 수 없다 — 응답 헤더를 **보고** 하는 2상 구조. 상태 파일을 {last_ms, remaining, remaining_at_ms} JSON 으로 확장(기존 숫자 한 줄 형식도 읽어 마이그레이션 — 수정 88~95 호환) 하고, 잔량 ≤ PACE_ADAPT_THRESHOLD(기본 10) 이고 관측 60s 이내(한도 창 리셋 전) 면 간격을 VERIFY_PACE_MS(2500) → PACE_ADAPT_MS(5000) 로 연장, 스테일(60s 초과) 시 기본 복귀
+- **구현**:
+  - `scripts/lib-verify-pace.sh` — `pace_state_py()`(load/save/effective_ms 공유 파이썬) + `pace_request()` 적응형 + `pace_report_remaining <잔량>`(curl 미사용 요청용) + **`pace_curl` 래퍼**(게이트 통과 + curl -D 헤더 캡처 → 잔량 자동 보고, stdout/exit 투명)
+  - `scripts/verify-deployed-gold.sh` — 인라인 python pace() 를 JSON/적응형으로 미러(`_pace_state`/`_pace_save`/`report_remaining`) + fetch() 의 `resp.headers.get('X-RateLimit-Remaining')` 보고 (두 구현이 같은 형식 공유 — 한쪽만 바꾸면 읽기가 깨지므로 함께 수정)
+  - `scripts/verify-env-equivalence.sh` — [3/4] 검색 curl 2곳을 `pace_request`+curl → `pace_curl` 로 교체
+- **헤더 출처 확인**: X-RateLimit-Remaining 은 security-middleware.ts 가 API 응답마다 설정 (checkIpRateLimit report 전용 — 429 재카운트 없음), /api/search 는 30/min per-IP (실측 잔량 9→2)
+- **기능 검증 (오프라인 4케이스)**: ① 잔량 5 → **486ms**(adapt 500ms) ② 잔량 30 → 49ms(base 100ms) ③ 스테일 잔량(61s 전 관측) → 65ms 기본 복귀 ④ 레거시 숫자 형식 → JSON 마이그레이션 + 정상 대기
+- **라이브 실측**: gold 스모크(staging) 6/6 + pace 파일 `{"remaining": 7, ...}` — **실 헤더 잔량 7(≤10) 보고 → 적응 연장 작동**(6쿼리 총 27.3s) · pace_curl 단일 요청 — 본문 4,224바이트 투과 + remaining=6 보고 · 동치 대조 — [3/4] 검색 3/3 ✅·[4/4] gold 6/6=6/6 ✅, 429 없음 ([1/4] 커밋 불일치는 기존 상태 staging=49231a1 vs production=51f0a4e)
+- **테스트**: `tests/unit/lib-verify-pace.test.ts` 신규 **5/5** — 낮음 연장(≥300ms)/높음 유지(<300ms)/스테일 복귀/레거시 마이그레이션/비숫자·빈 값 무시 (타이밍 기반, 100/500ms 축소 간격 + 여유 경계 300ms)
+- **검증**: bash -n 3개 OK · tsc 0 · eslint 0 · prettier clean · 전체 unit **143 파일 2,813/2,813 PASS** (중간 flake 는 기지의 동시 부하 bash 스폰 타임아웃 — 단독 전부 통과)
+
+### 수정 100: verify-secret-set.sh GitHub API 토큰 해석 — git credential helper 라이브 검증 + 경로별 실패 사유 안내 (2026-08-17)
+- **작업 ID**: FIX-2026-08-17-15 (라이브 검증 + 개선 + 테스트)
+- **요청**: verify-secret-set.sh 의 GitHub API 토큰 해석 경로에 git credential helper 가 실제로 동작하는지 라이브로 확인하고, 실패 시 오류 메시지를 개선
+- **라이브 실측** (이 셸): ① `credential.helper=osxkeychain` — `git credential fill` 이 실제 토큰 반환 (GitHub API rate_limit 5000·repo 접근 OK 로 유효성 확인) ② `gh auth token` 은 실패 ("no oauth token found for github.com", rc=1 — gh 미인증) ③ **그러나 스크립트는 ①단계(gh auth status)가 gh 인증을 하드 게이트**하므로 이 셸에서는 credential fallback 에 도달 전에 "gh 미인증"으로 차단 → **fallback 이 그림자화** (gh 인증 시엔 gh auth token 이 성공해 fallback 이 불필요 — 도달 가능 경로는 gh 로그인됐는데 token 만 빈 이례 케이스). 결론: credential helper 경로는 **동작하지만** gh secret set 이 gh 를 필수로 요구하므로 독립 경로로 쓸 수 없음 — ①단계 메시지에 명시
+- **구현** (`scripts/verify-secret-set.sh`):
+  - 토큰 해석 블록 — gh auth token 을 `2>&1` 병합 + rc 로 성공/실패 구분 (실패 사유 보존), credential fallback 에 `git config --get credential.helper` 진단 추가, 성공 시 출처(`TOKEN_SOURCE`) 보고
+  - 실패 메시지 — 기존 "모두 없음" 한 줄 → **경로별 사유 + 해법 3줄**: ① GH_TOKEN 설정 여부 ② gh auth token 실패 사유(`no oauth token…` 등)+`gh auth login` 안내 / gh 미설치 안내 ③ credential.helper 미설정 vs 설정됐는데 미반환 구분 + `git credential approve`/`osxkeychain` 설정 안내
+  - ①단계 "gh 미인증" 메시지에 "git credential helper 토큰은 gh secret set 을 대신할 수 없음 — gh 는 자체 토큰 저장소 사용" 노트 추가
+- **테스트** (+1 → **8/8**): fake gh 에 `FAKE_AUTH_TOKEN_FAIL` 토글 + **fake git** 추가 (진짜 osxkeychain 토큰 반환 차단 — 오프라인 결정성). 신규: GH_TOKEN 해제 + gh token 실패 + credential 무응답 → exit 1 + `① GH_TOKEN/② gh auth token: 실패(사유)/③ git credential: 미설정` 전부 출력 + set 미도달 단언
+- **검증**: bash -n OK · 단독 8/8 · 오프라인 하네스로 새 실패 메시지 실제 출력 확인 (경로별 사유+해법) · tsc 0 · prettier clean (기존 bad7c84 미포맷 상태를 이번에 포맷 — 수정 93 push 시 worktree 에서만 포맷했던 것과 정렬) · 전체 unit **2,827/2,827** (1건은 기지의 verify-do-binding-token 동시 부하 flake — 단독 통과)
+
+### 수정 99: verify-deploy-workflow.ts check 8/9 에 prefix 매칭 회귀 체크 — 정확 일치(==) 금지로 short SHA 오탐 재발 방지 (2026-08-17)
+- **작업 ID**: FIX-2026-08-17-14 (구현 + 회귀 테스트)
+- **요청**: verify-deploy-workflow.ts check 8 에 prefix 매칭 회귀 체크(정확 일치 == 금지)를 추가해 short SHA 오탐 재발을 방지한다
+- **구현** (`scripts/verify-deploy-workflow.ts`):
+  - **check 8 (runtime-bundle-verify, 수정 78 블록)** — verify-pages-bundle.sh 검증에 2개 추가: ① **require** `[[ "$BUNDLE_COMMIT" == "$EXPECTED"* ]]` prefix 매칭 구문 필수 (없으면 FAIL — 비교 구문 제거/변형 회귀 포착) ② **forbid** `"$BUNDLE_COMMIT" ==/= "$EXPECTED"` 정확 일치 구문 금지 (부정 lookahead `(?!\*)` 로 prefix 형태는 제외 — 오탐 없음)
+  - **check 9 (rollback-token-hygiene, ⑦ 추가)** — deploy-local-worktree.sh 번들 검증(BUNDLE_COMMIT/REDEPLOY_COMMIT 존재 시에만 발동 — rollback_pages 만 있는 최소 픽스처 오탐 방지): `== "$FULL_SHA"*` 필수 + 정확 일치 `= "$FULL_SHA" ]` 금지 (주석 라인 제외, 비교문만 매치 — BUILD_COMMIT= 할당 등 오탐 없음)
+- **테스트** (`tests/unit/verify-deploy-workflow.test.ts` **+4 → 56**):
+  - GOOD_BUNDLE_SCRIPT 픽스처를 prefix 매칭으로 갱신 (기존 정확 일치 픽스처는 새 체크와 충돌)
+  - 신규 4건: ① verify-pages-bundle.sh 정확 일치 회귀 → FAIL(정확 일치로 회귀) ② prefix 구문 제거 변형 → FAIL(prefix 매칭) ③ deploy-local-worktree.sh prefix 매칭 포함 → PASS ④ deploy-local-worktree.sh 정확 일치 회귀 → FAIL(정확 일치)
+- **검증**: 단독 56/56 PASS (현재 repo deploy.yml 실측 PASS 포함 — 실제 스크립트들이 prefix 매칭이라 새 체크 통과) · tsc 0 · eslint 0 · prettier clean · 전체 unit **143파일 2,826/2,826** (1건 실패는 기지의 verify-do-binding-token 동시 부하 flake — 단독 5/5 통과)
+
+### 수정 98: deploy-local-worktree.sh 번들 검증에도 short SHA prefix 매칭 — verify-pages-bundle.sh(수정 92)와 양쪽 경로 일치 (2026-08-17)
+- **작업 ID**: FIX-2026-08-17-13 (구현 + 회귀)
+- **요청**: deploy-local-worktree.sh 의 수정 56 동일 번들 검증 로직에도 short SHA prefix 매칭을 적용해 양쪽 경로를 일치시킨다
+- **배경**: 수정 92 에서 verify-pages-bundle.sh 의 대조를 정확 일치(`==`) → bash glob prefix 매칭(`[[ "$BUNDLE_COMMIT" == "$EXPECTED"* ]]`)으로 바꿔 short 인자 오탐을 제거했다. deploy-local-worktree.sh 의 수정 56(배포 URL /api/health build_commit 대조)과 수정 76 auto-redeploy 재검증은 **정확 일치(`= "$FULL_SHA"`)로 남아** 두 검증 경로의 판정 규칙이 갈라져 있었다
+- **구현** (`scripts/deploy-local-worktree.sh` 2곳):
+  - **수정 56 판정부** (배포 직후 번들 검증): `if [ "$BUNDLE_COMMIT" = "$FULL_SHA" ]` → `if [[ "$BUNDLE_COMMIT" == "$FULL_SHA"* ]]` — 성공 메시지를 `build_commit=${BUNDLE_COMMIT:0:${#FULL_SHA}} … (prefix 매칭)`, 실패 메시지에 `(prefix 매칭 실패)` 명시
+  - **auto-redeploy 재검증부** (캐시 무효화 재배포 후 재검증): 동일 비교를 prefix 매칭으로 통일 — 같은 비교 클래스라 한쪽만 바꾸면 불일치
+  - 규칙 의미론: 패턴 = 예상 SHA(이 스크립트는 항상 rev-parse 로 전체 40자) + `*` — verify-pages-bundle.sh 와 **동일 규칙**. build_commit 이 40자면 기존 정확 일치와 동일 동작, `-dirty` 접미사 등 변형에도 오탐 없이 판정 (FULL_SHA 는 항상 40자라 short 빈 값·타 커밋 접두사는 구조적으로 FAIL 유지)
+- **검증**: bash -n OK · **self-test 10/10 PASS** (retry_race 의 `✅ 번들 커밋 검증: .*build_commit=` 단언 유지 · bundle_mismatch/auto_redeploy/rollback_e2e 전 시나리오 무회귀) · 패턴 의미론 직접 확인 — 전체 40자 PASS / short 7자 FAIL(패턴이 40자라 구조적) / `-dirty` 변형 PASS / 빈 값·타 접두사 FAIL
+
+### 수정 97: DEFAULT_RATE_LIMIT env 오버라이드 — RATE_LIMIT_PER_MIN 으로 60/min 상향 옵션 (2026-08-17)
+- **작업 ID**: FIX-2026-08-17-12 (구현 + 테스트)
+- **요청**: DEFAULT_RATE_LIMIT 를 env 오버라이드(RATE_LIMIT_PER_MIN) 가능하게 만들고 유닛 테스트를 추가해 60/min 상향 옵션을 연다
+- **이중 한도 구조 확정**: /api/search 에는 ① **무인증 미들웨어 게이트** `IP_RATE_LIMIT=10/min`(security-middleware.ts — gold/equivalence 도구가 여기 걸림, 실측 remaining 9→2 의 출처) ② **클라이언트 한도** `DEFAULT_RATE_LIMIT=30/min`(auth.ts checkClientRateLimit — 인증 요청). 60/min 옵션이 실제로 의미 있으려면 **둘 다** env 를 읽어야 한다
+- **구현**:
+  - `src/lib/auth.ts` — `RateLimitEnv` 타입 + **`resolveRateLimitPerMin(env, fallback=30)`** (양의 정수만 허용 — 미설정/빈값/비숫자/0 이하/소수 → fallback, 잘못된 값으로 한도가 0·무한이 되는 사고 차단). `getTenantRateLimit`/`getTenantPerIpRateLimit`/`checkClientRateLimit` 에 env 파라미터 추가 ('__default__'·오픈 모드 경로가 env 반영)
+  - `src/lib/security-middleware.ts` — **`resolveIpRateLimit(env)`** (기본 10 유지, 같은 env 공유): 무인증 차단(110)·감사 로그(119)·헤더 보고(155-156) 모두 해석값 사용
+  - `src/types.ts` — `RATE_LIMIT_PER_MIN?: string` 바인딩 선언
+  - **라우트 8곳** — checkClientRateLimit 호출에 `env: c.env` 전달 (search/extract/images/news/ltr×2/experiments/research/chat — research·chat 은 옵션 없던 호출이라 `{ env: c.env }` 신규)
+- **테스트**: `auth.test.ts` **+11 → 44** (resolveRateLimitPerMin 4케이스: 미설정 30/60 상향/무효 fallback/fallback 인자 + env 오버라이드 3케이스: 오픈 모드 60 → 61번째 차단·env 미지정 30 불변·__default__ 테넌트 60) · `security-middleware.test.ts` **+2** (resolveIpRateLimit: 기본 10 불변/60 상향) — 총 63 통과
+- **보안 노트**: 미들웨어 게이트는 env 미설정 시 10 유지 — 운영자가 RATE_LIMIT_PER_MIN 을 명시하지 않는 한 방어 수준 불변 (오픈 API 남용 방지 vs 검증 도구 소비 균형)
+- **검증**: tsc 0 · eslint 0 · prettier clean · 전체 unit **143 파일 2,822/2,822 PASS** (중간 flake 는 기지의 동시 부하 bash 스폰 타임아웃 — 단독 전부 통과) · 커밋 1817859 는 혼합 파일 3개(auth.test.ts/types.ts/extract.ts — 타 작업자 미커밋 WIP) 에서 **내 hunk 만** difflib 패치로 분리 스테이징해 13개 파일만 포함, 외부 staged 7건 복원
 
 ### 수정 91: deploy 체인 `$VAR한글` 로케일 버그 — bash 3.2 UTF-8 locale 에서 미커밋 경고 시 배포 중단 (2026-08-17)
 - **작업 ID**: FIX-2026-08-17-06 (발견 + 수정)

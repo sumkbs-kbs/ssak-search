@@ -44,7 +44,12 @@ interface RunResult {
   stateFile: string
 }
 
-function runWatch(secretsBody: string, extraEnv: Record<string, string> = {}, args: string[] = []): RunResult {
+function runWatch(
+  secretsBody: string,
+  extraEnv: Record<string, string> = {},
+  args: string[] = [],
+  cfTokenValue?: string, // 수정 94: 주어지면 새 토큰 파일 생성 + CF_TOKEN_FILE 설정
+): RunResult {
   const dir = mkdtempSync(join(tmpdir(), 'rot-watch-'))
   const bin = join(dir, 'bin')
   mkdirSync(bin, { recursive: true })
@@ -57,12 +62,33 @@ function runWatch(secretsBody: string, extraEnv: Record<string, string> = {}, ar
   // "watch 프로세스 도중 시크릿이 교체된다"를 시뮬레이션한다 (FAKE_SECRETS_SWITCH_AFTER
   // = secrets 조회 N 번 후 FAKE_SECRETS_BODY_2 로, FAKE_DISPATCH_SWITCH_AFTER = 디스패치
   // N 번 후 FAKE_DISPATCH_CODE_2 로). 스위치 env 미설정 시 기존 동작(단일 본문) 유지.
+  // 수정 94: CF /user/tokens/verify 는 URL 을 -K config 파일에 주입하므로(수정 84 패턴)
+  // config 에서 URL 을 읽어 분기한다 (FAKE_CF_SWITCH_AFTER = CF 검증 N 번 후 전환).
   const fakeCurl = [
     '#!/usr/bin/env bash',
     `echo "curl $*" >> ${JSON.stringify(logSh)}`,
     'URL=""',
-    'for a in "$@"; do case "$a" in http*) URL="$a" ;; esac; done',
+    'CFG=""',
+    'prev=""',
+    'for a in "$@"; do',
+    '  case "$a" in',
+    '    http*) URL="$a" ;;',
+    '    -K) ;;',
+    '    *) [ "$prev" = "-K" ] && CFG="$a" ;;',
+    '  esac',
+    '  prev="$a"',
+    'done',
+    '[ -z "$URL" ] && [ -n "$CFG" ] && URL="$(sed -n \'s/^url = "\\(.*\\)"/\\1/p\' "$CFG" | head -1)"',
     'case "$URL" in',
+    '  *api.cloudflare.com*)',
+    '    CC=$(( $(cat "${FAKE_COUNT_DIR}/cf.count" 2>/dev/null || echo 0) + 1 ))',
+    '    echo "$CC" > "${FAKE_COUNT_DIR}/cf.count"',
+    '    if [ -n "${FAKE_CF_SWITCH_AFTER:-}" ] && [ "$CC" -gt "$FAKE_CF_SWITCH_AFTER" ]; then',
+    '      printf "%s" "${FAKE_CF_BODY_2:-}"',
+    '    else',
+    '      printf "%s" "${FAKE_CF_BODY:-}"',
+    '    fi',
+    '    exit 0 ;;',
     '  */dispatches)',
     '    DC=$(( $(cat "${FAKE_COUNT_DIR}/dispatch.count" 2>/dev/null || echo 0) + 1 ))',
     '    echo "$DC" > "${FAKE_COUNT_DIR}/dispatch.count"',
@@ -109,12 +135,20 @@ function runWatch(secretsBody: string, extraEnv: Record<string, string> = {}, ar
   writeFileSync(join(bin, 'git'), fakeGit)
   chmodSync(join(bin, 'git'), 0o755)
 
+  // 수정 94: CF_TOKEN_FILE — 새 토큰 값(내용)을 파일로 써서 argv 미노출 경로 재현
+  let cfTokenPath = ''
+  if (cfTokenValue !== undefined) {
+    cfTokenPath = join(dir, 'cf-token.txt')
+    writeFileSync(cfTokenPath, cfTokenValue)
+  }
+
   const baseEnv = {
     ...process.env,
     PATH: `${bin}:${process.env.PATH ?? ''}`,
     GH_TOKEN: 'ghp_test_pat',
     FAKE_SECRETS_BODY: secretsBody,
     FAKE_RUNS_BODY: RUNS_BODY,
+    FAKE_CF_BODY: JSON.stringify({ success: true, result: { id: 'x', status: 'active' } }),
     ROTATION_STATE: stateFile,
     // 수정 86: 실제 머신의 /tmp legacy 상태 파일이 테스트에 마이그레이션되지 않도록
     // legacy 경로를 항상 존재하지 않는 임시 경로로 격리 (마이그레이션 테스트만 오버라이드).
@@ -122,10 +156,12 @@ function runWatch(secretsBody: string, extraEnv: Record<string, string> = {}, ar
     DISPATCH_RUN_SLEEP: '0',
     FAKE_COUNT_DIR: dir,
   }
+  const env: Record<string, string> = { ...baseEnv, ...extraEnv }
+  if (cfTokenPath) env.CF_TOKEN_FILE = cfTokenPath
   const res = spawnSync('bash', [SCRIPT, ...args], {
     encoding: 'utf8',
     maxBuffer: 10 * 1024 * 1024,
-    env: { ...baseEnv, ...extraEnv },
+    env,
   })
   const out = `${res.stdout ?? ''}${res.stderr ?? ''}`
   return {
@@ -318,6 +354,94 @@ describe.skipIf(!BASH_AVAILABLE)(
       expect(state.baseline_updated_at).toBe('2026-08-14T12:00:00Z')
       // 상태 이력: [BASELINE] + [ROTATION] + [DISPATCH] 3건
       expect(state.events.length).toBe(3)
+    })
+
+    it('수정 94: 교체 감지 + CF 토큰 유효 → [CF-VERIFY] + 디스패치 (이중 검증 통과)', () => {
+      const first = runWatch(SECRETS_A) // 베이스라인
+      const r = runWatch(SECRETS_B, { ROTATION_STATE: first.stateFile }, [], 'cf_valid_token')
+      expect(r.exit).toBe(0)
+      expect(r.out).toContain('[CF-VERIFY]')
+      expect(r.out).toContain('새 토큰 유효')
+      expect(r.out).toContain('HTTP 204')
+      expect(dispatchPosts(r.log)).toBe(1)
+      // CF verify 가 config 주입 경로(-K, 수정 84 패턴)로 발화됐는지 — URL·토큰이
+      // argv 에 없어야 한다 (로그 라인: `curl -s -m 15 -K <config>` — URL 은 config 안)
+      expect(r.log).toMatch(/-K \/\S+/)
+      expect(r.log).not.toContain('/user/tokens/verify')
+      const state = JSON.parse(readFileSync(r.stateFile, 'utf8'))
+      expect(state.baseline_updated_at).toBe('2026-08-14T12:00:00Z')
+    })
+
+    it('수정 94: CF 토큰 무효(하드) → [CF-VERIFY-FAILED] + 디스패치 보류 → 재검증 후 디스패치', () => {
+      const first = runWatch(SECRETS_A)
+      const r = runWatch(
+        SECRETS_B,
+        {
+          ROTATION_STATE: first.stateFile,
+          FAKE_CF_BODY: JSON.stringify({ success: false, errors: [{ code: 1000 }] }),
+        },
+        [],
+        'cf_invalid_token',
+      )
+      expect(r.exit).toBe(0)
+      expect(r.out).toContain('[CF-VERIFY-FAILED]')
+      expect(r.out).toContain('[DISPATCH-BLOCKED]')
+      expect(dispatchPosts(r.log)).toBe(0) // 보류 — 디스패치 없음
+      // baseline 유지 → 다음 폴링에서 재검증 대상이 남는다
+      const state = JSON.parse(readFileSync(r.stateFile, 'utf8'))
+      expect(state.baseline_updated_at).toBe('2026-08-12T08:45:24Z')
+      // 토큰 파일이 유효로 바뀌면 (FAKE_CF_BODY 기본 success:true) 같은 상태에서
+      // 재검증 → 디스패치 (이번 실행의 디스패치 POST 는 정확히 1회)
+      const retry = runWatch(SECRETS_B, { ROTATION_STATE: first.stateFile }, [], 'cf_fixed_token')
+      expect(retry.exit).toBe(0)
+      expect(retry.out).toContain('[CF-VERIFY]')
+      expect(retry.out).toContain('HTTP 204')
+      expect(dispatchPosts(retry.log)).toBe(1)
+    })
+
+    it('수정 94: CF 토큰 무효 + CF_VERIFY_HARD=0 → [CF-VERIFY-WARN] + 디스패치 진행', () => {
+      const first = runWatch(SECRETS_A)
+      const r = runWatch(
+        SECRETS_B,
+        {
+          ROTATION_STATE: first.stateFile,
+          CF_VERIFY_HARD: '0',
+          FAKE_CF_BODY: JSON.stringify({ success: false, errors: [{ code: 1000 }] }),
+        },
+        [],
+        'cf_invalid_token',
+      )
+      expect(r.exit).toBe(0)
+      expect(r.out).toContain('[CF-VERIFY-WARN]')
+      expect(r.out).toContain('HTTP 204')
+      expect(dispatchPosts(r.log)).toBe(1) // 소프트 모드 — 디스패치 진행
+    })
+
+    it('수정 94: --watch 체인 — CF 검증 실패(1회) → 보류 → 다음 폴링 유효 → 디스패치 (상태 전이)', () => {
+      const r = runWatch(
+        SECRETS_A,
+        {
+          POLL_INTERVAL: '0',
+          WATCH_ITERATIONS: '3',
+          FAKE_SECRETS_SWITCH_AFTER: '1',
+          FAKE_SECRETS_BODY_2: SECRETS_B,
+          FAKE_CF_SWITCH_AFTER: '1',
+          FAKE_CF_BODY: JSON.stringify({ success: false, errors: [{ code: 1000 }] }),
+          FAKE_CF_BODY_2: JSON.stringify({ success: true, result: { id: 'x', status: 'active' } }),
+        },
+        ['--watch'],
+        'cf_token',
+      )
+      expect(r.exit).toBe(0)
+      expect(r.out).toContain('[CF-VERIFY-FAILED]')
+      expect(r.out).toContain('[DISPATCH-BLOCKED]')
+      expect(r.out).toContain('[CF-VERIFY]')
+      expect(r.out).toContain('HTTP 204')
+      // 3회 폴링(secrets 조회 3회) — 디스패치 POST 는 재검증 성공 후 정확히 1회
+      expect(secretGets(r.log)).toBe(3)
+      expect(dispatchPosts(r.log)).toBe(1)
+      const state = JSON.parse(readFileSync(r.stateFile, 'utf8'))
+      expect(state.baseline_updated_at).toBe('2026-08-14T12:00:00Z')
     })
 
     it('수정 87: 디스패치 실패 시 다음 폴링에서 재시도해 성공 (연속 watch 체인)', () => {

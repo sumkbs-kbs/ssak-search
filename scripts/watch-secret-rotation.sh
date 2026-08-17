@@ -28,6 +28,9 @@
 #                                                     # (WATCH_MINUTES 까지, 0=무기한)
 #   bash scripts/watch-secret-rotation.sh --reset      # 상태 파일 초기화 후 1회 폴링
 #   bash scripts/watch-secret-rotation.sh --dry-run    # 감지/계획만 — 디스패치 안 함
+#   bash scripts/watch-secret-rotation.sh \
+#     --cf-token-file /path/to/new-token.txt          # 교체 감지 시 새 토큰을
+#                                                     # /user/tokens/verify 로 이중 검증 (수정 94)
 #
 # Env:
 #   GH_TOKEN              GitHub PAT (미설정 시 gh auth token → git credential)
@@ -49,6 +52,17 @@
 #                         — 마이그레이션 원본, 테스트에서 오버라이드 가능)
 #   SLACK_WEBHOOK / ALERT_SLACK_WEBHOOK  교체 감지 알림 (코드베이스 resolveWebhookUrl
 #                                        컨벤션 — SLACK_WEBHOOK 우선, 미설정 no-op)
+#   CF_TOKEN_FILE        로컬 새 토큰 파일 경로 (gh secret set 에 쓴 바로 그 파일
+#                        — 수정 93 의 verify-secret-set.sh --file 과 동일한 값).
+#                        설정 시 교체 감지 시점에 updated_at 회전 신호에 더해 **새
+#                        토큰 값 자체를 Cloudflare /user/tokens/verify 로 이중 검증**
+#                        한다 (수정 94 — GitHub 시크릿 값은 API 로 읽을 수 없어
+#                        운영자의 로컬 사본을 사용). 값은 argv 로 받지 않는다
+#                        (curl -K config 주입, 수정 84 패턴).
+#   CF_VERIFY_HARD       CF 검증 실패 시 디스패치 차단 (기본 1). 1 이면 무효 토큰
+#                        시 디스패치를 보류하고 다음 폴링에서 재검증(토큰 파일이
+#                        고쳐지면 자동 발사), 0 이면 경고만 남기고 디스패치 진행
+#                        (guard 가 최종 판정).
 # =============================================================================
 set -uo pipefail
 
@@ -64,14 +78,18 @@ POLL_INTERVAL="${POLL_INTERVAL:-300}"
 WATCH_MINUTES="${WATCH_MINUTES:-0}"
 WATCH_ITERATIONS="${WATCH_ITERATIONS:-0}"
 AUTO_DISPATCH="${AUTO_DISPATCH:-1}"
+# 수정 94: 이중 검증 — 새 토큰 값 자체를 Cloudflare /user/tokens/verify 로 확인.
+CF_TOKEN_FILE="${CF_TOKEN_FILE:-}"
+CF_VERIFY_HARD="${CF_VERIFY_HARD:-1}"
 
 MODE="poll"
-for arg in "$@"; do
-  case "$arg" in
-    --watch) MODE="watch" ;;
-    --reset) rm -f "$STATE_FILE" "$LEGACY_STATE_FILE"; echo " 상태 파일 초기화: $STATE_FILE (legacy 도 제거: $LEGACY_STATE_FILE)" ;;
-    --dry-run) AUTO_DISPATCH=0 ;;
-    *) echo " ❌ 알 수 없는 옵션: $arg (지원: [--watch] [--reset] [--dry-run])" >&2; exit 1 ;;
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    --watch) MODE="watch"; shift ;;
+    --reset) rm -f "$STATE_FILE" "$LEGACY_STATE_FILE"; echo " 상태 파일 초기화: $STATE_FILE (legacy 도 제거: $LEGACY_STATE_FILE)"; shift ;;
+    --dry-run) AUTO_DISPATCH=0; shift ;;
+    --cf-token-file) CF_TOKEN_FILE="${2:-}"; shift 2 ;;
+    *) echo " ❌ 알 수 없는 옵션: $1 (지원: [--watch] [--reset] [--dry-run] [--cf-token-file PATH])" >&2; exit 1 ;;
   esac
 done
 
@@ -208,6 +226,34 @@ PYEOF
   fi
 }
 
+# ── 새 토큰 값 자체를 Cloudflare /user/tokens/verify 로 검증 (수정 94) ─────
+# GitHub 시크릿 값은 API 로 읽을 수 없다 — 운영자가 로컬에 둔 새 토큰 파일
+# (CF_TOKEN_FILE — gh secret set 에 쓴 바로 그 파일) 을 verify 로 확인해
+# updated_at 회전 신호를 이중 검증한다. argv 에 토큰 미노출 (curl -K config
+# 주입 — 수정 84 패턴).
+#   반환: 0=유효 1=무효/파일 없음 (파일 누락은 보수적으로 무효 취급)
+verify_cf_token() {
+  local token_file="$1" cfg body ok
+  if [ ! -s "$token_file" ]; then
+    echo "   ❌ CF 토큰 파일 없음/비어있음: $token_file (CF_TOKEN_FILE 재확인 — 보수적으로 무효 처리)" >&2
+    return 1
+  fi
+  cfg="$(mktemp)"; chmod 600 "$cfg"
+  printf 'url = "https://api.cloudflare.com/client/v4/user/tokens/verify"\nheader = "Authorization: Bearer %s"\n' \
+    "$(cat "$token_file")" > "$cfg"
+  body="$(curl -s -m 15 -K "$cfg" 2>/dev/null || true)"
+  rm -f "$cfg"
+  ok="$(printf '%s' "$body" | python3 -c "
+import json, sys
+try:
+    d = json.load(sys.stdin)
+    print('1' if d.get('success') is True else '0')
+except Exception:
+    print('0')
+" 2>/dev/null || echo 0)"
+  [ "$ok" = "1" ]
+}
+
 # ── 상태 파일 로드/저장 ────────────────────────────────────────────────────
 load_state() {
   if [ -f "$STATE_FILE" ]; then
@@ -268,8 +314,27 @@ except Exception: print('')
   elif [ "$cur_ts" != "$baseline" ]; then
     local old_baseline="$baseline"
     events="[ROTATION] ${SECRET_NAME} updated_at ${baseline:-없음} → ${cur_ts}"
+
+    # 수정 94 — 이중 검증: updated_at 회전 신호에 더해 새 토큰 값 자체를
+    # Cloudflare /user/tokens/verify 로 확인한다. CF_TOKEN_FILE 미설정이면
+    # 기존 동작(updated_at 만으로 판정, guard 가 최종 검증) 그대로.
+    local cf_verdict=""  # PASS | FAIL | 비움(파일 미지정)
+    if [ -n "$CF_TOKEN_FILE" ]; then
+      if verify_cf_token "$CF_TOKEN_FILE"; then
+        cf_verdict="PASS"
+        events="${events}\n[CF-VERIFY] 새 토큰 유효 — /user/tokens/verify 통과"
+      else
+        cf_verdict="FAIL"
+        if [ "$CF_VERIFY_HARD" = "1" ]; then
+          events="${events}\n[CF-VERIFY-FAILED] 새 토큰 무효 — 디스패치 보류 (다음 폴링에서 재검증)"
+        else
+          events="${events}\n[CF-VERIFY-WARN] 새 토큰 무효 — CF_VERIFY_HARD=0 라 디스패치 진행"
+        fi
+      fi
+    fi
+
     local dispatch_result="SKIPPED(--dry-run|AUTO_DISPATCH=0)" run_id=""
-    if [ "$AUTO_DISPATCH" = "1" ]; then
+    if [ "$AUTO_DISPATCH" = "1" ] && { [ "$cf_verdict" != "FAIL" ] || [ "$CF_VERIFY_HARD" != "1" ]; }; then
       local dr
       dr="$(dispatch_deploy "$repo" "$token")"
       dispatch_result="${dr%%|*}"
@@ -283,11 +348,30 @@ except Exception: print('')
         dispatch_failed=1
         events="${events}\n[DISPATCH-FAILED] deploy.yml environment=${TARGET_ENV} ref=${DISPATCH_REF} → ${dispatch_result} (다음 폴링에서 재시도)"
       fi
+    elif [ "$AUTO_DISPATCH" = "1" ] && [ "$cf_verdict" = "FAIL" ]; then
+      # 수정 94 — CF 검증 하드 실패: baseline 을 옛 값으로 유지해 다음 폴링에서
+      # 토큰 파일이 고쳐지면 재검증 → 자동 디스패치 (차단 중엔 재디스패치 없음)
+      dispatch_result="BLOCKED(cf-verify)"
+      events="${events}\n[DISPATCH-BLOCKED] 새 토큰 무효 — 디스패치 안 함 (다음 폴링에서 재검증)"
     else
       baseline="$cur_ts"  # dry-run 도 handled 로 간주 — 재폴링마다 감지 반복 방지
       events="${events}\n[DISPATCH-SKIPPED] AUTO_DISPATCH=0 (--dry-run) — 디스패치 안 함"
     fi
-    notify_slack "$old_baseline" "$cur_ts" "$dispatch_result" "$run_id"
+
+    # 수정 94 — 동일 회전에 대한 retry(CF 하드 실패/디스패치 실패 재폴링)는 Slack
+    # 을 재통지하지 않는다 (폴링마다 스팸 방지). 첫 감지에서만 통지.
+    local rot_seen
+    rot_seen="$(printf '%s' "$prev" | python3 -c '
+import json, sys
+try:
+    evs = json.load(sys.stdin).get("events") or []
+    print(sum(1 for e in evs if "[ROTATION]" in (e.get("detail") or "")))
+except Exception:
+    print(0)
+')"
+    if [ "${rot_seen:-0}" = "0" ]; then
+      notify_slack "$old_baseline" "$cur_ts" "$dispatch_result" "$run_id"
+    fi
   fi
 
   # 상태 갱신
@@ -311,6 +395,7 @@ PYEOF
 
   local mark=""
   case "$events" in
+    *"[CF-VERIFY-FAILED]"*) mark="★★ 교체 감지 (토큰 무효 — 디스패치 보류) ★★" ;;
     *"[ROTATION]"*) mark="★★ 교체 감지 ★★" ;;
     *"[BASELINE]"*) mark="(베이스라인)" ;;
   esac

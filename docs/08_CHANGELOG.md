@@ -1100,6 +1100,15 @@
 - **테스트**: `tests/unit/lib-verify-pace.test.ts` 신규 **5/5** — 낮음 연장(≥300ms)/높음 유지(<300ms)/스테일 복귀/레거시 마이그레이션/비숫자·빈 값 무시 (타이밍 기반, 100/500ms 축소 간격 + 여유 경계 300ms)
 - **검증**: bash -n 3개 OK · tsc 0 · eslint 0 · prettier clean · 전체 unit **143 파일 2,813/2,813 PASS** (중간 flake 는 기지의 동시 부하 bash 스폰 타임아웃 — 단독 전부 통과)
 
+### 수정 110: notify-pipeline-failure.sh — 미설정 no-op 경고 승격(::warning::) + Slack 수락 응답 검증(200+{"ok":true}) (2026-08-17)
+- **작업 ID**: FIX-2026-08-17-24 (구현 + 테스트)
+- **요청**: [14] Notify 가 SLACK_WEBHOOK 미설정으로 조용히 no-op 성공 처리되는 걸 경고로 승격할지, 드라이런 캡처를 기본값으로 삼을지 검토 → **① 경고 승격 채택 · 드라이런 기본값 비채택**(CI 러너엔 캡처 수신자가 없어 무의미 — 기존 notify_dry_run=true 경로 유지)
+- **① 미설정 no-op → 경고 승격**: `echo "ℹ️ ..."` → `::warning::SLACK_WEBHOOK 미설정 — [14] 실패 알림이 전송되지 않았습니다 (no-op)` + 로컬 드라이런 안내. exit 0 유지 (알림 미설정이 배포 실패와 별개로 CI 를 붉히지 않게 — best-effort)
+- **② 실 POST 응답 검증 (302 오탐 제거)**: `curl -sf` → `curl -s -w '%{http_code}'` + 본문 `{"ok":true}` 검사. 자리표시자/무효 URL 의 302 리다이렉트를 curl -sf 가 성공 처리해 "전송됨" 오탐이 났던 문제 (2026-08-17 실측) 해결 — 200+ok 만 수락, 그 외(302/4xx/ok:false) 는 "전송 실패 (HTTP n)" 로 보고
+- **산출물**: `scripts/notify-pipeline-failure.sh`(② 승격 + ③ 검증) · `tests/unit/notify-pipeline-failure.test.ts`(fake curl 응답 에뮬레이션 FAKE_HTTP_CODE/BODY + 302·ok:false 케이스 2건 + spawnSync 로 stderr 수집)
+- **발견·수정**: 유닛 테스트의 rmSync 순서 버그 — 디렉토리 삭제 후 curl.log 를 읽어 r.log 가 항상 빈 문자열이던 문제 (2026-08-17 실측, 수정 110) · TS 템플릿 리터럴에서 `\\${` 는 `\`+치환, `\${` 가 리터럴 (디버깅 교훈)
+- **검증**: self-test 12/12 (기존 7 + noop_warning/webhook_200_ok/webhook_302/webhook_ok_false/**webhook_500**) · 유닛 10/10 (302·ok:false·**500** 신규 — fake curl FAKE_HTTP_CODE/BODY 분기) · 전체 2,862+1 통과 (1건은 기지 동시 부하 flake — 단독 14/14) · tsc 0 · eslint 0 · prettier clean
+
 ### 수정 109: check 11/스캐너 오탐 필터 확장 회귀 — 실제 repo 패턴 6종 고정 (2026-08-17)
 - **작업 ID**: FIX-2026-08-17-23 (구현 + 테스트)
 - **요청**: check 11 전수 sweep 의 오탐(주석·config printf 라인 제외 로직)을 더 많은 실제 .sh 패턴으로 회귀 테스트해 견고성 검증

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { execFileSync } from 'node:child_process'
+import { execFileSync, spawnSync } from 'node:child_process'
 import { mkdtempSync, mkdirSync, writeFileSync, chmodSync, rmSync, readFileSync, existsSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
@@ -61,33 +61,35 @@ function runNotify(env: Record<string, string>): RunResult {
     '      ;;',
     '  esac',
     'done',
+    `BODY="\${FAKE_HTTP_BODY}"`,
+    `[ -z "$BODY" ] && BODY='{"ok":true}'`,
+    `printf '%s\\n' "$BODY"`,
+    `CODE="\${FAKE_HTTP_CODE}"`,
+    `[ -z "$CODE" ] && CODE=200`,
+    `printf '%s\\n' "$CODE"`,
     'exit 0',
     '',
   ].join('\n')
   writeFileSync(join(bin, 'curl'), fakeCurl)
   chmodSync(join(bin, 'curl'), 0o755)
 
-  try {
-    const stdout = execFileSync('bash', [SCRIPT], {
-      encoding: 'utf8',
-      maxBuffer: 10 * 1024 * 1024,
-      env: {
-        ...process.env,
-        PATH: `${bin}:${process.env.PATH ?? ''}`,
-        ...env,
-      },
-    })
-    return { exit: 0, out: stdout, log: existsSync(log) ? readFileSync(log, 'utf8') : '' }
-  } catch (err) {
-    const e = err as { status?: number; stdout?: string; stderr?: string }
-    return {
-      exit: e.status ?? -1,
-      out: `${e.stdout ?? ''}${e.stderr ?? ''}`,
-      log: existsSync(log) ? readFileSync(log, 'utf8') : '',
-    }
-  } finally {
-    rmSync(dir, { recursive: true, force: true })
-  }
+  // spawnSync — 성공(exit 0) 시에도 stderr 를 함께 수집한다 (전송 실패 경고는
+  // stderr 로 출력되므로 stdout 만으론 단언 불가, 수정 110).
+  const res = spawnSync('bash', [SCRIPT], {
+    encoding: 'utf8',
+    maxBuffer: 10 * 1024 * 1024,
+    env: {
+      ...process.env,
+      PATH: `${bin}:${process.env.PATH ?? ''}`,
+      ...env,
+    },
+  })
+  const out = `${res.stdout ?? ''}${res.stderr ?? ''}`
+  // log 를 읽은 뒤 정리 — rmSync 를 먼저 하면 curl.log 가 삭제돼 r.log 가
+  // 항상 빈 문자열이 된다 (2026-08-17 실측, 수정 110).
+  const logContent = existsSync(log) ? readFileSync(log, 'utf8') : ''
+  rmSync(dir, { recursive: true, force: true })
+  return { exit: res.status ?? -1, out, log: logContent }
 }
 
 describe.skipIf(!BASH_AVAILABLE)('notify-pipeline-failure.sh (웹훅 불필요 드라이런 검증, 수정 62)', () => {
@@ -109,19 +111,52 @@ describe.skipIf(!BASH_AVAILABLE)('notify-pipeline-failure.sh (웹훅 불필요 �
     expect(r.log).not.toContain('127.0.0.1:18080')
   })
 
-  it('웹훅 미설정 + 드라이런 아님 → no-op (curl 호출 없음, exit 0)', () => {
+  it('웹훅 미설정 + 드라이런 아님 → no-op (curl 호출 없음, exit 0, ::warning:: 승격)', () => {
     const r = runNotify({ SLACK_WEBHOOK: '' })
     expect(r.exit).toBe(0)
-    expect(r.out).toContain('SLACK_WEBHOOK 미설정')
+    expect(r.out).toContain('::warning::SLACK_WEBHOOK 미설정')
     expect(r.out).toContain('no-op')
     expect(r.log).toBe('')
   })
 
-  it('웹훅 설정 → 웹훅 URL 로 POST + 성공 메시지', () => {
+  it('웹훅 설정 → 웹훅 URL 로 POST + 성공 메시지 (200+{"ok":true} 수락)', () => {
     const r = runNotify({ SLACK_WEBHOOK: 'https://hooks.slack.com/services/T000/B000/xxx' })
     expect(r.exit).toBe(0)
     expect(r.log).toContain('https://hooks.slack.com/services/T000/B000/xxx')
-    expect(r.out).toContain('Slack 알림 전송됨 (danger)')
+    expect(r.out).toContain('Slack 알림 전송됨 (danger) — HTTP 200')
+  })
+
+  it('302 리다이렉트 (자리표시자/무효 URL) → 전송 실패 — "전송됨" 오탐 제거 (수정 110)', () => {
+    const r = runNotify({
+      SLACK_WEBHOOK: 'https://hooks.slack.com/services/T000/B000/xxx',
+      FAKE_HTTP_CODE: '302',
+      FAKE_HTTP_BODY: '',
+    })
+    expect(r.exit).toBe(0)
+    expect(r.out).toContain('전송 실패 (HTTP 302)')
+    expect(r.out).not.toContain('전송됨 (danger)')
+  })
+
+  it('HTTP 200 이지만 ok:false → 전송 실패 (본문 검증, 수정 110)', () => {
+    const r = runNotify({
+      SLACK_WEBHOOK: 'https://hooks.slack.com/services/T000/B000/xxx',
+      FAKE_HTTP_CODE: '200',
+      FAKE_HTTP_BODY: '{"ok":false}',
+    })
+    expect(r.exit).toBe(0)
+    expect(r.out).toContain('전송 실패 (HTTP 200)')
+    expect(r.out).not.toContain('전송됨 (danger)')
+  })
+
+  it('HTTP 500 (Slack 서버 오류) → 전송 실패 (5xx 는 수락 아님, 수정 110)', () => {
+    const r = runNotify({
+      SLACK_WEBHOOK: 'https://hooks.slack.com/services/T000/B000/xxx',
+      FAKE_HTTP_CODE: '500',
+      FAKE_HTTP_BODY: '{"ok":false,"error":"internal_error"}',
+    })
+    expect(r.exit).toBe(0)
+    expect(r.out).toContain('전송 실패 (HTTP 500)')
+    expect(r.out).not.toContain('전송됨 (danger)')
   })
 
   it('커스터마이즈: SLACK_CHANNEL/USERNAME/ICON_EMOJI 설정 시 페이로드에 최상위 키 포함 (Incoming Webhook 스키마)', () => {
@@ -156,11 +191,11 @@ describe.skipIf(!BASH_AVAILABLE)('notify-pipeline-failure.sh (웹훅 불필요 �
     }
   })
 
-  it('--self-test 오프라인 회귀 7/7 통과', () => {
+  it('--self-test 오프라인 회귀 12/12 통과', () => {
     const out = execFileSync('bash', [SCRIPT, '--self-test'], {
       encoding: 'utf8',
       maxBuffer: 10 * 1024 * 1024,
     })
-    expect(out).toContain('all PASS (7/7)')
+    expect(out).toContain('all PASS (12/12)')
   })
 })

@@ -48,9 +48,11 @@ if [ "${1:-}" = "--self-test" ]; then
 
   cat > "$FAKE_BIN/curl" <<'FAKEEOF'
 #!/usr/bin/env bash
-# 셀프테스트용 가짜 curl — 호출을 로그에 남기고 성공(exit 0) 처리.
+# 셀프테스트용 가짜 curl — 호출을 로그에 남기고 응답을 에뮬레이션 (수정 110).
 # -K config 파일이 argv 에 있으면 url= 지시어를 로그에 함께 기록한다 (수정 105:
 # URL 이 config 로 이동해도 단언이 주입 대상을 검증할 수 있게 — 수정 77 패턴).
+# 응답: FAKE_HTTP_BODY(기본 {"ok":true}) + FAKE_HTTP_CODE(기본 200) — ③ 의
+# -w $'\n%{http_code}' 형식(본문 + 개행 + 상태코드)과 동일하게 출력.
 echo "curl $*" >> "${FAKE_CURL_LOG:?}"
 i=0
 for a in "$@"; do
@@ -62,6 +64,8 @@ for a in "$@"; do
       ;;
   esac
 done
+printf '%s\n' "${FAKE_HTTP_BODY:-{\"ok\":true}}"
+printf '%s\n' "${FAKE_HTTP_CODE:-200}"
 exit 0
 FAKEEOF
   chmod +x "$FAKE_BIN/curl"
@@ -96,9 +100,9 @@ FAKEEOF
   run_case "dry_run_default_url" 0 "http://127.0.0.1:18080" env SLACK_DRY_RUN=1 SLACK_WEBHOOK= bash "$REPO_ROOT/scripts/notify-pipeline-failure.sh"
   # 드라이런: 커스텀 캡처 URL
   run_case "dry_run_custom_url" 0 "http://127.0.0.1:19999" env SLACK_DRY_RUN=1 SLACK_DRY_RUN_URL=http://127.0.0.1:19999 SLACK_WEBHOOK= bash "$REPO_ROOT/scripts/notify-pipeline-failure.sh"
-  # no-op: 웹훅 미설정 + 드라이런 아님 → curl 호출 없음
+  # no-op: 웹훅 미설정 + 드라이런 아님 → curl 호출 없음 + ::warning:: 승격 (수정 110)
   run_case "noop_without_webhook" 0 "" env SLACK_WEBHOOK= bash "$REPO_ROOT/scripts/notify-pipeline-failure.sh"
-  # 웹훅 설정 → 실 웹훅 URL 로 POST
+  # 웹훅 설정 → 실 웹훅 URL 로 POST (가짜 curl 기본 응답 200+{"ok":true})
   run_case "webhook_set" 0 "https://hooks.slack.com/services/T" env SLACK_WEBHOOK=https://hooks.slack.com/services/T000/B000/xxx bash "$REPO_ROOT/scripts/notify-pipeline-failure.sh"
 
   # 페이로드 구조: 드라이런 출력에서 페이로드 JSON 을 추출해 Slack Incoming
@@ -181,12 +185,67 @@ assert "icon_url" not in payload  # 미설정 필드는 포함 안 됨
     FAILURES=$((FAILURES + 1))
   fi
 
+  # ── 수정 110: no-op 경고 승격 + 응답 검증 (200+ok / 302 / ok:false) ────────
+  # ① no-op → ::warning:: 마커 (exit 0 유지)
+  NOOP_OUT="$(PATH="$FAKE_BIN:$PATH" SLACK_WEBHOOK= bash "$REPO_ROOT/scripts/notify-pipeline-failure.sh" 2>&1)"
+  if printf '%s' "$NOOP_OUT" | grep -q '::warning::SLACK_WEBHOOK 미설정'; then
+    echo " ✅ noop_warning: 미설정 → ::warning:: 승격 (exit 0 유지, 조용한 성공 제거)"
+  else
+    echo " ❌ noop_warning: ::warning:: 마커 없음" >&2
+    printf '%s\n' "$NOOP_OUT" | tail -5 >&2
+    FAILURES=$((FAILURES + 1))
+  fi
+
+  # ② HTTP 200 + {"ok":true} → 전송됨
+  : > "$FAKE_CURL_LOG"
+  OK_OUT="$(PATH="$FAKE_BIN:$PATH" SLACK_WEBHOOK=https://hooks.slack.com/services/T000/B000/xxx bash "$REPO_ROOT/scripts/notify-pipeline-failure.sh" 2>&1)"
+  if printf '%s' "$OK_OUT" | grep -q '✅ Slack 알림 전송됨 (danger) — HTTP 200 +'; then
+    echo " ✅ webhook_200_ok: 200+{\"ok\":true} → 전송됨"
+  else
+    echo " ❌ webhook_200_ok: 200+ok 수락 판정 실패" >&2
+    printf '%s\n' "$OK_OUT" | tail -5 >&2
+    FAILURES=$((FAILURES + 1))
+  fi
+
+  # ③ 302 리다이렉트 (자리표시자/무효 URL) → 전송 실패 (오탐 제거)
+  : > "$FAKE_CURL_LOG"
+  REDIR_OUT="$(PATH="$FAKE_BIN:$PATH" FAKE_HTTP_CODE=302 FAKE_HTTP_BODY= SLACK_WEBHOOK=https://hooks.slack.com/services/T000/B000/xxx bash "$REPO_ROOT/scripts/notify-pipeline-failure.sh" 2>&1)"
+  if printf '%s' "$REDIR_OUT" | grep -q '전송 실패 (HTTP 302)'; then
+    echo " ✅ webhook_302: 302 리다이렉트 → 전송 실패 (curl -sf 의 302 오탐 제거)"
+  else
+    echo " ❌ webhook_302: 302 가 수락으로 오탐" >&2
+    printf '%s\n' "$REDIR_OUT" | tail -5 >&2
+    FAILURES=$((FAILURES + 1))
+  fi
+
+  # ④ HTTP 200 이지만 ok:false → 전송 실패 (본문 검증)
+  : > "$FAKE_CURL_LOG"
+  OKFALSE_OUT="$(PATH="$FAKE_BIN:$PATH" FAKE_HTTP_CODE=200 FAKE_HTTP_BODY='{"ok":false}' SLACK_WEBHOOK=https://hooks.slack.com/services/T000/B000/xxx bash "$REPO_ROOT/scripts/notify-pipeline-failure.sh" 2>&1)"
+  if printf '%s' "$OKFALSE_OUT" | grep -q '전송 실패 (HTTP 200)'; then
+    echo " ✅ webhook_ok_false: 200+ok:false → 전송 실패 (본문 검증)"
+  else
+    echo " ❌ webhook_ok_false: ok:false 가 수락으로 오탐" >&2
+    printf '%s\n' "$OKFALSE_OUT" | tail -5 >&2
+    FAILURES=$((FAILURES + 1))
+  fi
+
+  # ⑤ HTTP 500 (Slack 서버 오류) → 전송 실패 (5xx 는 항상 수락 아님)
+  : > "$FAKE_CURL_LOG"
+  SRV500_OUT="$(PATH="$FAKE_BIN:$PATH" FAKE_HTTP_CODE=500 FAKE_HTTP_BODY='{"ok":false,"error":"internal_error"}' SLACK_WEBHOOK=https://hooks.slack.com/services/T000/B000/xxx bash "$REPO_ROOT/scripts/notify-pipeline-failure.sh" 2>&1)"
+  if printf '%s' "$SRV500_OUT" | grep -q '전송 실패 (HTTP 500)'; then
+    echo " ✅ webhook_500: HTTP 500 → 전송 실패 (5xx 수락 오탐 없음)"
+  else
+    echo " ❌ webhook_500: 500 이 수락으로 오탐" >&2
+    printf '%s\n' "$SRV500_OUT" | tail -5 >&2
+    FAILURES=$((FAILURES + 1))
+  fi
+
   rm -rf "$SELFTEST_TMP"
   if [ "$FAILURES" != "0" ]; then
     echo " ❌ notify-pipeline-failure.sh self-test FAIL: $FAILURES case(s) 실패"
     exit 1
   fi
-  echo " ✅ notify-pipeline-failure.sh self-test: all PASS (7/7)"
+  echo " ✅ notify-pipeline-failure.sh self-test: all PASS (12/12)"
   exit 0
 fi
 
@@ -250,22 +309,32 @@ if [ "${SLACK_DRY_RUN:-0}" = "1" ]; then
   exit 1
 fi
 
-# ── ② 웹훅 미설정 → no-op (기존 동작) ─────────────────────────────────────
+# ── ② 웹훅 미설정 → no-op (경고 승격, 수정 110) ───────────────────────────
+# 미설정이 조용히 성공으로 묻히지 않도록 ::warning:: 어노테이션으로 승격.
+# exit 0 유지 — 알림 미설정이 배포 실패와 별개로 CI 를 붉히지 않게 (best-effort).
 if [ -z "${SLACK_WEBHOOK:-}" ]; then
-  echo "ℹ️ SLACK_WEBHOOK 미설정 — 실패 알림 생략 (no-op)"
+  echo "::warning::SLACK_WEBHOOK 미설정 — [14] 실패 알림이 전송되지 않았습니다 (no-op)"
+  echo "   로컬 검증: SLACK_DRY_RUN=1 로 캡처 서버 확인 (python3 scripts/capture-webhook.py --port 18080)" >&2
   exit 0
 fi
 
 # ── ③ 실 웹훅 POST ─────────────────────────────────────────────────────────
 # 웹훅 URL 은 Slack 자격증명 — curl argv 에 두면 ps/bash -x 로그에 그대로
 # 노출된다. curl config(-K, chmod 600, 사용 후 rm -f) 로 주입한다 (수정 105).
+# 응답 검증 (수정 110): **HTTP 200 + 본문 {"ok":true} 만** Slack 수락으로 인정.
+# 자리표시자/무효 URL 은 302 리다이렉트로 응답하는데 curl -sf 가 302(<400) 를
+# 성공 처리해 "전송됨" 오탐이 났었다 (2026-08-17 실측) — -s + 상태코드/본문
+# 검증으로 교체. 알림은 best-effort 라 전송 실패도 exit 0 (파이프라인 결과 불변).
 CURL_CFG="$(mktemp "${TMPDIR:-/tmp}/npf-curl.XXXXXX")"
 chmod 600 "$CURL_CFG"
 printf 'url = "%s"\n' "$SLACK_WEBHOOK" > "$CURL_CFG"
-if curl -sf -m 10 -X POST -H 'Content-Type: application/json' -d "$PAYLOAD" -K "$CURL_CFG"; then
-  echo "✅ Slack 알림 전송됨 (danger)"
-else
-  echo "⚠️ Slack 알림 전송 실패 — 로그로만 남깁니다" >&2
-fi
+RESP="$(curl -s -m 10 -w $'\n%{http_code}' -X POST -H 'Content-Type: application/json' -d "$PAYLOAD" -K "$CURL_CFG" 2>/dev/null || true)"
+HTTP_CODE="$(printf '%s' "$RESP" | tail -1)"
+BODY="$(printf '%s' "$RESP" | sed '$d')"
 rm -f "$CURL_CFG"
+if [ "$HTTP_CODE" = "200" ] && printf '%s' "$BODY" | grep -q '"ok"[[:space:]]*:[[:space:]]*true'; then
+  echo "✅ Slack 알림 전송됨 (danger) — HTTP 200 + {\"ok\":true}"
+else
+  echo "⚠️ Slack 알림 전송 실패 (HTTP ${HTTP_CODE:-?}) — 로그로만 남깁니다 (302 리다이렉트/무효 웹훅 포함, 수정 110)" >&2
+fi
 exit 0

@@ -43,6 +43,7 @@ import {
   clearWikipediaCache,
   githubSearch,
   githubIssuesSearch,
+  clearGithubCache,
   isGithubIssuesIntent,
   isCjkTechPattern,
   isGithubSearchRateLimited,
@@ -50,7 +51,13 @@ import {
   resetGithubSearchRateState,
   hackerNewsSearch,
   arxivSearch,
+  isArxivRateLimited,
+  recordArxivRateLimit,
+  resetArxivRateState,
   redditSearch,
+  parseRedditRss,
+  resetRedditRateState,
+  isProgrammingIntent,
   extractTimelineFromClaims,
   extractStatsFromClaims,
   fetchDbpediaEntity,
@@ -420,6 +427,15 @@ describe('getSourcesForQueryType', () => {
     expect(sources.useWikipedia).toBe(true)
     expect(sources.useHackerNews).toBe(true)
     expect(sources.useGitHub).toBe(false)
+    // P24 (2026-08-14): reddit.com is gold in 15/16 English general queries —
+    // the backend must be scheduled (its .json endpoint is 403-blocked, but
+    // the .rss fallback + DDG site:reddit recover the domain).
+    expect(sources.useReddit).toBe(true)
+  })
+
+  it('schedules reddit for news queries (existing contract)', () => {
+    const sources = getSourcesForQueryType('news')
+    expect(sources.useReddit).toBe(true)
   })
 })
 
@@ -497,35 +513,18 @@ describe('wikipediaSearch', () => {
     expect(results[0].title).toBe('Fallback Result')
   })
 
-  it('tries Action API FIRST on REST 429 — recovers results when Action succeeds', async () => {
-    // 수정 58: REST 429 시 Action 을 먼저 시도한다 — REST 재시도는 429 구간에서
-    // 재-429 만 반복(쿼리당 3회 실패 누적 → 서킷 트립, 수정 57 실측)이고,
-    // Action 은 REST 429 중에도 200 임이 Workers egress 실측으로 확인됐다.
-    mockFetchWithTimeout.mockResolvedValueOnce({ ok: false, status: 429 })
-    mockFetchWithTimeout.mockResolvedValueOnce({
-      ok: true,
-      json: () =>
-        Promise.resolve({
-          query: { search: [{ title: 'ActionRecovered', snippet: 'ok' }] },
-        }),
-    })
-    const results = await wikipediaSearch('what is quantum computing')
-    expect(results).toHaveLength(1)
-    expect(results[0].title).toBe('ActionRecovered')
-    // REST 1회(429, 재시도 없음) + Action 1회(성공) = 2회 — 3회 REST 재시도가 아님
-    expect(mockFetchWithTimeout).toHaveBeenCalledTimes(2)
-  })
-
-  it('returns empty when REST AND Action both 429 — but only 3 failures max (1 REST + 2 Action, no trip at threshold 5)', async () => {
-    // 수정 58: REST 429 는 재시도하지 않고(1회) Action 으로 즉시 전환 — Action 은
-    // 자체 1회 재시도가 있어 최악 REST 1 + Action 2 = 3 failures 로 임계값(5) 미만.
-    // 구 동작(REST 3회 재시도 + Action skip)과 달리 단일 쿼리로 트립할 수 없다.
+  it('skips the Action API fallback when REST is rate-limited (429)', async () => {
+    // wikipedia.org rate-limits the IP across BOTH the REST and Action endpoints
+    // (verified live: Action keeps returning 429 for 8s+ after REST trips). Firing
+    // the Action fallback on REST-429 amplifies the block with wasted requests, so
+    // it is skipped — 3 REST attempts, ZERO Action attempts. (S35: the DBpedia
+    // mirror that S28 added here now lives in the standalone dbpediaSearch,
+    // fired by the orchestrator only when the wikipedia backend is missing.)
     mockFetchWithTimeout.mockResolvedValueOnce({ ok: false, status: 429 })
     mockFetchWithTimeout.mockResolvedValueOnce({ ok: false, status: 429 })
     mockFetchWithTimeout.mockResolvedValueOnce({ ok: false, status: 429 })
     const results = await wikipediaSearch('what is quantum computing')
     expect(results).toEqual([])
-    // REST 1회 + Action 2회(재시도 1회 포함) = 3회
     expect(mockFetchWithTimeout).toHaveBeenCalledTimes(3)
   })
 
@@ -557,13 +556,13 @@ describe('wikipediaSearch', () => {
     expect(results[0].title).toBe('NetworkRecovered')
   })
 
-  it('returns empty when REST (429) and Action also 429 — Action still attempted (수정 58)', async () => {
+  it('returns empty when REST (429) — Action is skipped on REST-429', async () => {
     mockFetchWithTimeout.mockResolvedValueOnce({ ok: false, status: 429 })
     mockFetchWithTimeout.mockResolvedValueOnce({ ok: false, status: 429 })
     mockFetchWithTimeout.mockResolvedValueOnce({ ok: false, status: 429 })
     const results = await wikipediaSearch('anything')
     expect(results).toEqual([])
-    // REST 1회(재시도 없음) + Action 2회 = 3회 — 구 동작은 REST 3회 + Action 0회
+    // 3 REST attempts only — no Action (429), no internal DBpedia (S35 moved it out).
     expect(mockFetchWithTimeout).toHaveBeenCalledTimes(3)
   })
 
@@ -630,32 +629,14 @@ describe('wikipediaSearch', () => {
 
   // ── B1 (Wave 4): wikipedia 429 pacing guard ────────────────────────
 
-  it('skips REST but still tries the Action API while the pacing guard is armed (B1 완화, 수정 68)', async () => {
-    // A previous 429 armed a 30s cooldown — the REST chain must be skipped
-    // (in-window REST retries only re-429), but the Action API is still
-    // attempted (수정 57/58 실측: REST 429 동안 Action 은 200 인 경우가 많다).
+  it('skips the network chain entirely while the pacing guard is armed (B1)', async () => {
+    // A previous 429 armed a 30s cooldown — wikipediaSearch must return empty
+    // WITHOUT touching the network (the orchestrator mirror covers the gold).
     recordWikipediaRateLimit()
     expect(isWikipediaRateLimited()).toBe(true)
     const results = await wikipediaSearch('anything')
-    expect(results).toEqual([]) // mock 미설정 → Action 도 결과 없음
-    const urls = mockFetchWithTimeout.mock.calls.map((c) => String(c[1])) // [env, url, init, timeout]
-    expect(urls.some((u) => u.includes('/w/rest.php/'))).toBe(false) // REST 미호출
-    expect(urls.some((u) => u.includes('/w/api.php?'))).toBe(true) // Action 은 시도
-  })
-
-  it('recovers results from the Action API inside the 429 cooldown window (수정 68)', async () => {
-    recordWikipediaRateLimit()
-    mockFetchWithTimeout.mockResolvedValue({
-      ok: true,
-      json: () =>
-        Promise.resolve({ query: { search: [{ title: 'Recovered', snippet: 'action result during window' }] } }),
-    })
-    const results = await wikipediaSearch('during window')
-    expect(results).toHaveLength(1)
-    expect(results[0].title).toBe('Recovered')
-    const urls = mockFetchWithTimeout.mock.calls.map((c) => String(c[1])) // [env, url, init, timeout]
-    expect(urls.some((u) => u.includes('/w/rest.php/'))).toBe(false) // REST 미호출
-    expect(urls.some((u) => u.includes('/w/api.php?'))).toBe(true) // Action 결과 회복
+    expect(results).toEqual([])
+    expect(mockFetchWithTimeout).not.toHaveBeenCalled()
   })
 
   it('serves a cached result even while the pacing guard is armed (B1)', async () => {
@@ -788,19 +769,38 @@ describe('Cross-isolate shared cooldowns (wikipedia/github 429 windows)', () => 
     expect(untilMs as number).toBeGreaterThan(Date.now())
   })
 
-  it('adopts a window another isolate armed — skips REST but tries Action (수정 68)', async () => {
+  it('adopts a window another isolate armed — skips the network chain', async () => {
     cooldownMocks.getSharedCooldown.mockResolvedValue(Date.now() + 30_000)
     const results = await wikipediaSearch('shared window', { env: {} as never })
-    expect(results).toEqual([]) // mock 미설정 → Action 도 결과 없음
-    const urls = mockFetchWithTimeout.mock.calls.map((c) => String(c[1])) // [env, url, init, timeout]
-    expect(urls.some((u) => u.includes('/w/rest.php/'))).toBe(false) // REST 미호출
-    expect(urls.some((u) => u.includes('/w/api.php?'))).toBe(true) // Action 은 시도
+    expect(results).toEqual([])
+    expect(mockFetchWithTimeout).not.toHaveBeenCalled()
   })
 
   it('adopts the shared window into the local guard state', async () => {
     cooldownMocks.getSharedCooldown.mockResolvedValue(Date.now() + 30_000)
     await wikipediaSearch('shared window 2', { env: {} as never })
     expect(isWikipediaRateLimited()).toBe(true)
+  })
+
+  it('mirrors an armed github quota window into shared storage', async () => {
+    mockFetchWithTimeout.mockResolvedValueOnce({
+      ok: false,
+      status: 403,
+      headers: { get: (k: string) => (k === 'retry-after' ? '5' : null) },
+    } as unknown as Response)
+    await githubSearch('shared quota', { env: {} as never })
+    expect(cooldownMocks.setSharedCooldown).toHaveBeenCalled()
+    const [env, key, untilMs] = cooldownMocks.setSharedCooldown.mock.calls[0]
+    expect(env).toEqual({})
+    expect(key).toBe('cooldown:github-search')
+    expect(untilMs as number).toBeGreaterThan(Date.now())
+  })
+
+  it('skips githubSearch when another isolate armed the quota window', async () => {
+    cooldownMocks.getSharedCooldown.mockResolvedValue(Date.now() + 30_000)
+    const results = await githubSearch('shared quota skip')
+    expect(results).toEqual([])
+    expect(mockFetchWithTimeout).not.toHaveBeenCalled()
   })
 })
 
@@ -1089,6 +1089,69 @@ describe('wikidataWikiSearch', () => {
     expect(results[0].url).toBe('https://zh.wikipedia.org/wiki/%E8%99%AB%E6%B4%9E')
   })
 
+  // ── S74: sitelink pollution guard ────────────────────────────────
+
+  it('skips a polluted sitelink whose page title is unrelated to the query (S74)', async () => {
+    // Live-verified pattern: Q11016's zhwiki sitelink resolves to
+    // zh.wikipedia.org/wiki/技术 (the entity's zh label was overwritten to
+    // the same wrong value) — a query for 量子计算 must NOT return the
+    // unrelated 技术 article. Entity 1 is polluted (label AND sitelink both
+    // wrong), entity 2 is a correct match.
+    mockFetchWithTimeout.mockResolvedValueOnce({
+      ok: true,
+      json: () =>
+        Promise.resolve({
+          search: [
+            { id: 'Q11016', label: '技术', description: '（错误标签）' },
+            { id: 'Q17995793', label: '量子计算', description: '遵循量子力学规律进行计算的计算模式' },
+          ],
+        }),
+    })
+    mockFetchWithTimeout.mockResolvedValueOnce({
+      ok: true,
+      json: () =>
+        Promise.resolve({
+          entities: {
+            Q11016: { sitelinks: { zhwiki: { url: 'https://zh.wikipedia.org/wiki/%E6%8A%80%E6%9C%AF' } } },
+            Q17995793: {
+              sitelinks: { zhwiki: { url: 'https://zh.wikipedia.org/wiki/%E9%87%8F%E5%AD%90%E8%AE%A1%E7%AE%97' } },
+            },
+          },
+        }),
+    })
+    const results = await wikidataWikiSearch('什么是量子计算', { language: 'zh' })
+    expect(results).toHaveLength(1)
+    expect(results[0].url).toBe('https://zh.wikipedia.org/wiki/%E9%87%8F%E5%AD%90%E8%AE%A1%E7%AE%97')
+    expect(results[0].title).toBe('量子计算')
+  })
+
+  it('keeps a sitelink whose title relates to the query in another script variant (S74)', async () => {
+    // zh simplified/traditional variant: query 量子计算 (simplified), sitelink
+    // title 量子計算 (traditional). Character-shared fraction stays above the
+    // 0.5 relevance floor so the correct article survives the guard.
+    mockFetchWithTimeout.mockResolvedValueOnce({
+      ok: true,
+      json: () =>
+        Promise.resolve({
+          search: [{ id: 'Q9999', label: '量子計算', description: '量子力学を用いた計算' }],
+        }),
+    })
+    mockFetchWithTimeout.mockResolvedValueOnce({
+      ok: true,
+      json: () =>
+        Promise.resolve({
+          entities: {
+            Q9999: {
+              sitelinks: { zhwiki: { url: 'https://zh.wikipedia.org/wiki/%E9%87%8F%E5%AD%90%E8%A8%88%E7%AE%97' } },
+            },
+          },
+        }),
+    })
+    const results = await wikidataWikiSearch('什么是量子计算', { language: 'zh' })
+    expect(results).toHaveLength(1)
+    expect(results[0].url).toBe('https://zh.wikipedia.org/wiki/%E9%87%8F%E5%AD%90%E8%A8%88%E7%AE%97')
+  })
+
   it('skips the wikidata fallback for English (covered by dbpediaSearch)', async () => {
     const results = await wikidataWikiSearch('what is quantum computing', { language: 'en' })
     expect(results).toEqual([])
@@ -1282,6 +1345,10 @@ describe('dbpediaLangSearch', () => {
 describe('githubSearch', () => {
   beforeEach(() => {
     mockFetchWithTimeout.mockReset()
+    // S75: the 403-quota test arms the S23 cooldown and caches — both must
+    // reset per test or later githubSearch tests skip the network chain.
+    resetGithubSearchRateState()
+    clearGithubCache()
   })
   afterEach(() => {
     vi.restoreAllMocks()
@@ -1307,6 +1374,63 @@ describe('githubSearch', () => {
     expect(results).toHaveLength(1)
     expect(results[0].title).toContain('facebook/react')
     expect(results[0].domain).toBe('github.com')
+  })
+
+  // ── S75: github result cache (quota protection) ───────────────────
+
+  it('serves a cached result without a second API call (S75)', async () => {
+    clearGithubCache()
+    mockFetchWithTimeout.mockReset()
+    mockFetchWithTimeout.mockResolvedValue({
+      ok: true,
+      json: () =>
+        Promise.resolve({
+          items: [
+            {
+              full_name: 'facebook/react',
+              description: 'A JavaScript library',
+              html_url: 'https://github.com/facebook/react',
+              stargazers_count: 100,
+              language: 'JavaScript',
+            },
+          ],
+        }),
+    })
+    await githubSearch('react cache')
+    const callsAfterFirst = mockFetchWithTimeout.mock.calls.length
+    const second = await githubSearch('react cache')
+    expect(second).toHaveLength(1)
+    expect(mockFetchWithTimeout.mock.calls.length).toBe(callsAfterFirst)
+  })
+
+  it('never caches an empty/403 result so the quota window is retried (S75)', async () => {
+    clearGithubCache()
+    resetGithubSearchRateState()
+    mockFetchWithTimeout.mockReset()
+    mockFetchWithTimeout.mockResolvedValue({ ok: false, status: 403 })
+    await githubSearch('quota drained')
+    // the 403 armed the S23 cooldown — clear it to model the window passing,
+    // then verify the SAME query re-fetches (nothing was cached empty).
+    resetGithubSearchRateState()
+    mockFetchWithTimeout.mockReset()
+    mockFetchWithTimeout.mockResolvedValue({
+      ok: true,
+      json: () =>
+        Promise.resolve({
+          items: [
+            {
+              full_name: 'owner/repo',
+              description: 'recovered',
+              html_url: 'https://github.com/owner/repo',
+              stargazers_count: 1,
+              language: 'JS',
+            },
+          ],
+        }),
+    })
+    const second = await githubSearch('quota drained')
+    expect(second).toHaveLength(1)
+    expect(mockFetchWithTimeout).toHaveBeenCalled()
   })
 
   it('sends only the first TWO key terms to the API (S19 AND-recall fix)', async () => {
@@ -1448,6 +1572,28 @@ describe('isGithubIssuesIntent', () => {
     expect(isGithubIssuesIntent('레디스 안되')).toBe(true)
     expect(isGithubIssuesIntent('레디스 안돼')).toBe(true)
     expect(isGithubIssuesIntent('이거 안 돼')).toBe(true)
+  })
+})
+
+describe('isProgrammingIntent (P24 — Stack Exchange for general queries)', () => {
+  it('matches programming-context general queries', () => {
+    // adv-11 'what language should i learn first' — gold reddit.com|stackoverflow.com
+    expect(isProgrammingIntent('what language should i learn first')).toBe(true)
+    expect(isProgrammingIntent('which programming language should I learn')).toBe(true)
+    expect(isProgrammingIntent('how to learn to code')).toBe(true)
+    expect(isProgrammingIntent('best JavaScript framework for beginners')).toBe(true)
+    expect(isProgrammingIntent('how to debug a react app')).toBe(true)
+    expect(isProgrammingIntent('what is an api')).toBe(true)
+    expect(isProgrammingIntent('best language to start programming')).toBe(true)
+  })
+
+  it('does NOT match human-language contexts (en-general-04 duolingo)', () => {
+    expect(isProgrammingIntent('how to learn a language fast')).toBe(false)
+    expect(isProgrammingIntent('best language to learn for travel')).toBe(false)
+    expect(isProgrammingIntent('how to speak english fluently')).toBe(false)
+    expect(isProgrammingIntent('best restaurants')).toBe(false)
+    expect(isProgrammingIntent('remote work productivity tips')).toBe(false)
+    expect(isProgrammingIntent('meal prep for weight loss')).toBe(false)
   })
 })
 
@@ -1635,6 +1781,22 @@ describe('GitHub /search rate guard (S23)', () => {
     expect(isGithubSearchRateLimited(now + 61_000)).toBe(false)
   })
 
+  it('caps an excessive Retry-After at MAX_NETWORK_COOLDOWN_MS (120s)', () => {
+    const now = Date.now()
+    // 1시간 Retry-After(서버 오설정/비현실적 대기)가 GitHub 검색을 한 시간
+    // 동안 막아서는 안 된다 — 120s 절대 상한으로 클램프.
+    recordGithubSearchCall(rateLimitedResponse('3600'), now)
+    expect(isGithubSearchRateLimited(now + 119_000)).toBe(true) // 캡 안에서는 여전히 차단
+    expect(isGithubSearchRateLimited(now + 121_000)).toBe(false) // 캡 직후 해제
+  })
+
+  it('does not clamp a normal Retry-After below the cap', () => {
+    const now = Date.now()
+    recordGithubSearchCall(rateLimitedResponse('30'), now)
+    expect(isGithubSearchRateLimited(now + 29_000)).toBe(true)
+    expect(isGithubSearchRateLimited(now + 31_000)).toBe(false)
+  })
+
   it('githubSearch skips the network call when rate limited (graceful)', async () => {
     recordGithubSearchCall(rateLimitedResponse('60'))
     expect(isGithubSearchRateLimited()).toBe(true)
@@ -1727,9 +1889,64 @@ describe('hackerNewsSearch', () => {
 describe('arxivSearch', () => {
   beforeEach(() => {
     mockFetchWithTimeout.mockReset()
+    resetArxivRateState()
   })
   afterEach(() => {
     vi.restoreAllMocks()
+    resetArxivRateState()
+  })
+
+  it('skips the network chain entirely while a 429 cooldown is active', async () => {
+    // record a 429 window → the next call must NOT touch fetchWithTimeout.
+    recordArxivRateLimit({}, Date.now())
+    mockFetchWithTimeout.mockResolvedValue({
+      ok: true,
+      text: () => Promise.resolve('<feed></feed>'),
+    })
+    const results = await arxivSearch('transformer', { env: {} as never })
+    expect(results).toEqual([])
+    expect(mockFetchWithTimeout).not.toHaveBeenCalled()
+  })
+
+  it('records a cooldown on 429 so later queries in the window skip', async () => {
+    expect(isArxivRateLimited()).toBe(false)
+    mockFetchWithTimeout.mockResolvedValue({ ok: false, status: 429, text: () => Promise.resolve('') })
+    const first = await arxivSearch('transformer', { env: {} as never })
+    expect(first).toEqual([])
+    expect(isArxivRateLimited()).toBe(true)
+    // Second call in the same window: guard trips before the fetch.
+    mockFetchWithTimeout.mockClear()
+    const second = await arxivSearch('transformer', { env: {} as never })
+    expect(second).toEqual([])
+    expect(mockFetchWithTimeout).not.toHaveBeenCalled()
+  })
+
+  it('honours a Retry-After header when present (clamped to max)', async () => {
+    const now = Date.now()
+    recordArxivRateLimit({ headers: { get: () => '10' } }, now)
+    expect(isArxivRateLimited(now + 5_000)).toBe(true)
+    expect(isArxivRateLimited(now + 11_000)).toBe(false)
+  })
+
+  it('does not trip the guard on successful responses', async () => {
+    mockFetchWithTimeout.mockResolvedValue({
+      ok: true,
+      text: () =>
+        Promise.resolve(`
+        <feed>
+          <entry>
+            <title>Attention Is All You Need</title>
+            <id>http://arxiv.org/abs/1706.03762v7</id>
+            <summary>Transformer paper.</summary>
+            <published>2017-06-12T00:00:00Z</published>
+            <author><name>Ashish Vaswani</name></author>
+          </entry>
+        </feed>
+      `),
+    })
+    const results = await arxivSearch('transformer attention mechanism')
+    expect(results.length).toBe(1)
+    expect(isArxivRateLimited()).toBe(false)
   })
 
   it('returns results from arXiv Atom XML', async () => {
@@ -1860,6 +2077,80 @@ describe('arxivSearch', () => {
     expect(results.length).toBeGreaterThanOrEqual(1)
     expect(results[0].title).toContain('Valid')
   })
+
+  // ── docs/16 §3.5 retry policy (5xx/503 → 1 retry; 4xx/429/circuit fail-fast) ──
+  it('retries a 5xx once and succeeds on the second attempt', async () => {
+    mockFetchWithTimeout
+      .mockResolvedValueOnce({ ok: false, status: 503, text: () => Promise.resolve('busy') })
+      .mockResolvedValueOnce({
+        ok: true,
+        text: () =>
+          Promise.resolve(`
+          <feed>
+            <entry>
+              <title>Recovered Paper</title>
+              <id>http://arxiv.org/abs/1706.03762v7</id>
+              <summary>Recovered after a 503.</summary>
+            </entry>
+          </feed>
+        `),
+      })
+    const results = await arxivSearch('retry me')
+    expect(mockFetchWithTimeout).toHaveBeenCalledTimes(2)
+    expect(results.length).toBeGreaterThanOrEqual(1)
+    expect(results[0].title).toContain('Recovered')
+  })
+
+  it('returns [] after two consecutive 5xx responses (retries exhausted)', async () => {
+    mockFetchWithTimeout
+      .mockResolvedValueOnce({ ok: false, status: 503, text: () => Promise.resolve('busy') })
+      .mockResolvedValueOnce({ ok: false, status: 500, text: () => Promise.resolve('still busy') })
+    const results = await arxivSearch('retry twice')
+    expect(mockFetchWithTimeout).toHaveBeenCalledTimes(2)
+    expect(results).toEqual([])
+  })
+
+  it('retries a network error once and succeeds on the second attempt', async () => {
+    mockFetchWithTimeout.mockRejectedValueOnce(new Error('socket hang up')).mockResolvedValueOnce({
+      ok: true,
+      text: () =>
+        Promise.resolve(`
+          <feed>
+            <entry>
+              <title>Network Recovered</title>
+              <id>http://arxiv.org/abs/1801.00001v1</id>
+              <summary>Recovered after a network blip.</summary>
+            </entry>
+          </feed>
+        `),
+    })
+    const results = await arxivSearch('network retry')
+    expect(mockFetchWithTimeout).toHaveBeenCalledTimes(2)
+    expect(results.length).toBeGreaterThanOrEqual(1)
+  })
+
+  it('does NOT retry 429 (quota window — 150ms retry lands in the same window)', async () => {
+    mockFetchWithTimeout.mockResolvedValue({ ok: false, status: 429, text: () => Promise.resolve('') })
+    const results = await arxivSearch('no 429 retry')
+    expect(mockFetchWithTimeout).toHaveBeenCalledTimes(1)
+    expect(results).toEqual([])
+  })
+
+  it('does NOT retry 4xx (permanent refusal)', async () => {
+    mockFetchWithTimeout.mockResolvedValue({ ok: false, status: 403, text: () => Promise.resolve('') })
+    const results = await arxivSearch('no 4xx retry')
+    expect(mockFetchWithTimeout).toHaveBeenCalledTimes(1)
+    expect(results).toEqual([])
+  })
+
+  it('does NOT retry the rate-limiter circuit-open throw', async () => {
+    mockFetchWithTimeout.mockRejectedValue(
+      new Error('Upstream unavailable (circuit open or at capacity): https://export.arxiv.org/api/query'),
+    )
+    const results = await arxivSearch('no circuit retry')
+    expect(mockFetchWithTimeout).toHaveBeenCalledTimes(1)
+    expect(results).toEqual([])
+  })
 })
 
 // ============================================================
@@ -1869,6 +2160,7 @@ describe('arxivSearch', () => {
 describe('redditSearch', () => {
   beforeEach(() => {
     mockFetchWithTimeout.mockReset()
+    resetRedditRateState()
   })
   afterEach(() => {
     vi.restoreAllMocks()
@@ -2048,6 +2340,143 @@ describe('redditSearch', () => {
     await redditSearch('test', { maxResults: 100 })
     const calledUrl = mockFetchWithTimeout.mock.calls[0][1]
     expect(calledUrl).toContain('limit=25')
+  })
+
+  // ── docs/16 §3.6 retry policy (5xx/network → 1 retry; 429/4xx/circuit fail-fast) ──
+  it('retries a 5xx once and succeeds on the second attempt', async () => {
+    mockFetchWithTimeout.mockResolvedValueOnce({ ok: false, status: 503 }).mockResolvedValueOnce({
+      ok: true,
+      json: () =>
+        Promise.resolve({
+          data: {
+            children: [
+              {
+                data: {
+                  title: 'Recovered',
+                  url: 'https://example.com/1',
+                  selftext: '',
+                  subreddit: 'r',
+                  score: 1,
+                  num_comments: 0,
+                  permalink: '/r/r/comments/1/',
+                },
+              },
+            ],
+          },
+        }),
+    })
+    const results = await redditSearch('retry me')
+    expect(mockFetchWithTimeout).toHaveBeenCalledTimes(2)
+    expect(results.length).toBeGreaterThanOrEqual(1)
+    expect(results[0].title).toBe('Recovered')
+  })
+
+  it('returns [] after two consecutive 5xx responses (retries exhausted)', async () => {
+    mockFetchWithTimeout
+      .mockResolvedValueOnce({ ok: false, status: 503 })
+      .mockResolvedValueOnce({ ok: false, status: 500 })
+    const results = await redditSearch('retry twice')
+    expect(mockFetchWithTimeout).toHaveBeenCalledTimes(2)
+    expect(results).toEqual([])
+  })
+
+  it('retries a network error once and succeeds on the second attempt', async () => {
+    mockFetchWithTimeout
+      .mockRejectedValueOnce(new Error('socket hang up'))
+      .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({ data: { children: [] } }) })
+    const results = await redditSearch('network retry')
+    expect(mockFetchWithTimeout).toHaveBeenCalledTimes(2)
+    expect(results).toEqual([])
+  })
+
+  it('does NOT retry 429 (datacenter rate limit — same window)', async () => {
+    mockFetchWithTimeout.mockResolvedValue({ ok: false, status: 429 })
+    const results = await redditSearch('no 429 retry')
+    expect(mockFetchWithTimeout).toHaveBeenCalledTimes(1)
+    expect(results).toEqual([])
+  })
+
+  it('does NOT retry 4xx on the .json endpoint but falls back to the Atom feed (P24)', async () => {
+    // 403 = datacenter-IP block — NOT retried, but remembered (redditJsonBlocked)
+    // and the .rss feed is tried once as the fallback (which 403s too here).
+    mockFetchWithTimeout.mockResolvedValue({ ok: false, status: 403 })
+    const results = await redditSearch('no 4xx retry')
+    expect(mockFetchWithTimeout).toHaveBeenCalledTimes(2)
+    expect(mockFetchWithTimeout.mock.calls[0][1]).toContain('search.json')
+    expect(mockFetchWithTimeout.mock.calls[1][1]).toContain('search.rss')
+    expect(results).toEqual([])
+  })
+
+  it('does NOT retry the rate-limiter circuit-open throw', async () => {
+    mockFetchWithTimeout.mockRejectedValue(
+      new Error('Upstream unavailable (circuit open or at capacity): https://www.reddit.com/search.json'),
+    )
+    const results = await redditSearch('no circuit retry')
+    expect(mockFetchWithTimeout).toHaveBeenCalledTimes(1)
+    expect(results).toEqual([])
+  })
+
+  it('falls back to the Atom RSS feed and returns reddit.com posts when .json is 403-blocked', async () => {
+    const rss = `<?xml version="1.0" encoding="UTF-8"?><feed>
+      <entry><author><name>/u/tester</name><uri>https://www.reddit.com/user/tester</uri></author>
+        <content type="html">&lt;div&gt; A great tip about sleep hygiene &lt;/div&gt;</content>
+        <id>t3_abc123</id>
+        <link href="https://www.reddit.com/r/sleep/comments/abc123/how_to_sleep_better/" />
+        <updated>2026-01-01T00:00:00+00:00</updated><title>How to sleep better</title></entry>
+      <entry><author><name>/u/mods</name></author>
+        <content type="html">&lt;div&gt; Subreddit landing page &lt;/div&gt;</content>
+        <id>t5_dtg784</id>
+        <link href="https://www.reddit.com/r/sleepal/" />
+        <updated>2025-03-07T09:25:35+00:00</updated><title>sleepal</title></entry>
+    </feed>`
+    mockFetchWithTimeout
+      .mockResolvedValueOnce({ ok: false, status: 403 })
+      .mockResolvedValueOnce({ ok: true, text: () => Promise.resolve(rss) })
+    const results = await redditSearch('how to improve sleep quality')
+    expect(mockFetchWithTimeout).toHaveBeenCalledTimes(2)
+    // Post entry kept, subreddit-page entry skipped
+    expect(results.length).toBe(1)
+    expect(results[0].title).toBe('How to sleep better')
+    expect(results[0].domain).toBe('reddit.com')
+    expect(results[0].url).toContain('/comments/')
+  })
+
+  it('skips the .rss fetch entirely once the endpoint is known-blocked and the RSS cooldown is armed', async () => {
+    // First call: .json 403 → .rss 429 (arms the cooldown). Second call must
+    // skip BOTH fetches (json known-blocked + rate-limited) → no network.
+    mockFetchWithTimeout
+      .mockResolvedValueOnce({ ok: false, status: 403 })
+      .mockResolvedValueOnce({ ok: false, status: 429, headers: new Headers({ 'x-ratelimit-reset': '30' }) })
+    await redditSearch('first')
+    expect(mockFetchWithTimeout).toHaveBeenCalledTimes(2)
+    mockFetchWithTimeout.mockClear()
+    const results = await redditSearch('second')
+    expect(mockFetchWithTimeout).not.toHaveBeenCalled()
+    expect(results).toEqual([])
+  })
+
+  it('parseRedditRss skips subreddit-page entries and decodes escaped content', () => {
+    const rss = `<feed>
+      <entry><author><name>/u/tester</name></author>
+        <content type="html">&lt;p&gt;Weight loss tips&lt;/p&gt;</content>
+        <id>t3_xyz</id>
+        <link href="https://www.reddit.com/r/fitness/comments/xyz/meal_prep/" />
+        <title>Meal prep ideas</title></entry>
+      <entry><author><name>/u/x</name></author>
+        <link href="https://www.reddit.com/r/weightroom/" /><id>t5_1</id><title>sub only</title></entry>
+    </feed>`
+    const results = parseRedditRss(rss, 'meal prep', 5)
+    expect(results.length).toBe(1)
+    expect(results[0].title).toBe('Meal prep ideas')
+    expect(results[0].content).toContain('Weight loss tips')
+    expect(results[0].domain).toBe('reddit.com')
+  })
+
+  it('parseRedditRss caps results at maxResults', () => {
+    const entry = (n: number) =>
+      `<entry><link href="https://www.reddit.com/r/x/comments/${n}/t/" /><id>t3_${n}</id><title>post ${n}</title></entry>`
+    const rss = `<feed>${entry(1)}${entry(2)}${entry(3)}</feed>`
+    expect(parseRedditRss(rss, 'q', 2).length).toBe(2)
   })
 })
 

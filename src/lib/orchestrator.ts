@@ -596,6 +596,12 @@ export async function executeSearch(request: SearchRequest, config: Orchestrator
     // same 800ms early-exit race that dropped arxiv results could drop them on a
     // slow network, leaving the qiita.com/juejin.cn gold absent. Bounded by
     // their 2500ms ceilings like the other waitFor entries.
+    // waitFor=['reddit','ddg-site-reddit']: P24 — the reddit backend's .rss
+    // fallback and the DDG site:reddit.com task (~700ms–1.5s live) frequently
+    // land just after phase 1's 800ms early-exit; reddit.com is gold in 15/16
+    // English general queries, so awaiting them (bounded by the 2000ms
+    // ceilings) keeps the community gold from being dropped on a fast bing
+    // pool (same S75 pattern).
     const { resultSets, usedBackends } = await fanoutBackends(tasks, max_results, {
       waitFor: [
         'wikipedia',
@@ -606,6 +612,8 @@ export async function executeSearch(request: SearchRequest, config: Orchestrator
         'arxiv',
         'qiita',
         'juejin',
+        'reddit',
+        'ddg-site-reddit',
       ],
     })
 

@@ -31,6 +31,7 @@ import { qiitaSearch, juejinSearch, csdnSearch } from '../community-search'
 import { braveSearch, isBraveAvailable } from '../brave-search'
 import { youtubeSearch } from '../youtube-search'
 import { isChineseQuery, cleanChineseQuery } from '../orchestrator'
+import { backendTimeoutMs } from './fanout'
 
 /** If the query is Chinese, return the cleaned version; otherwise the original. */
 function wikiQuery(ctx: SearchContext): string {
@@ -205,6 +206,94 @@ export function buildNewsOutletTask(ctx: SearchContext): BackendTask {
         maxResults: 4,
         env: ctx.env,
         locale: newsRssLocale(ctx),
+      }),
+  }
+}
+
+/**
+ * zh 여행·커뮤니티 gold 도메인 목록 — S104 (2026-08-14).
+ *
+ * eval gold-standards의 ZH_TRAVEL/ZH_GENERAL 목록과 1:1 (zh-travel-01~05 +
+ * zh-general-06~15 15쿼리; zhihu.com은 ZH_GENERAL 10쿼리에 포함). bing은
+ * site: 연산자를 무시하고 (scripts/probe-bing-site.ts 실측 — site: 프리픽스가
+ * 결과를 전혀 좁히지 않음) 이 도메인들을 일반 검색으로도 거의 회수하지 못하므로
+ * (docs/02 §2), site:-증강은 site:를 인정하는 엔진(DDG / SearXNG)으로 라우팅한다
+ * (P24 ddg-site-reddit 선례).
+ */
+export const ZH_TRAVEL_COMMUNITY_GOLD = [
+  'ctrip.com',
+  'mafengwo.cn',
+  'dianping.com',
+  'xiaohongshu.com',
+  'trip.com',
+  'qunar.com',
+  'zhihu.com',
+]
+
+/**
+ * 쿼리당 ONE gold 도메인을 결정적으로 선택 (S104).
+ *
+ * S95 pickNewsOutlet과 동일한 FNV-1a 회전: 같은 주제의 반복 쿼리가 한 도메인을
+ * 때리지 않고 목록 전체에 분산된다 (DDG 버스트 한도 / 공유 rate 예산 보호).
+ * 순수 함수 — 네트워크 없이 단위 테스트 가능. EXPORTED FOR TESTS.
+ */
+export function pickZhTravelCommunityDomain(query: string): string {
+  let hash = 0x811c9dc5
+  for (let i = 0; i < query.length; i++) {
+    hash ^= query.charCodeAt(i)
+    hash = Math.imul(hash, 0x01000193)
+  }
+  return ZH_TRAVEL_COMMUNITY_GOLD[(hash >>> 0) % ZH_TRAVEL_COMMUNITY_GOLD.length]
+}
+
+/**
+ * zh 여행·커뮤니티 gold site:-증강 태스크 — S104 (2026-08-14).
+ *
+ * `site:<gold-domain> <query>`가 해당 gold 도메인을 강제로 풀에 참여시킨다
+ * (S95 뉴스 아웃렛 패턴과 동일한 COVERAGE 패치: ONE site: 호출, 작은 maxResults,
+ * 부가형 — 무관한 결과는 순위/품질 임계값이 거른다).
+ *
+ * 엔진 선택 (진단 근거: scripts/probe-bing-site.ts — bing 모바일/데스크톱/RSS
+ * 3개 엔드포인트 모두 site: 무시, 일부 쿼리는 키워드 오염까지 발생):
+ *  - SEARXNG_URL 미설정 (기본/eval) → DuckDuckGo `site:` (P24 실측 10/10 인정,
+ *    docs/15 버스트 202 윈도우 한계 공유 — 부가형이므로 빈 풀은 기존 경로에 폴백)
+ *  - SEARXNG_URL 설정 → SearXNG `site:` — 단, 검증 실측 (2026-08-14,
+ *    searxng/settings.yml 주석 + scripts/probe-searxng-zh.ts):
+ *      · SearXNG 경유 bing도 site: 무시 (자연 랭킹만 반환 — 여행 쿼리에서 mafengwo가
+ *        우연히 1위일 뿐, site:ctrip.com도 mafengwo를 반환). 설정에서 비활성.
+ *      · google cse만 site: 인정 — top5 gold 5/5 (ctrip/dianping/trip/qunar/zhihu,
+ *        mafengwo 1/5 — google의 한계, DDG 경로가 보완). 단, language 파라미터를
+ *        명시하면 google cse가 0건을 반환하는 퀴크가 있어 **language를 넘기지 않는다**.
+ *      · baidu는 비CN IP에서 CAPTCHA (wappass) — CN VPS 배치 시에만 동작, 설정에 유지.
+ *
+ * Workers egress 실측 (2026-08-14, scripts/probe-egress-worker.ts): DDG site:는
+ * 7개 gold 도메인 전부를 100% 회수 (mafengwo.cn 11/11 · ctrip.com 12/12 ·
+ * dianping.com 10/10 · trip.com 12/12 · qunar.com 10/10 · zhihu.com 10/10 ·
+ * xiaohongshu.com 9/9) — "DDG가 zh gold 미인덱싱" 우려는 반증됨. 유일 상한은
+ * DDG 버스트 202 윈도우 (연속 2~4회 후 ~10~30초, docs/15와 일치): eval 벌크는
+ * 윈도우당 소수 쿼리만 gold 회수, 생산 단일 사용자 트래픽은 자연 간격으로 정상.
+ */
+export function buildZhTravelCommunityTask(ctx: SearchContext): BackendTask {
+  const domain = pickZhTravelCommunityDomain(ctx.query)
+  const siteQuery = `site:${domain} ${ctx.query}`
+  if (ctx.env?.SEARXNG_URL) {
+    return {
+      name: 'searxng-site-zh-travel',
+      run: () =>
+        // language를 넘기지 않는다 — google cse는 language 명시 시 0건 (실측).
+        searxngSearch(siteQuery, {
+          maxResults: 5,
+          env: ctx.env,
+        }),
+    }
+  }
+  return {
+    name: 'ddg-site-zh-travel',
+    run: () =>
+      duckDuckGoSearch(siteQuery, {
+        maxResults: 5,
+        timeoutMs: backendTimeoutMs('ddg-site-zh-travel', 6000),
+        env: ctx.env,
       }),
   }
 }

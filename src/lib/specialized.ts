@@ -14,10 +14,24 @@
 
 import type { SearchResult, Env } from '../types'
 import { logger, toError } from './logger'
-import { fetchWithTimeout, extractDomain, stripHtml, computeScore, truncateToTokens, simplifyQuery } from './util'
+import {
+  fetchWithTimeout,
+  extractDomain,
+  stripHtml,
+  decodeEntities,
+  computeScore,
+  truncateToTokens,
+  simplifyQuery,
+  isCircuitOpenError,
+} from './util'
 import { withRetry, splitRetryBudget } from './resilience/retry'
 import { BACKEND_TIMEOUT_MS, backendTimeoutMs } from './search/fanout'
 import { setSharedCooldown, getSharedCooldown, resetSharedCooldownLocal } from './rate-limiter'
+import { buildFinancialKeywordRegex, FINANCIAL_KEYWORDS, FINANCIAL_REGEX_ONLY } from './financial-keywords'
+
+// Financial detection regex — compiled once at module load from the shared
+// vocabulary (see financial-keywords.ts for tier semantics).
+const FINANCIAL_PATTERN = buildFinancialKeywordRegex(FINANCIAL_KEYWORDS, FINANCIAL_REGEX_ONLY)
 
 // ============================================================
 // Wikipedia REST API
@@ -47,6 +61,38 @@ import { setSharedCooldown, getSharedCooldown, resetSharedCooldownLocal } from '
 const WIKIPEDIA_CACHE_TTL_MS = 10 * 60 * 1000
 const WIKIPEDIA_CACHE_MAX = 500
 const wikipediaCache = new Map<string, { results: SearchResult[]; expiresAt: number }>()
+
+// S75 (2026-08-13): github Search API result cache. The anonymous /search
+// quota is 10 req/min SHARED between repositories and issues — repeat calls
+// for the same query (median-of-3 eval, popular production queries) burn the
+// budget for nothing and 403 the later queries in a burst, dropping the
+// github.com gold. wikipediaCache-style TTL + empty-result policy (never
+// cache 403/empty so the quota window is re-tried after recovery).
+const GITHUB_CACHE_TTL_MS = 10 * 60 * 1000
+const githubCache = new Map<string, { results: SearchResult[]; expiresAt: number }>()
+
+function githubCacheKey(query: string, maxResults: number, source: 'repos' | 'issues'): string {
+  return `github|${source}|${query.trim().toLowerCase()}|${maxResults}`
+}
+
+function githubCacheGet(key: string): SearchResult[] | undefined {
+  const entry = githubCache.get(key)
+  if (entry && entry.expiresAt > Date.now()) {
+    return entry.results.map((r) => ({ ...r }))
+  }
+  githubCache.delete(key)
+  return undefined
+}
+
+function githubCacheSet(key: string, results: SearchResult[]): void {
+  if (results.length === 0) return // never cache 403/empty — allow a real retry later
+  githubCache.set(key, { results, expiresAt: Date.now() + GITHUB_CACHE_TTL_MS })
+}
+
+/** TEST HOOK: clear the in-process github result cache. */
+export function clearGithubCache(): void {
+  githubCache.clear()
+}
 
 function wikipediaCacheKey(language: string, query: string, maxResults: number, source = 'rest'): string {
   // S28: the `source` dimension keeps DBpedia-fallback results in a SEPARATE
@@ -233,15 +279,22 @@ export async function wikipediaSearch(
   if (cached) return cached
 
   // B1 (Wave 4): pacing guard. When wikipedia recently 429'd (the wikimedia
-  // gateway blocks the IP for a minute+ under bursts), the REST chain is
-  // SKIPPED inside the window — every REST attempt just re-429s and re-arms
-  // the cooldown, wasting requests and delaying window recovery. The guard
-  // is applied below (after actionApiFallback is defined) so the **Action
-  // API is still tried inside the window** (수정 68) — 수정 57/58 실측:
-  // REST 429 동안 Action 은 200 인 경우가 많다 (Workers egress: zh_rest 429
-  // 중 zh_action 200). The cache is checked BEFORE this guard so a pre-window
-  // result still serves. Mirrors the S23 GitHub rate-guard skip semantics.
+  // gateway blocks the IP across REST+Action for a minute+ under bursts),
+  // skip the network chain ENTIRELY — every attempt inside the window just
+  // re-429s and re-arms the cooldown, wasting requests and delaying window
+  // recovery. The orchestrator-level mirror (5b) covers the gold instead;
+  // once the cooldown expires the next call retries for real. The cache is
+  // checked BEFORE this guard so a pre-window result still serves. Mirrors
+  // the S23 GitHub rate-guard skip semantics.
   const results: SearchResult[] = []
+  if (await isWikipediaRateLimitedShared(env, language)) {
+    logger.warn('Wikipedia search skipped (429 cooldown window):', {
+      resumeAt: new Date(wikipediaRateLimitedUntilByLang.get(language) ?? 0).toISOString(),
+      query,
+      language,
+    })
+    return results
+  }
 
   // Wikipedia REST API can return HTTP 429 (rate limit) under rapid sequential
   // calls. Retry with backoff that fits within fanout's wikipedia ceiling
@@ -390,25 +443,6 @@ export async function wikipediaSearch(
     }
   }
 
-  // B1 (Wave 4) pacing guard — 수정 68 완화: 창 내에서도 Action API 는 시도한다.
-  // 구 동작: 창 내 전체 체인 스킵 → 빈 결과 (Action 도 버려짐). 새 동작: REST
-  // 체인만 생략하고 Action 으로 바로 내려간다 — Action 은 창 내에서도 200 인
-  // 경우가 실측됐기 때문 (수정 57/58: zh_rest 429 중 zh_action 200). 창 내
-  // REST 재시도는 재-429 만 반복해 창을 연장하므로 요청하지 않는다. Action 은
-  // 자체 1회 재시도(500ms beat) 로 최대 2회 네트워크 호출 — 실패 누적 없음
-  // (429 는 releaseTransient, 수정 59) 및 예산(≈1.5s) 은 4.5s fanout ceiling
-  // 내에 안전하게 들어온다 (probe-wikipedia-budget 실측: Action 1303~1380ms).
-  const wikipediaInCooldown = await isWikipediaRateLimitedShared(env, language)
-  if (wikipediaInCooldown) {
-    logger.warn('Wikipedia REST search skipped (429 cooldown window) — Action API only:', {
-      resumeAt: new Date(wikipediaRateLimitedUntilByLang.get(language) ?? 0).toISOString(),
-      query,
-      language,
-    })
-    await actionApiFallback().catch(() => {})
-    return results
-  }
-
   try {
     // Search for page titles
     const searchUrl = `https://${language}.wikipedia.org/w/rest.php/v1/search/page?q=${encodeURIComponent(query)}&limit=${maxResults}`
@@ -420,6 +454,7 @@ export async function wikipediaSearch(
     // instantly instead of burning its own 429 attempts. The intra-query
     // retry chain is kept for the DISCOVERY query only (the one that finds
     // the window) — later queries are skipped at the top by the guard.
+    let restRateLimited = false
     let restError: unknown = null
     let restAttemptNo = 0
     const response = await withRetry(
@@ -446,18 +481,11 @@ export async function wikipediaSearch(
         })
         if (res.ok) return res
         if (res.status === 429) {
+          restRateLimited = true
           recordWikipediaRateLimit(res, language)
           // Share the window with other isolates (best-effort DO mirror).
           await mirrorWikipediaCooldown(env, language)
-          // 수정 58 (2026-08-15): REST 429 시 **Action 을 먼저** 시도한다 — REST
-          // 재시도는 429 구간에서 거의 항상 재-429 (B1 실측) 인 데다, 재시도마다
-          // rateLimitedFetch 가 release(host,false) 로 실패를 누적해 쿼리당 3회
-          // 실패가 쌓여 failureThreshold(5) 트립의 직접 원인이 됐다 (수정 57:
-          // zh.wikipedia.org 5/5 트립 실측). 반면 Action 은 REST 429 중에도 200
-          // 임이 Workers egress 실측으로 확인됐다. → non-transient 로 즉시
-          // 실패시켜(재시도 없이) Action fallback 으로 내려간다 — 실패 1회에
-          // 그치고 Action 성공 시 서킷 실패 카운트가 리셋된다.
-          throw new WikipediaHttpError(res.status, false)
+          throw new WikipediaHttpError(res.status, true)
         }
         // Non-429 error (5xx, 4xx) — fail fast, exactly like the old `break`.
         throw new WikipediaHttpError(res.status, false)
@@ -517,12 +545,18 @@ export async function wikipediaSearch(
     // 200 responses that returned 0 pages (e.g. zh REST returning empty for a
     // Chinese query), where it can genuinely succeed.
     //
-    // 수정 58: REST 429 시에도 **항상 Action 을 시도**한다 — 구 S73 가정
-    // ("Action 도 REST 와 함께 429 — fallback 이 블록을 증폭") 은 2026-08-15
-    // Workers egress 실측으로 뒤집혔다 (zh_rest 429 동안 zh_action 200).
-    // REST 재시도를 없앴으므로 최악(REST 1×429 + Action 2×429)에도 3 failures
-    // 로 임계값(5) 미만 — 단일 쿼리로는 절대 트립하지 않는다.
-    await actionApiFallback()
+    // SKIPPED when REST was rate-limited (429): wikipedia.org rate-limits the
+    // IP across BOTH the REST and Action endpoints (verified live: Action keeps
+    // returning 429 for 8s+ after REST trips). Firing the fallback on REST-429
+    // just amplifies the block with wasted requests and delays window recovery.
+    if (!restRateLimited) {
+      await actionApiFallback()
+    } else {
+      logger.warn(
+        `Wikipedia REST search rate-limited (429) — skipping Action API fallback so the window can recover:`,
+        { query },
+      )
+    }
   } catch (err) {
     logger.warn('Wikipedia search failed:', { error: toError(err) })
     // Even when the REST path throws, try the Action API before giving up.
@@ -859,11 +893,23 @@ export async function wikidataWikiSearch(
         const label = cand.label ?? ent.labels?.[language]?.value ?? ''
         const description = cand.description ?? ''
         if (!label) continue
+        // S74: sitelink pollution guard. Wikidata sitelinks occasionally
+        // point at the WRONG article (live-verified: Q11016's zhwiki link
+        // resolves to zh.wikipedia.org/wiki/技术 — the entity's zh label was
+        // overwritten to the same wrong value). The entity-level label
+        // check below would still pass on such a pair (label AND sitelink
+        // are both wrong), so ALSO validate the sitelink's own page title
+        // against the cleaned query. OR-ed with the label check so zh
+        // simplified/traditional variants (量子计算 vs 量子計算) and
+        // label-only matches survive: an entry is kept when EITHER its
+        // label or its sitelink title relates to the query.
+        const sitelinkTitle = decodeURIComponent(sitelink.split('/').pop() ?? '').replace(/_/g, ' ')
+        const sitelinkRelevant = wikidataLabelRelevant(cleaned, sitelinkTitle)
         // Relevance: label relation against the CLEANED query (the sitelink
         // filter already excludes papers; computeScore bigram overlap fails
         // on zh traditional/simplified variants like 蟲洞 vs 虫洞). The
         // +0.15 wikipedia authority boost mirrors dbpediaSearch.
-        if (!wikidataLabelRelevant(cleaned, label)) continue
+        if (!sitelinkRelevant && !wikidataLabelRelevant(cleaned, label)) continue
         const relevance = Math.max(computeScore(label, description, query), 0.05)
         results.push({
           title: label,
@@ -1130,10 +1176,17 @@ const GITHUB_REPO_SKIP_TERMS = new Set([
 let githubSearchRateLimitedUntil = 0 // epoch ms; 0 = not limited
 let githubSearchCallsSinceReset = 0
 
+/**
+ * Shared-cooldown key for the GitHub /search quota window (mirrored into the
+ * RateLimiter DO storage — see the wikipedia guard for the rationale).
+ */
+const GITHUB_COOLDOWN_KEY = 'cooldown:github-search'
+
 /** TEST HOOK: reset the GitHub search rate-guard state. */
 export function resetGithubSearchRateState(): void {
   githubSearchRateLimitedUntil = 0
   githubSearchCallsSinceReset = 0
+  resetSharedCooldownLocal(GITHUB_COOLDOWN_KEY)
 }
 
 /**
@@ -1145,6 +1198,32 @@ export function isGithubSearchRateLimited(now: number = Date.now()): boolean {
 }
 
 /**
+ * Cross-isolate GitHub /search quota check — local guard first (fast path),
+ * then the shared DO cooldown when the local window is clean (see
+ * isWikipediaRateLimitedShared for the rationale).
+ */
+export async function isGithubSearchRateLimitedShared(
+  env: Env | undefined,
+  now: number = Date.now(),
+): Promise<boolean> {
+  if (githubSearchRateLimitedUntil > now) return true
+  const untilMs = await getSharedCooldown(env, GITHUB_COOLDOWN_KEY, now)
+  if (untilMs > now) {
+    githubSearchRateLimitedUntil = Math.max(githubSearchRateLimitedUntil, untilMs)
+    return true
+  }
+  return false
+}
+
+/**
+ * Mirror the current GitHub quota cooldown into shared DO storage so other
+ * isolates skip the /search endpoint for the same reset window.
+ */
+export async function mirrorGithubSearchCooldown(env: Env | undefined): Promise<void> {
+  await setSharedCooldown(env, GITHUB_COOLDOWN_KEY, githubSearchRateLimitedUntil)
+}
+
+/**
  * Update the guard state from one /search response. Called on EVERY response
  * (ok or 403 — the rate-limit headers are present either way). EXPORTED FOR
  * TESTS. Missing headers are ignored (Number(undefined) = NaN guard).
@@ -1153,8 +1232,13 @@ export function recordGithubSearchCall(res: Response, now: number = Date.now()):
   githubSearchCallsSinceReset += 1
   const retryAfterSec = Number(res.headers?.get?.('retry-after'))
   if (Number.isFinite(retryAfterSec) && retryAfterSec > 0) {
-    // GitHub 403s with Retry-After when the search quota is exhausted.
-    githubSearchRateLimitedUntil = Math.max(githubSearchRateLimitedUntil, now + retryAfterSec * 1000)
+    // GitHub 403s with Retry-After when the search quota is exhausted. The
+    // value is authoritative but capped at MAX_NETWORK_COOLDOWN_MS so a
+    // pathological Retry-After can't block /search for hours. (x-ratelimit-
+    // reset below is GitHub's literal quota deadline — epoch-based, left
+    // authoritative: a genuine hourly reset must be respected, not clamped.)
+    const cooldownMs = Math.min(retryAfterSec * 1000, MAX_NETWORK_COOLDOWN_MS)
+    githubSearchRateLimitedUntil = Math.max(githubSearchRateLimitedUntil, now + cooldownMs)
     return
   }
   const remaining = Number(res.headers?.get?.('x-ratelimit-remaining'))
@@ -1179,11 +1263,19 @@ export async function githubSearch(
   query: string,
   opts: { maxResults?: number; timeoutMs?: number; env?: Env } = {},
 ): Promise<SearchResult[]> {
-  const { maxResults = 8, timeoutMs = 8000, env } = opts
+  const { maxResults = 8, timeoutMs = backendTimeoutMs('github', 8000), env } = opts
   const results: SearchResult[] = []
 
+  // S75: cache hit serves BEFORE the quota guard — a pre-window result still
+  // answers without burning another /search call (same semantics as the
+  // wikipedia B1 cache-before-guard ordering).
+  const cacheKey = githubCacheKey(query, maxResults, 'repos')
+  const cached = githubCacheGet(cacheKey)
+  if (cached) return cached
+
   // S23: skip early when GitHub reported the shared /search quota exhausted.
-  if (isGithubSearchRateLimited()) {
+  // Cross-isolate: also adopts a quota window another isolate discovered.
+  if (await isGithubSearchRateLimitedShared(env)) {
     logger.warn('GitHub search skipped (search quota exhausted):', {
       callsSinceReset: githubSearchCallsSinceReset,
       resumeAt: new Date(githubSearchRateLimitedUntil).toISOString(),
@@ -1232,6 +1324,12 @@ export async function githubSearch(
     )
     // S23: record the rate-limit state from EVERY response (ok or 403).
     recordGithubSearchCall(response)
+    // Share an armed quota window with other isolates (best-effort DO mirror;
+    // only when a window is actually armed, so steady-state responses don't
+    // pay a DO write per request).
+    if (githubSearchRateLimitedUntil > Date.now()) {
+      await mirrorGithubSearchCooldown(env)
+    }
     if (!response.ok) return results
 
     const data = (await response.json()) as {
@@ -1267,6 +1365,7 @@ export async function githubSearch(
     logger.warn('GitHub search failed:', { error: toError(err) })
   }
 
+  githubCacheSet(cacheKey, results)
   return results
 }
 
@@ -1286,6 +1385,65 @@ export function isGithubIssuesIntent(query: string): boolean {
   // vscode, "bug" must not match debug, "fix" must not match prefix/suffix,
   // "fail" must not match failover (code review 2026-08-07).
   return /\b(how\s+to|why|errors?|fail(?:ed|ure)?|crash(?:ing)?|bugs?|fix(?:ed)?|not\s+working|undefined|null|exceptions?|deprecat\w*|migrat\w*|upgrad\w*|differences?|versus|vs\.?|best\s+practices?|problems?|solutions?|unable|cannot|can'?t)\b|에러|오류|해결|안\s*되|안\s*돼|비교|エラー|違い|解決|できない|なぜ|报错|错误|区别|为什么|怎么解决/i.test(
+    query,
+  )
+}
+
+/**
+ * Programming-context gate for the Stack Exchange API in non-technical
+ * queries (P24, 2026-08-14). The SE gate is technical/academic-only, but
+ * stackoverflow.com is ALSO gold in queries detectQueryType routes elsewhere
+ * (adv-11 'what language should i learn first' → factual). This gate
+ * deliberately EXCLUDES human-language contexts ('how to learn a language
+ * fast' — en-general-04, gold duolingo.com — must NOT route to Stack
+ * Overflow): the first alternative requires 'language should/to learn', so
+ * 'learn a language' (verb before noun) never matches. EXPORTED FOR TESTS.
+ */
+export function isProgrammingIntent(query: string): boolean {
+  return /(which|what)\s+(programming\s+)?language\s+(should|to)\s+(?:(?:i|you|we|one)\s+)?(learn|start|use|pick)\b|learn\s+to\s+code|\bprogramming\b|\bcode\b|coding|developer\b|framework\b|library\b|function\b|algorithm\b|\bapi\b|debug\w*|syntax\b|compile\w*|stack\s+overflow|variable\b/i.test(
+    query,
+  )
+}
+
+/**
+ * Community-advice intent gate for the DDG site:reddit task (P24, 2026-08-14).
+ * reddit.com is gold in 15/16 English general queries, but detectQueryType
+ * scatters them across general/technical/financial/factual/news ('how to
+ * improve sleep quality' → technical, 'how to invest for beginners' →
+ * financial, 'what language should i learn first' → factual) — a
+ * queryType-based gate misses most of the set. This intent gate fires for
+ * how-to / listicle / community-advice shapes regardless of type, and stays
+ * silent on pure stock/quote ('AAPL stock price'), technical-doc
+ * ('React useState docs') and debate queries ('is open source sustainable').
+ * EXPORTED FOR TESTS.
+ */
+export function isCommunityAdviceIntent(query: string): boolean {
+  return /how\s+(to|do|can|should)|best\s+\w+(\s+(for|to|in|with|on)\b)?|top\s+\d|tips?\b|advice|guide|for\s+beginners|routines?\b|ideas?\b|without\s+|no\s+equipment|budget\b|recommend|reviews?\b|benefits?\b|symptoms?\b|diets?\b|workouts?\b|meal\s+prep|sleep\s+qualit|salaries?\b|negotiat|podcasts?\b|books?\b|courses?\b|learn(ing)?\s+\w+|invest(ing)?\b|travel(ling)?\b|backpack|productivit|office\s+setup|screen\s+time|headphones?\b|smartphones?\b|monitors?\b|language\s+should/i.test(
+    query,
+  )
+}
+
+/**
+ * zh 여행·커뮤니티 의도 게이트 — S104 (2026-08-14) CJK 여행·커뮤니티 gold
+ * site:-라우팅 레버용.
+ *
+ * 대상: zh-travel-01~05 + zh-general-06~15 (3차 확장 15쿼리) — gold가
+ * ctrip.com/mafengwo.cn/dianping.com/xiaohongshu.com/trip.com/qunar.com
+ * (zhihu.com 포함)인 여행·미식·쇼핑·커뮤니티 쿼리. 이 gold 도메인은 bing이
+ * (실측상) 회수하지 못해 run-3에서 15쿼리 중 7쿼리가 NDCG 0.000이었다 (docs/02
+ * §2 전무 진단과 일치).
+ *
+ * 게이트는 여행/관광/미식/쇼핑/커뮤니티 형태어로 트리거된다 (攻略/旅游/旅行/
+ * 美食/火锅/推荐/购物/注意事项...). 트레이드오프 (리뷰 2026-08-14):
+ *  - '推荐'를 단독 포함 → 家用跑步机推荐/智能手表推荐도 스케줄 (gold가 실제로
+ *    ZH_GENERAL 목록이라 딱 맞음; 과발화는 순위/품질 임계값이 걸러냄 — S95/P24
+ *    부가형 site: 태스크와 동일 원칙).
+ *  - 의도적 미포함: 考研复习计划 (학습 계획 — S26 CSDN 경로가 이미 전담),
+ *    手游排行榜 (리스트/뉴스 의도).
+ * EXPORTED FOR TESTS.
+ */
+export function isZhTravelCommunityIntent(query: string): boolean {
+  return /攻略|旅游|旅行|行程|景点|路线|门票|民宿|酒店|住宿|美食|小吃|火锅|餐厅|菜谱|食谱|探店|推荐|购物|逛街|免税|特产|注意事项|自由行|自驾|跟团|穷游|打卡|目的地/.test(
     query,
   )
 }
@@ -1441,12 +1599,18 @@ export async function githubIssuesSearch(
   query: string,
   opts: { maxResults?: number; timeoutMs?: number; env?: Env } = {},
 ): Promise<SearchResult[]> {
-  const { maxResults = 5, timeoutMs = 8000, env } = opts
+  const { maxResults = 5, timeoutMs = backendTimeoutMs('github-issues', 8000), env } = opts
   const results: SearchResult[] = []
+
+  // S75: cache hit before the quota guard (see githubSearch).
+  const cacheKey = githubCacheKey(query, maxResults, 'issues')
+  const cached = githubCacheGet(cacheKey)
+  if (cached) return cached
 
   // S23: skip early when GitHub reported the shared /search quota exhausted
   // (githubSearch + githubIssuesSearch share the same search-resource budget).
-  if (isGithubSearchRateLimited()) {
+  // Cross-isolate: also adopts a quota window another isolate discovered.
+  if (await isGithubSearchRateLimitedShared(env)) {
     logger.warn('GitHub issues search skipped (search quota exhausted):', {
       callsSinceReset: githubSearchCallsSinceReset,
       resumeAt: new Date(githubSearchRateLimitedUntil).toISOString(),
@@ -1475,6 +1639,12 @@ export async function githubIssuesSearch(
     )
     // S23: record the rate-limit state from EVERY response (ok or 403).
     recordGithubSearchCall(response)
+    // Share an armed quota window with other isolates (best-effort DO mirror;
+    // only when a window is actually armed, so steady-state responses don't
+    // pay a DO write per request).
+    if (githubSearchRateLimitedUntil > Date.now()) {
+      await mirrorGithubSearchCooldown(env)
+    }
     if (!response.ok) return results
     const data = (await response.json()) as {
       items?: Array<{
@@ -1515,6 +1685,7 @@ export async function githubIssuesSearch(
     logger.warn('GitHub issues search failed:', { error: toError(err) })
   }
 
+  githubCacheSet(cacheKey, results)
   return results
 }
 
@@ -1530,7 +1701,7 @@ export async function hackerNewsSearch(
   query: string,
   opts: { maxResults?: number; timeoutMs?: number; timeRange?: string; env?: Env } = {},
 ): Promise<SearchResult[]> {
-  const { maxResults = 8, timeoutMs = 8000, timeRange, env } = opts
+  const { maxResults = 8, timeoutMs = backendTimeoutMs('hackernews', 8000), timeRange, env } = opts
   const results: SearchResult[] = []
 
   try {
@@ -1607,87 +1778,269 @@ export async function hackerNewsSearch(
 // ============================================================
 
 /**
- * Search Reddit posts via .json endpoint.
- * Free, no API key. Requires descriptive User-Agent.
+ * Transient failure from Reddit's .json endpoint — the ONLY error class
+ * worth retrying (docs/16_FAILFAST_BACKEND_RETRY_ANALYSIS.md §3.6). Covers
+ * 5xx and network errors (fetch throw). Deliberately NOT wrapped: 4xx
+ * (permanent refusal), 429 (datacenter-IP rate limit — the local limiter
+ * already caps at 40/min, so a 429 means quota exhausted and a 150ms retry
+ * lands in the same window), and the rate limiter's circuit-open /
+ * capacity-race throws (retrying a closed circuit just hammers it).
  */
-export async function redditSearch(
-  query: string,
-  opts: { maxResults?: number; timeoutMs?: number; timeRange?: string; env?: Env } = {},
-): Promise<SearchResult[]> {
-  const { maxResults = 5, timeoutMs = 8000, timeRange, env } = opts
+class TransientRedditError extends Error {
+  readonly status: number | null
+  constructor(message: string, status: number | null) {
+    super(message)
+    this.status = status
+    this.name = 'TransientRedditError'
+  }
+}
+
+// ── reddit backend rate state (P24, 2026-08-14) ──────────────────────────
+// www.reddit.com/search.json is 403-blocked from datacenter egress IPs, so
+// redditSearch falls back to the official Atom search feed
+// (www.reddit.com/search.rss — verified live 200 OK). The feed rate-limits
+// anonymously at roughly 1 request / x-ratelimit-reset seconds; the guard
+// below (wikipedia/arxiv/openalex pattern) skips fetches during a cooldown
+// window instead of hammering it.
+let redditJsonBlocked = false // .json endpoint confirmed blocked (403) — skip straight to .rss
+let redditRateLimitedUntil = 0 // epoch ms — RSS 429 cooldown (x-ratelimit-reset)
+
+/** Test hook — reset the module rate state between tests. */
+export function resetRedditRateState(): void {
+  redditJsonBlocked = false
+  redditRateLimitedUntil = 0
+}
+
+/** Arm the RSS cooldown from a 429 response's x-ratelimit-reset (seconds). */
+function armRedditRateLimit(response: Response): void {
+  const resetSec = Number(response.headers.get('x-ratelimit-reset'))
+  const cooldownMs = (Number.isFinite(resetSec) && resetSec > 0 ? resetSec : 60) * 1000
+  redditRateLimitedUntil = Date.now() + cooldownMs
+  logger.warn('Reddit rate-limited — cooldown armed', { cooldownMs })
+}
+
+/**
+ * Parse a Reddit Atom search feed (search.rss). Each <entry> is either a post
+ * (link contains /comments/, id t3_…) or a subreddit page (t5_…, weak) — only
+ * posts are kept. Content is HTML-escaped inside <content type="html">, so it
+ * is decoded BEFORE stripHtml so escaped tags are removed. EXPORTED FOR TESTS.
+ */
+export function parseRedditRss(xml: string, query: string, maxResults: number): SearchResult[] {
   const results: SearchResult[] = []
-
-  try {
-    // Reddit search also benefits from simplified queries for better hit rates
-    const simplified = simplifyQuery(query, 5)
-    const params = new URLSearchParams({
-      q: simplified,
-      limit: String(Math.min(maxResults, 25)),
-      sort: 'relevance',
+  const entryRe = /<entry>([\s\S]*?)<\/entry>/g
+  let m: RegExpExecArray | null
+  while ((m = entryRe.exec(xml)) !== null && results.length < maxResults) {
+    const block = m[1]
+    const link = block.match(/<link href="([^"]+)"/)?.[1] ?? ''
+    // Posts only — subreddit-page entries (t5_ ids, /r/<name>/ links) are weak.
+    if (!/\/comments\//.test(link)) continue
+    const title = decodeEntities(stripHtml(block.match(/<title>([\s\S]*?)<\/title>/)?.[1] ?? '')).trim()
+    if (title.length < 3) continue
+    const author = block.match(/<author><name>([\s\S]*?)<\/name><\/author>/)?.[1] ?? ''
+    const contentHtml = block.match(/<content type="html">([\s\S]*?)<\/content>/)?.[1] ?? ''
+    const body = stripHtml(decodeEntities(contentHtml)).replace(/\s+/g, ' ').trim()
+    const content = truncateToTokens(`${author}${body ? ` - ${body}` : ''}`, 500)
+    results.push({
+      title,
+      url: link,
+      content,
+      score: computeScore(title, body, query),
+      domain: extractDomain(link),
     })
-    if (timeRange) {
-      const tMap: Record<string, string> = { day: 'day', week: 'week', month: 'month', year: 'year' }
-      params.append('t', tMap[timeRange] || 'month')
-    }
+  }
+  return results
+}
 
-    const url = `https://www.reddit.com/search.json?${params}`
+/**
+ * Official Reddit Atom search feed fallback (P24, 2026-08-14).
+ * www.reddit.com/search.json 403s from datacenter IPs; search.rss returns the
+ * same posts as an Atom feed (~1 request per x-ratelimit-reset seconds
+ * anonymously). No retry — the guard + fanout ceiling bound the wait.
+ */
+async function redditRssSearch(
+  query: string,
+  opts: { maxResults?: number; timeoutMs?: number; env?: Env } = {},
+): Promise<SearchResult[]> {
+  const { maxResults = 5, timeoutMs = backendTimeoutMs('reddit', 8000), env } = opts
+  if (Date.now() < redditRateLimitedUntil) return []
+  const simplified = simplifyQuery(query, 5)
+  const params = new URLSearchParams({
+    q: simplified,
+    limit: String(Math.min(maxResults, 25)),
+    sort: 'relevance',
+  })
+  const url = `https://www.reddit.com/search.rss?${params}`
+  try {
     const response = await fetchWithTimeout(
       env,
       url,
       {
         headers: {
-          Accept: 'application/json',
+          Accept: 'application/rss+xml, application/xml;q=0.9, */*;q=0.8',
           'User-Agent': 'SearchAPI/1.0 (contact@example.com)',
         },
       },
-      timeoutMs,
+      Math.min(timeoutMs, 2000),
     )
-
-    if (!response.ok) return results
-    const data = (await response.json()) as {
-      data?: {
-        children?: {
-          data: {
-            title: string
-            url: string
-            selftext: string
-            subreddit: string
-            score: number
-            num_comments: number
-            permalink: string
-          }
-        }[]
-      }
+    if (!response.ok) {
+      if (response.status === 429) armRedditRateLimit(response)
+      return []
     }
-    const children = data.data?.children || []
-
-    for (const child of children) {
-      if (results.length >= maxResults) break
-      const post = child.data
-      // Reddit post URL - use external URL if it's a link post, otherwise Reddit permalink
-      const postUrl =
-        post.url && !post.url.includes('reddit.com') && !post.url.includes('redd.it')
-          ? post.url
-          : `https://www.reddit.com${post.permalink}`
-      const subreddit = `r/${post.subreddit}`
-      const score = post.score > 0 ? ` ↑${post.score}` : ''
-      const comments = post.num_comments > 0 ? ` (${post.num_comments} comments)` : ''
-      const selftext = post.selftext ? ` - ${post.selftext.slice(0, 200)}` : ''
-      const content = truncateToTokens(`${subreddit}${score}${comments}${selftext}`, 500)
-
-      results.push({
-        title: post.title,
-        url: postUrl,
-        content,
-        score: computeScore(post.title, post.selftext, query) + Math.min(post.score / 1000, 0.05),
-        domain: extractDomain(postUrl),
-      })
-    }
+    const xml = await response.text()
+    return parseRedditRss(xml, query, maxResults)
   } catch (err) {
-    logger.warn('Reddit search failed:', { error: toError(err) })
+    logger.warn('Reddit RSS search failed:', { error: toError(err) })
+    return []
+  }
+}
+
+/**
+ * Search Reddit posts — .json endpoint, falling back to the Atom search feed.
+ * Free, no API key. Requires descriptive User-Agent.
+ *
+ * 2026-08-14 (P24): datacenter egress IPs are 403-blocked from
+ * www.reddit.com/search.json (verified live). On 403 the endpoint is marked
+ * blocked (per-isolate) and subsequent calls go straight to search.rss; 429
+ * arms a cooldown from x-ratelimit-reset. The .json path keeps the original
+ * withRetry budget (2×925+150 = 2000 = the reddit fanout ceiling exactly).
+ */
+export async function redditSearch(
+  query: string,
+  opts: { maxResults?: number; timeoutMs?: number; timeRange?: string; env?: Env } = {},
+): Promise<SearchResult[]> {
+  const { maxResults = 5, timeoutMs = backendTimeoutMs('reddit', 8000), timeRange, env } = opts
+  const results: SearchResult[] = []
+
+  // Rate-limit guard — skip while in a cooldown window instead of hammering.
+  if (Date.now() < redditRateLimitedUntil) {
+    logger.warn('Reddit search skipped — rate-limited', { until: redditRateLimitedUntil })
+    return results
   }
 
-  return results
+  // .json endpoint — skipped entirely once it is confirmed blocked (403).
+  if (!redditJsonBlocked) {
+    try {
+      const simplified = simplifyQuery(query, 5)
+      const params = new URLSearchParams({
+        q: simplified,
+        limit: String(Math.min(maxResults, 25)),
+        sort: 'relevance',
+      })
+      if (timeRange) {
+        const tMap: Record<string, string> = { day: 'day', week: 'week', month: 'month', year: 'year' }
+        params.append('t', tMap[timeRange] || 'month')
+      }
+
+      const url = `https://www.reddit.com/search.json?${params}`
+      // docs/16 §3.6: 5xx/network gets ONE retry via the shared withRetry
+      // decorator. Budget: splitRetryBudget(2000, 2, 150, 800) = 925 → worst
+      // 2×925+150 = 2000 = the reddit fanout ceiling exactly. 429/4xx pass
+      // through as Responses and fail fast below; circuit-open throws excluded.
+      const perAttemptMs = splitRetryBudget(Math.min(timeoutMs, 2000), 2, 150, 800)
+      const response = await withRetry(
+        async () => {
+          let res: Response
+          try {
+            res = await fetchWithTimeout(
+              env,
+              url,
+              {
+                headers: {
+                  Accept: 'application/json',
+                  'User-Agent': 'SearchAPI/1.0 (contact@example.com)',
+                },
+              },
+              perAttemptMs,
+            )
+          } catch (err) {
+            if (isCircuitOpenError(err)) throw err
+            // Network timeout / blip — transient, worth the single retry.
+            throw new TransientRedditError(`Reddit fetch failed: ${toError(err)}`, null)
+          }
+          if (res.ok) return res
+          // 4xx → permanent refusal; 429 → quota exhausted — fail fast.
+          if (res.status === 429 || (res.status >= 400 && res.status < 500)) return res
+          // 5xx → server-side transient failure — retry once.
+          res.body?.cancel().catch(() => {})
+          throw new TransientRedditError(`Reddit HTTP ${res.status}`, res.status)
+        },
+        {
+          maxRetries: 1,
+          delaysMs: [150],
+          jitter: false,
+          retryable: (err) => err instanceof TransientRedditError && !isCircuitOpenError(err),
+        },
+      ).catch((err) => {
+        logger.warn('Reddit search failed:', { error: toError(err) })
+        return null
+      })
+
+      if (response?.ok) {
+        const data = (await response.json()) as {
+          data?: {
+            children?: {
+              data: {
+                title: string
+                url: string
+                selftext: string
+                subreddit: string
+                score: number
+                num_comments: number
+                permalink: string
+              }
+            }[]
+          }
+        }
+        const children = data.data?.children || []
+
+        for (const child of children) {
+          if (results.length >= maxResults) break
+          const post = child.data
+          // Reddit post URL - use external URL if it's a link post, otherwise Reddit permalink
+          const postUrl =
+            post.url && !post.url.includes('reddit.com') && !post.url.includes('redd.it')
+              ? post.url
+              : `https://www.reddit.com${post.permalink}`
+          const subreddit = `r/${post.subreddit}`
+          const score = post.score > 0 ? ` ↑${post.score}` : ''
+          const comments = post.num_comments > 0 ? ` (${post.num_comments} comments)` : ''
+          const selftext = post.selftext ? ` - ${post.selftext.slice(0, 200)}` : ''
+          const content = truncateToTokens(`${subreddit}${score}${comments}${selftext}`, 500)
+
+          results.push({
+            title: post.title,
+            url: postUrl,
+            content,
+            score: computeScore(post.title, post.selftext, query) + Math.min(post.score / 1000, 0.05),
+            domain: extractDomain(postUrl),
+          })
+        }
+        return results
+      }
+
+      if (response) {
+        if (response.status === 429) {
+          armRedditRateLimit(response)
+          return results
+        }
+        if (response.status === 403) {
+          // Datacenter IPs are blocked from the .json endpoint — remember it
+          // (per-isolate) and fall through to the Atom feed below.
+          redditJsonBlocked = true
+        } else {
+          return results // other 4xx permanent refusal / 5xx retries exhausted
+        }
+      } else {
+        return results // network chain exhausted — .rss would fail the same way
+      }
+    } catch (err) {
+      logger.warn('Reddit search failed:', { error: toError(err) })
+      return results
+    }
+  }
+
+  // .json blocked/403 — official Atom search feed fallback.
+  return redditRssSearch(query, { maxResults, timeoutMs, env })
 }
 
 // ============================================================
@@ -1703,12 +2056,112 @@ export async function redditSearch(
  * Endpoint: https://export.arxiv.org/api/query?search_query=all:QUERY&max_results=N
  * Returns Atom XML feed.
  */
+
+/**
+ * Transient failure from the arXiv Atom endpoint — the ONLY error class worth
+ * retrying (docs/16_FAILFAST_BACKEND_RETRY_ANALYSIS.md §3.5). Covers 5xx/503
+ * (arXiv's measured-frequent "server is busy") and network errors (fetch
+ * throw). Deliberately NOT wrapped: 4xx (permanent refusal), 429 (quota
+ * window — a 150ms retry lands in the same window), and the rate limiter's
+ * circuit-open / capacity-race throws (retrying a closed circuit just hammers
+ * it — docs/16 rule 4).
+ */
+class TransientArxivError extends Error {
+  readonly status: number | null
+  constructor(message: string, status: number | null) {
+    super(message)
+    this.status = status
+    this.name = 'TransientArxivError'
+  }
+}
+
+// ============================================================
+// arXiv 429 pacing guard (2026-08-13) — mirrors the wikipedia/github guards.
+// ============================================================
+
+/**
+ * arXiv anonymous API rate limit: ~30 req/min (live-verified 2026-08-13:
+ * rapid academic-query bursts trip export.arxiv.org to HTTP 429 for ~1min,
+ * no Retry-After header). The 150ms retry in arxivSearch deliberately fails
+ * fast on 429 (a retry lands in the same window), so WITHOUT this guard a
+ * bulk client (eval batch, bursty production traffic) hammers the endpoint
+ * on every query and loses the arxiv.org gold for the WHOLE window — the
+ * run-1 eval snapshot lost en-acad-08..17 exactly this way. The guard skips
+ * the network chain entirely once a 429 is recorded, and shares the window
+ * across isolates via the RateLimiter DO (same pattern as wikipedia).
+ */
+const ARXIV_COOLDOWN_MS = 60_000
+const ARXIV_COOLDOWN_KEY = 'cooldown:arxiv'
+
+/** Epoch ms; 0 = not limited. Module-level arxiv 429 window. */
+let arxivRateLimitedUntil = 0
+
+/** TEST HOOK: reset the arxiv rate-guard state. */
+export function resetArxivRateState(): void {
+  arxivRateLimitedUntil = 0
+  resetSharedCooldownLocal(ARXIV_COOLDOWN_KEY)
+}
+
+/** True when arxiv recently 429'd and the cooldown window has not passed. */
+export function isArxivRateLimited(now: number = Date.now()): boolean {
+  return now < arxivRateLimitedUntil
+}
+
+/**
+ * Cross-isolate arxiv 429 window check — local guard first (fast path),
+ * then the shared DO cooldown when the local window is clean.
+ */
+export async function isArxivRateLimitedShared(env: Env | undefined, now: number = Date.now()): Promise<boolean> {
+  if (arxivRateLimitedUntil > now) return true
+  const untilMs = await getSharedCooldown(env, ARXIV_COOLDOWN_KEY, now)
+  if (untilMs > now) {
+    arxivRateLimitedUntil = Math.max(arxivRateLimitedUntil, untilMs)
+    return true
+  }
+  return false
+}
+
+/** Mirror the current arxiv cooldown deadline into shared DO storage. */
+export async function mirrorArxivCooldown(env: Env | undefined): Promise<void> {
+  await setSharedCooldown(env, ARXIV_COOLDOWN_KEY, arxivRateLimitedUntil)
+}
+
+/**
+ * Record an arxiv 429 — arms a cooldown. arXiv sends no Retry-After header
+ * (live-verified), so the fallback 60s window is the effective behaviour;
+ * a Retry-After IS honoured when present (clamped to MAX_NETWORK_COOLDOWN_MS).
+ * EXPORTED FOR TESTS.
+ */
+export function recordArxivRateLimit(
+  res?: { headers?: { get?: (key: string) => string | null } },
+  now: number = Date.now(),
+): void {
+  const retryAfterSec = Number(res?.headers?.get?.('retry-after'))
+  const cooldownMs =
+    Number.isFinite(retryAfterSec) && retryAfterSec > 0
+      ? Math.min(Math.max(retryAfterSec * 1000, 1000), MAX_NETWORK_COOLDOWN_MS)
+      : ARXIV_COOLDOWN_MS
+  arxivRateLimitedUntil = Math.max(arxivRateLimitedUntil, now + cooldownMs)
+}
+
 export async function arxivSearch(
   query: string,
   opts: { maxResults?: number; timeoutMs?: number; env?: Env } = {},
 ): Promise<SearchResult[]> {
-  const { maxResults = 8, timeoutMs = 10000, env } = opts
+  const { maxResults = 8, timeoutMs = backendTimeoutMs('arxiv', 10000), env } = opts
   const results: SearchResult[] = []
+
+  // 2026-08-13: arxiv 429 pacing guard — skip the network chain entirely
+  // while a recorded window is active (a 429 retry lands in the same window
+  // and just burns subrequests; the guard stops the hammering so the window
+  // actually recovers). Mirrors the wikipedia B1 guard semantics.
+  if (await isArxivRateLimitedShared(env)) {
+    logger.warn('arXiv search skipped (429 cooldown window):', {
+      resumeAt: new Date(arxivRateLimitedUntil).toISOString(),
+      query,
+    })
+    return results
+  }
 
   try {
     // Simplify query for arXiv — strip filler words, keep key terms
@@ -1721,14 +2174,54 @@ export async function arxivSearch(
       sortOrder: 'descending',
     })
     const url = `https://export.arxiv.org/api/query?${params.toString()}`
-    const response = await fetchWithTimeout(
-      env,
-      url,
-      { headers: { Accept: 'application/xml, application/atom+xml' } },
-      timeoutMs,
-    )
+    // docs/16 §3.5: 5xx/503 gets ONE retry via the shared withRetry decorator.
+    // Budget: splitRetryBudget(4500, 2, 150, 800) = 2175 → worst 2×2175+150 =
+    // 4500 = the arxiv fanout ceiling exactly, so the per-backend timer never
+    // fires mid-chain. Circuit-open throws are excluded from retryable.
+    const perAttemptMs = splitRetryBudget(Math.min(timeoutMs, 4500), 2, 150, 800)
+    const response = await withRetry(
+      async () => {
+        let res: Response
+        try {
+          res = await fetchWithTimeout(
+            env,
+            url,
+            { headers: { Accept: 'application/xml, application/atom+xml' } },
+            perAttemptMs,
+          )
+        } catch (err) {
+          // Circuit open / capacity race → fail fast (never retry a closed
+          // circuit); network timeout / blip → transient, retry once.
+          if (isCircuitOpenError(err)) throw err
+          throw new TransientArxivError(`arXiv fetch failed: ${toError(err)}`, null)
+        }
+        if (res.ok) return res
+        // 429 → quota window: fail fast on THIS query (a 150ms retry lands in
+        // the same window) but record the cooldown so LATER queries in the
+        // window skip the chain entirely instead of re-hammering. Shared with
+        // other isolates (best-effort DO mirror). 4xx → permanent refusal.
+        if (res.status === 429) {
+          recordArxivRateLimit(res)
+          await mirrorArxivCooldown(env)
+          return res
+        }
+        if (res.status >= 400 && res.status < 500) return res
+        // 5xx → server-side transient overload (arXiv's frequent 503) — retry.
+        res.body?.cancel().catch(() => {})
+        throw new TransientArxivError(`arXiv HTTP ${res.status}`, res.status)
+      },
+      {
+        maxRetries: 1,
+        delaysMs: [150],
+        jitter: false,
+        retryable: (err) => err instanceof TransientArxivError && !isCircuitOpenError(err),
+      },
+    ).catch((err) => {
+      logger.warn('arXiv search failed:', { error: toError(err) })
+      return null
+    })
 
-    if (!response.ok) return results
+    if (!response?.ok) return results
     const xml = await response.text()
 
     // Parse Atom XML entries: <entry>...<title>...</title><summary>...</summary><id>...</id>...</entry>
@@ -1787,7 +2280,7 @@ export async function arxivSearch(
  */
 export async function duckDuckGoInstantAnswer(
   query: string,
-  timeoutMs = 8000,
+  timeoutMs = backendTimeoutMs('duckduckgo', 8000),
   env?: Env,
 ): Promise<{ abstract: string; source: string; url: string } | null> {
   try {
@@ -1853,13 +2346,14 @@ export function detectQueryType(
   const hasProduct = entities ? entities.products.length > 0 : false
   const hasPerson = entities ? entities.people.length > 0 : false
 
-  // Financial / stock keywords (Korean + English + Chinese)
-  // Must be checked BEFORE news because stock queries often contain year numbers
-  // Phase 1.3: If known organization is detected + financial context keywords → financial
-  const isFinancialPattern =
-    /주가|주식|증권|코스피|코스닥|kospi|kosdaq|시세|변동률|상한가|하한가|목표주가|투자의견|실적|배당|주주|공시|기업분석|리서치|\bper\b|\bpbr\b|\broe\b|\beps\b|시가총액|거래량|시장가|주봉|일봉|월봉|\bchart\b|\bfinance\b|\bfinancial\b|\bstock\b|\bprice\b|\bshare\b|\bshares\b|\bdividend\b|market\s?cap|\btrading\b|\bipo\b|공모가/i.test(
-      query,
-    )
+  // Financial / stock keywords — single source: src/lib/financial-keywords.ts
+  // (FINANCIAL_KEYWORDS + FINANCIAL_REGEX_ONLY). Must be checked BEFORE news
+  // because stock queries often contain year numbers. Phase 1.3: If known
+  // organization is detected + financial context keywords → financial.
+  // S48: FINANCIAL_PLANNER_ONLY (금리/환율/투자/ETF/공모/상장) is deliberately
+  // EXCLUDED here — bare 금리/환율 would hijack kr-news-09/10 news routing, and
+  // 투자/ETF product terms must pair with a learning word (gate below).
+  const isFinancialPattern = FINANCIAL_PATTERN.test(query)
 
   if (isFinancialPattern) {
     return 'financial'
@@ -2132,11 +2626,16 @@ export function getSourcesForQueryType(type: QueryType): {
         useOpenAlex: true,
       }
     default:
+      // P24 (2026-08-14): reddit.com is gold in 15/16 English general queries
+      // (en-general-06..19, adv-11 — community advice/listicle intent) but the
+      // backend was never scheduled for general. UseReddit here + the .rss/
+      // DDG site:reddit paths in all.ts recover it (the .json endpoint is
+      // 403-blocked from datacenter IPs).
       return {
         useWikipedia: true,
         useGitHub: false,
         useHackerNews: true,
-        useReddit: false,
+        useReddit: true,
         useArxiv: false,
         useOpenAlex: false,
       }

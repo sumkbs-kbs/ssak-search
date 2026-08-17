@@ -44,6 +44,8 @@ vi.mock('../../src/lib/specialized', () => ({
   arxivSearch: vi.fn().mockResolvedValue([]),
   duckDuckGoInstantAnswer: vi.fn().mockResolvedValue(null),
   detectQueryType: vi.fn().mockReturnValue('general'),
+  isProgrammingIntent: vi.fn().mockReturnValue(false),
+  isCommunityAdviceIntent: vi.fn().mockReturnValue(false),
   getSourcesForQueryType: vi
     .fn()
     .mockReturnValue({ wikipedia: true, github: false, hackernews: true, reddit: false, arxiv: false }),

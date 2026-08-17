@@ -455,6 +455,55 @@ describe('Search Strategies — task composition', () => {
       expect(taskNames(getStrategy('all').buildTasks(ctx))).not.toContain('ddg-site-mdn')
     })
 
+    it('adds the DDG site:reddit community task for English general queries (P24)', () => {
+      // reddit.com is gold in 15/16 English general queries but the reddit
+      // backend's .json endpoint is 403-blocked — DDG site:reddit.com recovers
+      // the gold domain (verified 10/10 live).
+      const ctx = makeCtx({ focus: 'all', queryType: 'general', query: 'how to improve sleep quality' })
+      const names = taskNames(getStrategy('all').buildTasks(ctx))
+      expect(names).toContain('ddg-site-reddit')
+      expect(names).toContain('reddit')
+    })
+
+    it('omits the DDG site:reddit task for Korean/Chinese/Japanese general queries', () => {
+      // The reddit-gold set is English-only; CJK general gold is community
+      // sites (zhihu/mafengwo/yahoo.co.jp) — a site:reddit call would waste a
+      // subrequest on English threads.
+      for (const lang of ['korean', 'chinese', 'japanese'] as const) {
+        const ctx = makeCtx({ focus: 'all', queryType: 'general', query: 'test query', [lang]: true })
+        expect(taskNames(getStrategy('all').buildTasks(ctx))).not.toContain('ddg-site-reddit')
+      }
+    })
+
+    it('omits the DDG site:reddit task when SearXNG is configured (DDG is the fallback)', () => {
+      const ctx = makeCtx({
+        focus: 'all',
+        queryType: 'general',
+        query: 'how to improve sleep quality',
+        env: { SEARXNG_URL: 'http://localhost:8888' } as never,
+      })
+      const names = taskNames(getStrategy('all').buildTasks(ctx))
+      expect(names).toContain('searxng')
+      expect(names).not.toContain('ddg-site-reddit')
+      expect(names).not.toContain('duckduckgo')
+    })
+
+    it('routes programming-intent general queries to the Stack Exchange API (P24)', () => {
+      // adv-11 'what language should i learn first' is general-classified but
+      // carries stackoverflow.com gold — the SE gate must fire for it.
+      const ctx = makeCtx({ focus: 'all', queryType: 'general', query: 'what language should i learn first' })
+      expect(taskNames(getStrategy('all').buildTasks(ctx))).toContain('stack-exchange')
+    })
+
+    it('keeps the Stack Exchange API out of human-language general queries (P24)', () => {
+      // en-general-04 'how to learn a language fast' — duolingo.com gold, NOT
+      // programming intent — must not route to Stack Overflow.
+      const ctx = makeCtx({ focus: 'all', queryType: 'general', query: 'how to learn a language fast' })
+      expect(taskNames(getStrategy('all').buildTasks(ctx))).not.toContain('stack-exchange')
+      // but the DDG site:reddit community task still fires
+      expect(taskNames(getStrategy('all').buildTasks(ctx))).toContain('ddg-site-reddit')
+    })
+
     it('includes duckduckgo when searxng is not configured', () => {
       const ctx = makeCtx({ focus: 'all' })
       const tasks = getStrategy('all').buildTasks(ctx)
@@ -493,6 +542,85 @@ describe('Search Strategies — task composition', () => {
       const names = taskNames(tasks)
       expect(names).toContain('searxng')
       expect(names).not.toContain('duckduckgo')
+    })
+
+    // ── S104 (2026-08-14): zh 여행·커뮤니티 gold site:-라우팅 레버 ──
+    it('adds the DDG site: zh-travel task for zh travel/community queries (S104)', () => {
+      // zh-travel-01 张家界旅游攻略 — gold ctrip/mafengwo/xiaohongshu/trip/qunar
+      // are ABSENT from every run pool (docs/02 §2 전무 진단): bing ignores
+      // site: operators entirely (probe-bing-site.ts 실측), so the lever must
+      // route site: through DuckDuckGo (the engine that honors it, P24).
+      const ctx = makeCtx({ focus: 'all', queryType: 'general', chinese: true, query: '张家界旅游攻略' })
+      const names = taskNames(getStrategy('all').buildTasks(ctx))
+      expect(names).toContain('ddg-site-zh-travel')
+      expect(names).toContain('duckduckgo')
+    })
+
+    it('routes the S104 site: task through SearXNG when SEARXNG_URL is configured', () => {
+      // 실측 (2026-08-14, probe-searxng-zh.ts): SearXNG의 google cse만 site:
+      // 인정 — DDG 대신 SearXNG site: 라우팅 (docs/13 미티게이션, P24의
+      // !searxngConfigured 규칙). bing/baidu는 settings.yml에서 관리.
+      const ctx = makeCtx({
+        focus: 'all',
+        queryType: 'general',
+        chinese: true,
+        query: '张家界旅游攻略',
+        env: { SEARXNG_URL: 'http://localhost:8888' } as never,
+      })
+      const names = taskNames(getStrategy('all').buildTasks(ctx))
+      expect(names).toContain('searxng-site-zh-travel')
+      expect(names).not.toContain('ddg-site-zh-travel')
+      expect(names).not.toContain('duckduckgo')
+    })
+
+    it('covers the 15 zh travel/general eval queries via the intent gate (S104)', async () => {
+      const { isZhTravelCommunityIntent } = await import('../../src/lib/specialized')
+      const goldQueries: Array<[string, string]> = [
+        ['zh-travel-01', '张家界旅游攻略'],
+        ['zh-travel-02', '大理丽江旅游攻略'],
+        ['zh-travel-03', '西藏旅游注意事项'],
+        ['zh-travel-04', '新疆旅游路线'],
+        ['zh-travel-05', '泰国旅游攻略'],
+        ['zh-general-06', '成都美食攻略'],
+        ['zh-general-07', '杭州旅游景点'],
+        ['zh-general-08', '三亚旅游攻略'],
+        ['zh-general-09', '重庆火锅推荐'],
+        ['zh-general-10', '香港购物攻略'],
+        ['zh-general-11', '减肥食谱推荐'],
+        ['zh-general-13', '家用跑步机推荐'],
+        ['zh-general-15', '智能手表推荐'],
+      ]
+      for (const [id, q] of goldQueries) {
+        expect(isZhTravelCommunityIntent(q), `${id} (${q}) should fire`).toBe(true)
+      }
+      // 의도적 미포함: 학습 계획(S26 CSDN 전담) / 리스트 의도
+      expect(isZhTravelCommunityIntent('考研复习计划')).toBe(false)
+      expect(isZhTravelCommunityIntent('手游排行榜 2025')).toBe(false)
+    })
+
+    it('omits the S104 site: task for EN/KR/JA and zh non-travel queries', () => {
+      // EN — reddit/SE 경로가 커뮤니티 gold 담당
+      expect(taskNames(getStrategy('all').buildTasks(makeCtx({ focus: 'all', queryType: 'general', query: 'best travel tips' })))).not.toContain('ddg-site-zh-travel')
+      // KR — naver 경로
+      expect(taskNames(getStrategy('all').buildTasks(makeCtx({ focus: 'all', queryType: 'general', korean: true, query: '제주도 여행 코스' })))).not.toContain('ddg-site-zh-travel')
+      // JA — yahoo.co.jp/japan-guide는 ja 경로
+      expect(taskNames(getStrategy('all').buildTasks(makeCtx({ focus: 'all', queryType: 'general', japanese: true, query: '京都旅行 おすすめ' })))).not.toContain('ddg-site-zh-travel')
+      // zh 학습/리스트 쿼리 — 게이트 미통과
+      expect(taskNames(getStrategy('all').buildTasks(makeCtx({ focus: 'all', queryType: 'general', chinese: true, query: '考研复习计划' })))).not.toContain('ddg-site-zh-travel')
+    })
+
+    it('pickZhTravelCommunityDomain is deterministic and always in the gold set (S104)', async () => {
+      const { pickZhTravelCommunityDomain, ZH_TRAVEL_COMMUNITY_GOLD } = await import('../../src/lib/search/backend-tasks')
+      const queries = ['张家界旅游攻略', '成都美食攻略', '西藏旅游注意事项', '香港购物攻略', '重庆火锅推荐', '减肥食谱推荐']
+      for (const q of queries) {
+        const a = pickZhTravelCommunityDomain(q)
+        const b = pickZhTravelCommunityDomain(q)
+        expect(a).toBe(b) // 결정적
+        expect(ZH_TRAVEL_COMMUNITY_GOLD).toContain(a)
+      }
+      // 쿼리 해시 회전 — 모든 쿼리가 한 도메인을 때리지 않는다
+      const picks = new Set(queries.map(pickZhTravelCommunityDomain))
+      expect(picks.size).toBeGreaterThan(1)
     })
   })
 

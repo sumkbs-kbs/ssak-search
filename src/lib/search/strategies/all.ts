@@ -11,7 +11,12 @@
 import type { SearchStrategy } from './types'
 import type { BackendTask, SearchContext } from '../context'
 import { isChineseQuery, cleanChineseQuery } from '../../orchestrator'
-import { isGithubIssuesIntent } from '../../specialized'
+import {
+  isCommunityAdviceIntent,
+  isGithubIssuesIntent,
+  isProgrammingIntent,
+  isZhTravelCommunityIntent,
+} from '../../specialized'
 import {
   buildBingTask,
   buildBingNewsTask,
@@ -30,6 +35,7 @@ import {
   buildBingNewsRssTask,
   buildGoogleNewsRssTask,
   buildNewsOutletTask,
+  buildZhTravelCommunityTask,
   buildKoreanStockTask,
   buildYahooFinanceTask,
   buildBraveTask,
@@ -40,6 +46,7 @@ import {
 } from '../backend-tasks'
 import { bingSearch } from '../../bing-search'
 import { duckDuckGoSearch } from '../../duckduckgo'
+import { backendTimeoutMs } from '../fanout'
 
 export class AllStrategy implements SearchStrategy {
   readonly focus = 'all' as const
@@ -132,6 +139,16 @@ export class AllStrategy implements SearchStrategy {
         // smaller cap keeps the 10-slot pool from being 5/10 CSDN (review
         // 2026-08-07).
         tasks.push(buildCsdnTask(ctx, 3))
+
+        // S104: zh 여행·커뮤니티 gold site:-라우팅 레버 (2026-08-14).
+        // zh-travel-01~05 + zh-general-06~15의 gold(ctrip/mafengwo/dianping/
+        // xiaohongshu/trip/qunar/zhihu)는 bing이 회수하지 못해 run-3에서 7/15
+        // NDCG 0.000. 진단(scripts/probe-bing-site.ts 실측): bing은 site:
+        // 연산자를 무시하므로, site:를 인정하는 엔진(DDG / SearXNG 설정 시)으로
+        // ONE gold 도메인을 결정적으로 라우팅한다 (S95/P24 부가형 패턴).
+        if (isZhTravelCommunityIntent(ctx.query)) {
+          tasks.push(buildZhTravelCommunityTask(ctx))
+        }
       }
     }
 
@@ -242,6 +259,57 @@ export class AllStrategy implements SearchStrategy {
     // 5. Reddit
     if (ctx.sources.useReddit) {
       tasks.push(buildRedditTask(ctx, 5))
+    }
+
+    // 5a. DDG site:reddit.com community augmentation (P24, 2026-08-14).
+    // reddit.com is gold in 15/16 English general queries but the reddit
+    // backend's .json endpoint is 403-blocked from datacenter IPs and its .rss
+    // fallback rate-limits at ~1/15s (production-only). DDG honors
+    // site:reddit.com (10/10 live — real reddit.com post URLs) where bing
+    // ignores site: operators entirely. Mirrors the S95 news-outlet pattern:
+    // ONE site: call, small maxResults, additive — irrelevant threads are
+    // sorted out by ranking/quality thresholds. Gated by an INTENT gate, not
+    // queryType: detectQueryType scatters the reddit-gold how-to queries
+    // across general/technical/financial/factual ('how to improve sleep
+    // quality' → technical, 'how to invest for beginners' → financial), so a
+    // general-only gate misses most of the set (probe 2026-08-14). English
+    // only (the reddit-gold set is English) and !searxngConfigured (DDG is
+    // the keyless fallback only when SearXNG is absent — same rule as the
+    // main duckduckgo task below).
+    if (
+      isCommunityAdviceIntent(ctx.query) &&
+      !ctx.korean &&
+      !ctx.chinese &&
+      !ctx.japanese &&
+      !searxngConfigured
+    ) {
+      tasks.push({
+        name: 'ddg-site-reddit',
+        run: () =>
+          duckDuckGoSearch(`site:reddit.com ${ctx.query}`, {
+            maxResults: 5,
+            timeoutMs: backendTimeoutMs('ddg-site-reddit', 6000),
+            env: ctx.env,
+          }),
+      })
+    }
+
+    // 5a2. Stack Exchange for programming-intent queries (P24, 2026-08-14).
+    // stackoverflow.com is gold in non-technical-classified queries too
+    // (adv-11 'what language should i learn first' → factual, gold
+    // reddit.com|stackoverflow.com) but the SE gate above is
+    // technical/academic-only, so it never fired there. The intent gate
+    // replaces the old queryType==='general' guard (which missed adv-11
+    // entirely). isProgrammingIntent excludes human-language contexts
+    // (en-general-04 duolingo). English-only, same language rule as the
+    // technical/academic gate.
+    if (
+      !ctx.korean &&
+      !ctx.chinese &&
+      !ctx.japanese &&
+      isProgrammingIntent(ctx.query)
+    ) {
+      tasks.push(buildStackExchangeTask(ctx, 8))
     }
 
     // 5b. arXiv

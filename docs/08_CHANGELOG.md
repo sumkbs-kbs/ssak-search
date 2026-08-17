@@ -1100,6 +1100,18 @@
 - **테스트**: `tests/unit/lib-verify-pace.test.ts` 신규 **5/5** — 낮음 연장(≥300ms)/높음 유지(<300ms)/스테일 복귀/레거시 마이그레이션/비숫자·빈 값 무시 (타이밍 기반, 100/500ms 축소 간격 + 여유 경계 300ms)
 - **검증**: bash -n 3개 OK · tsc 0 · eslint 0 · prettier clean · 전체 unit **143 파일 2,813/2,813 PASS** (중간 flake 는 기지의 동시 부하 bash 스폰 타임아웃 — 단독 전부 통과)
 
+### 수정 105: 전수 curl argv 자격증명 금지 — 5개 스크립트 -K config 전환 + check 12 (2026-08-17)
+- **작업 ID**: FIX-2026-08-17-18 (구현 + 테스트 + 실 repo PASS)
+- **요청**: 워처 외 다른 스크립트(notify-pipeline-failure/verify-secret-set/create-logpush-datadog/verify-env-equivalence/verify-deploy-commit-sync)의 curl argv 토큰/웹훅 노출을 전수 조사해 같은 패턴(-K config)으로 정리
+- **노출 지점 → 전환 내역**:
+  - `notify-pipeline-failure.sh` — ③ 실 웹훅 POST(CI 러너 로그 노출, **P0**) + ① 드라이런 캡처 URL → `-K` config (mktemp + chmod 600 + rm -f, `npf-curl.XXXXXX`)
+  - `verify-secret-set.sh` — GitHub secrets API 조회 2곳 → `github_api_get()` 헬퍼 (워처 `gh_curl_cfg` 동일 패턴, repo-scope PAT config 주입)
+  - `create-logpush-datadog.sh` — Logpush 목록 조회 + 생성 POST 2곳 (CF 토큰 config 주입)
+  - `verify-env-equivalence.sh` / `verify-deploy-commit-sync.sh` — 웹훅 POST → `-K` config (`veq-curl`/`vdcs-curl.XXXXXX`)
+- **회귀 게이트 — check 12 (verify-deploy-workflow.ts)**: ① curl argv `Authorization: Bearer ${VAR}` 금지 ② curl argv `"$WEBHOOK"/"$SLACK_WEBHOOK"` 금지 ③ 자격증명 변수 사용 시 `-K "` 필수 — 대상 5파일 전수, 파일 부재 시 생략
+- **테스트**: verify-deploy-workflow 68/68 (+8: check 12 PASS 2 + FAIL 6) · notify-pipeline-failure 7/7 (fake curl 이 -K config url= 추출 로그 — 수정 77/102 패턴) · verify-secret-set 8/8 · verify-deploy-commit-sync 5/5 · 전체 unit 2,839/2,839 · tsc 0 · eslint 0 · prettier clean · bash -n 5/5 · self-test 7/7
+- **실 repo 실측**: `verify-deploy-workflow.ts .` → PASS (credential-sweep 포함) · 잔존 argv 노출 스윕 5파일 0건 (echo/printf config 지시어 라인은 오탐 제외)
+
 ### 수정 104: CI per-commit replay 범위 계산 — force-push(비-조상 before) 견고화 (2026-08-17)
 - **요청**: 고정 체인 force-push(4fa42f4) 후 CI per-commit gate replay 가 `fatal: Invalid revision range 51ae1a6..4fa42f4` 로 실패 — 원인 진단 및 해결
 - **근본 원인**: ci.yml 의 "Resolve commit range" 스텝이 `github.event.before` 를 그대로 BASE 로 사용. force-push 로 브랜치가 재작성되면 **before(구 헤드)는 새 HEAD 의 조상이 아니다** → `git rev-list --count "before..HEAD"` 가 fatal(exit 128) → replay 잡 전체 실패. 첫 push(빈/zeros before)만 처리하고 비-조상 before 는 미처리

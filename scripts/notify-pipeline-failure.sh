@@ -49,7 +49,19 @@ if [ "${1:-}" = "--self-test" ]; then
   cat > "$FAKE_BIN/curl" <<'FAKEEOF'
 #!/usr/bin/env bash
 # 셀프테스트용 가짜 curl — 호출을 로그에 남기고 성공(exit 0) 처리.
+# -K config 파일이 argv 에 있으면 url= 지시어를 로그에 함께 기록한다 (수정 105:
+# URL 이 config 로 이동해도 단언이 주입 대상을 검증할 수 있게 — 수정 77 패턴).
 echo "curl $*" >> "${FAKE_CURL_LOG:?}"
+i=0
+for a in "$@"; do
+  i=$((i+1))
+  case "$a" in
+    -K)
+      cfg="${@:$((i+1)):1}"
+      [ -n "$cfg" ] && [ -f "$cfg" ] && grep -E '^url = ' "$cfg" >> "${FAKE_CURL_LOG:?}" || true
+      ;;
+  esac
+done
 exit 0
 FAKEEOF
   chmod +x "$FAKE_BIN/curl"
@@ -222,10 +234,17 @@ if [ "${SLACK_DRY_RUN:-0}" = "1" ]; then
   TARGET="${SLACK_DRY_RUN_URL:-http://127.0.0.1:18080/}"
   echo "ℹ️ DRY-RUN: 로컬 캡처 서버로 POST — $TARGET (웹훅 미사용, 페이로드 검증용)"
   echo "   페이로드: $PAYLOAD"
-  if curl -sf -m 10 -X POST -H 'Content-Type: application/json' -d "$PAYLOAD" "$TARGET"; then
+  # URL 은 argv 에 두지 않고 curl config(-K) 로 주입 — 드라이런이어도 동일 원칙
+  # (수정 105 — check 12 전수 규칙, verify-slack-alert-e2e CURL_CFG 패턴).
+  CURL_CFG="$(mktemp "${TMPDIR:-/tmp}/npf-curl.XXXXXX")"
+  chmod 600 "$CURL_CFG"
+  printf 'url = "%s"\n' "$TARGET" > "$CURL_CFG"
+  if curl -sf -m 10 -X POST -H 'Content-Type: application/json' -d "$PAYLOAD" -K "$CURL_CFG"; then
+    rm -f "$CURL_CFG"
     echo "✅ DRY-RUN 알림 전송됨 (캡처 서버) — 페이로드 검증 완료"
     exit 0
   fi
+  rm -f "$CURL_CFG"
   echo "⚠️ DRY-RUN 캡처 서버 응답 없음 — 아래 명령으로 캡처 서버를 띄운 뒤 재실행하세요:" >&2
   echo "   python3 scripts/capture-webhook.py --port 18080" >&2
   exit 1
@@ -238,9 +257,15 @@ if [ -z "${SLACK_WEBHOOK:-}" ]; then
 fi
 
 # ── ③ 실 웹훅 POST ─────────────────────────────────────────────────────────
-if curl -sf -m 10 -X POST -H 'Content-Type: application/json' -d "$PAYLOAD" "$SLACK_WEBHOOK"; then
+# 웹훅 URL 은 Slack 자격증명 — curl argv 에 두면 ps/bash -x 로그에 그대로
+# 노출된다. curl config(-K, chmod 600, 사용 후 rm -f) 로 주입한다 (수정 105).
+CURL_CFG="$(mktemp "${TMPDIR:-/tmp}/npf-curl.XXXXXX")"
+chmod 600 "$CURL_CFG"
+printf 'url = "%s"\n' "$SLACK_WEBHOOK" > "$CURL_CFG"
+if curl -sf -m 10 -X POST -H 'Content-Type: application/json' -d "$PAYLOAD" -K "$CURL_CFG"; then
   echo "✅ Slack 알림 전송됨 (danger)"
 else
   echo "⚠️ Slack 알림 전송 실패 — 로그로만 남깁니다" >&2
 fi
+rm -f "$CURL_CFG"
 exit 0

@@ -44,7 +44,26 @@ function runNotify(env: Record<string, string>): RunResult {
   const logSh = log.replace(/\\/g, '/')
 
   // 가짜 curl — 호출을 로그로 남기고 성공(exit 0) 처리. 네트워크 없음.
-  const fakeCurl = ['#!/usr/bin/env bash', `echo "curl $*" >> ${JSON.stringify(logSh)}`, 'exit 0', ''].join('\n')
+  // 가짜 curl — 호출을 로그에 남기고 성공(exit 0) 처리. 네트워크 없음.
+  // -K config 파일이 argv 에 있으면 url= 지시어를 로그에 함께 기록한다 (수정
+  // 105: URL 이 config 로 이동해도 단언이 주입 대상을 검증할 수 있게 — 수정 77
+  // 패턴, watch-secret-rotation.test.ts 와 동일).
+  const fakeCurl = [
+    '#!/usr/bin/env bash',
+    `echo "curl $*" >> ${JSON.stringify(logSh)}`,
+    'i=0',
+    'for a in "$@"; do',
+    '  i=$((i+1))',
+    '  case "$a" in',
+    '    -K)',
+    '      cfg="${@:$((i+1)):1}"',
+    '      [ -n "$cfg" ] && [ -f "$cfg" ] && grep -E \'^url = \' "$cfg" >> ' + JSON.stringify(logSh) + ' || true',
+    '      ;;',
+    '  esac',
+    'done',
+    'exit 0',
+    '',
+  ].join('\n')
   writeFileSync(join(bin, 'curl'), fakeCurl)
   chmodSync(join(bin, 'curl'), 0o755)
 

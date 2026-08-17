@@ -1100,6 +1100,15 @@
 - **테스트**: `tests/unit/lib-verify-pace.test.ts` 신규 **5/5** — 낮음 연장(≥300ms)/높음 유지(<300ms)/스테일 복귀/레거시 마이그레이션/비숫자·빈 값 무시 (타이밍 기반, 100/500ms 축소 간격 + 여유 경계 300ms)
 - **검증**: bash -n 3개 OK · tsc 0 · eslint 0 · prettier clean · 전체 unit **143 파일 2,813/2,813 PASS** (중간 flake 는 기지의 동시 부하 bash 스폰 타임아웃 — 단독 전부 통과)
 
+### 수정 107: -K config 수명주기 회귀 게이트 — chmod 600 + rm -f 필수 (check 11 ③) (2026-08-17)
+- **작업 ID**: FIX-2026-08-17-21 (실측 + 게이트 + 테스트)
+- **배경**: verify-env-equivalence.sh 실패 경로에서 -K config 가 600 권한으로 생성되고 rm -f 로 정리되는지(잔존 0건)를 캡처 서버 실측으로 확인 → 이를 check 11(전수 sweep)의 ③ 수명주기 규칙으로 고정
+- **실측**: verify-env-equivalence.sh 실패 유도(캡처 서버) — config 600 생성 확인 + 실행 후 잔존 0건 + 945B danger 페이로드 수신 · argv URL 0회
+- **전수 확인**: 10개 -K 사용 .sh 전부 chmod 600 + rm -f 보유 (오탐 0)
+- **check 11 ③ 추가**: -K config 사용 스크립트에 `chmod 600` + `rm -f` 필수 (누락 시 FAIL) — ① argv Authorization 금지 · ② argv 웹훅 URL 금지 · ③ -K config 수명주기(600 생성 + 정리)
+- **산출물**: `scripts/verify-deploy-workflow.ts`(③ 추가) · `tests/unit/verify-deploy-workflow.test.ts`(FAIL 케이스 2건: chmod 누락 / rm 누락)
+- **검증**: workflow 유닛 71/71 (③ FAIL 2건 포함) · tsc 0 · eslint 0 · prettier clean · 실 repo verify PASS (script-credential-sweep)
+
 ### 수정 106: set-slack-webhook.sh — ALERT_SLACK_WEBHOOK 실 URL 교체 + 반영 검증 스크립트 (2026-08-17)
 - **작업 ID**: FIX-2026-08-17-20 (구현 + 테스트)
 - **배경**: 웹훅 URL 없이 가능한 마지막 검증으로 임의 테스트 값을 ALERT_SLACK_WEBHOOK 에 설정 → [14] Notify 가 `SLACK_WEBHOOK: ***`(env 해석) + `✅ Slack 알림 전송됨 (danger)` + argv/로그 URL 0회 를 신선 run(run 32015278011)으로 확인. 남은 실 Slack 수락(200+{"ok":true})은 실 URL 로만 가능 — **교체 절차를 스크립트로 정식화**

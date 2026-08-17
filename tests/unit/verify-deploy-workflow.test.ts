@@ -972,5 +972,19 @@ ${STAGING_PAGES_DEPLOY}${BUNDLE_VERIFY_STEP}      - name: Deploy probe-scheduler
       expectStatus(outcome, 'FAIL')
       expect(outcome.detail).toContain('extra-sweep.sh: 웹훅 URL 이 curl argv')
     })
+
+    it('FAILs when -K config 를 쓰는데 chmod 600 이 없다 (임시 파일 권한 노출, 수정 107)', () => {
+      const noChmod = GOOD_NOTIFY.replace(/chmod 600 "\$CURL_CFG"\n/, '')
+      const outcome = verifyDeployWorkflow(writeRepo({ ...allGood, notify: noChmod }))
+      expectStatus(outcome, 'FAIL')
+      expect(outcome.detail).toContain('chmod 600 이 없다')
+    })
+
+    it('FAILs when -K config 를 쓰는데 rm -f 정리가 없다 (임시 파일 잔존, 수정 107)', () => {
+      const noRm = GOOD_NOTIFY.replace(/rm -f "\$CURL_CFG"\n/, '')
+      const outcome = verifyDeployWorkflow(writeRepo({ ...allGood, notify: noRm }))
+      expectStatus(outcome, 'FAIL')
+      expect(outcome.detail).toContain('rm -f 정리가 없다')
+    })
   })
 })

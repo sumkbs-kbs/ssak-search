@@ -508,6 +508,19 @@ export function verifyDeployWorkflow(repoDir: string): GateOutcome {
     if (webhookLeak) {
       findings.push(`scripts/${f}: 웹훅 URL 이 curl argv 에 노출된다 — -K config 로 주입해야 한다 (수정 105)`)
     }
+    // ③ curl config 수명주기 — -K config 를 쓰는 스크립트는 반드시 chmod 600
+    // 생성 + rm -f 정리 (수정 107 실측: POST 시점 600, 잔존 0건). 자격증명·URL
+    // 이 담긴 임시 파일이 열린 권한으로 남으면 누출 경로가 된다.
+    if (/-K "/.test(cs)) {
+      if (!cs.includes('chmod 600')) {
+        findings.push(
+          `scripts/${f}: curl config(-K) 를 쓰는데 chmod 600 이 없다 — 토큰/웹훅 URL 이 담긴 임시 파일 권한이 열려 있다 (수정 107)`,
+        )
+      }
+      if (!cs.includes('rm -f')) {
+        findings.push(`scripts/${f}: curl config(-K) 를 쓰는데 rm -f 정리가 없다 — 자격증명 임시 파일 잔존 (수정 107)`)
+      }
+    }
   }
   // watcher 공용 헬퍼 유지 (수정 102) — GitHub 호출이 argv -H 로 되돌아가지
   // 않도록 전수 스윕(①) 위에 별도 구조적 요구로 남긴다.

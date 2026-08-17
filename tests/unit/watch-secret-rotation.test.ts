@@ -444,6 +444,42 @@ describe.skipIf(!BASH_AVAILABLE)(
       expect(state.baseline_updated_at).toBe('2026-08-14T12:00:00Z')
     })
 
+    it('수정 95: 회전 이벤트에 감지→디스패치 지연(ms) 마커 + 상태에 detected_at/latency 기록', () => {
+      const first = runWatch(SECRETS_A) // 베이스라인
+      const r = runWatch(SECRETS_B, { ROTATION_STATE: first.stateFile }, [], 'cf_valid_token')
+      expect(r.exit).toBe(0)
+      expect(r.out).toContain('[ROTATION]')
+      // 지연 마커 — 감지 시각(t0)~디스패치 ack(HTTP 204 + run id) 간격 (ms)
+      expect(r.out).toMatch(/감지→디스패치 \d+ms/)
+      expect(r.out).toContain('HTTP 204')
+      const state = JSON.parse(readFileSync(r.stateFile, 'utf8'))
+      // 시각: 회전 감지 시점 ISO (상태 파일 영구 기록)
+      expect(state.last_rotation_detected_at).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/)
+      // 지연: 0 이상 정수 (디스패치 ack 포함 — run id 캡처 대기 포함)
+      expect(typeof state.last_rotation_latency_ms).toBe('number')
+      expect(state.last_rotation_latency_ms).toBeGreaterThanOrEqual(0)
+    })
+
+    it('수정 95: CF 하드 보류도 감지→판정 지연을 기록한다', () => {
+      const first = runWatch(SECRETS_A)
+      const r = runWatch(
+        SECRETS_B,
+        {
+          ROTATION_STATE: first.stateFile,
+          FAKE_CF_BODY: JSON.stringify({ success: false, errors: [{ code: 1000 }] }),
+        },
+        [],
+        'cf_invalid_token',
+      )
+      expect(r.exit).toBe(0)
+      expect(r.out).toContain('[DISPATCH-BLOCKED]')
+      expect(r.out).toMatch(/감지→판정 \d+ms/)
+      const state = JSON.parse(readFileSync(r.stateFile, 'utf8'))
+      expect(typeof state.last_rotation_latency_ms).toBe('number')
+      // baseline 유지 (재검증 대상) — 수정 94 동작 불변
+      expect(state.baseline_updated_at).toBe('2026-08-12T08:45:24Z')
+    })
+
     it('수정 87: 디스패치 실패 시 다음 폴링에서 재시도해 성공 (연속 watch 체인)', () => {
       // 첫 디스패치(1번째)는 500 실패 → baseline 유지 → 다음 폴링 재시도(2번째) 204
       // 성공. 총 2회 POST, 최종 baseline=B.

@@ -16,6 +16,11 @@
 # 디스패치 후 guard(verify-do-binding.sh, 수정 28/46)가 새 토큰 유효성과 만료
 # 임박을 검증한다 — 워처는 발사까지만 담당하고 검증은 CI 에 위임한다.
 #
+# 수정 95: 교체 감지 시각·지연도 로그에 남긴다 — 회전 이벤트에 직전 폴링과의
+# 간격(회전 발생 시점의 상한 추정) 을, 디스패치 결과 이벤트에 감지→디스패치 ack
+# 간격(밀리초) 을 기록하고 상태 파일에 last_rotation_detected_at /
+# last_rotation_latency_ms 로 저장한다 (watch 모드 회전~디스패치 간격 측정용).
+#
 # 상태 파일에 이력을 저장해 중단 후 재실행이 이어붙는다:
 #   ROTATION_STATE (기본 ${XDG_STATE_HOME:-$HOME/.local/state}/ssak-search/
 #                   gh-secret-rotation-state.json — 홈 영구 경로, 수정 86)
@@ -99,6 +104,8 @@ if [ "$TARGET_ENV" = "production" ] && [ "${ALLOW_PRODUCTION:-0}" != "1" ]; then
 fi
 
 now_iso() { date -u '+%Y-%m-%dT%H:%M:%SZ'; }
+# 수정 95 — 밀리초 시각 (감지→디스패치 지연 측정용)
+now_epoch_ms() { python3 -c 'import time; print(int(time.time()*1000))' 2>/dev/null || echo 0; }
 
 # ── GitHub PAT 해결 ────────────────────────────────────────────────────────
 resolve_pat() {
@@ -308,12 +315,36 @@ except Exception: print('')
 " 2>/dev/null)"
 
   local events="" dispatch_failed=0
+  # 수정 95 — 회전 감지 시각·지연 (분기 밖 선언 — set -u 안전)
+  local rot_iso="" lat_ms=""
   if [ -z "$baseline" ]; then
     events="[BASELINE] 첫 관찰 — ${SECRET_NAME} updated_at=${cur_ts:-없음}"
     baseline="$cur_ts"  # 반드시 저장 — 안 하면 매 실행이 '첫 실행'으로 오탐해 교체 감지가 영원히 안 됨
   elif [ "$cur_ts" != "$baseline" ]; then
     local old_baseline="$baseline"
-    events="[ROTATION] ${SECRET_NAME} updated_at ${baseline:-없음} → ${cur_ts}"
+    # 수정 95 — 감지 시각(밀리초·ISO) + 직전 폴링과의 간격(회전이 실제로 일어난
+    # 시점의 상한 추정: 이전 폴링과 지금 사이 어느 순간에 교체됐을 것이다)
+    local rot_ms rot_gap last_poll_at gap_s
+    rot_ms="$(now_epoch_ms)"
+    rot_iso="$(now_iso)"
+    last_poll_at="$(printf '%s' "$prev" | python3 -c "
+import json, sys
+try: print(json.load(sys.stdin).get('lastPollAt') or '')
+except Exception: print('')
+" 2>/dev/null)"
+    rot_gap=""
+    if [ -n "$last_poll_at" ]; then
+      gap_s=$(( $(date +%s) - $(printf '%s' "$last_poll_at" | python3 -c "
+import sys, datetime
+try:
+    s = sys.stdin.read().strip().replace('Z', '+00:00')
+    print(int(datetime.datetime.fromisoformat(s).timestamp()))
+except Exception:
+    print(0)
+") ))
+      [ "$gap_s" -gt 0 ] && rot_gap=" (이전 폴링 ${gap_s}s 후 감지)"
+    fi
+    events="[ROTATION] ${SECRET_NAME} updated_at ${baseline:-없음} → ${cur_ts}${rot_gap}"
 
     # 수정 94 — 이중 검증: updated_at 회전 신호에 더해 새 토큰 값 자체를
     # Cloudflare /user/tokens/verify 로 확인한다. CF_TOKEN_FILE 미설정이면
@@ -337,22 +368,26 @@ except Exception: print('')
     if [ "$AUTO_DISPATCH" = "1" ] && { [ "$cf_verdict" != "FAIL" ] || [ "$CF_VERIFY_HARD" != "1" ]; }; then
       local dr
       dr="$(dispatch_deploy "$repo" "$token")"
+      # 수정 95 — 감지→디스패치 ack(HTTP 204 + run id 캡처) 간격 (ms)
+      lat_ms=$(( $(now_epoch_ms) - rot_ms ))
       dispatch_result="${dr%%|*}"
       run_id="${dr#*|}"
       if [ "$dispatch_result" = "OK" ]; then
         dispatch_result="HTTP 204 (accepted)"
         baseline="$cur_ts"  # 성공 — 다음 폴링은 no-op (중복 재디스패치 방지)
-        events="${events}\n[DISPATCH] deploy.yml environment=${TARGET_ENV} ref=${DISPATCH_REF} → ${dispatch_result} run=${run_id:-?}"
+        events="${events}\n[DISPATCH] deploy.yml environment=${TARGET_ENV} ref=${DISPATCH_REF} → ${dispatch_result} run=${run_id:-?} (감지→디스패치 ${lat_ms}ms)"
       else
         # 실패 — baseline 을 옛 값으로 유지해 다음 폴링에서 재시도한다
         dispatch_failed=1
-        events="${events}\n[DISPATCH-FAILED] deploy.yml environment=${TARGET_ENV} ref=${DISPATCH_REF} → ${dispatch_result} (다음 폴링에서 재시도)"
+        events="${events}\n[DISPATCH-FAILED] deploy.yml environment=${TARGET_ENV} ref=${DISPATCH_REF} → ${dispatch_result} (다음 폴링에서 재시도) (감지→${lat_ms}ms)"
       fi
     elif [ "$AUTO_DISPATCH" = "1" ] && [ "$cf_verdict" = "FAIL" ]; then
       # 수정 94 — CF 검증 하드 실패: baseline 을 옛 값으로 유지해 다음 폴링에서
       # 토큰 파일이 고쳐지면 재검증 → 자동 디스패치 (차단 중엔 재디스패치 없음)
+      # 수정 95 — 감지→CF 판정(차단 결정) 간격도 기록
+      lat_ms=$(( $(now_epoch_ms) - rot_ms ))
       dispatch_result="BLOCKED(cf-verify)"
-      events="${events}\n[DISPATCH-BLOCKED] 새 토큰 무효 — 디스패치 안 함 (다음 폴링에서 재검증)"
+      events="${events}\n[DISPATCH-BLOCKED] 새 토큰 무효 — 디스패치 안 함 (다음 폴링에서 재검증) (감지→판정 ${lat_ms}ms)"
     else
       baseline="$cur_ts"  # dry-run 도 handled 로 간주 — 재폴링마다 감지 반복 방지
       events="${events}\n[DISPATCH-SKIPPED] AUTO_DISPATCH=0 (--dry-run) — 디스패치 안 함"
@@ -377,13 +412,18 @@ except Exception:
   # 상태 갱신
   local new_state
   new_state="$(ROT_PREV="$prev" ROT_TS="$ts" ROT_BASE="$baseline" ROT_CUR="$cur_ts" \
-    ROT_EVENTS="$events" python3 <<'PYEOF'
+    ROT_EVENTS="$events" ROT_DETECTED_AT="$rot_iso" ROT_LAT_MS="$lat_ms" python3 <<'PYEOF'
 import json, os
 prev = json.loads(os.environ.get('ROT_PREV', '{}'))
 state = dict(prev)
 state['lastPollAt'] = os.environ['ROT_TS']
 state['baseline_updated_at'] = os.environ['ROT_BASE']
 state['last_seen_updated_at'] = os.environ['ROT_CUR']
+# 수정 95 — 회전 감지 시각 + 감지→디스패치/판정 지연(ms) 저장
+if os.environ.get('ROT_DETECTED_AT'):
+    state['last_rotation_detected_at'] = os.environ['ROT_DETECTED_AT']
+if os.environ.get('ROT_LAT_MS', '') != '':
+    state['last_rotation_latency_ms'] = int(os.environ['ROT_LAT_MS'])
 ev = state.setdefault('events', [])
 t = os.environ.get('ROT_EVENTS', '')
 for line in [x for x in t.split('\\n') if x]:

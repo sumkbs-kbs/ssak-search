@@ -996,6 +996,36 @@
 - **실측에서 잡은 버그**: `gitStatusPorcelain` 이 매칭 라인의 첫 글자(`l[0]`)만 반환해 dirty 판정(`trim !== ''`) 이 **항상 clean** 이었음 — 라인 전체 반환으로 수정. 시뮬레이션에서 DANGER 가 잡히지 않는 것으로 발견
 - **검증**: 유닛 **18건** (분류 6 + eval.yml 구조 가드 + preflight ④) · tsc 0 · eslint 0 · prettier clean · 전체 unit **141 파일 전부 PASS** · **worktree 시뮬레이션 3경로 실측**: d33ce3b 패턴(baseline 단독 수정) → `❌ DANGER exit=1` · 함께 커밋(baseline+run 동시) → `ℹ️ SYNC_PENDING exit=0` · run-only → `⚠️ WARN exit=0`
 
+### 수정 84: guard(verify-do-binding.sh) 토큰 누수 방지 — check 9 동일 라인 단위 검사를 전체 스크립트로 확장 (2026-08-16)
+- **작업 ID**: FIX-2026-08-16-06 (구현 + 테스트 + 실측)
+- **요청**: verify-do-binding.sh 에도 토큰이 argv 에 노출되지 않는지 동일한 라인 단위 검사(check 9 rollback-token-hygiene) 를 적용해 토큰 누수 방지를 전체 스크립트로 확장
+- **실측 발견**: `verify_cf_token()` 이 `/user/tokens/verify` 호출을 `curl -H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}"` 로 해 **토큰을 curl argv 에 노출** — check 9 가 rollback_pages 에서 금지한 정확히 같은 패턴 (ps 프로세스 목록 / bash -x 로그 누수) 이 guard 쪽에 잔존
+- **구현**:
+  - `scripts/verify-do-binding.sh` — `verify_cf_token()` 을 curl config 주입(`mktemp` → `chmod 600` → `printf 'url = …\nheader = "Authorization: Bearer %s"…'` → `curl -K "$curl_cfg"` → `rm -f`) 로 전환 (rollback_pages 와 동일 패턴). argv 에 토큰·URL 부재, config 는 600 + 사용 후 정리
+  - `scripts/verify-deploy-workflow.ts` — **check 10 (guard-token-hygiene)** 추가: verify_cf_token() 이 있는 guard 에 대해 ① argv Bearer 주입 금지(라인 단위, 주석 제외 — check 9 오탐 교훈) ② `-K "$curl_cfg"` 사용 ③ config `chmod 600` ④ `rm -f` 정리를 단언. verify_cf_token 이 없는 구 guard 는 생략 (나머지 체크 진행)
+- **테스트**: `tests/unit/verify-deploy-workflow.test.ts` +6 → **48/48** — GOOD_GUARD_TOK 픽스처(PASS) · 구 guard(SKIP 경로) · argv 누수/-K 부재/chmod 누락/rm 누락 각 FAIL
+- **실측**: 실 repo `verify-deploy-workflow PASS (…/ rollback-token-hygiene / **guard-token-hygiene**)` · dummy 토큰으로 guard 실행 → `❌ INVALID/EXPIRED (verify HTTP 400) — exit 1` (config 주입 + 본문 캡처 + 판정 정상)
+- **검증**: tsc 0 · eslint 0 · prettier clean(TS) · bash -n OK · 전체 unit **141 파일 전부 PASS**
+
+### 수정 85: rollback_pages 토큰 우선순위(CLOUDFLARE_API_TOKEN 우선 → OAuth 폴백) 회귀 체크 추가 (2026-08-16)
+- **작업 ID**: FIX-2026-08-16-07 (구현 + 테스트)
+- **요청**: rollback_pages 가 CLOUDFLARE_API_TOKEN 우선 → OAuth 폴백으로 읽는 토큰 우선순위까지 회귀 체크에 추가
+- **구현**: `scripts/verify-deploy-workflow.ts` check 9 에 **⑥ 토큰 우선순위** 서브체크 추가 — 라인 순서로 단언: ① env read(`token=.*CLOUDFLARE_API_TOKEN` — `local token=…` 본문형 + `&& token=…` 역전형 모두 포착) ② empty gate(`[ -z "$token" ]`) ③ OAuth 폴백(`token="$(read_wrangler_oauth_token)"`) 이 **순서대로** 있어야 한다. env read 누락(우선 읽기 상실) / 폴백·gate 누락(로컬 OAuth 경로 상실) / 순서 역전(OAuth 가 CI 토큰을 가림) 각각 FAIL
+- **테스트**: +4 → **52/52** — 정상 순서 PASS · 역전(swap) FAIL(우선순위) · 폴백 제거 FAIL · env read 제거 FAIL. (역전 케이스에서 env read 가 "local" 접두사 없이 `&& token=` 형태로 남는 문제를 발견해 정규식 완화)
+- **검증**: tsc 0 · eslint 0 · prettier clean · 전체 unit **141 파일 전부 PASS** · 실 repo `verify-deploy-workflow PASS (… guard-token-hygiene)`
+
+### 수정 86: watch-secret-rotation.sh 상태 파일을 홈 영구 경로로 이동 + legacy 자동 마이그레이션 (2026-08-17)
+- **작업 ID**: FIX-2026-08-17-01 (구현 + 테스트 + 실측)
+- **요청**: 상태 파일이 /tmp 에 있어 재부팅 시 손실되는 문제를 홈 영구 경로로 옮기고, --reset 없이 재개 가능하게
+- **구현** (`scripts/watch-secret-rotation.sh`):
+  - 기본 경로: `/tmp/gh-secret-rotation-state.json` → **`${XDG_STATE_HOME:-$HOME/.local/state}/ssak-search/gh-secret-rotation-state.json`** (XDG state 관례, Git Bash/Windows 에서도 $HOME 기반으로 동작)
+  - **`migrate_state()`** — 새 경로에 상태가 없고 legacy(/tmp) 가 있으면 첫 실행 시 자동 복사 → baseline/이력 보존으로 **--reset 없이 재개** (재부팅 후에도 이어받기)
+  - `--reset` 은 새 경로 **+ legacy 양쪽** 제거 (재마이그레이션 방지) · `save_state` 는 디렉터리 자동 생성
+  - `ROTATION_STATE_LEGACY` env 로 legacy 경로 오버라이드 가능 (테스트용)
+- **테스트**: +3 → **10/10** — 마이그레이션(baseline·이력 보존, [BASELINE] 재기록 없음) · reset(양쪽 제거 + 새 베이스라인 시작) · 새 경로 기존 상태 시 legacy 무시. **환경 오염 발견**: 실제 머신의 /tmp legacy 파일이 테스트에 마이그레이션되어 첫 실행 테스트가 깨지는 문제 → baseEnv 가 legacy 경로를 항상 존재하지 않는 임시 경로로 격리
+- **실측**: 라이브 실행 — `/tmp/gh-secret-rotation-state.json → /Users/mr.k/.local/state/ssak-search/gh-secret-rotation-state.json` 마이그레이션 성공 · baseline 2026-08-12 + 이력 1건 보존 · 폴링 재개(no-op) 확인
+- **검증**: tsc 0 · eslint 0 · prettier clean · 전체 unit **141 파일 전부 PASS** (1회차 workerd 동시 부하 기동 실패 5건은 재실행 시 141 전부 통과 — 일시적 환경 이슈)
+
 ### 수정 80: watch-secret-rotation.sh watch 모드 top-level `local` 버그 수정 (2026-08-16)
 - **작업 ID**: FIX-2026-08-16-01 (발견 + 수정 + 검증)
 - **요청**: docs/17 절차대로 시크릿 교체가 끝나면 watch-secret-rotation.sh 로 updated_at 변경 감지 → staging 디스패치 자동 발사 → run 모니터링까지 이어가는 체계 구동

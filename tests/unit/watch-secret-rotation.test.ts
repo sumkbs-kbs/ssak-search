@@ -44,7 +44,7 @@ interface RunResult {
   stateFile: string
 }
 
-function runWatch(secretsBody: string, extraEnv: Record<string, string> = {}): RunResult {
+function runWatch(secretsBody: string, extraEnv: Record<string, string> = {}, args: string[] = []): RunResult {
   const dir = mkdtempSync(join(tmpdir(), 'rot-watch-'))
   const bin = join(dir, 'bin')
   mkdirSync(bin, { recursive: true })
@@ -96,9 +96,12 @@ function runWatch(secretsBody: string, extraEnv: Record<string, string> = {}): R
     FAKE_SECRETS_BODY: secretsBody,
     FAKE_RUNS_BODY: RUNS_BODY,
     ROTATION_STATE: stateFile,
+    // 수정 86: 실제 머신의 /tmp legacy 상태 파일이 테스트에 마이그레이션되지 않도록
+    // legacy 경로를 항상 존재하지 않는 임시 경로로 격리 (마이그레이션 테스트만 오버라이드).
+    ROTATION_STATE_LEGACY: join(dir, 'legacy-absent.json'),
     DISPATCH_RUN_SLEEP: '0',
   }
-  const res = spawnSync('bash', [SCRIPT], {
+  const res = spawnSync('bash', [SCRIPT, ...args], {
     encoding: 'utf8',
     maxBuffer: 10 * 1024 * 1024,
     env: { ...baseEnv, ...extraEnv },
@@ -204,6 +207,69 @@ describe.skipIf(!BASH_AVAILABLE)(
       expect(retry.out).toContain('[ROTATION]')
       expect(retry.out).toContain('HTTP 204')
       expect(dispatchPosts(retry.log)).toBe(1)
+    })
+
+    it('수정 86: legacy(/tmp) 상태 파일을 새 영구 경로로 마이그레이션해 --reset 없이 재개한다', () => {
+      // /tmp 기본값 시절(수정 47~85)에 기록된 상태 — 재부팅 후 /tmp 는 그대로 남아
+      // 있고 새 영구 경로는 아직 없는 시나리오. baseline+이력이 보존돼야 재개다.
+      const dir = mkdtempSync(join(tmpdir(), 'rot-mig-'))
+      const legacy = join(dir, 'legacy-state.json')
+      writeFileSync(
+        legacy,
+        JSON.stringify({
+          lastPollAt: '2026-08-16T02:01:59Z',
+          baseline_updated_at: '2026-08-12T08:45:24Z',
+          last_seen_updated_at: '2026-08-12T08:45:24Z',
+          events: [
+            {
+              at: '2026-08-16T01:52:33Z',
+              detail: '[BASELINE] 첫 관찰 — CLOUDFLARE_API_TOKEN updated_at=2026-08-12T08:45:24Z',
+            },
+          ],
+        }),
+        'utf-8',
+      )
+      const newPath = join(dir, 'state', 'gh-secret-rotation-state.json')
+      const r = runWatch(SECRETS_A, { ROTATION_STATE: newPath, ROTATION_STATE_LEGACY: legacy })
+      expect(r.exit).toBe(0)
+      expect(r.out).toContain('마이그레이션')
+      // baseline 이 보존됐으므로 재개(no-op 폴링) — [BASELINE] 재기록 없음
+      expect(r.out).not.toContain('[BASELINE]')
+      const state = JSON.parse(readFileSync(newPath, 'utf8'))
+      expect(state.baseline_updated_at).toBe('2026-08-12T08:45:24Z')
+      expect(state.events.length).toBe(1) // 이력 보존
+    })
+
+    it('수정 86: --reset 은 새 경로와 legacy 경로를 모두 제거하고 새 베이스라인으로 시작한다', () => {
+      const dir = mkdtempSync(join(tmpdir(), 'rot-reset-'))
+      const legacy = join(dir, 'legacy.json')
+      const newPath = join(dir, 'state.json')
+      writeFileSync(legacy, JSON.stringify({ baseline_updated_at: '2026-08-12T08:45:24Z' }), 'utf-8')
+      writeFileSync(newPath, '{}', 'utf-8')
+      const r = runWatch(SECRETS_A, { ROTATION_STATE: newPath, ROTATION_STATE_LEGACY: legacy }, ['--reset'])
+      expect(r.exit).toBe(0)
+      expect(r.out).toContain('초기화')
+      // legacy 는 제거된 채로 남는다 (마이그레이션은 복사 방향만 — 재생성 없음)
+      expect(existsSync(legacy)).toBe(false)
+      // 새 경로는 reset 후 폴링이 [BASELINE] 으로 새로 기록한다 (legacy 이월 없음)
+      expect(r.out).toContain('[BASELINE]')
+      expect(existsSync(newPath)).toBe(true)
+      const state = JSON.parse(readFileSync(newPath, 'utf8'))
+      expect(state.baseline_updated_at).toBe('2026-08-12T08:45:24Z')
+    })
+
+    it('수정 86: 새 영구 경로에 이미 상태가 있으면 legacy 를 건드리지 않는다', () => {
+      const dir = mkdtempSync(join(tmpdir(), 'rot-existing-'))
+      const legacy = join(dir, 'legacy.json')
+      writeFileSync(legacy, '{}', 'utf-8')
+      const newPath = join(dir, 'state.json')
+      writeFileSync(newPath, JSON.stringify({ baseline_updated_at: '2026-08-14T12:00:00Z' }), 'utf-8')
+      const r = runWatch(SECRETS_B, { ROTATION_STATE: newPath, ROTATION_STATE_LEGACY: legacy })
+      expect(r.exit).toBe(0)
+      expect(r.out).not.toContain('마이그레이션')
+      // 새 경로 baseline(B) 유지 — [ROTATION] 재감지·재디스패치 없음
+      expect(r.out).not.toContain('[ROTATION]')
+      expect(dispatchPosts(r.log)).toBe(0)
     })
   },
   30000,

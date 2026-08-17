@@ -17,7 +17,8 @@
 # 임박을 검증한다 — 워처는 발사까지만 담당하고 검증은 CI 에 위임한다.
 #
 # 상태 파일에 이력을 저장해 중단 후 재실행이 이어붙는다:
-#   ROTATION_STATE (기본 /tmp/gh-secret-rotation-state.json)
+#   ROTATION_STATE (기본 ${XDG_STATE_HOME:-$HOME/.local/state}/ssak-search/
+#                   gh-secret-rotation-state.json — 홈 영구 경로, 수정 86)
 # 첫 폴링은 베이스라인만 기록한다 (기존 상태를 "교체"로 오탐하지 않음).
 # 이미 디스패치한 updated_at 에 대해서는 재디스패치하지 않는다 (중복 방지).
 #
@@ -38,7 +39,12 @@
 #   AUTO_DISPATCH         교체 감지 시 디스패치 자동 실행 (기본 1; --dry-run 이면 0)
 #   POLL_INTERVAL         --watch 간격 초 (기본 300)
 #   WATCH_MINUTES         --watch 총 실행 분 (기본 0 = 무기한, Ctrl-C 중단)
-#   ROTATION_STATE        상태 파일 경로 (기본 /tmp/gh-secret-rotation-state.json)
+#   ROTATION_STATE        상태 파일 경로 (기본 ${XDG_STATE_HOME:-$HOME/.local/state}/ssak-search/
+#                         gh-secret-rotation-state.json — /tmp 가 아니라 홈 영구 경로라
+#                         재부팅 후에도 유지된다. 이전 /tmp 기본값 시절(수정 47~85)의
+#                         상태 파일이 있으면 첫 실행 시 자동 마이그레이션한다)
+#   ROTATION_STATE_LEGACY legacy(/tmp) 상태 파일 경로 (기본 /tmp/gh-secret-rotation-state.json
+#                         — 마이그레이션 원본, 테스트에서 오버라이드 가능)
 #   SLACK_WEBHOOK / ALERT_SLACK_WEBHOOK  교체 감지 알림 (코드베이스 resolveWebhookUrl
 #                                        컨벤션 — SLACK_WEBHOOK 우선, 미설정 no-op)
 # =============================================================================
@@ -47,7 +53,11 @@ set -uo pipefail
 SECRET_NAME="${SECRET_NAME:-CLOUDFLARE_API_TOKEN}"
 TARGET_ENV="${TARGET_ENV:-staging}"
 DISPATCH_REF="${DISPATCH_REF:-main}"
-STATE_FILE="${ROTATION_STATE:-/tmp/gh-secret-rotation-state.json}"
+# 수정 86: /tmp 기본값은 재부팅 시 손실된다 — 홈 영구 경로(XDG state)로 이동.
+STATE_DIR="${XDG_STATE_HOME:-${HOME}/.local/state}/ssak-search"
+STATE_FILE="${ROTATION_STATE:-${STATE_DIR}/gh-secret-rotation-state.json}"
+# 수정 47~85 시절 /tmp 기본값의 상태 파일 — 새 영구 경로로 마이그레이션 원본.
+LEGACY_STATE_FILE="${ROTATION_STATE_LEGACY:-/tmp/gh-secret-rotation-state.json}"
 POLL_INTERVAL="${POLL_INTERVAL:-300}"
 WATCH_MINUTES="${WATCH_MINUTES:-0}"
 AUTO_DISPATCH="${AUTO_DISPATCH:-1}"
@@ -56,7 +66,7 @@ MODE="poll"
 for arg in "$@"; do
   case "$arg" in
     --watch) MODE="watch" ;;
-    --reset) rm -f "$STATE_FILE"; echo " 상태 파일 초기화: $STATE_FILE" ;;
+    --reset) rm -f "$STATE_FILE" "$LEGACY_STATE_FILE"; echo " 상태 파일 초기화: $STATE_FILE (legacy 도 제거: $LEGACY_STATE_FILE)" ;;
     --dry-run) AUTO_DISPATCH=0 ;;
     *) echo " ❌ 알 수 없는 옵션: $arg (지원: [--watch] [--reset] [--dry-run])" >&2; exit 1 ;;
   esac
@@ -212,6 +222,7 @@ PYEOF
 }
 
 save_state() {
+  mkdir -p "$(dirname "$STATE_FILE")" 2>/dev/null || true
   ROT_STATE_JSON="$1" python3 - "$STATE_FILE" <<'PYEOF'
 import json, os, sys
 state = json.loads(os.environ['ROT_STATE_JSON'])
@@ -305,7 +316,22 @@ PYEOF
   return "$dispatch_failed"
 }
 
+# ── legacy(/tmp) 상태 파일 마이그레이션 (수정 86) ────────────────────────
+# /tmp 기본값 시절(수정 47~85)의 상태 파일이 새 영구 경로에 없을 때만 복사해
+# --reset 없이 재개한다 (baseline/이력 보존 — 재부팅 후에도 이어받기).
+migrate_state() {
+  [ -f "$STATE_FILE" ] && return 0
+  [ -f "$LEGACY_STATE_FILE" ] || return 0
+  mkdir -p "$(dirname "$STATE_FILE")" 2>/dev/null || true
+  if cp "$LEGACY_STATE_FILE" "$STATE_FILE" 2>/dev/null; then
+    echo " 상태 파일 마이그레이션: $LEGACY_STATE_FILE → $STATE_FILE (영구 경로, 재부팅 손실 방지)"
+  else
+    echo " ⚠️  상태 파일 마이그레이션 실패: $LEGACY_STATE_FILE → $STATE_FILE" >&2
+  fi
+}
+
 # ── 메인 ───────────────────────────────────────────────────────────────────
+migrate_state
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo " 시크릿 교체 워처 (${SECRET_NAME} → deploy.yml ${TARGET_ENV})"
 echo "   상태: $STATE_FILE | AUTO_DISPATCH=$AUTO_DISPATCH"

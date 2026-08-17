@@ -1036,6 +1036,74 @@
 - **테스트**: +2 → **12/12** — ① watch 3회 폴링 체인: secrets 조회 3회·디스패치 POST **정확히 1회**·최종 baseline=B·이력 3건([BASELINE]+[ROTATION]+[DISPATCH]) ② 디스패치 실패(500)→다음 폴링 재시도(204) 성공: POST 2회·최종 baseline=B
 - **검증**: tsc 0 · eslint 0 · prettier clean · bash -n OK · 전체 unit **141 파일 전부 PASS**
 
+=======
+### 수정 92: verify-pages-bundle.sh short SHA 오탐 불일치 — 전체 SHA 비교를 prefix 매칭으로 완화 (2026-08-17)
+- **작업 ID**: FIX-2026-08-17-07 (구현 + 실측)
+- **요청**: verify-pages-bundle.sh 가 short SHA 를 받으면 전체 SHA build_commit 와 비교해 오탐 불일치를 내는 문제를 prefix 매칭으로 완화
+- **원인**: ③ 대조가 `[ "$BUNDLE_COMMIT" = "$EXPECTED" ]` 정확 일치 — /api/health 의 build_commit 은 항상 **전체 40자** 인데 `--expected-commit 49231a1` 처럼 short 인자를 받으면 구조적으로 항상 불일치 (실측: short 인자로 스테일 오판 → 재배포 유도)
+- **구현**: `[[ "$BUNDLE_COMMIT" == "$EXPECTED"* ]]` — bash glob 리터럴 접두사 매칭. EXPECTED=전체 SHA 면 기존 정확 일치와 동일, short 면 접두사 일치. 헤더에 short/full 허용 문서화. (BUNDLE_COMMIT 비어있음·음성 케이스는 기존 FAIL 경로 유지)
+- **실측 (staging @ 49231a1)**: ① `--expected-commit 49231a1` → ✅ `build_commit=49231a1…` exit 0 (이전: 오탐 FAIL) ② 전체 SHA → ✅ exit 0 ③ `deadbee` → ❌ `prefix 매칭 실패` exit 1
+- **검증**: bash -n OK · verify-deploy-workflow 실 repo **PASS** (check 8 runtime-bundle-verify — build_commit/deployment list/BUNDLE_VERIFY_RETRIES 보존)
+
+### 수정 93: verify-secret-set.sh — `gh secret set` 조용한 실패(PAT scope 부족/다른 repo/미인증/무효 토큰)를 set 전후 5단계로 사전 차단 (2026-08-17)
+- **작업 ID**: FIX-2026-08-17-08 (구현 + 테스트 + 실측)
+- **요청**: `gh secret set` 이 조용히 실패하는 케이스(PAT 스코프 부족 등)를 사전에 잡도록 `gh auth status` + secret set 검증 단계를 스크립트로 작성
+- **배경 (08-16~17 실측)**: 사용자가 "시크릿을 교체했다"고 믿었지만 GitHub 시크릿 updated_at 이 08-12 에 그대로인 사례가 워처·직접 API 3중 확인으로 반복 확인됨. 원인 후보: ① 다른 디렉터리/다른 repo 에서 `gh secret list`/set ② gh 미인증/다른 계정 ③ PAT repo scope 부족 → 조용한 실패 ④ set 은 됐지만 값 자체가 무효 토큰 (guard 가 그 뒤 401 차단)
+- **구현** (`scripts/verify-secret-set.sh` 신규, set **전후 5단계**):
+  - ① `gh auth status` — 로그인 + **repo scope 포함** 확인 (부족 시 `gh auth refresh -s repo` 안내 후 차단 — scope 라인 파싱은 따옴표/무따옴표 구버전 포맷 모두 대응, scopes 라인 없는 구버전 gh 는 unknown 으로 ④ 에 위임)
+  - ② repo 컨텍스트 고정 — git remote/GH_REPO 로 대상 repo 확정 후 `gh repo view` 로 인증 계정이 접근 가능한지 확인 (잘못된 디렉터리에서 다른 repo 에 조용히 set 되는 실수 방지)
+  - ③ `gh secret set` — **stdin/파일 주입**(argv·셸 히스토리 노출 없음, 수정 84 패턴)
+  - ④ **API updated_at 전/후 비교** — set 직후 GitHub API 로 재조회해 updated_at 이 '지금'으로 바뀌었는지 ground truth 판정 (`check_updated_at` — after>before + now±300s, 조용한 실패의 최종 게이트)
+  - ⑤ (기본 on) 새 토큰 자체를 Cloudflare `/user/tokens/verify` 로 검증 — GitHub 반영돼도 무효면 다음 guard 가 401 로 막히므로 set 단계에서 차단 (`curl -K` config 주입, argv 미노출)
+- **인자**: `--file PATH`(필수) `--secret` `--repo` `--skip-cf-verify` `--dry-run`(①②만) `--self-test`(오프라인). GH_TOKEN/gh auth token/git credential helper 순으로 API 토큰 해석
+- **테스트**: `tests/unit/verify-secret-set.test.ts` 신규 **7/7** — fake gh(인증+repo scope / scope 부족 / 미인증 / 다른 repo) 분기 · fake curl(updated_at before→after 카운터 전환 — set 반영 시뮬레이션) · CF verify -K config 주입 분기(수정 84 패턴) · dry-run(set 미실행) · updated_at 미반영 → FAIL
+- **실측**: 이 셸은 gh 미인증 상태라 `--dry-run` 이 ①에서 정확히 차단됨 (이 스크립트가 잡으려는 핵심 케이스 라이브 확인) · `--self-test` 8 케이스 전부 PASS
+- **검증**: bash -n OK · tsc 0 · eslint 0 · prettier clean · 전체 unit **141 파일 전부 PASS**
+
+### 수정 91: deploy 체인 `$VAR한글` 로케일 버그 — bash 3.2 UTF-8 locale 에서 미커밋 경고 시 배포 중단 (2026-08-17)
+- **작업 ID**: FIX-2026-08-17-06 (발견 + 수정)
+- **발견 경로**: 수정 90 staging 배포 첫 발사 시 `line 517: DIRTY_FILES�: unbound variable` 로 즉시 실패 — 원인은 `echo "...$DIRTY_FILES건이..."` 의 **중괄호 없는 변수+한글 조합**. bash 3.2 는 UTF-8 locale(`LC_ALL=ko_KR.UTF-8`) 에서 `건` 을 변수명 문자로 취급해 `$DIRTY_FILES건이` 를 단일 변수로 조회 → unbound (재현: `LC_ALL=ko_KR.UTF-8` vs `LC_ALL=C`)
+- **수정**: deploy 체인 내 동일 패턴 3곳을 중괄호화 — `deploy-local-worktree.sh` 2곳(`${LOCAL_AHEAD}개`, `${DIRTY_FILES}건이`) + `verify-deployed-gold.sh` 1곳(`${FAIL_COUNT}건`). grep `\$[A-Za-z_][A-Za-z0-9_]*[가-힣]` = 0 확인
+- **검증**: bash -n 2개 OK · 로케일 재현/수정 후 ko_KR.UTF-8 에서 정상 출력 (215건 표기) · 수정 90 staging 배포 재발사 성공
+
+### 수정 90: staging scheduler/Pages 로그의 ddEnv=production 원인 제거 — 빌드 타임 DEPLOY_ENV 로 ddEnv 재정의 (2026-08-17)
+- **작업 ID**: FIX-2026-08-17-05 (진단 + 구현 + 번들 실측)
+- **요청**: staging 스케줄러/Pages 로그의 ddEnv 가 production 으로 남는 원인을 추적하고, DEPLOY_ENV=staging 빌드에서 ddEnv 를 staging 으로 재정의
+- **근본 원인**: `logger.ts formatLog` 의 ddEnv 해석 체인은 ① `context.ddEnv` → ② `globalThis.ENV?.ENVIRONMENT`(어느 배포도 설정 안 함 — dead code) → ③ **하드코딩 `'production'`**. ①은 `index.tsx` 미들웨어가 `ddEnv: 'production'` 하드코딩으로 **항상** 덮어쓰고, scheduler 는 미들웨어 없이 ③ 폴백 → staging 번들도 production 로깅 (수정 89 실측 01:45Z 로그에서 확정)
+- **구현**:
+  - `src/lib/logger.ts` — `resolveDdEnv()` 신규: ① context.ddEnv → ② 런타임 ENV.ENVIRONMENT → ③ **빌드 타임 DEPLOY_ENV** (vite define Pages / wrangler define scheduler — 방안 B 와 동일 단일 진실 공급원) → ④ `'production'` 최후 폴백 (DEPLOY_ENV='global' = vitest/로컬 define 미주입 시에만 → **기존 동작 보존, 테스트 무회귀**). `formatLog` 가 이를 사용
+  - `src/index.tsx` — 미들웨어 하드코딩 `ddEnv: 'production'` 제거 (context 우선순위가 DEPLOY_ENV 를 가리는 원인)
+  - `wrangler.cron.jsonc` / `wrangler.cron.staging.jsonc` — **`define: { "__DEPLOY_ENV__": "\"production\"" / "\"staging\"" }`** — esbuild 직접 번들(scheduler)에도 DEPLOY_ENV 주입 (vite 미경유)
+- **검증**: 유닛 **+6 → 40/40** (resolveDdEnv: context 우선 / DEPLOY_ENV=staging / production / 'global' 폴백 → production / 런타임 var 우선 / 테스트 기본값 보존) · tsc 0 · eslint 0 · prettier clean · 전체 unit **141파일 2,795/2,795 PASS** (1차 slack-e2e 5s 타임아웃은 기존 동시 부하 플레이크 — 단독 6/6)
+- **번들 실측 (wrangler --dry-run --outdir)**: staging scheduler 번들 `var DEPLOY_ENV = "staging" ? "staging" : "global"` · production `"production"` — define 치환 + `typeof` 가드 폴딩 확인
+- **공유 checkout 안전**: logger.ts/index.tsx 는 타 작업자의 미커밋 변경(traceId 블록 / tracing middleware) 과 혼재 — **hunk 단위 필터링으로 내 변경만 스테이징** (staged diff 에 traceId/createTracingMiddleware 0건, working tree 외부 변경은 보존)
+- **라이브 검증 (staging @ 49231a1 배포 후 02:15Z 틱 실측)**: scheduler `[cron-probe]` **`ddEnv:"staging"`** (HTTP 200, 1526ms) · Pages `[health]` **`ddEnv:"staging"`** (uncached, 1381ms) — 양쪽 모두 production 에서 staging 으로 전환 확인 · verify-deep-probe-tick.sh exit 0. (참고: 로컬 main 계보는 타 작업자 미커밋 WIP 모듈 참조 커밋(d1d2430~6e47b90)이 있어 빌드 불가 — 배포는 d3dd9b6 위 cherry-pick `49231a1` 사용, 수정 91 로케일 수정 후 재발사 성공)
+
+### 수정 89: deep probe cron 틱 검증 스크립트 — 15분 틱 대기 → scheduler+Pages 단일 포그라운드 캡처 → `[health] deep health probe complete` 검증 (2026-08-17)
+- **작업 ID**: FIX-2026-08-17-04 (구현 + 실측)
+- **요청**: 15분 cron tick 을 기다렸다가 scheduler + Pages deployment **양쪽** tail 을 **단일 포그라운드 윈도우**로 캡처해 `[health] deep health probe complete` 라인을 검증하는 스크립트 생성
+- **구현** — `scripts/verify-deep-probe-tick.sh` 신규:
+  - **틱 대기**: 다음 UTC :00/:15/:30/:45 경계(epoch 900 배수, 정각 초엔 다음 경계)를 계산해 `LEAD_SECONDS`(기본 60) 앞에서 tail 시작 — 15분 헛돌기 없이 틱 순간에 맞춰 캡처 (run-prod-cron-tail.py 의 840s 고정 대기와 대비)
+  - **양쪽 tail**: scheduler(`wrangler tail --config <env>.jsonc`) + Pages deployment(`wrangler pages deployment tail`) 동시 캡처. Pages ID 는 **런타임 deployment list 해석** — staging=Branch==staging(Environment 는 Preview)·production=Environment==Production, `Status==Failure` 제외 (run-staging-cron-tail.py 의 하드코딩 ID 스테일 사고 재발 방지)
+  - **검증**: Pages 로그에서 `[health] deep health probe complete` 라인 수 + **cached 여부**(wrangler envelope 이중 이스케이프 `\"` 평탄화 후 `cached":false` 매치 — 이번 틱 실측 프로브인지 판별) + scheduler `[cron-probe]` 발화 여부로 미발화 원인 구분 (scheduler 발화+Pages 라인 → exit 0)
+  - **wrangler 4.x 발견 (실측)**: "Connected to" 배너는 **TTY 전용** — 파일 캡처에서 0바이트 (40s tail 실측). → 연결 확인을 ① 대조 트래픽(root `/` 는 requestLogger "Request started" 만 로깅, health 라우트 오염 없음) + ② 바이트 수 기반 해석으로 대체
+  - **`--self-test`**: 틱 경계 계산 오프라인 검증 (경계 3케이스 + 900 배수 샘플)
+- **실측 (staging, 01:45 UTC 틱 — 전체 파이프라인)**: scheduler `[cron-probe] deep health probe triggered` (**01:45:28Z**, HTTP 200, probe_status=degraded, down_backends=none, 860ms) + Pages `[health] deep health probe complete` 1건(**uncached**, latency 835ms) + 대조 트래픽 HTTP 200 · Pages tail 11036바이트 · **exit 0 판정**
+- **검증**: bash -n OK · `--self-test` PASS · 파서 픽스처 4종(bare uncached / bare cached / 이스케이프 envelope / pretty multiline) 전부 정확 판정 (`1 1` / `1 0` / `1 1` / `1 1`) · 실측 중 **BSD grep BRE 반복 상한 255** 발견(`maximum repetition exceeds 255`) → 표시용 발췌를 `.{0,255}` 로 제한 후 재검증
+- **사용법**: `bash scripts/verify-deep-probe-tick.sh [staging|production] [window_seconds]` (기본 staging · 캡처 360s) — `KEEP_LOGS=1` 시 /tmp/verify-tick.* 보존
+
+### 수정 88: 검증 도구 공유 페이싱 게이트 — per-IP rate limit(30/min) 429 오탐 miss 제거 (2026-08-17)
+- **작업 ID**: FIX-2026-08-17-03 (구현 + 실측)
+- **요청**: 검증 도구들이 빠르게 연속 실행되면 per-IP rate limit(30/min, src/lib/auth.ts DEFAULT_RATE_LIMIT) 에 걸려 gold 오탐 miss(HTTP 429) 가 나는 문제를, 검증 전용 페이싱/한도 예외로 해결
+- **근본 원인**: 단일 도구 내부 페이싱만으로는 도구 간 연속 실행(배포 gold 6 + 동치 검색 3×2 + gold 6×2 + 수동 재실행) 을 막지 못함 — 동치 대조가 1분 윈도우를 채워 gold 5/6↔6/6 왕복 (실측). gold 스모크(6쿼리) 는 full-eval(>50쿼리) 전용 페이싱이라 **무페이싱**이었음
+- **구현** (한도 예외 대신 **검증 전용 공유 페이싱** — API 서피스/보안 변경 없음):
+  - `scripts/lib-verify-pace.sh` 신규 — `pace_request()`: 공유 pace 파일(기본 `${XDG_STATE_HOME:-$HOME/.local/state}/ssak-search/verify-pace.ts`, 워처 상태와 동일 영구 경로) 에 마지막 요청 시각(epoch ms) 을 기록하고 `VERIFY_PACE_MS`(기본 2500ms → 최대 24/min, 한도 대비 여유) 미만 간격이면 대기. **어떤 도구가 마지막으로 요청했든** 다음 요청이 간격을 지킴
+  - `scripts/verify-deployed-gold.sh` — **스모크 포함 매 쿼리 전** 공유 게이트 통과 (`len(queries) > 50` 조건 제거, full-eval 기존 페이싱을 공유 게이트로 대체). `GOLD_PACE_FILE` env 오버라이드
+  - `scripts/verify-env-equivalence.sh` [3/4] — 검색 top-5 curl(A/B) 각각 전에 `pace_request()` (lib source). [4/4] gold 는 verify-deployed-gold.sh 내부에서 같은 파일을 통과
+- **실측**: ① gold 스모크 연속 2회 — 1회차 12s → 2회차 연속 **16s**(공유 게이트 대기) · **둘 다 6/6, 429 없음** ② 동치 대조 1회 — 46s · **4/4 green** (gold 6/6=6/6) ③ 동치 연속 2회 — **전부 6/6=6/6, 왕복 소멸** (이전: 5/6↔6/6)
+- **설계 선택**: 한도 예외(헤더/키 기반 우회) 는 보안 서피스·인증 변경이 필요하고 검증 트래픽만 골라낼 수 없어 배제 — 클라이언트 측 공유 페이싱이 무변경·무위험
+- **검증**: bash -n 3개 OK · 동치 4/4 green (exit 0)
+
 ### 수정 80: watch-secret-rotation.sh watch 모드 top-level `local` 버그 수정 (2026-08-16)
 - **작업 ID**: FIX-2026-08-16-01 (발견 + 수정 + 검증)
 - **요청**: docs/17 절차대로 시크릿 교체가 끝나면 watch-secret-rotation.sh 로 updated_at 변경 감지 → staging 디스패치 자동 발사 → run 모니터링까지 이어가는 체계 구동

@@ -53,15 +53,35 @@ function runWatch(secretsBody: string, extraEnv: Record<string, string> = {}, ar
   const stateFile = join(dir, 'state.json')
 
   // 가짜 curl — URL 패턴별 응답 주입. 모든 호출을 로그에 남겨 발화 횟수 검증.
+  // 상태 전이(수정 87): FAKE_COUNT_DIR 의 호출 카운터로 N 번째 이후 응답을 전환해
+  // "watch 프로세스 도중 시크릿이 교체된다"를 시뮬레이션한다 (FAKE_SECRETS_SWITCH_AFTER
+  // = secrets 조회 N 번 후 FAKE_SECRETS_BODY_2 로, FAKE_DISPATCH_SWITCH_AFTER = 디스패치
+  // N 번 후 FAKE_DISPATCH_CODE_2 로). 스위치 env 미설정 시 기존 동작(단일 본문) 유지.
   const fakeCurl = [
     '#!/usr/bin/env bash',
     `echo "curl $*" >> ${JSON.stringify(logSh)}`,
     'URL=""',
     'for a in "$@"; do case "$a" in http*) URL="$a" ;; esac; done',
     'case "$URL" in',
-    '  */dispatches) echo "${FAKE_DISPATCH_CODE:-204}"; exit 0 ;;',
+    '  */dispatches)',
+    '    DC=$(( $(cat "${FAKE_COUNT_DIR}/dispatch.count" 2>/dev/null || echo 0) + 1 ))',
+    '    echo "$DC" > "${FAKE_COUNT_DIR}/dispatch.count"',
+    '    if [ -n "${FAKE_DISPATCH_SWITCH_AFTER:-}" ] && [ "$DC" -gt "$FAKE_DISPATCH_SWITCH_AFTER" ]; then',
+    '      echo "${FAKE_DISPATCH_CODE_2:-204}"',
+    '    else',
+    '      echo "${FAKE_DISPATCH_CODE:-204}"',
+    '    fi',
+    '    exit 0 ;;',
     '  */runs?*) printf "%s" "${FAKE_RUNS_BODY:-}"; exit 0 ;;',
-    '  */actions/secrets) printf "%s" "${FAKE_SECRETS_BODY:-}"; exit 0 ;;',
+    '  */actions/secrets)',
+    '    SC=$(( $(cat "${FAKE_COUNT_DIR}/secrets.count" 2>/dev/null || echo 0) + 1 ))',
+    '    echo "$SC" > "${FAKE_COUNT_DIR}/secrets.count"',
+    '    if [ -n "${FAKE_SECRETS_SWITCH_AFTER:-}" ] && [ "$SC" -gt "$FAKE_SECRETS_SWITCH_AFTER" ]; then',
+    '      printf "%s" "${FAKE_SECRETS_BODY_2:-}"',
+    '    else',
+    '      printf "%s" "${FAKE_SECRETS_BODY:-}"',
+    '    fi',
+    '    exit 0 ;;',
     '  *) echo "500"; exit 0 ;;',
     'esac',
     '',
@@ -100,6 +120,7 @@ function runWatch(secretsBody: string, extraEnv: Record<string, string> = {}, ar
     // legacy 경로를 항상 존재하지 않는 임시 경로로 격리 (마이그레이션 테스트만 오버라이드).
     ROTATION_STATE_LEGACY: join(dir, 'legacy-absent.json'),
     DISPATCH_RUN_SLEEP: '0',
+    FAKE_COUNT_DIR: dir,
   }
   const res = spawnSync('bash', [SCRIPT, ...args], {
     encoding: 'utf8',
@@ -270,6 +291,57 @@ describe.skipIf(!BASH_AVAILABLE)(
       // 새 경로 baseline(B) 유지 — [ROTATION] 재감지·재디스패치 없음
       expect(r.out).not.toContain('[ROTATION]')
       expect(dispatchPosts(r.log)).toBe(0)
+    })
+
+    it('수정 87: --watch 단일 프로세스에서 교체 감지 → 디스패치 → 중복 방지 체인 (fake API 상태 전이)', () => {
+      // secrets API 가 1번째 조회 후 교체(SECRETS_B)로 전환 — watch 도중 교체 발생
+      // 시뮬레이션. 폴링 3회: ① 베이스라인 ② [ROTATION]+디스패치 ③ no-op(중복 방지).
+      const r = runWatch(
+        SECRETS_A,
+        {
+          POLL_INTERVAL: '0',
+          WATCH_ITERATIONS: '3',
+          FAKE_SECRETS_SWITCH_AFTER: '1',
+          FAKE_SECRETS_BODY_2: SECRETS_B,
+        },
+        ['--watch'],
+      )
+      expect(r.exit).toBe(0)
+      expect(r.out).toContain('[BASELINE]')
+      expect(r.out).toContain('[ROTATION]')
+      expect(r.out).toContain('2026-08-12T08:45:24Z → 2026-08-14T12:00:00Z')
+      expect(r.out).toContain('HTTP 204')
+      // 3회 폴링(secrets 조회 3회) 중 디스패치 POST 는 정확히 1회 — 중복 방지
+      expect(secretGets(r.log)).toBe(3)
+      expect(dispatchPosts(r.log)).toBe(1)
+      const state = JSON.parse(readFileSync(r.stateFile, 'utf8'))
+      expect(state.baseline_updated_at).toBe('2026-08-14T12:00:00Z')
+      // 상태 이력: [BASELINE] + [ROTATION] + [DISPATCH] 3건
+      expect(state.events.length).toBe(3)
+    })
+
+    it('수정 87: 디스패치 실패 시 다음 폴링에서 재시도해 성공 (연속 watch 체인)', () => {
+      // 첫 디스패치(1번째)는 500 실패 → baseline 유지 → 다음 폴링 재시도(2번째) 204
+      // 성공. 총 2회 POST, 최종 baseline=B.
+      const r = runWatch(
+        SECRETS_A,
+        {
+          POLL_INTERVAL: '0',
+          WATCH_ITERATIONS: '3',
+          FAKE_SECRETS_SWITCH_AFTER: '1',
+          FAKE_SECRETS_BODY_2: SECRETS_B,
+          FAKE_DISPATCH_SWITCH_AFTER: '1',
+          FAKE_DISPATCH_CODE: '500',
+          FAKE_DISPATCH_CODE_2: '204',
+        },
+        ['--watch'],
+      )
+      expect(r.exit).toBe(0)
+      expect(r.out).toContain('[DISPATCH-FAILED]')
+      expect(r.out).toContain('HTTP_500')
+      expect(dispatchPosts(r.log)).toBe(2)
+      const state = JSON.parse(readFileSync(r.stateFile, 'utf8'))
+      expect(state.baseline_updated_at).toBe('2026-08-14T12:00:00Z')
     })
   },
   30000,

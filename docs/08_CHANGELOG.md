@@ -1026,6 +1026,16 @@
 - **실측**: 라이브 실행 — `/tmp/gh-secret-rotation-state.json → /Users/mr.k/.local/state/ssak-search/gh-secret-rotation-state.json` 마이그레이션 성공 · baseline 2026-08-12 + 이력 1건 보존 · 폴링 재개(no-op) 확인
 - **검증**: tsc 0 · eslint 0 · prettier clean · 전체 unit **141 파일 전부 PASS** (1회차 workerd 동시 부하 기동 실패 5건은 재실행 시 141 전부 통과 — 일시적 환경 이슈)
 
+### 수정 87: 워처 체인 fake GitHub API 상태 전이 테스트 — 교체 감지→디스패치→중복 방지를 단일 watch 프로세스로 검증 (2026-08-17)
+- **작업 ID**: FIX-2026-08-17-02 (구현 + 테스트)
+- **요청**: 워처의 교체 감지·디스패치·중복 방지 체인이 실제 시크릿 교체 없이도 검증되도록 fake GitHub API 시뮬레이션 테스트 추가
+- **갭 발견**: 기존 테스트는 전부 단일 폴링(--watch 미사용) — **단일 watch 프로세스 도중 교체가 발생**하는 상태 전이(① 베이스라인 → ② [ROTATION]+디스패치 → ③ 중복 방지 no-op)는 미검증이었음
+- **구현**:
+  - `scripts/watch-secret-rotation.sh` — **`WATCH_ITERATIONS`** env 추가 (기본 0=무기한, 테스트에서 POLL_INTERVAL=0 과 함께 짧은 체인 검증). watch 루프가 폴링 횟수 상한을 존중 (bash 3.2 호환 그룹 조건)
+  - `tests/unit/watch-secret-rotation.test.ts` — fake curl 을 **상태 전이형**으로 확장: `FAKE_COUNT_DIR` 카운터로 secrets 조회 N 번 후 `FAKE_SECRETS_BODY_2`(교체), 디스패치 N 번 후 `FAKE_DISPATCH_CODE_2`(재시도 성공) 로 전환. 스위치 env 미설정 시 기존 단일 본문 동작 유지 (기존 테스트 회귀 없음)
+- **테스트**: +2 → **12/12** — ① watch 3회 폴링 체인: secrets 조회 3회·디스패치 POST **정확히 1회**·최종 baseline=B·이력 3건([BASELINE]+[ROTATION]+[DISPATCH]) ② 디스패치 실패(500)→다음 폴링 재시도(204) 성공: POST 2회·최종 baseline=B
+- **검증**: tsc 0 · eslint 0 · prettier clean · bash -n OK · 전체 unit **141 파일 전부 PASS**
+
 ### 수정 80: watch-secret-rotation.sh watch 모드 top-level `local` 버그 수정 (2026-08-16)
 - **작업 ID**: FIX-2026-08-16-01 (발견 + 수정 + 검증)
 - **요청**: docs/17 절차대로 시크릿 교체가 끝나면 watch-secret-rotation.sh 로 updated_at 변경 감지 → staging 디스패치 자동 발사 → run 모니터링까지 이어가는 체계 구동

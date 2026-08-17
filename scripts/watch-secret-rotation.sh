@@ -39,6 +39,8 @@
 #   AUTO_DISPATCH         교체 감지 시 디스패치 자동 실행 (기본 1; --dry-run 이면 0)
 #   POLL_INTERVAL         --watch 간격 초 (기본 300)
 #   WATCH_MINUTES         --watch 총 실행 분 (기본 0 = 무기한, Ctrl-C 중단)
+#   WATCH_ITERATIONS      --watch 최대 폴링 횟수 (기본 0 = 무기한 — 테스트에서
+#                         POLL_INTERVAL=0 과 함께 짧은 체인 검증용)
 #   ROTATION_STATE        상태 파일 경로 (기본 ${XDG_STATE_HOME:-$HOME/.local/state}/ssak-search/
 #                         gh-secret-rotation-state.json — /tmp 가 아니라 홈 영구 경로라
 #                         재부팅 후에도 유지된다. 이전 /tmp 기본값 시절(수정 47~85)의
@@ -60,6 +62,7 @@ STATE_FILE="${ROTATION_STATE:-${STATE_DIR}/gh-secret-rotation-state.json}"
 LEGACY_STATE_FILE="${ROTATION_STATE_LEGACY:-/tmp/gh-secret-rotation-state.json}"
 POLL_INTERVAL="${POLL_INTERVAL:-300}"
 WATCH_MINUTES="${WATCH_MINUTES:-0}"
+WATCH_ITERATIONS="${WATCH_ITERATIONS:-0}"
 AUTO_DISPATCH="${AUTO_DISPATCH:-1}"
 
 MODE="poll"
@@ -340,11 +343,16 @@ echo "━━━━━━━━━━━━━━━━━━━━━━━━�
 if [ "$MODE" = "watch" ]; then
   end_at=0  # top-level — local 불가 (함수 밖)
   [ "$WATCH_MINUTES" -gt 0 ] && end_at=$(( $(date +%s) + WATCH_MINUTES * 60 ))
-  while [ "$end_at" -eq 0 ] || [ "$(date +%s)" -lt "$end_at" ]; do
+  iter=0
+  # WATCH_ITERATIONS(테스트용 폴링 횟수 상한) + WATCH_MINUTES(시간 상한) 중 먼저
+  # 도달하는 쪽까지 반복 — bash 3.2 호환 그룹 조건.
+  while { [ "$WATCH_ITERATIONS" -eq 0 ] || [ "$iter" -lt "$WATCH_ITERATIONS" ]; } && \
+        { [ "$end_at" -eq 0 ] || [ "$(date +%s)" -lt "$end_at" ]; }; do
+    iter=$((iter + 1))
     poll_and_report || true
     sleep "$POLL_INTERVAL"
   done
-  echo " 모니터링 종료 (${WATCH_MINUTES}분) — 상태: $STATE_FILE"
+  echo " 모니터링 종료 (${WATCH_MINUTES}분, ${iter}회 폴링) — 상태: $STATE_FILE"
 else
   poll_and_report
 fi

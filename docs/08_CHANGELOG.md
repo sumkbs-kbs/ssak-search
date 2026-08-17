@@ -1109,6 +1109,40 @@
 - **검증**: workflow 유닛 76/76 (describe 14 신규 4케이스 포함) · 전체 2,868 (1건은 기지 workerd 동시 부하 flake — 단독 5/5) · tsc 0 · eslint 0 · prettier clean · 실 repo verify **PASS (notify-webhook-curl-f)** · notify self-test 12/12
 - **한계**: 앵커(`%{http_code}`) 가 미래 리팩터로 사라지면 조용히 비활성 — check 9/10 의 verify_cf_token() 앵커와 동일한 허용 한계
 
+### 수정 112: 셸 spawn 테스트 flaky 타임아웃 전수 수정 — CI 그린 3연속 달성 (2026-08-17)
+- **작업 ID**: FIX-2026-08-17-26 (진단 + 구현 + 검증)
+- **요청**: 전체 유닛 스위트 실행 시 셸 스크립트 검증 테스트(`--self-test` 컨벤션)가 병렬 부하에서 5,000ms 기본 타임아웃을 초과해 flaky 실패 — 수정 110/111이 "기지(known) 동시 부하 flake"로 문서화하던 문제를 전수 해소 (마스터 플랜 P1-1, docs/20)
+- **실측 재현 (2026-08-17, 전체 스위트 3회)**: 실행마다 다른 파일이 실패 — ① `verify-slack-alert-e2e.test.ts` `--self-test`(execFileSync 기본 5s) ② `verify-do-binding-token.test.ts` `TOKEN_EXPIRY_WARN_DAYS`(guard 2회 spawn — vitest 기본 5s) ③ `set-slack-webhook.test.ts` `stdin 주입`. 세 파일 모두 **단독 실행은 통과** → 전형적 CPU 경합 flaky
+- **수정**:
+  - `vitest.config.ts` — 유닛 프로젝트 `testTimeout: 30_000` (spawnSync 계열 전체 커버)
+  - `execFileSync` 호출부에 `timeout: 60_000` 명시 (자식 프로세스 킬 방지) — verify-slack-alert-e2e(runScript+self-test) · verify-do-binding-token · set-slack-webhook · scan-credential-sweep · deploy-local-worktree · verify-deploy-commit-sync · notify-pipeline-failure(--self-test 12/12) · verify-env-health-diff(3곳) · parse-cron-health
+  - verify-slack-alert-e2e·verify-do-binding-token 의 `it` 블록에 테스트별 타임아웃 부여 (60s)
+- **검증**: 전체 유닛 스위트 **3회 연속 그린 (145파일/2,868건 × 3)** · typecheck 0 에러 · 단독 실행 정상
+- **여파**: "기지 flake"로 넘어가던 CI 레드 리스크 제거 — CI 게이트 신뢰성 복원. 잔여 동일 클래스(검색 관련 E2E)는 병렬 부하에서도 타임아웃 여유 6배 확보
+
+### 수정 113: wikipedia 429 S73 언어별 cooldown 실동작 검증 — hitRate 0.854 실측 + 측정 스크립트 신규 (2026-08-17)
+- **작업 ID**: FIX-2026-08-17-27 (진단 + 측정 도구 + 검증) — 마스터 플랜 P1-3 (docs/20)
+- **요청**: S73(언어별 cooldown 분리, FIX-2026-08-13-13) 이후 wikipedia gold hitRate ≥0.5 목표 달성 여부를 실측 검증
+- **검증 ① (유닛)**: `tests/unit/specialized.test.ts` **175/175 통과** — S73 3건(단일 언어만 armed / en armed에도 zh 네트워크 체인 / per-language shared 키 `cooldown:wikipedia:zh`) + 크로스-isolate 공유 cooldown 포함
+- **검증 ② (저장 run 실측)**: `scripts/probe-wikipedia-hitrate.ts` 신규 — 저장된 eval 아티팩트 5종(run-1/run-2/latest/s73-check/baselines-latest, 08-13~08-16)에서 wikipedia gold 96 query-run 측정:
+  - **gold 풀 회수율 (직접+미러 통합) 85.4% (82/96)** — 목표 0.5 달성 ✅ (미러는 wikipedia.org URL로 회수하므로 직접 측정에 포함)
+  - **백엔드 사용 hitRate 92.9% (39/42)** — wikipedia 백엔드가 실제 실행된 query-run에서는 gold 회수 거의 보장
+  - 미커버 14.6% (14/96) — 5개 쿼리: zh-general-03/04, zh-fact-03/04/05 (zh-fact-05는 S72 nasa.gov gold 오버브레스 계열, zh-general-03/04는 wikipedia가 보조 gold인 구조적 케이스)
+- **검증 ③ (라이브)**: 본 IP에서 en/zh/ja/ko wikipedia REST 전부 HTTP 200 — per-site rate limit 분리 전제(언어별 독립 창)와 정합
+- **정직한 한계**: ① 0.854는 **zh 집중** 샘플(최근 run 67쿼리가 chinese 태그 중심) — en/ja/ko wikipedia gold는 최근 run에 없어 미측정, 500쿼리 전체 eval 재실행 후 재측정 필요 (다음 세션 P1-3b) ② 08-13 baseline hitRate 0.249와 정의·샘플이 달라 직접 비교 불가 (0.249 = 백엔드 사용 대비 gold 히트, 0.854 = 풀 회수율) ③ 본 IP 라이브 200은 Workers egress IP의 wikimedia 블록 여부와 무관
+- **검증**: typecheck 0 · eslint scripts/probe-wikipedia-hitrate.ts 0-warning · 스크립트 실행 정상 (5종 아티팩트 로드)
+
+### 수정 114: stack-exchange 400+error_id 502 rate-limit 인지 + 크로스-isolate 쿼터 가드 (2026-08-17)
+- **작업 ID**: FIX-2026-08-17-28 (구현 + 배포 + 재측정) — 마스터 플랜 P1-4 (docs/20 §7.5)
+- **요청**: stack-exchange 백엔드 사용 4/162(08-13) → 80+ 목표 달성을 위해 docs/18 방안 A 후속 — SE keyless 일일 쿼터(300/day/IP)가 **HTTP 400 + error_id 502** 로 오는 점(429 아님)을 코드가 인지하지 못해 매 요청 재fetch → egress IP 해머링 + 격리 단위 가드 독립 재시도 문제 해결
+- **구현** (`src/lib/stack-exchange.ts`): ① `recordStackExchangeRateLimit` — 400+502 body 의 "more requests available in N seconds" 파싱 → [60s, 24h] 클램프 (SE 일일 쿼터 창 실측 ~22-23h 정직 반영) ② `isStackExchangeRateLimitedShared`/`mirrorStackExchangeCooldown` — wikipedia(S73)/github/arxiv 와 동일한 DO 공유 키 `cooldown:stack-exchange` 크로스-isolate 가드 (모든 격리가 같은 rate-limit 창을 fetch 없이 스킵) ③ bare 400(비-502) 은 영구 거부 fail-fast 유지, bare 429 는 보수적 60s
+- **테스트**: `tests/unit/stack-exchange.test.ts` 신규 6건 (400+502 파싱·공유 창 채택·비-502 미arm·429 기본 창·24h 클램프) — 전체 145파일/2,874건 그린 · typecheck 0 · eslint 0
+- **배포**: production @ **7836e39** (DO→Pages→cron 3단계, deploy-local-worktree.sh) — 번들 build_commit 검증 ✅ · gold 회수 6/6 ✅ · SE 서킷 healthy (failures=0)
+- **재측정** (`scripts/probe-se-usage.ts` 신규, 라이브 인프로세스): SO gold 39쿼리 중 **사용 33/39 (84.6%)** · 풀 회수 32/39 (82.1%) · **사용 중 gold 회수 32/33 (97%)** · 3-run 투영 ≈99건 ≥ 80 목표 **달성** ✅
+- **프로덕션 egress 실측**: 프로브 워커(s104-egress-probe, 배포→철거)로 확정 — egress IP SE 일일 쿼터 **차단 중 (400+502, 83317s ≈ 23.1h 후 리셋)**. 프로덕션 0건은 코드 결함이 아니라 업스트림 쿼터 조건이며, 수정 114 가 리셋까지 스킵·자동회복
+- **남은 위험**: 300/day/IP 쿼터는 구조적 상한 — eval 500×3 이 하루 쿼터 초과 가능 (단일 run ~39건은 안전) · egress IP 리셋 후 프로덕션에서 SO 결과 확인 + 전체 eval 재실행 필요 (P1-4b)
+- **도구**: `scripts/probe-egress-worker.ts` 에 `se` 엔진 케이스 추가 (egress SE 상태 재사용 가능)
+
 ### 수정 110: notify-pipeline-failure.sh — 미설정 no-op 경고 승격(::warning::) + Slack 수락 응답 검증(200+{"ok":true}) (2026-08-17)
 - **작업 ID**: FIX-2026-08-17-24 (구현 + 테스트)
 - **요청**: [14] Notify 가 SLACK_WEBHOOK 미설정으로 조용히 no-op 성공 처리되는 걸 경고로 승격할지, 드라이런 캡처를 기본값으로 삼을지 검토 → **① 경고 승격 채택 · 드라이런 기본값 비채택**(CI 러너엔 캡처 수신자가 없어 무의미 — 기존 notify_dry_run=true 경로 유지)

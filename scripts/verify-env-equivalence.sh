@@ -37,6 +37,13 @@
 # =============================================================================
 set -uo pipefail
 
+# 수정 88: 검증 전용 공유 페이싱 — /api/search 는 per-IP rate limit 30/min 이라
+# [3/4] 검색 top-5(3×2) + [4/4] gold(6×2) 가 연속 실행되면 1분 윈도우를 채워
+# 429 오탐 miss 가 난다. lib-verify-pace.sh 의 공유 pace 파일로 도구 간 간격을
+# 지킨다 (gold 는 verify-deployed-gold.sh 내부에서 같은 파일을 통과).
+# shellcheck source=/dev/null
+source "$(dirname "${BASH_SOURCE[0]}")/lib-verify-pace.sh"
+
 # ── 환경 설정 ─────────────────────────────────────────────────────────────
 ENV_A="${ENV_A:-https://staging.search-engine-api.pages.dev}"
 ENV_B="${ENV_B:-https://search-engine-api.pages.dev}"
@@ -126,8 +133,10 @@ OLDIFS="$IFS"
 IFS='|'
 for q in $QUERIES; do
   IFS="$OLDIFS"
+  pace_request  # 수정 88: 공유 pace 게이트 (검색 요청 전)
   DOMS_A="$(curl -s -m 40 -X POST "$ENV_A/api/search" -H 'Content-Type: application/json' \
     -d "{\"query\":\"$q\"}" | python3 -c "import json,sys; print(' '.join(r.get('domain','') for r in (json.load(sys.stdin).get('results') or [])[:5]))" 2>/dev/null || echo 'ERR')"
+  pace_request  # 수정 88: 공유 pace 게이트 (검색 요청 전)
   DOMS_B="$(curl -s -m 40 -X POST "$ENV_B/api/search" -H 'Content-Type: application/json' \
     -d "{\"query\":\"$q\"}" | python3 -c "import json,sys; print(' '.join(r.get('domain','') for r in (json.load(sys.stdin).get('results') or [])[:5]))" 2>/dev/null || echo 'ERR')"
   if [ "$DOMS_A" = "$DOMS_B" ] && [ "$DOMS_A" != "ERR" ] && [ -n "$DOMS_A" ]; then

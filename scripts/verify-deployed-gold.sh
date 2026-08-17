@@ -25,10 +25,16 @@
 #                   함께 쓰면 무시)
 #   GOLD_TOP_N      gold 회수 판정에 사용할 top-N (기본 10)
 #   GOLD_TIMEOUT_MS 검색 요청 타임아웃 (기본 40s)
-#   GOLD_DELAY_MS   full-eval 에서 쿼리 사이 지연 (기본 2500ms) — staging/
-#                   production 은 같은 DO 를 공유하므로 wikipedia 100/min 공유
-#                   버짓을 지키려면 반드시 페이싱이 필요하다 (실측: 무페이싱
-#                   500쿼리 실행이 wikipedia 서킷을 트립, S73 재발)
+#   GOLD_DELAY_MS   쿼리 사이 지연 (기본 2500ms) — staging/production 은 같은
+#                   DO 를 공유하므로 wikipedia 100/min 공유 버짓을 지키려면
+#                   반드시 페이싱이 필요하다 (실측: 무페이싱 500쿼리 실행이
+#                   wikipedia 서킷을 트립, S73 재발). **스모크(6쿼리)도** 공유
+#                   pace 파일(GOLD_PACE_FILE, 기본 홈 영구 경로) 로 페이싱한다 —
+#                   동치 대조·배포 검증이 연속 실행될 때 per-IP rate limit(30/min,
+#                   src/lib/auth.ts) 에 걸려 gold 오탐 miss(429) 가 나는 문제
+#                   (수정 88) 를 도구 간 공유 게이트로 막는다.
+#   GOLD_PACE_FILE   공유 pace 파일 (기본 ${XDG_STATE_HOME:-$HOME/.local/state}/
+#                   ssak-search/verify-pace.ts — lib-verify-pace.sh 와 동일)
 #   FULL_EVAL_SHOW_FAIL 1이면 --full-eval 에서 실패 쿼리 상세 출력 (기본 0)
 #
 # ⚠️ --full-eval 은 배포 URL(staging/production 공유 DO)에 500쿼리를 순차
@@ -52,8 +58,11 @@ GOLD_TOP_N="${GOLD_TOP_N:-10}"
 GOLD_TIMEOUT="${GOLD_TIMEOUT_MS:-40000}"
 GOLD_DELAY="${GOLD_DELAY_MS:-2500}"
 FULL_EVAL_SHOW_FAIL="${FULL_EVAL_SHOW_FAIL:-0}"
+# 수정 88: 공유 pace 파일 — 동치 대조·배포 검증이 연속 실행돼도 per-IP rate
+# limit(30/min) 을 넘지 않도록 모든 gold 쿼리가 이 게이트를 통과한다.
+GOLD_PACE_FILE="${GOLD_PACE_FILE:-${XDG_STATE_HOME:-${HOME}/.local/state}/ssak-search/verify-pace.ts}"
 # python heredoc 이 os.environ 으로 읽도록 export
-export SEARCH_URL GOLD_TOP_N GOLD_TIMEOUT_MS GOLD_DELAY_MS FULL_EVAL_SHOW_FAIL
+export SEARCH_URL GOLD_TOP_N GOLD_TIMEOUT_MS GOLD_DELAY_MS FULL_EVAL_SHOW_FAIL GOLD_PACE_FILE
 
 # 카테고리별 대표 gold 쿼리 — 배포 후 빠른 회수 스모크 테스트용.
 DEFAULT_QUERIES="kr-stock-01 zh-travel-01 en-fact-01 gk-01 en-tech-01 ja-news-01"
@@ -116,6 +125,28 @@ top_n = int(os.environ.get('GOLD_TOP_N', '10'))
 timeout = int(os.environ.get('GOLD_TIMEOUT_MS', '40000')) / 1000
 out_jsonl = os.environ.get('GOLD_OUT_JSONL', '/tmp/gold-verify-out.jsonl')
 
+# 수정 88: 공유 페이싱 게이트 — 이 스크립트(스모크 포함) 와 동치 대조의 검색
+# top-5 가 같은 pace 파일을 공유해, 도구가 연속 실행돼도 per-IP rate limit
+# (30/min) 을 넘지 않는다. 매 fetch 전에 게이트를 통과한다 (첫 요청도 포함 —
+# 직전 도구가 방금 요청했으면 대기).
+def pace():
+    pf = os.environ.get('GOLD_PACE_FILE', '')
+    if not pf or os.environ.get('VERIFY_PACE', '1') == '0':
+        return
+    ms = int(os.environ.get('GOLD_DELAY_MS', '2500'))
+    if ms <= 0:
+        return
+    now = time.time() * 1000
+    try:
+        last = float(open(pf).read().strip())
+    except Exception:
+        last = 0
+    wait = (last + ms - now) / 1000
+    if wait > 0:
+        time.sleep(wait)
+    with open(pf, 'w') as f:
+        f.write(str(int(time.time() * 1000)))
+
 def is_relevant(domain, gold):
     # S49 label-suffix: D === G or D ends with '.'+G
     for g in gold:
@@ -163,16 +194,13 @@ import time
 for i, q in enumerate(pending, 1):
     if i % 10 == 0 or i == len(pending):
         print(f'  ... {i}/{len(pending)} 진행', file=sys.stderr)
+    pace()  # 수정 88: 매 요청 전 공유 게이트 (스모크 포함)
     r = fetch(q)
     results.append(r)
     # 실패한 요청만 빼고 체크포인트에 저장 (resume 시 재시도)
     if '요청 실패' not in (r.get('reason') or ''):
         with open(out_jsonl, 'a') as f:
             f.write(json.dumps(r) + '\n')
-    # 페이싱 — wikipedia 100/min 공유 버짓 보호 (DO는 staging/production 공유).
-    # 스모크(6쿼리)는 버짓에 여유가 있으므로 페이싱 생략.
-    if i < len(pending) and len(queries) > 50:
-        time.sleep(float(os.environ.get('GOLD_DELAY_MS', '2500')) / 1000)
 
 # 쿼리 목록 순서로 정렬해 병합 출력
 ordered = []

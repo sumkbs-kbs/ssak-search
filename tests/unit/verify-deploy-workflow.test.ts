@@ -986,5 +986,27 @@ ${STAGING_PAGES_DEPLOY}${BUNDLE_VERIFY_STEP}      - name: Deploy probe-scheduler
       expectStatus(outcome, 'FAIL')
       expect(outcome.detail).toContain('rm -f 정리가 없다')
     })
+
+    it('PASSes 실제 repo 오탐 패턴 (들여쓰기 주석/echo 이스케이프/단일따옴표/sed/변수 할당/멀티라인 curl, 수정 109)', () => {
+      // create-logpush-datadog.sh:97 · :202 · cron-seed.sh:53 · deploy-local-worktree.sh:259 의
+      // 실제 라인을 그대로 옮긴 오탐 후보 — 전부 curl argv 자격증명이 아니어야 한다.
+      // String.raw: 이스케이프 시퀀스를 그대로 텍스트로 (실제 .sh 라인과 바이트 동일).
+      const realPatterns = String.raw`#!/usr/bin/env bash
+    # -H "Authorization: Bearer \${TOKEN}"   ← 들여쓰기 주석
+echo "      -H \"Authorization: Bearer \\\"\\$CLOUDFLARE_API_TOKEN\\\"\""
+echo "   curl -s -H 'Authorization: Bearer \${CLOUDFLARE_API_TOKEN}' \\"
+AUTH_HEADER="-H \"Authorization: Bearer $API_KEY\""
+sed -n 's/^header = "Authorization: Bearer \(.*\)"/[curl -K config] header: Authorization: Bearer <token> (config 파일 내부)/p' "$a"
+printf 'url = "%s"\nheader = "Authorization: Bearer %s"\n' "$TOKEN" > "$cfg"
+cfg="$(mktemp)"; chmod 600 "$cfg"
+curl -sf -m 10 \\
+  -H "Content-Type: application/json" \\
+  -d "$PAYLOAD" \\
+  -K "$cfg"
+rm -f "$cfg"
+`
+      const outcome = verifyDeployWorkflow(writeRepo({ ...allGood, extraSh: realPatterns }))
+      expectStatus(outcome, 'PASS')
+    })
   })
 })

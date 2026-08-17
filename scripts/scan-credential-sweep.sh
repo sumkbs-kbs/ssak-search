@@ -119,6 +119,61 @@ run_self_test() {
     'curl -sf -m 10 -X POST -d "{}" -K "$cfg"' \
     'rm -f "$cfg"' > "$d/_fix_webhook_comment.sh"
 
+  # 수정 109: 실제 repo 에서 채집한 오탐 패턴 (전부 0건이어야 함).
+  # ① 들여쓰기 주석 — 선행 공백 뒤 # 시작 라인도 제외돼야 한다.
+  printf '%s\n' \
+    '#!/usr/bin/env bash' \
+    '    # -H "Authorization: Bearer ${TOKEN}"   ← 들여쓰기 주석' \
+    'cfg="$(mktemp)"; chmod 600 "$cfg"' \
+    'curl -sf -m 10 -K "$cfg"' \
+    'rm -f "$cfg"' > "$d/_fix_indented_comment.sh"
+
+  # ② echo 이스케이프 문서 라인 (create-logpush-datadog.sh:97 실제 패턴) —
+  #    `-H \"Authorization: Bearer` 는 이중따옴표가 백슬래시로 이스케이프되어
+  #    `-H "Authorization: Bearer` 와 다르다 → 매치 안 됨.
+  printf '%s\n' \
+    '#!/usr/bin/env bash' \
+    '  echo "      -H \\"Authorization: Bearer \\\"\\$CLOUDFLARE_API_TOKEN\\\"\\""' \
+    'cfg="$(mktemp)"; chmod 600 "$cfg"' \
+    'curl -sf -m 10 -K "$cfg"' \
+    'rm -f "$cfg"' > "$d/_fix_escaped_echo.sh"
+
+  # ③ echo + curl + 단일따옴표 문서 라인 (create-logpush-datadog.sh:202) —
+  #    curl 이 있어도 `-H "Authorization` (이중따옴표) 가 아니면 매치 안 됨.
+  printf '%s\n' \
+    '#!/usr/bin/env bash' \
+    "  echo \"   curl -s -H 'Authorization: Bearer \\\${CLOUDFLARE_API_TOKEN}' \\\\ \"" \
+    'cfg="$(mktemp)"; chmod 600 "$cfg"' \
+    'curl -sf -m 10 -K "$cfg"' \
+    'rm -f "$cfg"' > "$d/_fix_singlequote_echo.sh"
+
+  # ④ 변수 할당 (cron-seed.sh:53 실제 패턴) — curl 명령 라인이 아니면 매치 안 됨.
+  printf '%s\n' \
+    '#!/usr/bin/env bash' \
+    'AUTH_HEADER="-H \\"Authorization: Bearer $API_KEY\\""' \
+    'cfg="$(mktemp)"; chmod 600 "$cfg"' \
+    'curl -sf -m 10 -K "$cfg"' \
+    'rm -f "$cfg"' > "$d/_fix_var_assign.sh"
+
+  # ⑤ sed 패턴 라인 (deploy-local-worktree.sh:259) — `curl` 문자열이 있어도
+  #    `-H "Authorization: Bearer` 조합이 없으면 매치 안 됨.
+  printf '%s\n' \
+    '#!/usr/bin/env bash' \
+    'sed -n '"'"'s/^header = "Authorization: Bearer \\(.*\\)"/[curl -K config] header: Authorization: Bearer <token> (config 파일 내부)/p'"'"' "$a"' \
+    'cfg="$(mktemp)"; chmod 600 "$cfg"' \
+    'curl -sf -m 10 -K "$cfg"' \
+    'rm -f "$cfg"' > "$d/_fix_sed.sh"
+
+  # ⑥ 멀티라인 curl 정상 사용 — 계속 라인에 자격증명이 없으면 매치 안 됨.
+  printf '%s\n' \
+    '#!/usr/bin/env bash' \
+    'cfg="$(mktemp)"; chmod 600 "$cfg"' \
+    'curl -sf -m 10 \\' \
+    '  -H "Content-Type: application/json" \\' \
+    '  -d "$PAYLOAD" \\' \
+    '  -K "$cfg"' \
+    'rm -f "$cfg"' > "$d/_fix_multiline_curl.sh"
+
   # 비-.sh 제외 픽스처 — capture-webhook.py 스타일 .py 파일은 스캔 대상이 아님.
   printf '%s\n' \
     '#!/usr/bin/env python3' \
@@ -154,7 +209,7 @@ run_self_test() {
 
   [ "$n_ok" -eq 0 ] || { echo " ❌ self-test: 오탐 픽스처에서 $n_ok 건 검출 (기대 0):"; printf '%s\n' "$res" | grep '_fix_\|capture-webhook.py' || true; fail=1; }
   [ -z "$missing" ] || { echo " ❌ self-test: 누수 픽스처 미검출:${missing} (기대 4/4 전부):"; printf '%s\n' "$res" | grep '_leak' || true; fail=1; }
-  [ "$fail" -eq 0 ] && echo " ✅ self-test PASS — 오탐 픽스처 4종 0건 · 누수 픽스처 4/4 포착 (규칙 = check 11 과 동일)"
+  [ "$fail" -eq 0 ] && echo " ✅ self-test PASS — 오탐 픽스처 9종 0건 · 누수 픽스처 4/4 포착 (규칙 = check 11 과 동일)"
   return $fail
 }
 

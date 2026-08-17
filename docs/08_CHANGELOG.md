@@ -1100,6 +1100,20 @@
 - **테스트**: `tests/unit/lib-verify-pace.test.ts` 신규 **5/5** — 낮음 연장(≥300ms)/높음 유지(<300ms)/스테일 복귀/레거시 마이그레이션/비숫자·빈 값 무시 (타이밍 기반, 100/500ms 축소 간격 + 여유 경계 300ms)
 - **검증**: bash -n 3개 OK · tsc 0 · eslint 0 · prettier clean · 전체 unit **143 파일 2,813/2,813 PASS** (중간 flake 는 기지의 동시 부하 bash 스폰 타임아웃 — 단독 전부 통과)
 
+### 수정 109: check 11/스캐너 오탐 필터 확장 회귀 — 실제 repo 패턴 6종 고정 (2026-08-17)
+- **작업 ID**: FIX-2026-08-17-23 (구현 + 테스트)
+- **요청**: check 11 전수 sweep 의 오탐(주석·config printf 라인 제외 로직)을 더 많은 실제 .sh 패턴으로 회귀 테스트해 견고성 검증
+- **실제 repo 채집 오탐 패턴 6종** (전부 0건이어야 함 — 양쪽 규칙에 픽스처로 고정):
+  ① 들여쓰기 주석 `    # -H "Authorization: Bearer ${TOKEN}"` (선행 공백 뒤 # 도 제외)
+  ② echo 이스케이프 `echo "      -H \"Authorization: Bearer ...\""` (create-logpush-datadog.sh:97 — `\"` 는 이중따옴표와 다름)
+  ③ echo + curl + 단일따옴표 `echo "   curl -s -H 'Authorization: Bearer ...' \"` (:202 — curl 이 있어도 `-H "Authorization` 조합 아니면 매치 안 됨)
+  ④ 변수 할당 `AUTH_HEADER="-H \"Authorization: Bearer $API_KEY\""` (cron-seed.sh:53 — curl 명령 라인 아님)
+  ⑤ sed 패턴 라인 `sed -n 's/^header = "Authorization: Bearer .../[curl -K config].../p'` (deploy-local-worktree.sh:259)
+  ⑥ 멀티라인 curl 정상 사용 (계속 라인에 자격증명 없음)
+- **산출물**: `scripts/scan-credential-sweep.sh`(--self-test 오탐 픽스처 4→9종) · `tests/unit/verify-deploy-workflow.test.ts`(check 11 실제 패턴 PASS 케이스 — String.raw 로 .sh 라인과 바이트 동일 표현)
+- **검증**: check 11 유닛 72/72 (신규 오탐 PASS 포함) · 스캐너 self-test 오탐 9종 0건 · 실 repo FP 0건 · tsc 0 · eslint 0 (String.raw 로 no-useless-escape 회피) · prettier clean
+- **한계 문서화**: 멀티라인 curl 의 **계속 라인**에 `-H "Authorization: Bearer"` 가 있으면 라인 단위 규칙 특성상 미검출 (같은 라인의 curl 필요) — 향후 강화 후보로 남김
+
 ### 수정 108: scan-credential-sweep.sh — check 11 규칙 재현 모니터 스캐너 (오탐 필터 고정 + FP 0건 감시) (2026-08-17)
 - **작업 ID**: FIX-2026-08-17-22 (구현 + 테스트)
 - **요청**: 전수 sweep 이 .py/.ts 등 비-.sh 파일(capture-webhook.py) 과 echo/printf 문서 라인의 오탐을 계속 걸러내는지, 실제 repo 에서 false positive 0건을 유지하는 모니터용 빠른 스캔 스크립트

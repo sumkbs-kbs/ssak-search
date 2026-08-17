@@ -157,6 +157,7 @@ experimentsRoute.post('/:name/click', async (c) => {
   const rateLimit = checkClientRateLimit(getClientIp(c.req.raw.headers), {
     tenantId: undefined,
     tenantsConfig: c.env.TENANTS_CONFIG,
+    env: c.env,
   })
   if (!rateLimit.allowed) {
     return c.json<ErrorResponse>({ detail: 'Rate limit exceeded', code: 'rate_limited' }, 429)

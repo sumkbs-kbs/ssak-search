@@ -8,7 +8,7 @@
  */
 
 import { describe, it, expect, beforeEach } from 'vitest'
-import { checkIpRateLimit } from '../../src/lib/security-middleware'
+import { checkIpRateLimit, resolveIpRateLimit } from '../../src/lib/security-middleware'
 
 const IP_RATE_LIMIT = 10
 
@@ -77,5 +77,20 @@ describe('checkIpRateLimit slot accounting', () => {
       expect(checkIpRateLimit(ip, customLimit).allowed).toBe(true)
     }
     expect(checkIpRateLimit(ip, customLimit).allowed).toBe(false)
+  })
+})
+
+describe('resolveIpRateLimit (수정 97 — 무인증 게이트 RATE_LIMIT_PER_MIN 오버라이드)', () => {
+  it('미설정/빈값/비숫자/0 이하 → 기본 10 유지 (보안 게이트 불변)', () => {
+    expect(resolveIpRateLimit({})).toBe(10)
+    expect(resolveIpRateLimit({ RATE_LIMIT_PER_MIN: '' })).toBe(10)
+    expect(resolveIpRateLimit({ RATE_LIMIT_PER_MIN: 'abc' })).toBe(10)
+    expect(resolveIpRateLimit({ RATE_LIMIT_PER_MIN: '0' })).toBe(10)
+    expect(resolveIpRateLimit({ RATE_LIMIT_PER_MIN: '-3' })).toBe(10)
+  })
+
+  it('양의 정수 → 그 값 (60/min 상향 옵션 — auth.ts 와 같은 env 공유)', () => {
+    expect(resolveIpRateLimit({ RATE_LIMIT_PER_MIN: '60' })).toBe(60)
+    expect(resolveIpRateLimit({ RATE_LIMIT_PER_MIN: 60 })).toBe(60)
   })
 })

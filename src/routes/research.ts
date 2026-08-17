@@ -25,7 +25,7 @@ researchRoute.use('/*', cors({ origin: '*' }))
 // Rate limit middleware (per-IP tracking)
 researchRoute.use('/*', async (c, next) => {
   const clientIp = getClientIp(c.req.raw.headers)
-  const rateLimit = checkClientRateLimit(clientIp)
+  const rateLimit = checkClientRateLimit(clientIp, { env: c.env })
   if (!rateLimit.allowed) {
     return c.json<ErrorResponse>(
       { detail: 'Research rate limit exceeded. Try again later.', code: 'rate_limited' },

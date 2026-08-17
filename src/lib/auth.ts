@@ -60,6 +60,23 @@ export interface AuthResult {
 /** Default rate limit: requests per minute per client IP */
 const DEFAULT_RATE_LIMIT = 30
 
+/** Env shape needed for the RATE_LIMIT_PER_MIN override (수정 97) */
+export type RateLimitEnv = { RATE_LIMIT_PER_MIN?: string | number }
+
+/**
+ * Resolve the default per-IP rate limit from env (수정 97).
+ * RATE_LIMIT_PER_MIN 가 양의 정수이면 그 값(60/min 상향 옵션), 그 외(미설정/
+ * 빈값/비숫자/0 이하) 는 fallback (기본 30) — 잘못된 값으로 한도가 0/무한이
+ * 되는 사고를 차단한다.
+ */
+export function resolveRateLimitPerMin(env?: RateLimitEnv, fallback = DEFAULT_RATE_LIMIT): number {
+  const raw = env?.RATE_LIMIT_PER_MIN
+  if (raw === undefined || raw === null || raw === '') return fallback
+  const n = typeof raw === 'number' ? raw : Number(raw)
+  if (!Number.isInteger(n) || n <= 0) return fallback
+  return n
+}
+
 /** Default tenant used when only SEARCH_API_KEY is set */
 const DEFAULT_TENANT: TenantConfig = {
   id: '__default__',
@@ -118,20 +135,24 @@ export function resolveTenant(
 }
 
 /**
- * Get tenant rate limit (per-minute) from tenant config, or default.
+ * Get tenant rate limit (per-minute) from tenant config, or env-default (수정 97).
  */
-export function getTenantRateLimit(tenantId: string, tenantsConfig: string | undefined): number {
-  if (tenantId === '__default__') return DEFAULT_RATE_LIMIT
+export function getTenantRateLimit(tenantId: string, tenantsConfig: string | undefined, env?: RateLimitEnv): number {
+  if (tenantId === '__default__') return resolveRateLimitPerMin(env)
   const tenants = parseTenantsConfig(tenantsConfig)
   const t = tenants.find((t) => t.id === tenantId)
-  return t?.rateLimitPerMinute ?? DEFAULT_RATE_LIMIT
+  return t?.rateLimitPerMinute ?? resolveRateLimitPerMin(env)
 }
 
-export function getTenantPerIpRateLimit(tenantId: string, tenantsConfig: string | undefined): number {
-  if (tenantId === '__default__') return DEFAULT_RATE_LIMIT
+export function getTenantPerIpRateLimit(
+  tenantId: string,
+  tenantsConfig: string | undefined,
+  env?: RateLimitEnv,
+): number {
+  if (tenantId === '__default__') return resolveRateLimitPerMin(env)
   const tenants = parseTenantsConfig(tenantsConfig)
   const t = tenants.find((t) => t.id === tenantId)
-  return t?.perIpRateLimit ?? t?.rateLimitPerMinute ?? DEFAULT_RATE_LIMIT
+  return t?.perIpRateLimit ?? t?.rateLimitPerMinute ?? resolveRateLimitPerMin(env)
 }
 
 // ============================================================
@@ -314,15 +335,16 @@ function rateLimitKey(tenantId: string | undefined, clientIp: string): string {
  */
 export function checkClientRateLimit(
   clientIp: string,
-  options?: { tenantId?: string; tenantsConfig?: string },
+  options?: { tenantId?: string; tenantsConfig?: string; env?: RateLimitEnv },
 ): { allowed: boolean; remaining: number } {
   const now = Date.now()
   const windowMs = 60_000 // 1 minute
 
   const key = rateLimitKey(options?.tenantId, clientIp)
+  // 수정 97: env 오버라이드(RATE_LIMIT_PER_MIN) — 오픈 모드·기본 테넌트 한도 상향
   const limit = options?.tenantId
-    ? getTenantPerIpRateLimit(options.tenantId, options?.tenantsConfig)
-    : DEFAULT_RATE_LIMIT
+    ? getTenantPerIpRateLimit(options.tenantId, options?.tenantsConfig, options?.env)
+    : resolveRateLimitPerMin(options?.env)
 
   let state = clientStates.get(key)
   if (!state) {

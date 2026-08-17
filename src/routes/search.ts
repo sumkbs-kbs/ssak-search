@@ -131,6 +131,7 @@ searchRoute.use('/*', async (c, next) => {
   const rateLimit = checkClientRateLimit(clientIp, {
     tenantId,
     tenantsConfig: c.env.TENANTS_CONFIG,
+    env: c.env,
   })
   if (!rateLimit.allowed) {
     auditRateLimit(clientIp, c.req.path, rateLimit.remaining)

@@ -34,6 +34,20 @@ const IP_RATE_WINDOW_MS = 60_000 // 1 minute
 const IP_RATE_LIMIT = 10 // requests per window
 
 /**
+ * 수정 97 — 무인증 API 게이트 한도: RATE_LIMIT_PER_MIN env 로 상향 가능.
+ * auth.ts 의 resolveRateLimitPerMin 과 같은 값(60/min 상향 옵션) 을 공유하되
+ * 기본값은 이 미들웨어의 보안 게이트(10) 를 유지한다 — env 미설정/잘못된 값이면
+ * 10 그대로 (운영자가 명시적으로 올리지 않는 한 방어 수준 불변).
+ */
+export function resolveIpRateLimit(env: { RATE_LIMIT_PER_MIN?: string | number }): number {
+  const raw = env?.RATE_LIMIT_PER_MIN
+  if (raw === undefined || raw === null || raw === '') return IP_RATE_LIMIT
+  const n = typeof raw === 'number' ? raw : Number(raw)
+  if (!Number.isInteger(n) || n <= 0) return IP_RATE_LIMIT
+  return n
+}
+
+/**
  * Check if an IP is rate limited.
  * Returns { allowed: boolean, remaining: number }
  *
@@ -97,6 +111,9 @@ export async function securityMiddleware(c: Context<{ Bindings: AppBindings }>, 
   const path = c.req.path
   const clientIp = getClientIp(c.req.raw.headers)
   const isApi = path.startsWith('/api/')
+  // 수정 97: env 오버라이드 반영 (RATE_LIMIT_PER_MIN — 60/min 상향 옵션).
+  // 무인증 게이트의 차단·헤더 보고·감사 로그가 모두 같은 값 사용.
+  const ipRateLimit = resolveIpRateLimit(c.env)
 
   // Per-IP rate limiting for non-authenticated API requests
   if (isApi) {
@@ -107,7 +124,7 @@ export async function securityMiddleware(c: Context<{ Bindings: AppBindings }>, 
       // Exempt monitoring/health check endpoints so the monitoring workflow
       // doesn't trigger false-positive rate limit blocks.
       if (path !== '/api/health' && path !== '/api/metrics' && path !== '/api/monitor') {
-        const rateCheck = checkIpRateLimit(clientIp)
+        const rateCheck = checkIpRateLimit(clientIp, ipRateLimit)
         if (!rateCheck.allowed) {
           // Audit rate limit violation
           audit({
@@ -116,7 +133,7 @@ export async function securityMiddleware(c: Context<{ Bindings: AppBindings }>, 
             outcome: 'blocked',
             resource: path,
             actor: clientIp,
-            context: { limit: IP_RATE_LIMIT, type: 'ip_based' },
+            context: { limit: ipRateLimit, type: 'ip_based' },
           })
 
           return c.json({ detail: 'Rate limit exceeded. Sign up for an API key at /docs', code: 'rate_limited' }, 429, {
@@ -152,8 +169,8 @@ export async function securityMiddleware(c: Context<{ Bindings: AppBindings }>, 
     // Add rate limit headers. record:false — this is a REPORTING call, not an
     // enforcement call; consuming a slot here would double-count every request
     // and silently halve the effective per-IP limit (10/min → 5/min).
-    const ipLimit = checkIpRateLimit(clientIp, IP_RATE_LIMIT, { record: false })
-    c.res.headers.set('X-RateLimit-Limit', String(IP_RATE_LIMIT))
+    const ipLimit = checkIpRateLimit(clientIp, ipRateLimit, { record: false })
+    c.res.headers.set('X-RateLimit-Limit', String(ipRateLimit))
     c.res.headers.set('X-RateLimit-Remaining', String(ipLimit.remaining))
     c.res.headers.set('X-RateLimit-Reset', String(Math.ceil(Date.now() / 1000) + 60))
   } else {

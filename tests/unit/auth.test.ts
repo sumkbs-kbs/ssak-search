@@ -4,7 +4,10 @@ import {
   validateApiKeyWithTenant,
   parseTenantsConfig,
   checkClientRateLimit,
+  resolveRateLimitPerMin,
   getClientIp,
+  getTenantRateLimit,
+  getTenantPerIpRateLimit,
 } from '../../src/lib/auth'
 
 function makeHeaders(obj: Record<string, string>): Headers {
@@ -92,6 +95,63 @@ describe('checkClientRateLimit', () => {
     // above 1000, which we don't dare test directly to avoid burning memory.
     const result = checkClientRateLimit('198.51.100.1')
     expect(result.allowed).toBe(true)
+  })
+})
+
+describe('resolveRateLimitPerMin (수정 97 — RATE_LIMIT_PER_MIN env 오버라이드)', () => {
+  it('미설정/빈값 → 기본 30 유지', () => {
+    expect(resolveRateLimitPerMin()).toBe(30)
+    expect(resolveRateLimitPerMin({})).toBe(30)
+    expect(resolveRateLimitPerMin({ RATE_LIMIT_PER_MIN: '' })).toBe(30)
+  })
+
+  it('양의 정수(문자열/숫자) → 그 값 (60/min 상향 옵션)', () => {
+    expect(resolveRateLimitPerMin({ RATE_LIMIT_PER_MIN: '60' })).toBe(60)
+    expect(resolveRateLimitPerMin({ RATE_LIMIT_PER_MIN: 60 })).toBe(60)
+    expect(resolveRateLimitPerMin({ RATE_LIMIT_PER_MIN: '120' })).toBe(120)
+  })
+
+  it('비숫자/0 이하/소수 → 기본 30 (잘못된 값으로 한도가 0·무한이 되는 사고 차단)', () => {
+    expect(resolveRateLimitPerMin({ RATE_LIMIT_PER_MIN: 'abc' })).toBe(30)
+    expect(resolveRateLimitPerMin({ RATE_LIMIT_PER_MIN: '0' })).toBe(30)
+    expect(resolveRateLimitPerMin({ RATE_LIMIT_PER_MIN: '-5' })).toBe(30)
+    expect(resolveRateLimitPerMin({ RATE_LIMIT_PER_MIN: '3.5' })).toBe(30)
+  })
+
+  it('fallback 인자로 기본값 변경 가능 (미들웨어 10/min 공유용)', () => {
+    expect(resolveRateLimitPerMin(undefined, 10)).toBe(10)
+    expect(resolveRateLimitPerMin({ RATE_LIMIT_PER_MIN: '60' }, 10)).toBe(60)
+    expect(resolveRateLimitPerMin({ RATE_LIMIT_PER_MIN: 'bad' }, 10)).toBe(10)
+  })
+})
+
+describe('checkClientRateLimit env 오버라이드 (수정 97)', () => {
+  it('오픈 모드(tenant 없음): RATE_LIMIT_PER_MIN=60 이면 61번째 요청부터 차단', () => {
+    const ip = `10.60.60.${Math.floor(Math.random() * 1000)}`
+    let last: { allowed: boolean; remaining: number } | undefined
+    for (let i = 0; i < 60; i++) {
+      last = checkClientRateLimit(ip, { env: { RATE_LIMIT_PER_MIN: '60' } })
+      expect(last.allowed).toBe(true)
+    }
+    const blocked = checkClientRateLimit(ip, { env: { RATE_LIMIT_PER_MIN: '60' } })
+    expect(blocked.allowed).toBe(false)
+    expect(blocked.remaining).toBe(0)
+  })
+
+  it('오픈 모드 env 미지정 → 기본 30 유지 (기존 동작 불변)', () => {
+    const ip = `10.30.30.${Math.floor(Math.random() * 1000)}`
+    let last: { allowed: boolean; remaining: number } | undefined
+    for (let i = 0; i < 30; i++) {
+      last = checkClientRateLimit(ip)
+      expect(last.allowed).toBe(true)
+    }
+    expect(checkClientRateLimit(ip).allowed).toBe(false)
+  })
+
+  it('기본 테넌트(__default__) 한도도 env 오버라이드를 따른다', () => {
+    expect(getTenantPerIpRateLimit('__default__', undefined, { RATE_LIMIT_PER_MIN: '60' })).toBe(60)
+    expect(getTenantPerIpRateLimit('__default__', undefined)).toBe(30)
+    expect(getTenantRateLimit('__default__', undefined, { RATE_LIMIT_PER_MIN: '120' })).toBe(120)
   })
 })
 

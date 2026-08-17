@@ -26,7 +26,7 @@ chatRoute.use('/*', cors({ origin: '*' }))
 async function checkRateLimit(c: Context<{ Bindings: AppBindings }>): Promise<boolean> {
   const { checkClientRateLimit, getClientIp } = await import('../lib/auth')
   const clientIp = getClientIp(c.req.raw.headers)
-  const rateLimit = checkClientRateLimit(clientIp)
+  const rateLimit = checkClientRateLimit(clientIp, { env: c.env })
   if (!rateLimit.allowed) {
     return false
   }

@@ -606,6 +606,10 @@ export interface AppBindings {
   SEARCH_API_KEY?: string
   // Multi-tenant config (JSON array of TenantConfig, stored as secret)
   TENANTS_CONFIG?: string
+  // Default per-IP rate limit override (requests/min — 수정 97: 기본 30, 60/min
+  // 상향 옵션). auth.ts resolveRateLimitPerMin + security-middleware 의 무인증
+  // 게이트가 함께 읽는다 — 잘못된 값/미설정이면 기본값 유지.
+  RATE_LIMIT_PER_MIN?: string
   // Workers AI binding (optional)
   AI?: Ai
   // Durable Object for rate limiting

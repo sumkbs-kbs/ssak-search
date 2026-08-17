@@ -179,6 +179,7 @@ newsRoute.use('/*', async (c, next) => {
   const rateLimit = checkClientRateLimit(clientIp, {
     tenantId: authResult.tenant?.id,
     tenantsConfig: c.env.TENANTS_CONFIG,
+    env: c.env,
   })
   if (!rateLimit.allowed) {
     return c.json<ErrorResponse>({ detail: 'Rate limit exceeded. Try again later.', code: 'rate_limited' }, 429, {

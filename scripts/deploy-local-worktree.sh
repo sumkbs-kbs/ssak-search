@@ -749,12 +749,16 @@ print(h.get("build_commit",""))' 2>/dev/null || echo '')"
         echo "   (rollback-e2e) E2E_FORCE_BUNDLE_MISMATCH=1 — 번들 커밋 검증을 의도적으로 불일치로 취급 (테스트 훅)" >&2
         BUNDLE_COMMIT="e2e-forced-mismatch"
       fi
-      if [ "$BUNDLE_COMMIT" = "$FULL_SHA" ]; then
+      # 수정 98: prefix 매칭 — verify-pages-bundle.sh 수정 92 패턴과 일치시킨다.
+      # bash glob `"$FULL_SHA"*` 은 리터럴 접두사 비교라 FULL_SHA(전체 40자)면
+      # 기존 정확 일치와 동일하게 동작하고, build_commit 이 short/변형으로 오는
+      # 경우에도 오탐 없이 판정한다 (양쪽 검증 경로 동일 규칙).
+      if [[ "$BUNDLE_COMMIT" == "$FULL_SHA"* ]]; then
         PAGES_BUNDLE_OK=1
-        echo "   ✅ 번들 커밋 검증: $PAGES_DEPLOY_URL → build_commit=$SHORT_SHA (배포된 번들이 대상 커밋 포함)"
+        echo "   ✅ 번들 커밋 검증: $PAGES_DEPLOY_URL → build_commit=${BUNDLE_COMMIT:0:${#FULL_SHA}} (배포된 번들이 대상 커밋 포함 — prefix 매칭)"
       else
         PAGES_BUNDLE_OK=0
-        echo " ❌ 번들 커밋 불일치: 배포 URL build_commit='${BUNDLE_COMMIT:-비어있음}' vs 대상 $SHORT_SHA" >&2
+        echo " ❌ 번들 커밋 불일치: 배포 URL build_commit='${BUNDLE_COMMIT:-비어있음}' vs 대상 $SHORT_SHA (prefix 매칭 실패)" >&2
         echo "    (재시도 ${BUNDLE_VERIFY_RETRIES:-5}회 후에도 조회 실패/불일치 — 전파 레이스가 아니라 스테일 의심)" >&2
         echo "    판정 전에 deployment list 의 Source commit 과 대조 후 재배포 권장 — 단발 조회로 인한 오탐은 재시도로 흡수됩니다." >&2
         if [ "$AUTO_ROLLBACK" = "1" ]; then
@@ -1130,9 +1134,10 @@ if [ "$REDEPLOY_PENDING" = "1" ]; then
     REDEPLOY_COMMIT="$(curl -s -m 20 "$REDEPLOY_URL/api/health" | python3 -c 'import json,sys
 h=json.load(sys.stdin)
 print(h.get("build_commit",""))' 2>/dev/null || echo '')"
-    if [ "$REDEPLOY_COMMIT" = "$FULL_SHA" ]; then
+    # 수정 98: 위 수정 56 판정부와 동일한 prefix 매칭 (verify-pages-bundle.sh 수정 92).
+    if [[ "$REDEPLOY_COMMIT" == "$FULL_SHA"* ]]; then
       REDEPLOY_OK=1
-      echo "   ✅ 재배포 번들 검증: $REDEPLOY_URL → build_commit=$SHORT_SHA (캐시 무효화로 복구)"
+      echo "   ✅ 재배포 번들 검증: $REDEPLOY_URL → build_commit=${REDEPLOY_COMMIT:0:${#FULL_SHA}} (캐시 무효화로 복구 — prefix 매칭)"
       break
     fi
     echo "   ⚠️  재배포 후에도 불일치 (build_commit='${REDEPLOY_COMMIT:-비어있음}' vs $SHORT_SHA) — 재시도" >&2

@@ -41,6 +41,7 @@ import {
   isCircuitOpenError,
 } from './util'
 import { withRetry, splitRetryBudget } from './resilience/retry'
+import { setSharedCooldown, getSharedCooldown, resetSharedCooldownLocal } from './rate-limiter'
 
 /**
  * Transient failure from the Stack Exchange API — the ONLY error class worth
@@ -78,6 +79,72 @@ export interface StackExchangeSearchOptions {
  */
 let quotaRemaining = 300
 const QUOTA_FLOOR = 10
+
+/**
+ * Cross-isolate SE quota cooldown (Phase 1-4, 2026-08-17). docs/18 실측:
+ * SE 의 keyless rate-limit 은 HTTP 400 + error_id 502 로 오며 (429 아님), egress IP
+ * 기준 **일일 쿼터** 로서 22h+ 창이 현실이다. 기존 코드는 429 만 쿼터 가드로
+ * 처리해 400+502 는 매 요청마다 다시 fetch → egress IP 를 해머링했고, 격리
+ * (isolate) 단위 가드라 다른 격리는 독립적으로 재시도했다. wikipedia(S73)/github/
+ * arxiv 의 공유 가드 패턴을 그대로 적용한다 — DO 스토리지 키를 통해 모든 격리가
+ * 같은 rate-limit 창을 건너뛴다.
+ */
+const STACK_EXCHANGE_COOLDOWN_KEY = 'cooldown:stack-exchange'
+/** SE 일일 쿼터 창은 실측 22h — 병리적 값이 며칠 막지 않도록 24h 상한. */
+const MAX_SE_COOLDOWN_MS = 24 * 60 * 60 * 1000
+/** body 없는 429 등 메시지 미파싱 시의 보수적 기본 창. */
+const DEFAULT_SE_COOLDOWN_MS = 60_000
+let stackExchangeRateLimitedUntil = 0
+
+/** TEST HOOK: reset the cross-isolate SE rate-guard state. */
+export function resetStackExchangeRateState(): void {
+  stackExchangeRateLimitedUntil = 0
+  resetSharedCooldownLocal(STACK_EXCHANGE_COOLDOWN_KEY)
+}
+
+/** True when this isolate's SE guard window has not passed. EXPORTED FOR TESTS. */
+export function isStackExchangeRateLimited(now: number = Date.now()): boolean {
+  return now < stackExchangeRateLimitedUntil
+}
+
+/**
+ * Cross-isolate SE quota check — local guard first (fast path), then the
+ * shared DO cooldown when the local window is clean (isWikipediaRateLimitedShared
+ * 와 동일 rationale).
+ */
+export async function isStackExchangeRateLimitedShared(
+  env: Env | undefined,
+  now: number = Date.now(),
+): Promise<boolean> {
+  if (stackExchangeRateLimitedUntil > now) return true
+  const untilMs = await getSharedCooldown(env, STACK_EXCHANGE_COOLDOWN_KEY, now)
+  if (untilMs > now) {
+    stackExchangeRateLimitedUntil = Math.max(stackExchangeRateLimitedUntil, untilMs)
+    return true
+  }
+  return false
+}
+
+/**
+ * Mirror the current SE cooldown deadline into shared DO storage so other
+ * isolates skip the API for the same reset window.
+ */
+export async function mirrorStackExchangeCooldown(env: Env | undefined): Promise<void> {
+  await setSharedCooldown(env, STACK_EXCHANGE_COOLDOWN_KEY, stackExchangeRateLimitedUntil)
+}
+
+/**
+ * Arm the SE guard from a rate-limit response. SE 의 rate-limit 응답 body 는
+ * "more requests available in N seconds" 를 실어 권위적 재개 시각을 제공한다
+ * (docs/18 실측 79048s ≈ 22h). N 을 파싱해 [60s, 24h] 로 클램프; 429 등 body
+ * 없는 경우 60s 보수 기본. EXPORTED FOR TESTS.
+ */
+export function recordStackExchangeRateLimit(bodyText: string, now: number = Date.now()): void {
+  const m = /more requests available in (\d+) seconds/.exec(bodyText)
+  const secs = m ? Number(m[1]) : 60
+  const cooldownMs = Math.min(Math.max(secs * 1000, DEFAULT_SE_COOLDOWN_MS), MAX_SE_COOLDOWN_MS)
+  stackExchangeRateLimitedUntil = Math.max(stackExchangeRateLimitedUntil, now + cooldownMs)
+}
 
 /**
  * Parse a Stack Exchange search/advanced response into SearchResult[].
@@ -139,6 +206,15 @@ export async function stackExchangeSearch(
     logger.warn('Stack Exchange API quota floor reached — skipping', { quotaRemaining })
     return []
   }
+  // Phase 1-4: cross-isolate cooldown — 다른 격리가 이미 egress IP 일일 쿼터
+  // 소진을 발견했으면 이 격리도 fetch 전에 스킵 (해머링 방지).
+  if (await isStackExchangeRateLimitedShared(env)) {
+    logger.warn('Stack Exchange API rate-limit cooldown active — skipping', {
+      resumeAt: new Date(stackExchangeRateLimitedUntil).toISOString(),
+      quotaRemaining,
+    })
+    return []
+  }
 
   try {
     // Simplify for the API: strip years/filler, keep key terms (mirrors
@@ -194,16 +270,23 @@ export async function stackExchangeSearch(
     })
 
     if (!response?.ok) {
-      if (response?.status === 429) {
-        // 429 = keyless quota exhausted (300/day/IP). Hard-stop the quota
-        // guard so every later query skips the API entirely — the previous
-        // behavior kept calling into the exhausted window, the circuit's
-        // failure counter grew to the trip threshold, and the open circuit
-        // fail-fast'ed for the rest of the day. quotaRemaining=0 → the guard
-        // returns [] BEFORE any fetch/acquire, so no new failures accumulate.
-        quotaRemaining = 0
+      const status = response?.status
+      if (response && (status === 429 || status === 400)) {
+        // SE 의 keyless rate-limit 은 429 가 아니라 **400 + error_id 502** 로 온다
+        // (docs/18 실측) — 400 body 를 읽어 502 여부를 판정한다.
+        let bodyText = ''
+        if (status === 400) bodyText = await response.text().catch(() => '')
+        const isRateLimit = status === 429 || /error_id["']?\s*[:=]\s*502/.test(bodyText)
+        if (isRateLimit) {
+          // 429/400+502 = egress IP 일일 쿼터 소진. 로컬 가드 하드스톱
+          // (quotaRemaining=0) + 크로스-isolate 공유 창 arm — 모든 격리가
+          // 리셋까지 fetch 없이 스킵 (기존: 격리 단위 가드라 독립 재해머링).
+          quotaRemaining = 0
+          recordStackExchangeRateLimit(bodyText)
+          await mirrorStackExchangeCooldown(env)
+        }
       }
-      if (response) logger.warn('Stack Exchange API non-OK:', { status: response.status })
+      if (response) logger.warn('Stack Exchange API non-OK:', { status: response?.status })
       return []
     }
     const data = (await response.json()) as { quota_remaining?: number; backoff?: number }

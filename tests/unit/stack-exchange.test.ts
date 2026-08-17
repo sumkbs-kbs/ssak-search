@@ -16,7 +16,30 @@ vi.mock('../../src/lib/util', async (importOriginal) => {
   return { ...actual, fetchWithTimeout: (...args: unknown[]) => mockFetchWithTimeout(...args) }
 })
 
-import { parseStackExchangeResponse, stackExchangeSearch, resetStackExchangeQuota } from '../../src/lib/stack-exchange'
+// Cross-isolate cooldown DO mocks (specialized.test.ts 와 동일 패턴 — S73)
+const cooldownMocks = vi.hoisted(() => ({
+  setSharedCooldown: vi.fn(async (_env: unknown, _key: string, _untilMs: number) => {}),
+  getSharedCooldown: vi.fn(async (_env: unknown, _key: string, _now: number) => 0),
+  resetSharedCooldownLocal: vi.fn(() => {}),
+}))
+vi.mock('../../src/lib/rate-limiter', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../../src/lib/rate-limiter')>()
+  return {
+    ...actual,
+    setSharedCooldown: cooldownMocks.setSharedCooldown,
+    getSharedCooldown: cooldownMocks.getSharedCooldown,
+    resetSharedCooldownLocal: cooldownMocks.resetSharedCooldownLocal,
+  }
+})
+
+import {
+  parseStackExchangeResponse,
+  stackExchangeSearch,
+  resetStackExchangeQuota,
+  resetStackExchangeRateState,
+  isStackExchangeRateLimited,
+  recordStackExchangeRateLimit,
+} from '../../src/lib/stack-exchange'
 
 const SO_ITEMS = {
   items: [
@@ -89,6 +112,10 @@ describe('parseStackExchangeResponse', () => {
 describe('stackExchangeSearch — quota guard / fetch', () => {
   beforeEach(() => {
     resetStackExchangeQuota()
+    resetStackExchangeRateState()
+    cooldownMocks.setSharedCooldown.mockClear()
+    cooldownMocks.getSharedCooldown.mockClear()
+    cooldownMocks.getSharedCooldown.mockResolvedValue(0)
     mockFetchWithTimeout.mockReset()
   })
 
@@ -202,5 +229,71 @@ describe('stackExchangeSearch — quota guard / fetch', () => {
     expect(mockFetchWithTimeout).toHaveBeenCalledTimes(1)
     await stackExchangeSearch('q', { maxResults: 5, timeoutMs: 4000 })
     expect(mockFetchWithTimeout).toHaveBeenCalledTimes(1) // no new fetch
+  })
+
+  // ── Phase 1-4: SE 400+error_id 502 일일 쿼터 인지 + 크로스-isolate 공유 가드 ──
+  it('arms the shared cooldown on 400 + error_id 502 (SE rate-limit shape) and parses the resume window', async () => {
+    mockFetchWithTimeout.mockResolvedValueOnce({
+      ok: false,
+      status: 400,
+      text: async () =>
+        JSON.stringify({
+          error_id: 502,
+          error_message: 'too many requests from this IP, more requests available in 300 seconds',
+        }),
+    } as unknown as Response)
+    const r = await stackExchangeSearch('q', { maxResults: 5, timeoutMs: 4000, env: {} as never })
+    expect(r).toEqual([])
+    // 로컬 가드 armed — 파싱된 300s 창 반영
+    const now = Date.now()
+    expect(isStackExchangeRateLimited(now + 299_000)).toBe(true)
+    expect(isStackExchangeRateLimited(now + 301_000)).toBe(false)
+    // DO 미러 — 다른 격리도 같은 창을 본다
+    expect(cooldownMocks.setSharedCooldown).toHaveBeenCalledWith(
+      expect.anything(),
+      'cooldown:stack-exchange',
+      expect.any(Number),
+    )
+  })
+
+  it('skips the API entirely when another isolate armed the shared cooldown (no fetch)', async () => {
+    cooldownMocks.getSharedCooldown.mockResolvedValue(Date.now() + 3_600_000)
+    const r = await stackExchangeSearch('q', { maxResults: 5, timeoutMs: 4000, env: {} as never })
+    expect(r).toEqual([])
+    expect(mockFetchWithTimeout).not.toHaveBeenCalled()
+  })
+
+  it('adopts a shared cooldown into the local guard for subsequent requests', async () => {
+    cooldownMocks.getSharedCooldown.mockResolvedValue(Date.now() + 3_600_000)
+    await stackExchangeSearch('q', { maxResults: 5, timeoutMs: 4000, env: {} as never }) // fetch 스킵 + 로컬 채택
+    expect(isStackExchangeRateLimited()).toBe(true)
+  })
+
+  it('does NOT arm the cooldown on a bare 400 (permanent refusal, not rate-limit)', async () => {
+    mockFetchWithTimeout.mockResolvedValueOnce({
+      ok: false,
+      status: 400,
+      text: async () => JSON.stringify({ error_id: 400, error_message: 'bad parameter' }),
+    } as unknown as Response)
+    const r = await stackExchangeSearch('q', { maxResults: 5, timeoutMs: 4000, env: {} as never })
+    expect(r).toEqual([])
+    expect(isStackExchangeRateLimited()).toBe(false)
+    expect(cooldownMocks.setSharedCooldown).not.toHaveBeenCalled()
+  })
+
+  it('arms a conservative 60s window on a bare 429 (no resume message)', async () => {
+    mockFetchWithTimeout.mockResolvedValueOnce({ ok: false, status: 429 } as unknown as Response)
+    const r = await stackExchangeSearch('q', { maxResults: 5, timeoutMs: 4000, env: {} as never })
+    expect(r).toEqual([])
+    const now = Date.now()
+    expect(isStackExchangeRateLimited(now + 59_000)).toBe(true)
+    expect(isStackExchangeRateLimited(now + 61_000)).toBe(false)
+  })
+
+  it('clamps a pathological resume window to 24h (recordStackExchangeRateLimit)', () => {
+    recordStackExchangeRateLimit('too many requests from this IP, more requests available in 9999999 seconds')
+    const now = Date.now()
+    expect(isStackExchangeRateLimited(now + 24 * 60 * 60 * 1000 - 1000)).toBe(true)
+    expect(isStackExchangeRateLimited(now + 24 * 60 * 60 * 1000 + 1000)).toBe(false)
   })
 })

@@ -1100,6 +1100,13 @@
 - **테스트**: `tests/unit/lib-verify-pace.test.ts` 신규 **5/5** — 낮음 연장(≥300ms)/높음 유지(<300ms)/스테일 복귀/레거시 마이그레이션/비숫자·빈 값 무시 (타이밍 기반, 100/500ms 축소 간격 + 여유 경계 300ms)
 - **검증**: bash -n 3개 OK · tsc 0 · eslint 0 · prettier clean · 전체 unit **143 파일 2,813/2,813 PASS** (중간 flake 는 기지의 동시 부하 bash 스폰 타임아웃 — 단독 전부 통과)
 
+### 수정 106: set-slack-webhook.sh — ALERT_SLACK_WEBHOOK 실 URL 교체 + 반영 검증 스크립트 (2026-08-17)
+- **작업 ID**: FIX-2026-08-17-20 (구현 + 테스트)
+- **배경**: 웹훅 URL 없이 가능한 마지막 검증으로 임의 테스트 값을 ALERT_SLACK_WEBHOOK 에 설정 → [14] Notify 가 `SLACK_WEBHOOK: ***`(env 해석) + `✅ Slack 알림 전송됨 (danger)` + argv/로그 URL 0회 를 신선 run(run 32015278011)으로 확인. 남은 실 Slack 수락(200+{"ok":true})은 실 URL 로만 가능 — **교체 절차를 스크립트로 정식화**
+- **구현** (`scripts/set-slack-webhook.sh`): ① URL 주입은 **파일/stdin 전용** (argv 노출 금지 — 수정 100/105 원칙) ② 형식 검증 (hooks.slack.com/services/T…/B…/토큰) ③ gh secret set (stdin) ④ updated_at 전/후 비교로 반영 ground-truth (verify-secret-set "조용한 실패 감지" 패턴) ⑤ `--live-check` 선택 — 테스트 메시지 POST → {"ok":true} 수락 확인 (실 Slack 에 1건 발송됨을 명시)
+- **사용법**: `umask 077 && printf '%s' '<URL>' > /tmp/slack-webhook.txt` → `bash scripts/set-slack-webhook.sh --file /tmp/slack-webhook.txt` (또는 `--live-check` 로 실 수신까지)
+- **테스트**: `tests/unit/set-slack-webhook.test.ts` 신규 **9/9** (happy/stdin/형식/미인증/조용한 실패/set 실패/파일 부재/live-check 수락·거부 — fake gh/curl -K config 추출, verify-secret-set 패턴) · tsc 0 · eslint 0 · prettier clean · bash -n OK · 실 repo sweep(신규 .sh 포함) PASS
+
 ### 수정 105: 전수 curl argv 자격증명 금지 — 5개 스크립트 -K config 전환 + check 11 전수 sweep (2026-08-17)
 - **작업 ID**: FIX-2026-08-17-18 (구현 + 테스트 + 실 repo PASS)
 - **요청**: 워처 외 다른 스크립트(notify-pipeline-failure/verify-secret-set/create-logpush-datadog/verify-env-equivalence/verify-deploy-commit-sync)의 curl argv 토큰/웹훅 노출을 전수 조사해 같은 패턴(-K config)으로 정리

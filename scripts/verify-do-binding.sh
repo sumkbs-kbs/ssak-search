@@ -110,10 +110,16 @@ verify_cf_token() {
     return 0  # local wrangler OAuth path — no API token in play
   fi
   local tmp="/tmp/cf-token-verify-body.$$"
+  local curl_cfg
+  curl_cfg="$(mktemp)"
+  chmod 600 "$curl_cfg"
+  # curl config 파일에 URL/헤더 주입 — argv 에 토큰을 남기지 않는다
+  # (ps 프로세스 목록 / bash -x 로그 노출 차단 — rollback_pages 와 동일 패턴, 수정 84).
+  printf 'url = "https://api.cloudflare.com/client/v4/user/tokens/verify"\nheader = "Authorization: Bearer %s"\n' \
+    "${CLOUDFLARE_API_TOKEN}" > "$curl_cfg"
   local http_code
-  http_code="$(curl -s -m 10 -o "${tmp}" -w '%{http_code}' \
-    -H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" \
-    "https://api.cloudflare.com/client/v4/user/tokens/verify" 2>/dev/null || echo '000')"
+  http_code="$(curl -s -m 10 -o "${tmp}" -w '%{http_code}' -K "$curl_cfg" 2>/dev/null || echo '000')"
+  rm -f "$curl_cfg"
   # status_info: "yes|<days>|<date>" (active — <days> = 만료까지 남은 일수,
   # <date> = 만료일, 만료 없는 토큰은 yes||) / "no" (무효/파싱 실패).
   local status_info

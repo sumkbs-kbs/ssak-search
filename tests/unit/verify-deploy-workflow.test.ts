@@ -72,17 +72,45 @@ const GOOD_GUARD = `if [ -z "\${CLOUDFLARE_API_TOKEN:-}" ]; then
 fi
 `
 
+/**
+ * 수정 84: verify_cf_token() 이 curl -K config 로 토큰을 주입하는 guard 픽스처
+ * (argv 에 토큰을 두지 않음 — ps/bash -x 노출 차단, rollback_pages 와 동일 패턴).
+ * GOOD_GUARD(구 guard, verify_cf_token 없음) 와는 별개 — check 10 은
+ * verify_cf_token() 이 있을 때만 발동한다.
+ */
+const GOOD_GUARD_TOK = `verify_cf_token() {
+  if [ -z "\${CLOUDFLARE_API_TOKEN:-}" ]; then
+    return 0  # local wrangler OAuth path — no API token in play
+  fi
+  local tmp="/tmp/cf-token-verify-body.$$"
+  local curl_cfg
+  curl_cfg="$(mktemp)"
+  chmod 600 "$curl_cfg"
+  printf 'url = "https://api.cloudflare.com/client/v4/user/tokens/verify"\\nheader = "Authorization: Bearer %s"\\n' \\
+    "\${CLOUDFLARE_API_TOKEN}" > "$curl_cfg"
+  local http_code
+  http_code="$(curl -s -m 10 -o "\${tmp}" -w '%{http_code}' -K "$curl_cfg" 2>/dev/null || echo '000')"
+  rm -f "$curl_cfg"
+}
+if [ -z "\${CLOUDFLARE_API_TOKEN:-}" ]; then
+  echo " ❌ Cannot resolve the \${ENVIRONMENT} deployment AND CLOUDFLARE_API_TOKEN is empty — refusing to pass a guard that cannot verify." >&2
+  echo "    Check CLOUDFLARE_API_TOKEN / CLOUDFLARE_ACCOUNT_ID secrets are set." >&2
+  exit 1
+fi
+`
+
 const created: string[] = []
 
-/** 수정 78: 런타임 번들 검증 스크립트의 최소 마커 (build_commit 대조 + 수정 79 재시도 포함). */
+/** 수정 78: 런타임 번들 검증 스크립트의 최소 마커 (build_commit 대조 + 수정 79 재시도 포함).
+ *  수정 92/98: 대조는 prefix 매칭([[ "$BUNDLE_COMMIT" == "$EXPECTED"* ]]) — 정확 일치는 금지. */
 const GOOD_BUNDLE_SCRIPT = `#!/usr/bin/env bash
 set -u
-# build_commit 조회·대조 (수정 78) — 재시도 루프 (수정 79)
+# build_commit 조회·대조 (수정 78) — 재시도 루프 (수정 79) + prefix 매칭 (수정 92)
 BUNDLE_VERIFY_RETRIES=5
 BUNDLE_VERIFY_RETRY_WAIT=10
 npx wrangler pages deployment list --project-name=search-engine-api --json > /tmp/deployments.json 2>/dev/null || true
-if [ "$BUNDLE_COMMIT" = "$EXPECTED" ]; then
-  echo " ✅ 번들 커밋 검증: build_commit=ok"
+if [[ "$BUNDLE_COMMIT" == "$EXPECTED"* ]]; then
+  echo " ✅ 번들 커밋 검증: build_commit=ok (prefix 매칭)"
   exit 0
 fi
 exit 1
@@ -570,6 +598,34 @@ ${STAGING_PAGES_DEPLOY}${BUNDLE_VERIFY_STEP}      - name: Deploy probe-scheduler
       expect(outcome.detail).toContain('build_commit 조회·대조 로직이 없다')
     })
 
+    it('FAILs when verify-pages-bundle.sh 대조가 정확 일치로 회귀한다 (short SHA 오탐 재발, 수정 92)', () => {
+      // GOOD_BUNDLE_SCRIPT 의 prefix 매칭만 정확 일치로 되돌린다 — 나머지 마커
+      // (build_commit/deployment list/BUNDLE_VERIFY_RETRIES) 는 그대로라 회귀 지점이
+      // 비교 구문 하나라는 것을 정확히 단언한다.
+      const dir = writeRepo({ workflow: BUNDLE_VERIFY_WORKFLOW, skipBundleScript: true })
+      const bad = GOOD_BUNDLE_SCRIPT.replace(
+        'if [[ "$BUNDLE_COMMIT" == "$EXPECTED"* ]]; then',
+        'if [ "$BUNDLE_COMMIT" = "$EXPECTED" ]; then',
+      )
+      writeFileSync(join(dir, 'scripts', 'verify-pages-bundle.sh'), bad, 'utf-8')
+      const outcome = verifyDeployWorkflow(dir)
+      expectStatus(outcome, 'FAIL')
+      expect(outcome.detail).toContain('정확 일치로 회귀')
+    })
+
+    it('FAILs when verify-pages-bundle.sh 에 prefix 매칭 구문이 사라진다 (수정 92)', () => {
+      // 비교 구문 자체가 제거된 변형 — require 쪽 체크가 발동해야 한다.
+      const dir = writeRepo({ workflow: BUNDLE_VERIFY_WORKFLOW, skipBundleScript: true })
+      const stripped = GOOD_BUNDLE_SCRIPT.replace(
+        'if [[ "$BUNDLE_COMMIT" == "$EXPECTED"* ]]; then',
+        'if [ -n "$BUNDLE_COMMIT" ]; then',
+      )
+      writeFileSync(join(dir, 'scripts', 'verify-pages-bundle.sh'), stripped, 'utf-8')
+      const outcome = verifyDeployWorkflow(dir)
+      expectStatus(outcome, 'FAIL')
+      expect(outcome.detail).toContain('prefix 매칭')
+    })
+
     it('FAILs when 검증 스텝이 Pages 배포보다 앞에 있다 (배포 직후 검증이 아님)', () => {
       // 검증 스텝을 (원래 위치에서 제거하고) Pages 배포 블록 바로 앞으로 이동 —
       // steps: 시퀀스 내부이므로 YAML 이 깨지지 않는다.
@@ -630,6 +686,100 @@ ${STAGING_PAGES_DEPLOY}${BUNDLE_VERIFY_STEP}      - name: Deploy probe-scheduler
       const outcome = verifyDeployWorkflow(writeRepo({ deployScript: noReader }))
       expectStatus(outcome, 'FAIL')
       expect(outcome.detail).toContain('크로스플랫폼 OAuth 토큰 리더')
+    })
+
+    it('PASSes when 토큰 우선순위가 CLOUDFLARE_API_TOKEN 우선 → OAuth 폴백 순서다 (수정 85)', () => {
+      // GOOD_DEPLOY_SCRIPT 는 이미 local token=…CLOUDFLARE_API_TOKEN →
+      // [ -z "$token" ] && …read_wrangler_oauth_token 순서 — ⑥ 통과.
+      expectStatus(verifyDeployWorkflow(writeRepo()), 'PASS')
+    })
+
+    it('FAILs when OAuth 를 env 토큰보다 먼저 읽는다 (우선순위 역전 — 로컬 OAuth 가 CI 토큰을 가림)', () => {
+      // env read 라인과 OAuth 폴백 라인의 순서를 맞바꾼다. 픽스처의
+      // `local token="${CLOUDFLARE_API_TOKEN:-}"` 는 템플릿 리터럴 이스케이프
+      // 결과 백슬래시 없는 `${` 문자열이다.
+      const inverted = GOOD_DEPLOY_SCRIPT.replace(
+        '  local token="${CLOUDFLARE_API_TOKEN:-}"\n  [ -z "$token" ] && token="$(read_wrangler_oauth_token)"',
+        '  local token="$(read_wrangler_oauth_token)"\n  [ -z "$token" ] && token="${CLOUDFLARE_API_TOKEN:-}"',
+      )
+      const outcome = verifyDeployWorkflow(writeRepo({ deployScript: inverted }))
+      expectStatus(outcome, 'FAIL')
+      expect(outcome.detail).toContain('우선순위')
+    })
+
+    it('FAILs when OAuth 폴백이 사라진다 (로컬 OAuth 배포 경로 상실)', () => {
+      const noFallback = GOOD_DEPLOY_SCRIPT.replace('  [ -z "$token" ] && token="$(read_wrangler_oauth_token)"\n', '')
+      const outcome = verifyDeployWorkflow(writeRepo({ deployScript: noFallback }))
+      expectStatus(outcome, 'FAIL')
+      expect(outcome.detail).toContain('우선순위')
+    })
+
+    it('FAILs when CLOUDFLARE_API_TOKEN 을 token 으로 읽지 않는다 (env 토큰 우선 읽기 누락)', () => {
+      const noEnv = GOOD_DEPLOY_SCRIPT.replace('  local token="${CLOUDFLARE_API_TOKEN:-}"\n', '  local token=""\n')
+      const outcome = verifyDeployWorkflow(writeRepo({ deployScript: noEnv }))
+      expectStatus(outcome, 'FAIL')
+      expect(outcome.detail).toContain('CLOUDFLARE_API_TOKEN 을 token 으로 읽지 않는다')
+    })
+
+    it('PASSes when deploy-local-worktree.sh 번들 검증이 prefix 매칭을 쓴다 (수정 98)', () => {
+      // GOOD_DEPLOY_SCRIPT(rollback_pages ①~⑥ 만족) + 수정 56/98 prefix 매칭 검증부.
+      const withBundle =
+        GOOD_DEPLOY_SCRIPT +
+        '\n# 번들 검증 (수정 56/98) — prefix 매칭\n' +
+        'if [[ "$BUNDLE_COMMIT" == "$FULL_SHA"* ]]; then\n' +
+        '  echo ok\n' +
+        'fi\n'
+      expectStatus(verifyDeployWorkflow(writeRepo({ deployScript: withBundle })), 'PASS')
+    })
+
+    it('FAILs when deploy-local-worktree.sh 번들 검증이 정확 일치로 회귀한다 (수정 98)', () => {
+      const badBundle =
+        GOOD_DEPLOY_SCRIPT +
+        '\n# 번들 검증 (회귀 — 정확 일치)\n' +
+        'if [ "$BUNDLE_COMMIT" = "$FULL_SHA" ]; then\n' +
+        '  echo ok\n' +
+        'fi\n'
+      const outcome = verifyDeployWorkflow(writeRepo({ deployScript: badBundle }))
+      expectStatus(outcome, 'FAIL')
+      expect(outcome.detail).toContain('정확 일치')
+    })
+  })
+
+  describe('11. guard(verify-do-binding.sh) token hygiene (수정 84)', () => {
+    it('PASSes when verify_cf_token 이 curl -K config 로 토큰을 주입한다', () => {
+      expectStatus(verifyDeployWorkflow(writeRepo({ guard: GOOD_GUARD_TOK })), 'PASS')
+    })
+
+    it('SKIPs the guard-token check when verify_cf_token 이 없다 (구 guard — 나머지 체크는 진행)', () => {
+      expectStatus(verifyDeployWorkflow(writeRepo()), 'PASS')
+    })
+
+    it('FAILs when curl argv 에 Bearer 토큰을 주입한다 (ps/로그 누수)', () => {
+      const leak = GOOD_GUARD_TOK.replace('-K "$curl_cfg"', '-H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}"')
+      const outcome = verifyDeployWorkflow(writeRepo({ guard: leak }))
+      expectStatus(outcome, 'FAIL')
+      expect(outcome.detail).toContain('curl argv 에 Bearer 토큰을 주입')
+    })
+
+    it('FAILs when curl -K config 주입이 빠진다 (argv 에 URL/토큰 잔존)', () => {
+      const noK = GOOD_GUARD_TOK.replace('-K "$curl_cfg"', '')
+      const outcome = verifyDeployWorkflow(writeRepo({ guard: noK }))
+      expectStatus(outcome, 'FAIL')
+      expect(outcome.detail).toContain('curl -K config 를 쓰지 않는다')
+    })
+
+    it('FAILs when curl config 파일이 chmod 600 이 아니다', () => {
+      const noChmod = GOOD_GUARD_TOK.replace('  chmod 600 "$curl_cfg"\n', '')
+      const outcome = verifyDeployWorkflow(writeRepo({ guard: noChmod }))
+      expectStatus(outcome, 'FAIL')
+      expect(outcome.detail).toContain('chmod 600 이 아니다')
+    })
+
+    it('FAILs when curl config 파일 정리(rm -f) 가 없다 (토큰 잔존)', () => {
+      const noRm = GOOD_GUARD_TOK.replace('  rm -f "$curl_cfg"\n', '')
+      const outcome = verifyDeployWorkflow(writeRepo({ guard: noRm }))
+      expectStatus(outcome, 'FAIL')
+      expect(outcome.detail).toContain('정리하지 않는다')
     })
   })
 })

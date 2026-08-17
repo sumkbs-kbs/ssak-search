@@ -346,6 +346,21 @@ export function verifyDeployWorkflow(repoDir: string): GateOutcome {
               `scripts/verify-pages-bundle.sh: build_commit 조회 재시도(BUNDLE_VERIFY_RETRIES) 가 없다 — 단발 조회면 배포 직후 전파 레이스 오탐 (수정 79)`,
             )
           }
+          // 수정 92/98: short SHA 오탐 재발 방지 — 대조는 prefix 매칭
+          // ([[ "$BUNDLE_COMMIT" == "$EXPECTED"* ]]) 이어야 한다. 정확 일치
+          // ([ "$BUNDLE_COMMIT" = "$EXPECTED" ] / [[ ... == "$EXPECTED" ]]) 로
+          // 회귀하면 short 인자 + 전체 build_commit 조합에서 구조적으로 불일치해
+          // 스테일 오판 → 불필요한 재배포/롤백을 유도한다 (2026-08-17 실측).
+          if (!/\[\[\s*"\$BUNDLE_COMMIT"\s*==\s*"\$EXPECTED"\*/.test(script)) {
+            findings.push(
+              `scripts/verify-pages-bundle.sh: 대조가 prefix 매칭([[ "$BUNDLE_COMMIT" == "$EXPECTED"* ]]) 이 아니다 — short SHA 인자를 받으면 오탐 불일치 (수정 92)`,
+            )
+          }
+          if (/"\$BUNDLE_COMMIT"\s*(?:==|=)\s*"\$EXPECTED"(?!\*)/.test(script)) {
+            findings.push(
+              `scripts/verify-pages-bundle.sh: build_commit 대조가 정확 일치로 회귀했다 — prefix 매칭([[ "$BUNDLE_COMMIT" == "$EXPECTED"* ]]) 이어야 한다 (수정 92 — short SHA 오탐 재발 방지)`,
+            )
+          }
         }
         // Pages 배포 스텝보다 뒤에 있어야 한다 (배포 직후 검증).
         const pagesIdx = stagingSteps.findIndex(
@@ -411,6 +426,91 @@ export function verifyDeployWorkflow(repoDir: string): GateOutcome {
           'scripts/deploy-local-worktree.sh: 크로스플랫폼 OAuth 토큰 리더(read_wrangler_oauth_token — python3 + APPDATA 후보) 가 없다 (수정 77)',
         )
       }
+      // ⑥ 토큰 우선순위 — CLOUDFLARE_API_TOKEN 우선 → OAuth 폴백 (수정 85)
+      // rollback_pages 는 env 토큰(CLOUDFLARE_API_TOKEN) 을 먼저 읽고, 비어 있으면
+      // wrangler OAuth(read_wrangler_oauth_token) 로 폴백해야 한다. 우선순위가
+      // 뒤집히면(로컬 OAuth 가 CI 토큰을 가림 — 배포가 로컬 계정으로 잘못 감) 또는
+      // 폴백이 사라지면(로컬 OAuth 배포 경로 상실) 회귀. 라인 순서로 단언한다
+      // (env read < empty-gate < OAuth 폴백).
+      const dlLines = dl.split('\n')
+      // env read 는 `local token="${CLOUDFLARE_API_TOKEN:-}"` (본문) 또는
+      // `&& token="${CLOUDFLARE_API_TOKEN:-}"` (우선순위 역전 시) 모두 잡는다.
+      const envReadIdx = dlLines.findIndex((l) => /token=.*CLOUDFLARE_API_TOKEN/.test(l))
+      const oauthIdx = dlLines.findIndex((l) => /token="\$\(read_wrangler_oauth_token\)"/.test(l))
+      const emptyGateIdx = dlLines.findIndex((l) => /\[ -z "\$token" \]/.test(l))
+      if (envReadIdx === -1) {
+        findings.push(
+          'scripts/deploy-local-worktree.sh: rollback_pages() 가 CLOUDFLARE_API_TOKEN 을 token 으로 읽지 않는다 — env 토큰 우선 읽기 누락 (수정 85)',
+        )
+      } else if (oauthIdx === -1 || emptyGateIdx === -1 || emptyGateIdx < envReadIdx || oauthIdx < emptyGateIdx) {
+        findings.push(
+          'scripts/deploy-local-worktree.sh: rollback_pages() 토큰 우선순위가 깨졌다 — CLOUDFLARE_API_TOKEN 우선, 비어 있을 때만 OAuth 폴백([ -z "$token" ] → read_wrangler_oauth_token) 순서여야 한다 (수정 85)',
+        )
+      }
+    }
+    // ⑦ 번들 검증 prefix 매칭 (수정 98) — 수정 56 배포 URL build_commit 대조와
+    // auto-redeploy 재검증이 정확 일치(= "$FULL_SHA") 로 회귀하면 verify-pages-
+    // bundle.sh(수정 92) 와 판정 규칙이 갈라져 short SHA 오탐이 재발한다.
+    // 양쪽 비교는 prefix 매칭([[ ... == "$FULL_SHA"* ]]) 이어야 한다.
+    // 번들 검증이 있는 스크립트에만 발동 (rollback_pages 만 있는 최소 픽스처 제외).
+    if (dl.includes('BUNDLE_COMMIT') || dl.includes('REDEPLOY_COMMIT')) {
+      if (!dl.includes('== "$FULL_SHA"*')) {
+        findings.push(
+          'scripts/deploy-local-worktree.sh: 번들 검증이 prefix 매칭([[ "$BUNDLE_COMMIT" == "$FULL_SHA"* ]]) 이 아니다 — verify-pages-bundle.sh 와 규칙 불일치, short SHA 오탐 재발 (수정 92/98)',
+        )
+      }
+      // 정확 일치 구문 금지 — 주석 라인(패턴을 문서화한 줄) 제외, 비교문만 매치.
+      const fullExact = dl.split('\n').some((line) => {
+        if (line.trim().startsWith('#')) return false
+        return /(?:==|=)\s*"\$FULL_SHA"\s*\]/.test(line)
+      })
+      if (fullExact) {
+        findings.push(
+          'scripts/deploy-local-worktree.sh: 번들 검증이 정확 일치(= "$FULL_SHA") 로 회귀했다 — prefix 매칭([[ ... == "$FULL_SHA"* ]]) 이어야 한다 (수정 98 — short SHA 오탐 재발 방지)',
+        )
+      }
+    }
+  }
+
+  // ── 10. verify-do-binding.sh token hygiene (수정 84) ─────────────────────
+  // verify-do-binding.sh 의 verify_cf_token() 은 /user/tokens/verify 호출 시
+  // 토큰을 curl argv 에 두면 안 된다 — check 9 와 동일한 누수(ps 프로세스 목록
+  // / bash -x 로그) 를 막기 위해 토큰·URL 을 curl config(-K, chmod 600, 사용 후
+  // rm -f) 로 주입해야 한다. 회귀하면 guard 가 매 CI run 마다 토큰을 argv 에
+  // 노출한다. verify_cf_token() 이 없는 버전(구 guard) 은 생략 — 나머지 체크 진행.
+  const guardPath10 = join(repoDir, GUARD_SCRIPT)
+  if (existsSync(guardPath10)) {
+    const gs = readFileSync(guardPath10, 'utf8')
+    if (gs.includes('verify_cf_token()')) {
+      // ① argv Bearer 토큰 주입 금지 — 실재하는 curl 명령 라인에서만 매치한다.
+      // 주석 라인(# 시작) 은 금지 패턴을 문서화한 줄이라 제외 (check 9 오탐 교훈).
+      const argvLeak = gs.split('\n').some((line) => {
+        if (line.trim().startsWith('#')) return false
+        return /curl[^\n]*?-H "Authorization: Bearer \$\{?CLOUDFLARE_API_TOKEN/.test(line)
+      })
+      if (argvLeak) {
+        findings.push(
+          'scripts/verify-do-binding.sh: verify_cf_token() 가 curl argv 에 Bearer 토큰을 주입한다 — ps/로그 토큰 누수 (수정 84)',
+        )
+      }
+      // ② curl -K config 주입 — argv 에 URL/토큰 부재
+      if (!gs.includes('-K "$curl_cfg"')) {
+        findings.push(
+          'scripts/verify-do-binding.sh: verify_cf_token() 가 curl -K config 를 쓰지 않는다 — argv 에 토큰이 남아 ps/로그 노출 (수정 84)',
+        )
+      }
+      // ③ config 파일 보안 (600) — 토큰이 담긴 임시 파일 권한
+      if (!gs.includes('chmod 600 "$curl_cfg"')) {
+        findings.push(
+          'scripts/verify-do-binding.sh: verify_cf_token() curl config 파일이 chmod 600 이 아니다 — 토큰이 담긴 임시 파일 권한이 열려 있다 (수정 84)',
+        )
+      }
+      // ④ config 정리 — 토큰이 담긴 임시 파일을 남기지 않는다
+      if (!gs.includes('rm -f "$curl_cfg"')) {
+        findings.push(
+          'scripts/verify-do-binding.sh: verify_cf_token() 가 curl config 파일을 정리하지 않는다 (rm -f) — 토큰 잔존 (수정 84)',
+        )
+      }
     }
   }
 
@@ -457,7 +557,7 @@ export function verifyDeployWorkflow(repoDir: string): GateOutcome {
   }
   return {
     status: 'PASS',
-    detail: `${DEPLOY_WF} + ${GUARD_SCRIPT} pass all S104-③-⑥-④/⑧ regression checks (secrets / guard-masking / artifact / node / needs / eval-baseline-permission / notify-dry-run-wiring / runtime-bundle-verify / rollback-token-hygiene)`,
+    detail: `${DEPLOY_WF} + ${GUARD_SCRIPT} pass all S104-③-⑥-④/⑧ regression checks (secrets / guard-masking / artifact / node / needs / eval-baseline-permission / notify-dry-run-wiring / runtime-bundle-verify / rollback-token-hygiene / guard-token-hygiene)`,
   }
 }
 

@@ -505,7 +505,7 @@ echo "   대상 SHA: $FULL_SHA ($SHORT_SHA)"
 # 0-1. push 여부 — 배포할 커밋이 origin/main보다 앞서면 (로컬에만 있으면) 경고.
 LOCAL_AHEAD="$(git rev-list --count origin/main.."$FULL_SHA" 2>/dev/null || echo 0)"
 if [ "$LOCAL_AHEAD" != "0" ]; then
-  echo " ⚠️  대상 커밋이 origin/main보다 $LOCAL_AHEAD개 앞서 있습니다 (로컬에만 존재)."
+  echo " ⚠️  대상 커밋이 origin/main보다 ${LOCAL_AHEAD}개 앞서 있습니다 (로컬에만 존재)."
   echo "    의도된 경우만 진행하세요 — 배포 후 소스 추적이 어긋날 수 있습니다."
 fi
 
@@ -514,7 +514,7 @@ fi
 DIRTY_FILES="$(git status --porcelain | wc -l | tr -d ' ')"
 PKG_DIRTY="$(git status --porcelain -- package.json package-lock.json | wc -l | tr -d ' ')"
 if [ "$DIRTY_FILES" != "0" ]; then
-  echo " ⚠️  워킹 트리에 미커밋 변경 $DIRTY_FILES건이 있습니다 (배포 내용에는 영향 없음 —"
+  echo " ⚠️  워킹 트리에 미커밋 변경 ${DIRTY_FILES}건이 있습니다 (배포 내용에는 영향 없음 —"
   echo "    worktree는 대상 커밋의 clean 체크아웃을 사용합니다)."
   if [ "$PKG_DIRTY" != "0" ]; then
     echo "    ⚠️  package.json/package-lock.json 미커밋 변경 감지 — worktree는 main repo의"

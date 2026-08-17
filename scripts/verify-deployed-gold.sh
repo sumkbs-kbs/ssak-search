@@ -261,6 +261,6 @@ if [ "$FAIL_COUNT" = "0" ]; then
   echo " ✅ 배포 후 gold 회수 검증 통과"
   exit 0
 else
-  echo " ⚠️  gold 미회수 $FAIL_COUNT건 — 라이브 검색에서 gold 도메인을 확인하세요" >&2
+  echo " ⚠️  gold 미회수 ${FAIL_COUNT}건 — 라이브 검색에서 gold 도메인을 확인하세요" >&2
   exit 1
 fi

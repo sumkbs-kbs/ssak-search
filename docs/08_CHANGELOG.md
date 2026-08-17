@@ -1106,6 +1106,16 @@
 - **해결**: ① 44dfff5 에 verify-do-binding.sh 수정(수정 84)을 접어넣어 amend — 체크 10/11 이 요구하는 트리 상태를 커밋 자체가 만족 (전용 커밋 3344907 은 드롭) ② `verify-commits-ci.sh` workflow 게이트를 **커밋의 자체 workflow.ts** 로 전환 — "해당 커밋 시점의 표준"으로 판정 (기존에 고쳐진 버그를 다시 도입하는 회귀는 그 커밋의 자체 체커가 잡음 — 회귀 보호 유지). 커밋의 체커 파일이 없으면 SKIP (deploy.yml 부재 SKIP 과 동일 의미론)
 - **판정 실측** (CI 로그): 수정 88~97 커밋은 7/5건 → 자체 체커에선 해당 체크 미존재 → PASS · 44dfff5' 는 자체 체커+자체 테스트 전부 PASS → **범위 전체 ALL GREEN**
 - **검증**: bash -n · tsc 0 · prettier clean · verify-deploy-workflow 56/56 · 로컬 verify-commits-ci.sh 전체 범위 재현 ALL GREEN 확인
+### 수정 101: credential fallback 그림자화 문서화 + gh 불요 사전 검증(--pre-check) 경로 설계 (2026-08-17)
+- **작업 ID**: FIX-2026-08-17-16 (문서화 + 설계)
+- **요청**: 수정 100 에서 확인한 '①단계 gh 하드 게이트로 credential fallback 그림자화'를 문서화하고, gh 미인증 환경에서도 API 토큰만으로 사전 검증할 수 있는 경로를 설계
+- **그림자화 발견 (문서화)**: `verify-secret-set.sh` 의 토큰 해석 체인(GH_TOKEN → gh auth token → git credential helper)은 **①단계(gh auth status — gh 설치+로그인+repo scope) 하드 게이트 뒤**에 위치한다. 따라서 ① gh 미인증 → 토큰 해석에 도달 전 차단 · ② gh 인증 → `gh auth token` 이 성공해 credential fallback 불필요 → **credential helper 경로는 실제로 도달 불가** (도달 가능 케이스는 gh 로그인됐는데 token 만 빈 이례). 라이브 실측으로 확정 (이 셸: credential helper 는 유효 토큰 반환·GitHub API 5000 OK 지만 ①에서 "gh 미인증" 차단). docs/17 §3-1 과 changelog 수정 100 에 기록
+- **설계 — `--pre-check` (gh 불요 사전 검증 모드)**:
+  - **목적**: gh 미인증/미설치 환경에서도 ① 새 토큰(CF verify) ② API 토큰의 repo 접근+secrets read scope ③ 현재 updated_at(교체 전 베이스라인) 을 **gh 호출 없이** 사전 검증 — "gh 미인증"과 "토큰 무효"가 겹쳤을 때 gh 를 고치고 나서야 토큰 무효를 발견하는 낭비 제거 (fail-fast)
+  - **흐름**: ① repo 해석(--repo/GH_REPO/git remote — gh 불요) → ② 토큰 해석(GH_TOKEN → gh auth token[있으면 시도·실패 무시] → credential helper — 수정 100 해석 블록을 함수화해 main 과 공유) → ③ `GET /repos/{repo}` 200 (토큰 유효+접근) → ④ `GET /actions/secrets` (시크릿 존재+현재 updated_at — secrets read scope 증명) → ⑤ `/user/tokens/verify` (기존 ⑤ 재사용, `--skip-cf-verify` 로 생략 가능) → ⑥ 요약(통과=set 전제 준비, 남은 블로커는 gh 인증뿐)
+  - **판정**: exit 0 = set 단계의 모든 전제 준비 · exit 1 = 경로별 사유 안내 (수정 100 의 경로별 메시지 재사용)
+  - **--dry-run 과 관계**: --dry-run 은 ①②(gh 게이트) 통과 후 중단 — gh 미인증 환경에선 아무것도 못 함. --pre-check 는 gh 가 필요 없는 검증 전체를 수행하는 확장
+- **산출물**: docs/17 §3-1 (verify-secret-set.sh 사용법 + 그림자화 + --pre-check 설계 명세). **구현은 다음 작업** (PRE_CHECK 플래그 + resolve_api_token 함수화 + 분기)
 
 ### 수정 100: verify-secret-set.sh GitHub API 토큰 해석 — git credential helper 라이브 검증 + 경로별 실패 사유 안내 (2026-08-17)
 - **작업 ID**: FIX-2026-08-17-15 (라이브 검증 + 개선 + 테스트)

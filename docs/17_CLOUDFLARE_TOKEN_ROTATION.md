@@ -72,6 +72,58 @@ GitHub Actions 로그가 아닌 **대시보드**에서 시크릿을 열어야 �
 > GitHub Actions 캐시 주의: 시크릿 변경은 워크플로우 실행 시점에 반영된다.
 > 이미 실행 중인 run은 이전 값을 쓴다 — 교체 직후 새 디스패치가 곧 검증이다.
 
+### 3-1. verify-secret-set.sh — set 전후 5단계 자동 검증 (수정 93/100)
+
+대시보드 수동 붙여넣기 대신 **`scripts/verify-secret-set.sh`** 로 set 의 **조용한
+실패**(PAT scope 부족 / 다른 repo / gh 미인증 / 무효 토큰)를 사전 차단할 수 있다:
+
+```bash
+# 새 토큰을 파일에 넣고 (argv·히스토리 노출 방지):
+bash scripts/verify-secret-set.sh --file /path/to/new-token.txt   # 이 repo에서 실행
+# 사전 점검만 (set 없음):
+bash scripts/verify-secret-set.sh --dry-run
+# 오프라인 로직 검증:
+bash scripts/verify-secret-set.sh --self-test
+```
+
+**5단계**: ① `gh auth status` (로그인+repo scope — 부족 시 set 전 차단) ② repo
+컨텍스트 (잘못된 repo에 조용히 set 되는 실수 방지) ③ `gh secret set` (stdin 주입)
+④ API `updated_at` 전/후 비교 (실제 반영 ground truth) ⑤ (기본 on) 새 토큰을
+Cloudflare `/user/tokens/verify` 로 검증.
+
+#### 3-1-1. 알려진 한계 — credential fallback 그림자화 (수정 100 실측)
+
+토큰 해석 체인(GH_TOKEN → gh auth token → git credential helper)은 **①단계의
+gh 하드 게이트 뒤**에 있다. 따라서:
+
+- gh **미인증** → ① 에서 차단 (credential helper 경로 도달 불가)
+- gh **인증** → `gh auth token` 이 성공 (credential fallback 불필요)
+
+즉 **git credential helper(osxkeychain)는 실제로 도달 불가능한 폴백**이다
+(도달 가능 케이스: gh 로그인됐는데 token 만 빈 이례). 2026-08-17 라이브 실측 —
+이 셸의 osxkeychain 은 유효 토큰을 반환하고 GitHub API 도 통과하지만(rate_limit
+5000 OK), 스크립트는 ①에서 "gh 미인증"으로 차단했다. gh secret set 은 gh 가
+필수이므로 credential helper 토큰이 **대체 경로가 될 수 없다**.
+
+#### 3-1-2. 설계 — `--pre-check` (gh 불요 사전 검증 모드, 구현 예정)
+
+위 한계로 gh 미인증 환경에서는 **아무 사전 검증도 못 하고** ①에서 멈춘다 —
+"gh 미인증"과 "토큰 무효"가 겹치면 gh 를 고치고 나서야 토큰 무효를 발견한다.
+이를 위해 **`--pre-check`** 모드를 설계한다 (gh 를 전혀 호출하지 않음):
+
+```
+흐름: ① repo 해석(--repo/GH_REPO/git remote)            ← gh 불요
+      ② 토큰 해석(GH_TOKEN → gh[있으면 시도·실패 무시] → credential)
+      ③ GET /repos/{repo} → 200 (토큰 유효 + repo 접근)
+      ④ GET /actions/secrets (시크릿 존재 + 현재 updated_at — secrets read scope 증명)
+      ⑤ 새 토큰 /user/tokens/verify (--skip-cf-verify 로 생략 가능)
+      ⑥ 요약: 통과 = set 전제 준비 (남은 블로커는 gh 인증뿐)
+```
+
+- **판정**: exit 0 = set 단계의 모든 전제 준비 · exit 1 = 경로별 사유 (수정 100 의 경로별 메시지 재사용)
+- **--dry-run 과 관계**: --dry-run 은 ①②(gh 게이트) 통과 후 중단 — gh 미인증 환경에선 무용. --pre-check 는 gh 가 필요 없는 검증 전체를 수행
+- **구현 시**: `PRE_CHECK` 플래그 + 수정 100 의 토큰 해석 블록을 `resolve_api_token` 으로 함수화 (main 과 공유) + 분기. 유닛 테스트: gh 미인증 fake 에서 pre-check 통과/실패 케이스
+
 ---
 
 ## 4. 교체 후 staging 파이프라인 검증 (10분)
@@ -217,7 +269,55 @@ bash scripts/watch-secret-rotation.sh --dry-run    # 감지만 — 디스패치 
   불가 — DO 는 롤백하고 Pages 는 올바른 번들로 재배포를 안내한다 (스테일 원인이
   빌드 캐시면 `ISOLATED_BUILD=1` 권장).
 
-  **배포 후 gold 회수 자동 검증 (2026-08-14)**: Pages 배포 성공 후
+  **--auto-redeploy: staging 번들 불일치 → 캐시 무효화 자동 재배포 (2026-08-16, 수정 76/79)**:
+  staging(preview) 배포는 Pages Rollback API 대상이 될 수 없으므로(Cloudflare 제약
+  'preview deployments are not valid rollback targets'), 번들 커밋 불일치 시 롤백 대신
+  **빌드 캐시를 무효화하고 올바른 번들로 재배포**한다. `--auto-rollback` 과 달리
+  **staging 전용** — production 에서 이 플래그는 무시된다 (production 은 롤백이 정답,
+  아래 선택 가이드 참조). 두 플래그를 동시에 주면 `--auto-rollback` 이 우선한다 (elif 순서).
+
+  **실행 절차**:
+
+  ```bash
+  # 정상 경로 — 번들 불일치가 실제로 나면 자동으로 캐시 무효화 재배포가 발동한다
+  bash scripts/deploy-local-worktree.sh HEAD staging --auto-redeploy
+  bash scripts/deploy-local-worktree.sh <sha> staging --auto-redeploy        # 특정 커밋
+  bash scripts/deploy-local-worktree.sh HEAD staging --auto-redeploy --dry-run  # 계획만 확인
+
+  # E2E 검증 (수정 75 훅 재사용) — 첫 번들 검증만 의도적으로 불일치로 취급해
+  # 재배포 복구 경로를 라이브로 발동시킨다 (재배포 후 검증은 실제 HTTP 대조)
+  E2E_FORCE_BUNDLE_MISMATCH=1 bash scripts/deploy-local-worktree.sh <sha> staging --auto-redeploy
+  ```
+
+  **동작 순서 (번들 불일치 감지 시)**:
+  1. 배포 URL 번들 검증 실패(build_commit ≠ 대상 SHA) 감지 → cron/[6/6] 생략 (부분 배포 보고)
+  2. 캐시 무효화: `rm -rf dist node_modules/.vite` — 심링크 node_modules 가 스테일 원인일 수
+     있으므로 worktree 내부에서 `npm ci` 후 재빌드 (`BUILD_COMMIT=<sha> DEPLOY_ENV=staging
+     npm run build`)
+  3. Pages 재배포(`--commit-dirty=true`) → **실제 HTTP 대조**로 build_commit 재검증
+     (최대 2회 시도)
+  4. 성공 시 cron 스케줄러까지 재배포 후 exit 0 / 2회 모두 실패 시 exit 1 + 수동 안내
+     (deployment list Source 대조 · `ISOLATED_BUILD=1` 재시도 권장)
+
+  **실측 (2026-08-16, staging @ 00cfc5f)**: E2E 훅으로 의도적 불일치를 유발해 실행 — 1차
+  재배포는 배포 직후 전파 레이스(빈 build_commit)로 불일치 처리 → 2차 재배포에서
+  `✅ build_commit=00cfc5f` 로 복구 → cron 재배포 → **exit 0**. 독립 재확인: staging alias
+  build_commit=00cfc5f (full SHA) · deployment list 최신 3건 모두 Source=00cfc5f ·
+  production 무영향(7dada19 유지). ⚠️ 알려진 한계: **재배포 후 검증은 단발 curl** — 수정 79의
+  5×10s 재시도가 첫 번들 검증에만 적용돼, 전파 레이스 시 2회차 루프가 흡수한다 (실패는
+  아니지만 1차에서 확정 판정하려면 재배포 검증에도 동일 재시도 추가 권장).
+
+  **복구 전략 선택 가이드 (staging vs production)**:
+
+  | 상황 | staging (preview) | production |
+  |---|---|---|
+  | 번들 커밋 불일치 (스테일 의심) | **--auto-redeploy** — 캐시 무효화 후 올바른 번들 재배포 | **--auto-rollback** — DO+Pages 를 이전 버전으로 롤백 (Rollback API 대상 가능) |
+  | Pages 배포 자체 실패 (DO 신/Pages 구) | --auto-rollback — DO 롤백 + Pages 는 재배포 안내 | --auto-rollback — DO 롤백 + Pages Rollback API 로 이전 배포 복구 |
+  | cron 배포 실패 (DO+Pages 일치) | 롤백/재배포 없음 — cron 만 재배포 | 동일 |
+  | 전파 레이스 오탐 (빈 build_commit) | 수정 79 재시도(5×10s)가 흡수 — 재배포 전 재확인 | 동일 |
+  | 스테일 원인이 빌드 캐시 | `ISOLATED_BUILD=1` (worktree 내부 격리 npm ci) 권장 | `ISOLATED_BUILD=1` 권장 |
+
+  **배포 후 gold 회수 자동 검증 (2026-08-14)**:
   `scripts/verify-deployed-gold.sh`가 6개 대표 gold 쿼리(kr-stock/zh-travel/
   en-fact/gk/en-tech/ja-news)를 배포 URL에 보내 top-10에서 gold 도메인 회수를
   판정한다 (S49 label-suffix 규칙 — eval/metrics.ts 와 동일). 전체 500쿼리 eval

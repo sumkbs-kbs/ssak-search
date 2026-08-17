@@ -535,6 +535,24 @@ export function verifyDeployWorkflow(repoDir: string): GateOutcome {
     )
   }
 
+  // ── 12. notify-pipeline-failure.sh 웹훅 POST curl -f 금지 (수정 110 회귀) ─
+  // 웹훅 POST 는 curl -s + -w $'\n%{http_code}' 로 HTTP 상태를 직접 캡처하고
+  // {"ok":true} 본문을 검증해야 한다. curl -f 는 HTTP 302(<400) 를 성공 처리해
+  // 자리표시자/무효 웹훅 URL 이 "✅ 전송됨" 으로 오탐된다 (수정 110 실측).
+  // 드라이런 경로의 curl -sf 는 캡처 서버(항상 200) 대상이라 정상 — %{http_code}
+  // 앵커로 웹훅 POST 라인만 대상으로 해 오탐하지 않는다. 앵커 라인은 주석
+  // (self-test 가짜 curl 의 -w 형식 설명) 을 건너뛴다.
+  const npfPath = join(repoDir, 'scripts/notify-pipeline-failure.sh')
+  if (existsSync(npfPath)) {
+    const ns = readFileSync(npfPath, 'utf8')
+    const webhookPost = ns.split('\n').find((l) => !l.trim().startsWith('#') && l.includes('%{http_code}'))
+    if (webhookPost && /(?:^|[ \t])-{1,2}([a-zA-Z]*f[a-zA-Z]*)(?:[ \t]|$)/.test(webhookPost)) {
+      findings.push(
+        'scripts/notify-pipeline-failure.sh: 웹훅 POST curl 이 -f 로 회귀 — 302 를 성공 처리해 "전송됨" 오탐 재발 (수정 110: curl -s + %{http_code} + {"ok":true} 본문 검증 유지)',
+      )
+    }
+  }
+
   // ── 10. verify-do-binding.sh token hygiene (수정 84) ─────────────────────
   // verify-do-binding.sh 의 verify_cf_token() 은 /user/tokens/verify 호출 시
   // 토큰을 curl argv 에 두면 안 된다 — check 9 와 동일한 누수(ps 프로세스 목록
@@ -620,7 +638,7 @@ export function verifyDeployWorkflow(repoDir: string): GateOutcome {
   }
   return {
     status: 'PASS',
-    detail: `${DEPLOY_WF} + ${GUARD_SCRIPT} pass all S104-③-⑥-④/⑧ regression checks (secrets / guard-masking / artifact / node / needs / eval-baseline-permission / notify-dry-run-wiring / runtime-bundle-verify / rollback-token-hygiene / guard-token-hygiene / script-credential-sweep)`,
+    detail: `${DEPLOY_WF} + ${GUARD_SCRIPT} pass all S104-③-⑥-④/⑧ regression checks (secrets / guard-masking / artifact / node / needs / eval-baseline-permission / notify-dry-run-wiring / runtime-bundle-verify / rollback-token-hygiene / guard-token-hygiene / script-credential-sweep / notify-webhook-curl-f)`,
   }
 }
 

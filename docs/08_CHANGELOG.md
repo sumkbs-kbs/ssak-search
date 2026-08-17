@@ -1100,6 +1100,15 @@
 - **테스트**: `tests/unit/lib-verify-pace.test.ts` 신규 **5/5** — 낮음 연장(≥300ms)/높음 유지(<300ms)/스테일 복귀/레거시 마이그레이션/비숫자·빈 값 무시 (타이밍 기반, 100/500ms 축소 간격 + 여유 경계 300ms)
 - **검증**: bash -n 3개 OK · tsc 0 · eslint 0 · prettier clean · 전체 unit **143 파일 2,813/2,813 PASS** (중간 flake 는 기지의 동시 부하 bash 스폰 타임아웃 — 단독 전부 통과)
 
+### 수정 111: check 12 — notify-pipeline-failure.sh 웹훅 POST curl -f 금지 규칙 (2026-08-17)
+- **작업 ID**: FIX-2026-08-17-25 (구현 + 테스트)
+- **요청**: 수정 110 의 응답 검증(curl -s + %{http_code} + {"ok":true}) 이 `curl -sf` 로 회귀하지 않도록 별도 정적 금지 규칙을 verify-deploy-workflow.ts 에 추가할 가치 재검토 → **추가 채택** (드라이런 경로의 curl -sf 는 캡처 서버 200 고정이라 정상 — %{http_code} 앵커로 웹훅 POST 라인만 대상)
+- **규칙 (check 12, scripts/verify-deploy-workflow.ts)**: notify-pipeline-failure.sh 에서 `%{http_code}` 를 포함한 **비주석 라인** 의 curl 플래그에 `-f`/`-sf`/`-fs`/`--fail` 등 f-플래그가 있으면 FAIL. 앵커 라인은 주석(self-test 가짜 curl 의 -w 형식 설명) 을 건너뜀
+- **산출물**: `scripts/verify-deploy-workflow.ts`(check 12 + PASS 상세 메시지에 /notify-webhook-curl-f 추가) · `tests/unit/verify-deploy-workflow.test.ts`(describe 14 — PASS 픽스처/`-sf` FAIL/`--fail` FAIL/주석-only PASS 4케이스)
+- **발견·수정 (JS replace 교훈 2건)**: ① 치환 문자열의 `$'` 가 JS `String.replace` 특수 패턴(매치 이후 문자열) 으로 해석돼 픽스처 파손 → **함수형 `() => replacement` 필수** (문자열 replace 는 $'/$&/$`/$$ 확장됨) ② TS 템플릿 리터럴에서 `\n` 은 백슬래시-n(2자), `\n` 단일은 실제 개행 — 픽스처의 `$'\n%{http_code}'` 는 **이중 백슬래시** 여야 함 (2026-08-17 실측)
+- **검증**: workflow 유닛 76/76 (describe 14 신규 4케이스 포함) · 전체 2,868 (1건은 기지 workerd 동시 부하 flake — 단독 5/5) · tsc 0 · eslint 0 · prettier clean · 실 repo verify **PASS (notify-webhook-curl-f)** · notify self-test 12/12
+- **한계**: 앵커(`%{http_code}`) 가 미래 리팩터로 사라지면 조용히 비활성 — check 9/10 의 verify_cf_token() 앵커와 동일한 허용 한계
+
 ### 수정 110: notify-pipeline-failure.sh — 미설정 no-op 경고 승격(::warning::) + Slack 수락 응답 검증(200+{"ok":true}) (2026-08-17)
 - **작업 ID**: FIX-2026-08-17-24 (구현 + 테스트)
 - **요청**: [14] Notify 가 SLACK_WEBHOOK 미설정으로 조용히 no-op 성공 처리되는 걸 경고로 승격할지, 드라이런 캡처를 기본값으로 삼을지 검토 → **① 경고 승격 채택 · 드라이런 기본값 비채택**(CI 러너엔 캡처 수신자가 없어 무의미 — 기존 notify_dry_run=true 경로 유지)

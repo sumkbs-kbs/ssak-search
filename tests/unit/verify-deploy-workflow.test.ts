@@ -1009,4 +1009,54 @@ rm -f "$cfg"
       expectStatus(outcome, 'PASS')
     })
   })
+
+  describe('14. notify-pipeline-failure.sh 웹훅 POST curl -f 금지 (check 12, 수정 110 회귀)', () => {
+    // check 11 픽스처(GOOD_NOTIFY) 와 달리 %{http_code} 앵커가 있는 실 웹훅 POST
+    // 형태. 드라이런 curl -sf (캡처 서버 200 고정 — 정상) + 주석 앵커 언급 포함.
+    const GOOD_NPF = `#!/usr/bin/env bash
+CURL_CFG="$(mktemp)"
+chmod 600 "$CURL_CFG"
+printf 'url = "%s"\n' "$SLACK_WEBHOOK" > "$CURL_CFG"
+if curl -sf -m 10 -X POST -d "$PAYLOAD" -K "$CURL_CFG"; then
+  echo ok
+fi
+# 응답: FAKE_HTTP_BODY + FAKE_HTTP_CODE — -w $'\\n%{http_code}' 형식과 동일하게 출력 (주석 — 스킵 대상)
+RESP="$(curl -s -m 10 -w $'\\n%{http_code}' -X POST -H 'Content-Type: application/json' -d "$PAYLOAD" -K "$CURL_CFG" 2>/dev/null || true)"
+rm -f "$CURL_CFG"
+`
+
+    it('PASSes when 웹훅 POST 가 curl -s + %{http_code} 본문 검증 (드라이런 curl -sf·주석 앵커 는 오탐 없음)', () => {
+      expectStatus(verifyDeployWorkflow(writeRepo({ notify: GOOD_NPF })), 'PASS')
+    })
+
+    it('FAILs when 웹훅 POST 가 curl -sf 로 회귀 (302 를 성공 처리하는 수정 110 이전 패턴)', () => {
+      // 함수형 replace 필수 — 치환 문자열의 $' 가 JS 특수 패턴(매치 이후 문자열)으로
+      // 해석되는 버그 회피 (수정 111 실측 — 문자열 replace 는 픽스처를 파손한다).
+      const regressed = GOOD_NPF.replace(
+        "curl -s -m 10 -w $'\\n%{http_code}'",
+        () => "curl -sf -m 10 -w $'\\n%{http_code}'",
+      )
+      const outcome = verifyDeployWorkflow(writeRepo({ notify: regressed }))
+      expectStatus(outcome, 'FAIL')
+      expect(outcome.detail).toContain('웹훅 POST curl 이 -f 로 회귀')
+    })
+
+    it('FAILs when 웹훅 POST 가 --fail 롱옵션 으로 회귀', () => {
+      const regressed = GOOD_NPF.replace(
+        "curl -s -m 10 -w $'\\n%{http_code}'",
+        () => "curl -s --fail -m 10 -w $'\\n%{http_code}'",
+      )
+      const outcome = verifyDeployWorkflow(writeRepo({ notify: regressed }))
+      expectStatus(outcome, 'FAIL')
+      expect(outcome.detail).toContain('웹훅 POST curl 이 -f 로 회귀')
+    })
+
+    it('PASSes when -f 는 주석 라인 에만 존재 (주석 앵커 스킵 — self-test 가짜 curl 설명과 동일 패턴)', () => {
+      const commentOnly = GOOD_NPF.replace(
+        "# 응답: FAKE_HTTP_BODY + FAKE_HTTP_CODE — -w $'\\n%{http_code}' 형식과 동일하게 출력 (주석 — 스킵 대상)",
+        '# RESP="$(curl -sf -m 10 -w $\'\\n%{http_code}\' ...)" — 주석 문서화 (스킵)',
+      )
+      expectStatus(verifyDeployWorkflow(writeRepo({ notify: commentOnly })), 'PASS')
+    })
+  })
 })

@@ -133,11 +133,11 @@ OLDIFS="$IFS"
 IFS='|'
 for q in $QUERIES; do
   IFS="$OLDIFS"
-  pace_request  # 수정 88: 공유 pace 게이트 (검색 요청 전)
-  DOMS_A="$(curl -s -m 40 -X POST "$ENV_A/api/search" -H 'Content-Type: application/json' \
+  # 수정 96: pace_curl 래퍼 — 공유 게이트 통과(수정 88) + 응답 X-RateLimit-Remaining
+  # 을 pace 파일에 보고해 잔량이 낮아지면 다음 요청부터 간격이 자동 연장된다
+  DOMS_A="$(pace_curl -s -m 40 -X POST "$ENV_A/api/search" -H 'Content-Type: application/json' \
     -d "{\"query\":\"$q\"}" | python3 -c "import json,sys; print(' '.join(r.get('domain','') for r in (json.load(sys.stdin).get('results') or [])[:5]))" 2>/dev/null || echo 'ERR')"
-  pace_request  # 수정 88: 공유 pace 게이트 (검색 요청 전)
-  DOMS_B="$(curl -s -m 40 -X POST "$ENV_B/api/search" -H 'Content-Type: application/json' \
+  DOMS_B="$(pace_curl -s -m 40 -X POST "$ENV_B/api/search" -H 'Content-Type: application/json' \
     -d "{\"query\":\"$q\"}" | python3 -c "import json,sys; print(' '.join(r.get('domain','') for r in (json.load(sys.stdin).get('results') or [])[:5]))" 2>/dev/null || echo 'ERR')"
   if [ "$DOMS_A" = "$DOMS_B" ] && [ "$DOMS_A" != "ERR" ] && [ -n "$DOMS_A" ]; then
     echo "   ✅ '$q' → $DOMS_A"

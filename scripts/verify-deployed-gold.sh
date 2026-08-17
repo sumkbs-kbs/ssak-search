@@ -35,6 +35,10 @@
 #                   (수정 88) 를 도구 간 공유 게이트로 막는다.
 #   GOLD_PACE_FILE   공유 pace 파일 (기본 ${XDG_STATE_HOME:-$HOME/.local/state}/
 #                   ssak-search/verify-pace.ts — lib-verify-pace.sh 와 동일)
+#   PACE_ADAPT_MS    잔량 ≤ PACE_ADAPT_THRESHOLD 일 때 연장 간격 ms (기본 5000 —
+#                   수정 96 자가 적응: 응답 X-RateLimit-Remaining 헤더를 읽어
+#                   잔량이 낮으면 GOLD_DELAY_MS → PACE_ADAPT_MS 로 자동 연장)
+#   PACE_ADAPT_THRESHOLD  잔량 ≤ 이 값이면 연장 (기본 10)
 #   FULL_EVAL_SHOW_FAIL 1이면 --full-eval 에서 실패 쿼리 상세 출력 (기본 0)
 #
 # ⚠️ --full-eval 은 배포 URL(staging/production 공유 DO)에 500쿼리를 순차
@@ -129,23 +133,74 @@ out_jsonl = os.environ.get('GOLD_OUT_JSONL', '/tmp/gold-verify-out.jsonl')
 # top-5 가 같은 pace 파일을 공유해, 도구가 연속 실행돼도 per-IP rate limit
 # (30/min) 을 넘지 않는다. 매 fetch 전에 게이트를 통과한다 (첫 요청도 포함 —
 # 직전 도구가 방금 요청했으면 대기).
+#
+# 수정 96: 자가 적응 — 응답 X-RateLimit-Remaining 을 report_remaining() 으로 남기고,
+# 다음 pace() 가 잔량 ≤ PACE_ADAPT_THRESHOLD(기본 10) 이면 간격을 GOLD_DELAY_MS →
+# PACE_ADAPT_MS(기본 5000ms) 로 연장한다 (관측 60s 초과 = 창 리셋 → 기본 복귀).
+# 상태 파일 형식은 lib-verify-pace.sh 와 공유: {last_ms, remaining, remaining_at_ms}
+# JSON (이전 순수 시각 형식도 읽음). 한쪽만 바꾸면 다른 쪽 읽기가 깨지므로 함께 수정.
+def _pace_state():
+    pf = os.environ.get('GOLD_PACE_FILE', '')
+    if not pf:
+        return None
+    try:
+        raw = open(pf).read().strip()
+    except Exception:
+        return {'last_ms': 0, 'remaining': None, 'remaining_at_ms': 0}
+    if raw.startswith('{'):
+        try:
+            return json.loads(raw)
+        except Exception:
+            return {'last_ms': 0, 'remaining': None, 'remaining_at_ms': 0}
+    try:
+        return {'last_ms': float(raw), 'remaining': None, 'remaining_at_ms': 0}
+    except Exception:
+        return {'last_ms': 0, 'remaining': None, 'remaining_at_ms': 0}
+
+
+def _pace_save(st):
+    pf = os.environ.get('GOLD_PACE_FILE', '')
+    if not pf:
+        return
+    with open(pf, 'w') as f:
+        json.dump(st, f)
+
+
 def pace():
     pf = os.environ.get('GOLD_PACE_FILE', '')
     if not pf or os.environ.get('VERIFY_PACE', '1') == '0':
         return
-    ms = int(os.environ.get('GOLD_DELAY_MS', '2500'))
-    if ms <= 0:
+    base_ms = int(os.environ.get('GOLD_DELAY_MS', '2500'))
+    if base_ms <= 0:
         return
+    adapt_ms = int(os.environ.get('PACE_ADAPT_MS', '5000'))
+    threshold = int(os.environ.get('PACE_ADAPT_THRESHOLD', '10'))
     now = time.time() * 1000
-    try:
-        last = float(open(pf).read().strip())
-    except Exception:
-        last = 0
-    wait = (last + ms - now) / 1000
+    st = _pace_state()
+    ms = base_ms
+    rem = st.get('remaining')
+    if rem is not None and (now - float(st.get('remaining_at_ms', 0))) < 60000 \
+       and int(rem) <= threshold:
+        ms = adapt_ms
+    wait = (float(st.get('last_ms', 0)) + ms - now) / 1000
     if wait > 0:
         time.sleep(wait)
-    with open(pf, 'w') as f:
-        f.write(str(int(time.time() * 1000)))
+    st['last_ms'] = time.time() * 1000
+    _pace_save(st)
+
+
+def report_remaining(rem):
+    pf = os.environ.get('GOLD_PACE_FILE', '')
+    if not pf or rem is None:
+        return
+    try:
+        n = int(rem)
+    except (TypeError, ValueError):
+        return
+    st = _pace_state()
+    st['remaining'] = n
+    st['remaining_at_ms'] = time.time() * 1000
+    _pace_save(st)
 
 def is_relevant(domain, gold):
     # S49 label-suffix: D === G or D ends with '.'+G
@@ -170,6 +225,9 @@ def fetch(q):
         )
         with urllib.request.urlopen(req, timeout=timeout) as resp:
             body = json.loads(resp.read())
+            # 수정 96: X-RateLimit-Remaining 헤더를 공유 pace 파일에 보고 —
+            # 잔량이 낮아지면 다음 요청부터 간격이 자동 연장된다
+            report_remaining(resp.headers.get('X-RateLimit-Remaining'))
     except Exception as e:
         return {**q, 'ok': False, 'reason': f'요청 실패: {str(e)[:80]}'}
     doms = [r.get('domain', '') for r in (body.get('results') or [])[:top_n]]

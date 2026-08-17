@@ -14,7 +14,15 @@
 
 import type { SearchResult, StockData, Env } from '../types'
 import { logger, toError } from './logger'
+import { backendTimeoutMs } from './search/fanout'
 import { fetchWithTimeout, truncateToTokens } from './util'
+import {
+  buildFinancialKeywordRegex,
+  FINANCIAL_KEYWORDS,
+  FINANCIAL_PLANNER_ONLY,
+  FINANCIAL_REGEX_ONLY,
+  FINANCIAL_STRIP_ONLY,
+} from './financial-keywords'
 
 // ============================================================
 // Types
@@ -195,6 +203,17 @@ function extractStockCode(query: string): string | null {
   return match ? match[1] : null
 }
 
+// 금융 키워드 제거 정규식 — src/lib/financial-keywords.ts 단일 소스에서 파생.
+// ASCII 키워드는 \b 전체 단어, 한글 키워드는 bare substring(JS \b는 ASCII
+// 전용 — Hangul은 비-word, 한국어 쿼리는 복합어화 "현대차주가"), 구문은 \s*
+// 결합. 긴 키워드 우선 정렬로 "목표주가"가 "주가"를 가리지 않는다.
+const FINANCIAL_FILLER_REGEX = buildFinancialKeywordRegex(
+  FINANCIAL_KEYWORDS,
+  FINANCIAL_PLANNER_ONLY,
+  FINANCIAL_REGEX_ONLY,
+  FINANCIAL_STRIP_ONLY,
+)
+
 /**
  * 쿼리에서 회사명 추출 (금융 키워드 제거)
  * 예: "삼성전자 주가" → "삼성전자"
@@ -202,14 +221,11 @@ function extractStockCode(query: string): string | null {
  *     "한화에어로스페이스 목표주가" → "한화에어로스페이스"
  */
 function extractCompanyName(query: string): string {
-  return query
-    .replace(
-      /\b(주가|주식|증권|시세|변동률|등락률|목표주가|투자의견|실적|배당|주주|공시|기업분석|리서치|stock|price|share|finance|chart|trading|quote|symbol|코스피|코스닥|kospi|kosdaq|시가총액|거래량|PER|PBR|EPS|ROE)\b/gi,
-      '',
-    )
-    .replace(/\s+/g, ' ')
-    .trim()
+  return query.replace(FINANCIAL_FILLER_REGEX, '').replace(/\s+/g, ' ').trim()
 }
+
+// Exported for the shared-keyword consistency tests (drift guard).
+export const _extractCompanyNameForTest = extractCompanyName
 
 /**
  * 쿼리에서 종목코드 조회.
@@ -617,7 +633,7 @@ export async function searchKoreanStock(
     env?: Env
   } = {},
 ): Promise<SearchResult[]> {
-  const { maxResults = 5, timeoutMs = 10000, env } = opts
+  const { maxResults = 5, timeoutMs = backendTimeoutMs('naver-finance', 10000), env } = opts
   const results: SearchResult[] = []
 
   try {
@@ -761,7 +777,7 @@ export async function captureStockPageSignature(stockCode: string, env?: Env): P
           Referer: 'https://finance.naver.com/',
         },
       },
-      10000,
+      backendTimeoutMs('naver-finance', 10000),
     )
 
     if (!resp.ok) return null
@@ -809,7 +825,7 @@ export async function extractStockPriceAdaptive(
           Referer: 'https://finance.naver.com/',
         },
       },
-      10000,
+      backendTimeoutMs('naver-finance', 10000),
     )
 
     if (!resp.ok) return null

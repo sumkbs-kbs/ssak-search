@@ -42,7 +42,7 @@
  * Usage (from anywhere; the directory must be a checkout of the commit):
  *   npx tsx scripts/verify-deploy-workflow.ts <repo-dir>
  */
-import { existsSync, readFileSync } from 'node:fs'
+import { existsSync, readFileSync, readdirSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import { parseDocument } from 'yaml'
 
@@ -472,42 +472,50 @@ export function verifyDeployWorkflow(repoDir: string): GateOutcome {
     }
   }
 
-  // ── 11. watch-secret-rotation.sh token hygiene (수정 102) ────────────────
-  // 워처의 GitHub API 호출(get_secret_updated_at / dispatch_deploy) 은 repo-scope
-  // PAT 를 curl argv(-H "Authorization: Bearer ...") 에 두면 ps 프로세스 목록 /
-  // bash -x 로그에 그대로 노출된다 (수정 84/77 과 동일 원칙 — 로컬 운영자 도구지만
-  // 고가치 자격증명). 토큰·URL 은 curl config(-K, chmod 600, rm -f) 로 주입해야
-  // 하고 공용 헬퍼(gh_curl_cfg) 로 묶여 있어야 한다. Slack 웹훅 URL 도 argv 에
-  // 두면 안 된다 (채널 포스팅 자격증명). 회귀하면 argv 누수가 재발한다.
-  const watcherPath = join(repoDir, 'scripts/watch-secret-rotation.sh')
-  if (existsSync(watcherPath)) {
-    const ws = readFileSync(watcherPath, 'utf8')
-    // ① argv Bearer 토큰 주입 금지 — 실재하는 curl 명령 라인만 (주석 제외).
-    const argvLeak = ws.split('\n').some((line) => {
+  // ── 11. 전수 scripts/*.sh curl argv 자격증명 금지 (수정 102/105) ────────
+  // scripts/ 아래 **모든** .sh 파일의 curl 호출이 자격증명(토큰·웹훅 URL) 을
+  // argv 에 두면 ps 프로세스 목록 / bash -x 로그에 그대로 노출된다 (수정 84/102
+  // 실측 원칙 — CI 러너는 공유 머신이라 타 잡이 ps 로 argv 를 읽을 수 있다).
+  // 자격증명·URL 은 curl config(-K, chmod 600, 사용 후 rm -f) 로 주입해야 한다.
+  // 하드코딩 파일 목록 대신 전수 스윕 — 새 .sh 파일이 추가돼도 자동 적용.
+  const scriptsDir11 = join(repoDir, 'scripts')
+  const shFiles: string[] = []
+  if (existsSync(scriptsDir11)) {
+    for (const f of readdirSync(scriptsDir11)) {
+      if (f.endsWith('.sh')) shFiles.push(f)
+    }
+    shFiles.sort()
+  }
+  for (const f of shFiles) {
+    const cs = readFileSync(join(scriptsDir11, f), 'utf8')
+    // ① argv Authorization: Bearer 토큰 주입 금지 — 실재하는 curl 명령 라인만
+    // (주석 라인 과 printf config 지시어 라인 은 제외 — 오탐 방지).
+    const argvLeak = cs.split('\n').some((line) => {
       if (line.trim().startsWith('#')) return false
-      return /curl[^\n]*Authorization: Bearer/.test(line)
+      return /curl[^\n]*?-H "Authorization: Bearer \$\{?[A-Za-z_][A-Za-z0-9_]*/.test(line)
     })
     if (argvLeak) {
       findings.push(
-        'scripts/watch-secret-rotation.sh: curl argv 에 Authorization: Bearer 토큰이 남아 있다 — -K config(gh_curl_cfg) 로 주입해야 한다 (수정 102)',
+        `scripts/${f}: curl argv 에 Authorization: Bearer 토큰이 남아 있다 — -K config 로 주입해야 한다 (수정 105)`,
       )
     }
-    // ② 웹훅 URL argv 노출 금지 (Slack webhook 도 자격증명)
-    const webhookLeak = ws.split('\n').some((line) => {
+    // ② argv 웹훅 URL 금지 — "$WEBHOOK"/"$SLACK_WEBHOOK"/"$WEBHOOK_URL"/"$webhook"
+    // 등 이 curl argv 에 실리면 안 된다 (Slack webhook 도 채널 포스팅 자격증명).
+    const webhookLeak = cs.split('\n').some((line) => {
       if (line.trim().startsWith('#')) return false
-      return /curl[^\n]*"\$webhook"/.test(line)
+      return /curl[^\n]*"\$[A-Za-z_]*WEBHOOK[A-Za-z_]*"/i.test(line)
     })
     if (webhookLeak) {
-      findings.push(
-        'scripts/watch-secret-rotation.sh: Slack 웹훅 URL 이 curl argv 에 노출된다 — -K config 로 주입해야 한다 (수정 102)',
-      )
+      findings.push(`scripts/${f}: 웹훅 URL 이 curl argv 에 노출된다 — -K config 로 주입해야 한다 (수정 105)`)
     }
-    // ③ 공용 config 헬퍼 필수 — GitHub 호출이 argv -H 로 되돌아가지 않도록.
-    if (!ws.includes('gh_curl_cfg()')) {
-      findings.push(
-        'scripts/watch-secret-rotation.sh: GitHub API 공용 curl config 헬퍼(gh_curl_cfg) 가 없다 — argv 토큰 노출 (수정 102)',
-      )
-    }
+  }
+  // watcher 공용 헬퍼 유지 (수정 102) — GitHub 호출이 argv -H 로 되돌아가지
+  // 않도록 전수 스윕(①) 위에 별도 구조적 요구로 남긴다.
+  const watcherPath = join(repoDir, 'scripts/watch-secret-rotation.sh')
+  if (existsSync(watcherPath) && !readFileSync(watcherPath, 'utf8').includes('gh_curl_cfg()')) {
+    findings.push(
+      'scripts/watch-secret-rotation.sh: GitHub API 공용 curl config 헬퍼(gh_curl_cfg) 가 없다 — argv 토큰 노출 (수정 102)',
+    )
   }
 
   // ── 10. verify-do-binding.sh token hygiene (수정 84) ─────────────────────
@@ -595,7 +603,7 @@ export function verifyDeployWorkflow(repoDir: string): GateOutcome {
   }
   return {
     status: 'PASS',
-    detail: `${DEPLOY_WF} + ${GUARD_SCRIPT} pass all S104-③-⑥-④/⑧ regression checks (secrets / guard-masking / artifact / node / needs / eval-baseline-permission / notify-dry-run-wiring / runtime-bundle-verify / rollback-token-hygiene / guard-token-hygiene / watcher-token-hygiene)`,
+    detail: `${DEPLOY_WF} + ${GUARD_SCRIPT} pass all S104-③-⑥-④/⑧ regression checks (secrets / guard-masking / artifact / node / needs / eval-baseline-permission / notify-dry-run-wiring / runtime-bundle-verify / rollback-token-hygiene / guard-token-hygiene / script-credential-sweep)`,
   }
 }
 

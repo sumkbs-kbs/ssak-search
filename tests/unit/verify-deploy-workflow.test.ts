@@ -135,6 +135,50 @@ gh_curl_cfg() {
 }
 `
 
+/** 수정 105: check 12 전수 대상 5개 스크립트의 GOOD 픽스처 — 자격증명·URL 을
+ *  curl config(-K) 로 주입하는 최소 마커. 템플릿 리터럴에서 `${` 는 \${ 로 이스케이프. */
+const GOOD_NOTIFY = `#!/usr/bin/env bash
+CURL_CFG="$(mktemp)"
+chmod 600 "$CURL_CFG"
+printf 'url = "%s"\n' "$SLACK_WEBHOOK" > "$CURL_CFG"
+if curl -sf -m 10 -X POST -d "$PAYLOAD" -K "$CURL_CFG"; then
+  echo ok
+fi
+rm -f "$CURL_CFG"
+`
+
+const GOOD_SECRET_SET = `#!/usr/bin/env bash
+github_api_get() {
+  local url="$1" cfg
+  cfg="$(mktemp)"
+  chmod 600 "$cfg"
+  printf 'url = "%s"\nheader = "Authorization: Bearer %s"\nheader = "Accept: application/vnd.github+json"\n' "$url" "$GITHUB_API_TOKEN" > "$cfg"
+  curl -s -m 15 -K "$cfg" 2>/dev/null
+  rm -f "$cfg"
+}
+updated_at_before="$(github_api_get "https://api.github.com/repos/REPO/actions/secrets/SECRET" | python3 -c "print(1)" 2>/dev/null || true)"
+`
+
+const GOOD_LOGPUSH = `#!/usr/bin/env bash
+curl_cfg="$(mktemp)"
+chmod 600 "$curl_cfg"
+printf 'url = "https://api.cloudflare.com/client/v4/accounts/%s/logpush/jobs"\nheader = "Authorization: Bearer %s"\n' "\${CLOUDFLARE_ACCOUNT_ID}" "\${CLOUDFLARE_API_TOKEN}" > "$curl_cfg"
+EXISTING_JOBS=$(curl -s -K "$curl_cfg")
+rm -f "$curl_cfg"
+`
+
+const GOOD_ENV_EQ = `#!/usr/bin/env bash
+CURL_CFG="$(mktemp)"
+chmod 600 "$CURL_CFG"
+printf 'url = "%s"\n' "$WEBHOOK" > "$CURL_CFG"
+if curl -sf -m 10 -X POST -d "$PAYLOAD" -K "$CURL_CFG"; then
+  echo ok
+fi
+rm -f "$CURL_CFG"
+`
+
+const GOOD_COMMIT_SYNC = GOOD_ENV_EQ
+
 /** 수정 77: rollback_pages 가 curl -K config 로 토큰을 주입하는 최소 마커. */
 // 템플릿 리터럴에서 `$` 는 이스케이프 불필요 — `${` 만 \${ 로 이스케이프한다.
 const GOOD_DEPLOY_SCRIPT = `#!/usr/bin/env bash
@@ -174,6 +218,14 @@ function writeRepo(
     /** 수정 102: watch-secret-rotation.sh 픽스처 */
     watcher?: string
     skipWatcher?: boolean
+    /** 수정 105: check 12 전수 대상 스크립트 픽스처 (미지정 = 파일 없음 → 생략) */
+    notify?: string
+    secretSet?: string
+    logpush?: string
+    envEq?: string
+    commitSync?: string
+    /** 수정 105-2: 전수 스윕용 임의 .sh 파일 (scripts/extra-sweep.sh) */
+    extraSh?: string
   } = {},
 ): string {
   const dir = mkdtempSync(join(tmpdir(), 'vdf-'))
@@ -194,6 +246,24 @@ function writeRepo(
   }
   if (!opts.skipWatcher) {
     writeFileSync(join(dir, 'scripts', 'watch-secret-rotation.sh'), opts.watcher ?? GOOD_WATCHER, 'utf-8')
+  }
+  if (opts.notify !== undefined) {
+    writeFileSync(join(dir, 'scripts', 'notify-pipeline-failure.sh'), opts.notify, 'utf-8')
+  }
+  if (opts.secretSet !== undefined) {
+    writeFileSync(join(dir, 'scripts', 'verify-secret-set.sh'), opts.secretSet, 'utf-8')
+  }
+  if (opts.logpush !== undefined) {
+    writeFileSync(join(dir, 'scripts', 'create-logpush-datadog.sh'), opts.logpush, 'utf-8')
+  }
+  if (opts.envEq !== undefined) {
+    writeFileSync(join(dir, 'scripts', 'verify-env-equivalence.sh'), opts.envEq, 'utf-8')
+  }
+  if (opts.commitSync !== undefined) {
+    writeFileSync(join(dir, 'scripts', 'verify-deploy-commit-sync.sh'), opts.commitSync, 'utf-8')
+  }
+  if (opts.extraSh !== undefined) {
+    writeFileSync(join(dir, 'scripts', 'extra-sweep.sh'), opts.extraSh, 'utf-8')
   }
   created.push(dir)
   return dir
@@ -833,6 +903,74 @@ ${STAGING_PAGES_DEPLOY}${BUNDLE_VERIFY_STEP}      - name: Deploy probe-scheduler
       const outcome = verifyDeployWorkflow(writeRepo({ watcher: webhookLeak }))
       expectStatus(outcome, 'FAIL')
       expect(outcome.detail).toContain('웹훅 URL 이 curl argv')
+    })
+  })
+
+  describe('13. 전수 scripts/*.sh curl argv 자격증명 금지 (check 11, 수정 102/105)', () => {
+    const allGood = {
+      notify: GOOD_NOTIFY,
+      secretSet: GOOD_SECRET_SET,
+      logpush: GOOD_LOGPUSH,
+      envEq: GOOD_ENV_EQ,
+      commitSync: GOOD_COMMIT_SYNC,
+    }
+
+    it('PASSes when 5개 전환 스크립트 모두 -K config 로 자격증명·URL 을 주입한다', () => {
+      expectStatus(verifyDeployWorkflow(writeRepo(allGood)), 'PASS')
+    })
+
+    it('PASSes when 기본 픽스처(guard/bundle/deploy/watcher) 를 포함한 기존 .sh 가 모두 깨끗하다', () => {
+      expectStatus(verifyDeployWorkflow(writeRepo()), 'PASS')
+    })
+
+    it('FAILs when notify-pipeline-failure.sh 웹훅 URL 이 curl argv 에 노출된다', () => {
+      const leak = GOOD_NOTIFY.replace('-K "$CURL_CFG"', '"$SLACK_WEBHOOK"')
+      const outcome = verifyDeployWorkflow(writeRepo({ ...allGood, notify: leak }))
+      expectStatus(outcome, 'FAIL')
+      expect(outcome.detail).toContain('notify-pipeline-failure.sh: 웹훅 URL 이 curl argv')
+    })
+
+    it('FAILs when verify-secret-set.sh PAT 가 curl argv(-H Authorization) 에 노출된다', () => {
+      const leak = GOOD_SECRET_SET.replace('-K "$cfg"', '-H "Authorization: Bearer ${GITHUB_API_TOKEN}"')
+      const outcome = verifyDeployWorkflow(writeRepo({ ...allGood, secretSet: leak }))
+      expectStatus(outcome, 'FAIL')
+      expect(outcome.detail).toContain('verify-secret-set.sh: curl argv 에 Authorization: Bearer')
+    })
+
+    it('FAILs when create-logpush-datadog.sh CF 토큰 이 curl argv 에 노출된다', () => {
+      const leak = GOOD_LOGPUSH.replace('-K "$curl_cfg"', '-H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}"')
+      const outcome = verifyDeployWorkflow(writeRepo({ ...allGood, logpush: leak }))
+      expectStatus(outcome, 'FAIL')
+      expect(outcome.detail).toContain('create-logpush-datadog.sh: curl argv 에 Authorization: Bearer')
+    })
+
+    it('FAILs when verify-env-equivalence.sh 웹훅 URL 이 curl argv 에 노출된다', () => {
+      const leak = GOOD_ENV_EQ.replace('-K "$CURL_CFG"', '"$WEBHOOK"')
+      const outcome = verifyDeployWorkflow(writeRepo({ ...allGood, envEq: leak }))
+      expectStatus(outcome, 'FAIL')
+      expect(outcome.detail).toContain('verify-env-equivalence.sh: 웹훅 URL 이 curl argv')
+    })
+
+    it('FAILs when verify-deploy-commit-sync.sh 웹훅 URL 이 curl argv 에 노출된다', () => {
+      const leak = GOOD_COMMIT_SYNC.replace('-K "$CURL_CFG"', '"$WEBHOOK"')
+      const outcome = verifyDeployWorkflow(writeRepo({ ...allGood, commitSync: leak }))
+      expectStatus(outcome, 'FAIL')
+      expect(outcome.detail).toContain('verify-deploy-commit-sync.sh: 웹훅 URL 이 curl argv')
+    })
+
+    it('FAILs when 목록에 없는 임의 .sh 파일 의 curl argv 에 Bearer 토큰 이 남는다 (전수 스윕)', () => {
+      const leak =
+        '#!/usr/bin/env bash\ncurl -s -H "Authorization: Bearer ${SOME_API_TOKEN}" https://api.example.com/ > /dev/null\n'
+      const outcome = verifyDeployWorkflow(writeRepo({ ...allGood, extraSh: leak }))
+      expectStatus(outcome, 'FAIL')
+      expect(outcome.detail).toContain('extra-sweep.sh: curl argv 에 Authorization: Bearer')
+    })
+
+    it('FAILs when 임의 .sh 파일 의 curl argv 에 웹훅 URL($WEBHOOK_URL 변형) 이 노출된다', () => {
+      const leak = '#!/usr/bin/env bash\ncurl -sf -m 10 -X POST -d "$payload" "$WEBHOOK_URL" > /dev/null\n'
+      const outcome = verifyDeployWorkflow(writeRepo({ ...allGood, extraSh: leak }))
+      expectStatus(outcome, 'FAIL')
+      expect(outcome.detail).toContain('extra-sweep.sh: 웹훅 URL 이 curl argv')
     })
   })
 })

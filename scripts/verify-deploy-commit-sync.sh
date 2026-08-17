@@ -92,11 +92,17 @@ print(json.dumps({
 }))
 PYEOF
 )"
-    if curl -sf -m 10 -X POST -H 'Content-Type: application/json' -d "$PAYLOAD" "$WEBHOOK"; then
+    # 웹훅 URL 은 자격증명 — curl argv 에 두면 ps/bash -x 로그에 노출된다.
+    # curl config(-K, chmod 600, 사용 후 rm -f) 로 주입 (수정 105 — check 12).
+    CURL_CFG="$(mktemp "${TMPDIR:-/tmp}/vdcs-curl.XXXXXX")"
+    chmod 600 "$CURL_CFG"
+    printf 'url = "%s"\n' "$WEBHOOK" > "$CURL_CFG"
+    if curl -sf -m 10 -X POST -H 'Content-Type: application/json' -d "$PAYLOAD" -K "$CURL_CFG"; then
       echo " ✅ Slack 알림 전송됨 (danger)"
     else
       echo " ⚠️  Slack 알림 전송 실패 (webhook 응답 오류) — 로그로만 남깁니다" >&2
     fi
+    rm -f "$CURL_CFG"
   else
     echo " ℹ️  동치 실패 알림 생략 — SLACK_WEBHOOK/ALERT_SLACK_WEBHOOK 미설정 (no-op)" >&2
   fi

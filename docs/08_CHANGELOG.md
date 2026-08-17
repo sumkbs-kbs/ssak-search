@@ -1100,7 +1100,7 @@
 - **테스트**: `tests/unit/lib-verify-pace.test.ts` 신규 **5/5** — 낮음 연장(≥300ms)/높음 유지(<300ms)/스테일 복귀/레거시 마이그레이션/비숫자·빈 값 무시 (타이밍 기반, 100/500ms 축소 간격 + 여유 경계 300ms)
 - **검증**: bash -n 3개 OK · tsc 0 · eslint 0 · prettier clean · 전체 unit **143 파일 2,813/2,813 PASS** (중간 flake 는 기지의 동시 부하 bash 스폰 타임아웃 — 단독 전부 통과)
 
-### 수정 105: 전수 curl argv 자격증명 금지 — 5개 스크립트 -K config 전환 + check 12 (2026-08-17)
+### 수정 105: 전수 curl argv 자격증명 금지 — 5개 스크립트 -K config 전환 + check 11 전수 sweep (2026-08-17)
 - **작업 ID**: FIX-2026-08-17-18 (구현 + 테스트 + 실 repo PASS)
 - **요청**: 워처 외 다른 스크립트(notify-pipeline-failure/verify-secret-set/create-logpush-datadog/verify-env-equivalence/verify-deploy-commit-sync)의 curl argv 토큰/웹훅 노출을 전수 조사해 같은 패턴(-K config)으로 정리
 - **노출 지점 → 전환 내역**:
@@ -1108,22 +1108,10 @@
   - `verify-secret-set.sh` — GitHub secrets API 조회 2곳 → `github_api_get()` 헬퍼 (워처 `gh_curl_cfg` 동일 패턴, repo-scope PAT config 주입)
   - `create-logpush-datadog.sh` — Logpush 목록 조회 + 생성 POST 2곳 (CF 토큰 config 주입)
   - `verify-env-equivalence.sh` / `verify-deploy-commit-sync.sh` — 웹훅 POST → `-K` config (`veq-curl`/`vdcs-curl.XXXXXX`)
-- **회귀 게이트 — check 12 (verify-deploy-workflow.ts)**: ① curl argv `Authorization: Bearer ${VAR}` 금지 ② curl argv `"$WEBHOOK"/"$SLACK_WEBHOOK"` 금지 ③ 자격증명 변수 사용 시 `-K "` 필수 — 대상 5파일 전수, 파일 부재 시 생략
-- **테스트**: verify-deploy-workflow 68/68 (+8: check 12 PASS 2 + FAIL 6) · notify-pipeline-failure 7/7 (fake curl 이 -K config url= 추출 로그 — 수정 77/102 패턴) · verify-secret-set 8/8 · verify-deploy-commit-sync 5/5 · 전체 unit 2,839/2,839 · tsc 0 · eslint 0 · prettier clean · bash -n 5/5 · self-test 7/7
-- **실 repo 실측**: `verify-deploy-workflow.ts .` → PASS (credential-sweep 포함) · 잔존 argv 노출 스윕 5파일 0건 (echo/printf config 지시어 라인은 오탐 제외)
+- **회귀 게이트 — check 11 확장(전수 sweep, verify-deploy-workflow.ts)**: 하드코딩 5파일 목록(check 12) 대신 **scripts/ 아래 모든 .sh 파일을 전수 스윕** — ① curl argv `Authorization: Bearer ${VAR}` 금지 ② curl argv `"$WEBHOOK"/"$SLACK_WEBHOOK"/"$WEBHOOK_URL"/"$webhook"` 금지 (대소문자 무시). ③(-K 필수)는 verify-pages-bundle.sh(무인증 /api/health curl) 오탐으로 **제외** — per-script 체크 9/10/11 이 -K 요구를 담당. watcher `gh_curl_cfg()` 요구는 전수 스윕 위에 별도 유지
+- **테스트**: verify-deploy-workflow 69/69 (+9: 전수 sweep PASS 2 + FAIL 7 — 5파일 누수 + **목록에 없는 임의 .sh 파일 누수 2건**) · notify-pipeline-failure 7/7 (fake curl 이 -K config url= 추출 로그 — 수정 77/102 패턴) · verify-secret-set 8/8 · verify-deploy-commit-sync 5/5 · tsc 0 · eslint 0 · prettier clean · bash -n 5/5 · self-test 7/7
+- **실 repo 실측**: `verify-deploy-workflow.ts .` → PASS (script-credential-sweep) — **25개 .sh 전수 0건** · ①② 스윕 0건 (유일 매치는 deploy-local-worktree.sh:296 주석 — trim 제외 확인)
 
-### 수정 104: CI per-commit replay 범위 계산 — force-push(비-조상 before) 견고화 (2026-08-17)
-- **요청**: 고정 체인 force-push(4fa42f4) 후 CI per-commit gate replay 가 `fatal: Invalid revision range 51ae1a6..4fa42f4` 로 실패 — 원인 진단 및 해결
-- **근본 원인**: ci.yml 의 "Resolve commit range" 스텝이 `github.event.before` 를 그대로 BASE 로 사용. force-push 로 브랜치가 재작성되면 **before(구 헤드)는 새 HEAD 의 조상이 아니다** → `git rev-list --count "before..HEAD"` 가 fatal(exit 128) → replay 잡 전체 실패. 첫 push(빈/zeros before)만 처리하고 비-조상 before 는 미처리
-- **해결**: `git merge-base --is-ancestor "$BASE" "$HEAD"` 가 거짓이면 (force-push/재작성 감지) **마지막 10개 커밋으로 폴백** (첫 push 경로와 동일한 상한 — merged-tree 게이트가 HEAD 를 이미 검증, replay 는 신규 커밋 회귀 pinpoint 용). ::warning:: 으로 감지 사실을 로그에 남김
-- **검증**: 재push 후 CI per-commit replay **ALL GREEN** 실측
-
-### 수정 103: per-commit replay workflow 게이트를 커밋별 자체 체커로 전환 — 시간역행 체크 제거 (2026-08-17)
-- **요청**: 수정 89~99 배치(11커밋) cherry-pick push 후 per-commit replay 에서 중간 커밋 전부 red — 원인 진단 및 해결
-- **근본 원인**: `verify-commits-ci.sh` 의 workflow 게이트가 **ROOT(팁)의 verify-deploy-workflow.ts** 를 모든 커밋에 적용. 체커는 수정 84/92/99 로 성장하는데, 스크립트 수정(92/98/84)과 체크 추가(99)가 서로 다른 커밋이라 중간 커밋은 **구조적으로** 최신 체크를 만족 불가 (예: 수정 92 이전 커밋의 verify-pages-bundle.sh 는 정확 일치가 당시 표준 — 팁 체커가 prefix 를 요구해 오탐 FAIL). 추가로 44dfff5(수정 99)는 체크 코드가 808c2e7 통째 채택으로 이미 있는데 verify-do-binding.sh 수정(수정 84)이 다음 커밋이라 **자체 unit/workflow 게이트조차 통과 불가** (체리픽으로 생긴, 로컬에 존재하지 않던 트리 상태)
-- **해결**: ① 44dfff5 에 verify-do-binding.sh 수정(수정 84)을 접어넣어 amend — 체크 10/11 이 요구하는 트리 상태를 커밋 자체가 만족 (전용 커밋 3344907 은 드롭) ② `verify-commits-ci.sh` workflow 게이트를 **커밋의 자체 workflow.ts** 로 전환 — "해당 커밋 시점의 표준"으로 판정 (기존에 고쳐진 버그를 다시 도입하는 회귀는 그 커밋의 자체 체커가 잡음 — 회귀 보호 유지). 커밋의 체커 파일이 없으면 SKIP (deploy.yml 부재 SKIP 과 동일 의미론)
-- **판정 실측** (CI 로그): 수정 88~97 커밋은 7/5건 → 자체 체커에선 해당 체크 미존재 → PASS · 44dfff5' 는 자체 체커+자체 테스트 전부 PASS → **범위 전체 ALL GREEN**
-- **검증**: bash -n · tsc 0 · prettier clean · verify-deploy-workflow 56/56 · 로컬 verify-commits-ci.sh 전체 범위 재현 ALL GREEN 확인
 ### 수정 102: 워처 GitHub/웹훅 curl argv 토큰 노출 — -K config(gh_curl_cfg) 전환 + 회귀 게이트 (2026-08-17)
 - **작업 ID**: FIX-2026-08-17-17 (구현 + 테스트 + 라이브 확인)
 - **요청**: 워처의 get_secret_updated_at 이 GitHub 토큰을 curl argv(-H Authorization: Bearer)에 노출하는 문제를 수정 84/77 패턴(-K config)으로 개선 (앞선 검토: 적용 권장 — 저비용·테스트 호환 확인)

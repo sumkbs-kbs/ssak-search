@@ -76,8 +76,13 @@ echo "━━━━━━━━━━━━━━━━━━━━━━━━�
 
 # ---- Pre-flight: check for existing jobs -------------------------------------
 echo " Checking for existing Logpush jobs..."
-EXISTING_JOBS=$(curl -s -H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" \
-  "https://api.cloudflare.com/client/v4/accounts/${CLOUDFLARE_ACCOUNT_ID}/logpush/jobs")
+# CF 토큰은 curl argv(-H "Authorization: Bearer …") 에 두지 않고 config(-K,
+# chmod 600, 사용 후 rm -f) 로 주입 — ps/bash -x 노출 차단 (수정 105 — check 12).
+curl_cfg="$(mktemp)"; chmod 600 "$curl_cfg"
+printf 'url = "https://api.cloudflare.com/client/v4/accounts/%s/logpush/jobs"\nheader = "Authorization: Bearer %s"\n' \
+  "${CLOUDFLARE_ACCOUNT_ID}" "${CLOUDFLARE_API_TOKEN}" > "$curl_cfg"
+EXISTING_JOBS=$(curl -s -K "$curl_cfg")
+rm -f "$curl_cfg"
 
 ACTIVE_JOB_ID=$(echo "${EXISTING_JOBS}" | jq -re '.result[] | select(.dataset == "workers_trace_events" and .enabled == true) | .id' | head -1)
 if [ -n "${ACTIVE_JOB_ID}" ]; then
@@ -151,11 +156,11 @@ echo ""
 
 # ---- Create the job ---------------------------------------------------------
 echo " Creating Logpush job..."
-RESPONSE=$(curl -s -X POST \
-  "https://api.cloudflare.com/client/v4/accounts/${CLOUDFLARE_ACCOUNT_ID}/logpush/jobs" \
-  -H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" \
-  -H "Content-Type: application/json" \
-  -d @"${PAYLOAD_FILE}")
+curl_cfg="$(mktemp)"; chmod 600 "$curl_cfg"
+printf 'url = "https://api.cloudflare.com/client/v4/accounts/%s/logpush/jobs"\nheader = "Authorization: Bearer %s"\nheader = "Content-Type: application/json"\n' \
+  "${CLOUDFLARE_ACCOUNT_ID}" "${CLOUDFLARE_API_TOKEN}" > "$curl_cfg"
+RESPONSE=$(curl -s -X POST -K "$curl_cfg" -d @"${PAYLOAD_FILE}")
+rm -f "$curl_cfg"
 
 SUCCESS=$(echo "${RESPONSE}" | jq -r '.success // false')
 JOB_ID=$(echo "${RESPONSE}" | jq -r '.result.id // "unknown"')

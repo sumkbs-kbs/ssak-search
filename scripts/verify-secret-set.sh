@@ -242,8 +242,21 @@ if [ -z "$GITHUB_API_TOKEN" ]; then
 fi
 echo "  ✅ GitHub API 토큰: ${TOKEN_SOURCE}"
 
-updated_at_before="$(curl -s -m 15 -H "Authorization: Bearer ${GITHUB_API_TOKEN}" -H "Accept: application/vnd.github+json" \
-  "https://api.github.com/repos/${REPO}/actions/secrets/${SECRET_NAME}" 2>/dev/null \
+# GitHub API 조회 — repo-scope PAT 를 curl argv(-H "Authorization: Bearer …")
+# 에 두면 ps/bash -x 로그에 그대로 노출된다 (수정 105 — check 12 전수 규칙).
+# 토큰·URL 을 curl config(-K, chmod 600, 사용 후 rm -f) 로 주입한다
+# (watch-secret-rotation.sh 의 gh_curl_cfg 와 동일 패턴).
+github_api_get() {
+  local url="$1" cfg
+  cfg="$(mktemp)"
+  chmod 600 "$cfg"
+  printf 'url = "%s"\nheader = "Authorization: Bearer %s"\nheader = "Accept: application/vnd.github+json"\n' \
+    "$url" "$GITHUB_API_TOKEN" > "$cfg"
+  curl -s -m 15 -K "$cfg" 2>/dev/null
+  rm -f "$cfg"
+}
+
+updated_at_before="$(github_api_get "https://api.github.com/repos/${REPO}/actions/secrets/${SECRET_NAME}" \
   | python3 -c "import json,sys; print(json.load(sys.stdin).get('updated_at',''))" 2>/dev/null || true)"
 
 echo "  set 전 updated_at: ${updated_at_before:-없음/조회불가}"
@@ -259,8 +272,7 @@ echo "  ✅ gh secret set 실행됨 (stdin 주입, argv 노출 없음)"
 
 # ── ④ API updated_at 전/후 비교 (실제 반영 ground truth) ──────────────────
 sleep 2
-updated_at_after="$(curl -s -m 15 -H "Authorization: Bearer ${GITHUB_API_TOKEN}" -H "Accept: application/vnd.github+json" \
-  "https://api.github.com/repos/${REPO}/actions/secrets/${SECRET_NAME}" 2>/dev/null \
+updated_at_after="$(github_api_get "https://api.github.com/repos/${REPO}/actions/secrets/${SECRET_NAME}" \
   | python3 -c "import json,sys; print(json.load(sys.stdin).get('updated_at',''))" 2>/dev/null || true)"
 echo "  set 후 updated_at: ${updated_at_after:-없음/조회불가}"
 

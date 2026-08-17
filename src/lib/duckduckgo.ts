@@ -13,6 +13,8 @@
 import type { SearchResult, ImageResult, Env } from '../types'
 import { logger, toError } from './logger'
 import { fetchWithTimeout, extractDomain, stripHtml, decodeEntities, computeScore, truncateToTokens } from './util'
+import { withRetry, splitRetryBudget } from './resilience/retry'
+import { BACKEND_TIMEOUT_MS, backendTimeoutMs } from './search/fanout'
 
 const DDG_HTML_URL = 'https://html.duckduckgo.com/html/'
 const DDG_LITE_URL = 'https://lite.duckduckgo.com/lite/'
@@ -28,11 +30,62 @@ const BROWSER_UA =
   'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
 
 /**
+ * DDG 202 anti-bot burst cooldown (P1-5, 2026-08-17).
+ *
+ * docs/15 판정과 실측 (probe-reddit-live, 2026-08-17): DDG 202은 IP-지속이
+ * 아니라 **버스트 차단**이다 — 단일 호출은 200+10건 성공하지만 연속 호출
+ * (1.5s 간격 16회)은 전부 202로 차단된다. eval/배치가 400ms 간격으로 DDG를
+ * 연타하면 site:reddit 태스크가 전부 202에 먹혀 reddit gold가 0건이 된다
+ * (600쿼리 eval 아티팩트에서 ddg-site-reddit 백엔드 전무 = 이 원인).
+ *
+ * 해법: wikipedia/reddit/arxiv 가드와 동일한 쿨다운 arm — 202 응답 시
+ * DDG_ANTIBOT_COOLDOWN_MS(30s) 동안 모든 DDG 호출을 fetch 없이 스킵해
+ * 버스트를 회복시킨 뒤 다음 쿼리에서 재시도한다. 해머링 제거 + 배치 eval에서
+ * 쿨다운 만료 후 재시도 기회 확보 (docs/15: 연속 2~4회 후 ~10-30초 202 —
+ * 30s 쿨다운이 그 창을 정직하게 반영).
+ */
+const DDG_ANTIBOT_COOLDOWN_MS = 30_000
+let ddgAntiBotUntil = 0 // epoch ms — 202 차단 해제 예정 시각
+
+/** Test hook — reset the module anti-bot state between tests. */
+export function resetDdgAntiBotState(): void {
+  ddgAntiBotUntil = 0
+}
+
+/** Arm the 202 anti-bot cooldown (called on an HTTP 202 challenge). */
+function armDdgAntiBot(): void {
+  ddgAntiBotUntil = Date.now() + DDG_ANTIBOT_COOLDOWN_MS
+  logger.warn('DDG 202 anti-bot — cooldown armed', { cooldownMs: DDG_ANTIBOT_COOLDOWN_MS })
+}
+
+/**
+ * Transient failure from the DDG html endpoint — the ONLY error class worth
+ * retrying (docs/15_DDG_ANTIBOT_RETRY_ANALYSIS.md, B안). Covers 5xx (server
+ * overload) and network errors (fetch throw). 202 anti-bot is deliberately
+ * NOT wrapped: DDG's challenge is IP-persistent on datacenter egress IPs, so
+ * retrying would just burn a subrequest for zero gain.
+ */
+class TransientDdgError extends Error {
+  readonly status: number | null
+  constructor(message: string, status: number | null) {
+    super(message)
+    this.status = status
+    this.name = 'TransientDdgError'
+  }
+}
+
+/**
  * Search using DuckDuckGo HTML endpoint.
  * Falls back to Lite endpoint if HTML returns no results.
+ *
+ * B안 (docs/15): transient failures (5xx / network blips) get ONE retry via
+ * the shared withRetry decorator; 202 anti-bot and 4xx fail fast (no retry,
+ * no lite fallback). The html chain's worst case (2×925 + 150ms beat) equals
+ * the duckduckgo fanout ceiling exactly, so the per-backend timer never fires
+ * mid-chain.
  */
 export async function duckDuckGoSearch(query: string, opts: DuckDuckGoOptions = {}): Promise<SearchResult[]> {
-  const { maxResults = 10, timeoutMs = 15000, region = 'wt-wt', env } = opts
+  const { maxResults = 10, timeoutMs = backendTimeoutMs('duckduckgo', 15000), region = 'wt-wt', env } = opts
 
   // Build form data - URLSearchParams handles UTF-8 encoding
   const params = new URLSearchParams()
@@ -41,6 +94,70 @@ export async function duckDuckGoSearch(query: string, opts: DuckDuckGoOptions = 
   params.append('df', '')
   params.append('b', '') // search button field (required by DDG HTML)
 
+  // P1-5: 202 anti-bot burst cooldown — skip fetches during a cooldown window
+  // instead of hammering DDG (docs/15: 연속 2~4회 후 ~10-30초 202; 실측:
+  // 단일 호출 200+10건 → 연속 16회 전부 202). 배치 eval(400ms 간격)에서
+  // site:reddit 태스크가 전부 202에 먹히는 문제를 해결 — 쿨다운 만료 후
+  // 다음 쿼리에서 재시도 기회를 얻는다.
+  if (Date.now() < ddgAntiBotUntil) {
+    logger.warn('DDG search skipped — anti-bot cooldown', { until: ddgAntiBotUntil })
+    return []
+  }
+
+  // Budget: splitRetryBudget(2000, 2, 150, 800) = 925 → worst 2×925+150 = 2000.
+  const ddgCeiling = BACKEND_TIMEOUT_MS.duckduckgo ?? 2000
+  const perAttemptMs = splitRetryBudget(Math.min(timeoutMs, ddgCeiling), 2, 150, 800)
+
+  // Fetch the html endpoint with the retry policy. 202/4xx pass through as
+  // Responses so the state machine below can act on them; `null` means the
+  // chain exhausted (retries used up on 5xx/network errors).
+  const response = await withRetry(
+    async () => {
+      let res: Response
+      try {
+        res = await fetchWithTimeout(
+          env,
+          DDG_HTML_URL,
+          {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8',
+              'User-Agent': BROWSER_UA,
+              Accept: 'text/html,application/xhtml+xml',
+              'Accept-Language': 'en-US,en;q=0.9,ko;q=0.8',
+              Referer: 'https://html.duckduckgo.com/',
+            },
+            body: params.toString(),
+          },
+          perAttemptMs,
+        )
+      } catch (err) {
+        // Network timeout / blip — transient, worth the single retry.
+        throw new TransientDdgError(`DDG HTML fetch failed: ${toError(err)}`, null)
+      }
+      if (res.status === 200 || res.status === 202 || (res.status >= 400 && res.status < 500)) {
+        // 200 → parsed below. 202 → anti-bot burst — arm the cooldown so
+        // subsequent calls skip instead of hammering, then fail fast (lite
+        // would 202 from the same IP too, so the fallback below never runs).
+        // 4xx → permanent refusal.
+        if (res.status === 202) armDdgAntiBot()
+        return res
+      }
+      // 5xx → server-side transient failure; free the subrequest slot and retry.
+      res.body?.cancel().catch(() => {})
+      throw new TransientDdgError(`DDG HTML HTTP ${res.status}`, res.status)
+    },
+    {
+      maxRetries: 1,
+      delaysMs: [150],
+      jitter: false,
+      retryable: (err) => err instanceof TransientDdgError,
+    },
+  ).catch((err) => {
+    logger.warn('DDG HTML search failed:', { error: toError(err) })
+    return null
+  })
+
   let results: SearchResult[] = []
   // Track whether the html endpoint returned a genuine HTTP 200 response.
   // DDG returns HTTP 202 for anti-bot challenges — response.ok is TRUE (2xx) but the
@@ -48,32 +165,11 @@ export async function duckDuckGoSearch(query: string, opts: DuckDuckGoOptions = 
   // because lite will also get 202 from the same IP, doubling the timeout for zero gain.
   let htmlReturned200 = false
 
-  try {
-    const response = await fetchWithTimeout(
-      env,
-      DDG_HTML_URL,
-      {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8',
-          'User-Agent': BROWSER_UA,
-          Accept: 'text/html,application/xhtml+xml',
-          'Accept-Language': 'en-US,en;q=0.9,ko;q=0.8',
-          Referer: 'https://html.duckduckgo.com/',
-        },
-        body: params.toString(),
-      },
-      timeoutMs,
-    )
-
-    // Only treat HTTP 200 as a real response. 202 = anti-bot challenge page.
-    if (response.status === 200) {
-      htmlReturned200 = true
-      const html = await response.text()
-      results = parseDuckDuckGoHtml(html, query, maxResults)
-    }
-  } catch (err) {
-    logger.warn('DDG HTML search failed:', { error: toError(err) })
+  // Only treat HTTP 200 as a real response. 202 = anti-bot challenge page.
+  if (response?.status === 200) {
+    htmlReturned200 = true
+    const html = await response.text()
+    results = parseDuckDuckGoHtml(html, query, maxResults)
   }
 
   // Fallback: DuckDuckGo Lite endpoint
@@ -93,7 +189,7 @@ export async function duckDuckGoSearch(query: string, opts: DuckDuckGoOptions = 
 
 /** DuckDuckGo Lite endpoint (simpler HTML, better for non-English) */
 async function duckDuckGoLiteSearch(query: string, opts: DuckDuckGoOptions = {}): Promise<SearchResult[]> {
-  const { maxResults = 10, timeoutMs = 15000, region = 'wt-wt', env } = opts
+  const { maxResults = 10, timeoutMs = backendTimeoutMs('duckduckgo', 15000), region = 'wt-wt', env } = opts
 
   const params = new URLSearchParams()
   params.append('q', query)
@@ -250,7 +346,7 @@ function decodeDdgUrl(rawUrl: string): string {
  */
 export async function duckDuckGoInstantAnswer(
   query: string,
-  timeoutMs = 10000,
+  timeoutMs = backendTimeoutMs('duckduckgo', 10000),
   env?: Env,
 ): Promise<{ abstract: string; source: string; url: string } | null> {
   const params = new URLSearchParams({
@@ -301,7 +397,7 @@ export async function duckDuckGoImageSearch(
   query: string,
   opts: { maxResults?: number; timeoutMs?: number; env?: Env } = {},
 ): Promise<ImageResult[]> {
-  const { maxResults = 10, timeoutMs = 10000, env } = opts
+  const { maxResults = 10, timeoutMs = backendTimeoutMs('duckduckgo', 10000), env } = opts
   const results: ImageResult[] = []
 
   try {

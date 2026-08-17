@@ -4,8 +4,36 @@
  * These are the HTML parsing functions that extract search results from DDG pages.
  */
 
-import { describe, it, expect } from 'vitest'
-import { parseDuckDuckGoHtml, duckDuckGoSearch, duckDuckGoInstantAnswer } from '../../src/lib/duckduckgo'
+import { describe, it, expect, vi, beforeEach } from 'vitest'
+
+// Mock fetchWithTimeout for network-path tests
+const mockFetchWithTimeout = vi.fn()
+vi.mock('../../src/lib/util', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../../src/lib/util')>()
+  return {
+    ...actual,
+    fetchWithTimeout: (...args: unknown[]) => mockFetchWithTimeout(...args),
+  }
+})
+
+import {
+  parseDuckDuckGoHtml,
+  duckDuckGoSearch,
+  duckDuckGoInstantAnswer,
+  duckDuckGoImageSearch,
+  resetDdgAntiBotState,
+} from '../../src/lib/duckduckgo'
+
+function ddgHtmlPage(n: number): string {
+  let html = ''
+  for (let i = 0; i < n; i++) {
+    html += `<div class="result">
+      <a class="result__a" href="https://example.com/${i}">Result ${i}</a>
+      <a class="result__snippet" href="https://example.com/${i}">Snippet ${i} text here.</a>
+    </div>`
+  }
+  return html
+}
 
 describe('DuckDuckGo Parsers', () => {
   describe('parseDuckDuckGoHtml', () => {
@@ -255,5 +283,222 @@ describe('DuckDuckGo Parsers', () => {
       const elapsed = Date.now() - start
       expect(elapsed).toBeLessThan(2000)
     })
+  })
+})
+
+// ============================================================
+// Network paths — mocked fetchWithTimeout
+// ============================================================
+
+describe('duckDuckGoSearch — network path', () => {
+  beforeEach(() => {
+    mockFetchWithTimeout.mockReset()
+    resetDdgAntiBotState()
+  })
+
+  it('POSTs to the html endpoint and parses results on HTTP 200', async () => {
+    mockFetchWithTimeout.mockResolvedValueOnce(new Response(ddgHtmlPage(2), { status: 200 }))
+    const results = await duckDuckGoSearch('hello', { env: {} as never })
+    expect(mockFetchWithTimeout).toHaveBeenCalledTimes(1)
+    const [, url, init] = mockFetchWithTimeout.mock.calls[0]
+    expect(String(url)).toContain('html.duckduckgo.com/html/')
+    expect((init as RequestInit).method).toBe('POST')
+    expect(results).toHaveLength(2)
+    expect(results[0].title).toBe('Result 0')
+    expect(results[0].domain).toBe('example.com')
+  })
+
+  it('does NOT fall through to lite when the html endpoint returns 202 (anti-bot)', async () => {
+    mockFetchWithTimeout.mockResolvedValueOnce(new Response('challenge', { status: 202 }))
+    const results = await duckDuckGoSearch('hello', { env: {} as never })
+    expect(mockFetchWithTimeout).toHaveBeenCalledTimes(1)
+    expect(results).toEqual([])
+  })
+
+  it('P1-5: 202 arms the burst cooldown — subsequent calls skip without fetching', async () => {
+    mockFetchWithTimeout.mockResolvedValueOnce(new Response('challenge', { status: 202 }))
+    await duckDuckGoSearch('hello', { env: {} as never })
+    expect(mockFetchWithTimeout).toHaveBeenCalledTimes(1)
+
+    // Cooldown window — the SECOND call must NOT hit the network (no hammering).
+    const results = await duckDuckGoSearch('hello again', { env: {} as never })
+    expect(mockFetchWithTimeout).toHaveBeenCalledTimes(1) // unchanged
+    expect(results).toEqual([])
+  })
+
+  it('P1-5: cooldown expires → the next call fetches again (recovery path)', async () => {
+    mockFetchWithTimeout
+      .mockResolvedValueOnce(new Response('challenge', { status: 202 }))
+      .mockResolvedValueOnce(new Response(ddgHtmlPage(1), { status: 200 }))
+    await duckDuckGoSearch('hello', { env: {} as never }) // 202 → arm
+
+    // Fast-forward past the 30s cooldown by re-arming the clock: reset clears it.
+    // (Simulating expiry directly is not possible without timer mocks — instead
+    // verify the reset hook allows a fresh fetch, which is the same code path
+    // the cooldown expiry takes.)
+    resetDdgAntiBotState()
+    const results = await duckDuckGoSearch('hello', { env: {} as never })
+    expect(mockFetchWithTimeout).toHaveBeenCalledTimes(2)
+    expect(results).toHaveLength(1)
+  })
+
+  it('falls back to lite when html returns 200 but parses zero results', async () => {
+    mockFetchWithTimeout
+      .mockResolvedValueOnce(new Response('<html>no results</html>', { status: 200 }))
+      .mockResolvedValueOnce(
+        new Response(
+          '<a class="result-link" href="https://lite.example.com/1">Lite Result</a><span class="result-snippet">lite snippet</span>',
+          { status: 200 },
+        ),
+      )
+    const results = await duckDuckGoSearch('hello', { env: {} as never })
+    expect(mockFetchWithTimeout).toHaveBeenCalledTimes(2)
+    expect(results).toHaveLength(1)
+    expect(results[0].title).toBe('Lite Result')
+    expect(results[0].domain).toBe('lite.example.com')
+  })
+
+  it('uses the generic link fallback when lite has no result-link class', async () => {
+    mockFetchWithTimeout
+      .mockResolvedValueOnce(new Response('<html>none</html>', { status: 200 }))
+      .mockResolvedValueOnce(
+        new Response('<a href="https://generic.example.com/page">Generic Page Title Here</a>', { status: 200 }),
+      )
+    const results = await duckDuckGoSearch('hello', { env: {} as never })
+    expect(results).toHaveLength(1)
+    expect(results[0].url).toBe('https://generic.example.com/page')
+  })
+
+  it('returns [] when the html fetch keeps throwing (retried once, no lite fallback)', async () => {
+    mockFetchWithTimeout
+      .mockRejectedValueOnce(new Error('timeout'))
+      .mockRejectedValueOnce(new Error('still down'))
+    const results = await duckDuckGoSearch('hello', { env: {} as never })
+    // Network blips are transient → B안 retries once; exhausted → [] with no lite.
+    expect(mockFetchWithTimeout).toHaveBeenCalledTimes(2)
+    expect(results).toEqual([])
+  })
+
+  it('retries once on 5xx and succeeds on the second attempt', async () => {
+    mockFetchWithTimeout
+      .mockResolvedValueOnce(new Response('overloaded', { status: 503 }))
+      .mockResolvedValueOnce(new Response(ddgHtmlPage(1), { status: 200 }))
+    const results = await duckDuckGoSearch('hello', { env: {} as never })
+    expect(mockFetchWithTimeout).toHaveBeenCalledTimes(2)
+    expect(results).toHaveLength(1)
+    expect(results[0].title).toBe('Result 0')
+  })
+
+  it('returns [] when 5xx persists across both attempts (no lite fallback)', async () => {
+    mockFetchWithTimeout
+      .mockResolvedValueOnce(new Response('overloaded', { status: 503 }))
+      .mockResolvedValueOnce(new Response('still overloaded', { status: 502 }))
+    const results = await duckDuckGoSearch('hello', { env: {} as never })
+    expect(mockFetchWithTimeout).toHaveBeenCalledTimes(2)
+    expect(results).toEqual([])
+  })
+
+  it('retries once on a network error and succeeds on the second attempt', async () => {
+    mockFetchWithTimeout
+      .mockRejectedValueOnce(new Error('network blip'))
+      .mockResolvedValueOnce(new Response(ddgHtmlPage(1), { status: 200 }))
+    const results = await duckDuckGoSearch('hello', { env: {} as never })
+    expect(mockFetchWithTimeout).toHaveBeenCalledTimes(2)
+    expect(results).toHaveLength(1)
+    expect(results[0].title).toBe('Result 0')
+  })
+
+  it('does NOT retry on 202 anti-bot — a would-succeed second attempt is never made', async () => {
+    mockFetchWithTimeout
+      .mockResolvedValueOnce(new Response('challenge', { status: 202 }))
+      .mockResolvedValueOnce(new Response(ddgHtmlPage(1), { status: 200 }))
+    const results = await duckDuckGoSearch('hello', { env: {} as never })
+    expect(mockFetchWithTimeout).toHaveBeenCalledTimes(1)
+    expect(results).toEqual([])
+  })
+
+  it('fails fast on 4xx without retry (permanent refusal)', async () => {
+    mockFetchWithTimeout
+      .mockResolvedValueOnce(new Response('forbidden', { status: 403 }))
+      .mockResolvedValueOnce(new Response(ddgHtmlPage(1), { status: 200 }))
+    const results = await duckDuckGoSearch('hello', { env: {} as never })
+    expect(mockFetchWithTimeout).toHaveBeenCalledTimes(1)
+    expect(results).toEqual([])
+  })
+})
+
+describe('duckDuckGoInstantAnswer — network path', () => {
+  beforeEach(() => {
+    mockFetchWithTimeout.mockReset()
+  })
+
+  it('returns the abstract when it is long enough', async () => {
+    mockFetchWithTimeout.mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          AbstractText: 'This is a sufficiently long abstract about the topic under discussion.',
+          AbstractSource: 'Wikipedia',
+          AbstractURL: 'https://en.wikipedia.org/wiki/X',
+        }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } },
+      ),
+    )
+    const out = await duckDuckGoInstantAnswer('question', 5000, {} as never)
+    expect(out).toEqual({
+      abstract: 'This is a sufficiently long abstract about the topic under discussion.',
+      source: 'Wikipedia',
+      url: 'https://en.wikipedia.org/wiki/X',
+    })
+  })
+
+  it('returns null for a short abstract', async () => {
+    mockFetchWithTimeout.mockResolvedValueOnce(
+      new Response(JSON.stringify({ AbstractText: 'short' }), { status: 200 }),
+    )
+    expect(await duckDuckGoInstantAnswer('q', 5000, {} as never)).toBeNull()
+  })
+
+  it('returns null on non-OK or fetch failure', async () => {
+    mockFetchWithTimeout.mockResolvedValueOnce(new Response('x', { status: 500 }))
+    expect(await duckDuckGoInstantAnswer('q', 5000, {} as never)).toBeNull()
+    mockFetchWithTimeout.mockRejectedValueOnce(new Error('net'))
+    expect(await duckDuckGoInstantAnswer('q', 5000, {} as never)).toBeNull()
+  })
+})
+
+describe('duckDuckGoImageSearch — network path', () => {
+  beforeEach(() => {
+    mockFetchWithTimeout.mockReset()
+  })
+
+  function imagePage(): string {
+    return `<a class="result-image" href="https://img.example.com/1"><img src="https://thumb.example.com/1.jpg" alt="Photo One"></a>`
+  }
+
+  it('parses result-image tiles into ImageResult entries', async () => {
+    mockFetchWithTimeout.mockResolvedValueOnce(new Response(imagePage(), { status: 200 }))
+    const results = await duckDuckGoImageSearch('cats', { env: {} as never })
+    expect(results).toHaveLength(1)
+    expect(results[0].url).toBe('https://img.example.com/1')
+    expect(results[0].thumbnail).toBe('https://thumb.example.com/1.jpg')
+    expect(results[0].title).toBe('Photo One')
+    expect(results[0].source).toBe('duckduckgo')
+  })
+
+  it('falls back to the tile layout when no result-image tiles exist', async () => {
+    const tilePage =
+      '<div class="tile"><a href="https://img.example.com/2"><img src="https://thumb.example.com/2.jpg" alt="Tile Photo"></a></div>'
+    mockFetchWithTimeout.mockResolvedValueOnce(new Response(tilePage, { status: 200 }))
+    const results = await duckDuckGoImageSearch('cats', { env: {} as never })
+    expect(results).toHaveLength(1)
+    expect(results[0].url).toBe('https://img.example.com/2')
+    expect(results[0].score).toBe(0.6)
+  })
+
+  it('returns [] on non-OK or fetch failure', async () => {
+    mockFetchWithTimeout.mockResolvedValueOnce(new Response('x', { status: 503 }))
+    expect(await duckDuckGoImageSearch('cats', { env: {} as never })).toEqual([])
+    mockFetchWithTimeout.mockRejectedValueOnce(new Error('boom'))
+    expect(await duckDuckGoImageSearch('cats', { env: {} as never })).toEqual([])
   })
 })

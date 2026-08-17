@@ -79,6 +79,10 @@ function runWatch(
     '  prev="$a"',
     'done',
     '[ -z "$URL" ] && [ -n "$CFG" ] && URL="$(sed -n \'s/^url = "\\(.*\\)"/\\1/p\' "$CFG" | head -1)"',
+    // 수정 102: GitHub 호출이 -K config 로 전환됐으므로 argv 에 URL 이 없다 —
+    // config 에서 추출한 URL 을 로그에 남겨 dispatchPosts/secretGets 카운터가
+    // 계속 동작하게 한다 (deploy-local-worktree fake 의 수정 77 패턴과 동일).
+    `[ -n "$CFG" ] && [ -n "$URL" ] && echo "[curl -K config] $URL" >> ${JSON.stringify(logSh)}`,
     'case "$URL" in',
     '  *api.cloudflare.com*)',
     '    CC=$(( $(cat "${FAKE_COUNT_DIR}/cf.count" 2>/dev/null || echo 0) + 1 ))',
@@ -365,9 +369,16 @@ describe.skipIf(!BASH_AVAILABLE)(
       expect(r.out).toContain('HTTP 204')
       expect(dispatchPosts(r.log)).toBe(1)
       // CF verify 가 config 주입 경로(-K, 수정 84 패턴)로 발화됐는지 — URL·토큰이
-      // argv 에 없어야 한다 (로그 라인: `curl -s -m 15 -K <config>` — URL 은 config 안)
+      // argv 에 없어야 한다 (로그 라인: `curl -s -m 15 -K <config>` — URL 은 config 안).
+      // 수정 102: config-echo 라인(`[curl -K config] <URL>`)은 argv 가 아니므로
+      // argv 라인만 필터해 부재를 단언하고, URL 이 config 로 갔음은 echo 로 증명.
+      const argvLog = r.log
+        .split('\n')
+        .filter((l) => !l.startsWith('[curl -K config]'))
+        .join('\n')
       expect(r.log).toMatch(/-K \/\S+/)
-      expect(r.log).not.toContain('/user/tokens/verify')
+      expect(r.log).toContain('[curl -K config] https://api.cloudflare.com/client/v4/user/tokens/verify')
+      expect(argvLog).not.toContain('/user/tokens/verify')
       const state = JSON.parse(readFileSync(r.stateFile, 'utf8'))
       expect(state.baseline_updated_at).toBe('2026-08-14T12:00:00Z')
     })

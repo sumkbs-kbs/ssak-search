@@ -472,6 +472,44 @@ export function verifyDeployWorkflow(repoDir: string): GateOutcome {
     }
   }
 
+  // ── 11. watch-secret-rotation.sh token hygiene (수정 102) ────────────────
+  // 워처의 GitHub API 호출(get_secret_updated_at / dispatch_deploy) 은 repo-scope
+  // PAT 를 curl argv(-H "Authorization: Bearer ...") 에 두면 ps 프로세스 목록 /
+  // bash -x 로그에 그대로 노출된다 (수정 84/77 과 동일 원칙 — 로컬 운영자 도구지만
+  // 고가치 자격증명). 토큰·URL 은 curl config(-K, chmod 600, rm -f) 로 주입해야
+  // 하고 공용 헬퍼(gh_curl_cfg) 로 묶여 있어야 한다. Slack 웹훅 URL 도 argv 에
+  // 두면 안 된다 (채널 포스팅 자격증명). 회귀하면 argv 누수가 재발한다.
+  const watcherPath = join(repoDir, 'scripts/watch-secret-rotation.sh')
+  if (existsSync(watcherPath)) {
+    const ws = readFileSync(watcherPath, 'utf8')
+    // ① argv Bearer 토큰 주입 금지 — 실재하는 curl 명령 라인만 (주석 제외).
+    const argvLeak = ws.split('\n').some((line) => {
+      if (line.trim().startsWith('#')) return false
+      return /curl[^\n]*Authorization: Bearer/.test(line)
+    })
+    if (argvLeak) {
+      findings.push(
+        'scripts/watch-secret-rotation.sh: curl argv 에 Authorization: Bearer 토큰이 남아 있다 — -K config(gh_curl_cfg) 로 주입해야 한다 (수정 102)',
+      )
+    }
+    // ② 웹훅 URL argv 노출 금지 (Slack webhook 도 자격증명)
+    const webhookLeak = ws.split('\n').some((line) => {
+      if (line.trim().startsWith('#')) return false
+      return /curl[^\n]*"\$webhook"/.test(line)
+    })
+    if (webhookLeak) {
+      findings.push(
+        'scripts/watch-secret-rotation.sh: Slack 웹훅 URL 이 curl argv 에 노출된다 — -K config 로 주입해야 한다 (수정 102)',
+      )
+    }
+    // ③ 공용 config 헬퍼 필수 — GitHub 호출이 argv -H 로 되돌아가지 않도록.
+    if (!ws.includes('gh_curl_cfg()')) {
+      findings.push(
+        'scripts/watch-secret-rotation.sh: GitHub API 공용 curl config 헬퍼(gh_curl_cfg) 가 없다 — argv 토큰 노출 (수정 102)',
+      )
+    }
+  }
+
   // ── 10. verify-do-binding.sh token hygiene (수정 84) ─────────────────────
   // verify-do-binding.sh 의 verify_cf_token() 은 /user/tokens/verify 호출 시
   // 토큰을 curl argv 에 두면 안 된다 — check 9 와 동일한 누수(ps 프로세스 목록
@@ -557,7 +595,7 @@ export function verifyDeployWorkflow(repoDir: string): GateOutcome {
   }
   return {
     status: 'PASS',
-    detail: `${DEPLOY_WF} + ${GUARD_SCRIPT} pass all S104-③-⑥-④/⑧ regression checks (secrets / guard-masking / artifact / node / needs / eval-baseline-permission / notify-dry-run-wiring / runtime-bundle-verify / rollback-token-hygiene / guard-token-hygiene)`,
+    detail: `${DEPLOY_WF} + ${GUARD_SCRIPT} pass all S104-③-⑥-④/⑧ regression checks (secrets / guard-masking / artifact / node / needs / eval-baseline-permission / notify-dry-run-wiring / runtime-bundle-verify / rollback-token-hygiene / guard-token-hygiene / watcher-token-hygiene)`,
   }
 }
 

@@ -138,12 +138,33 @@ resolve_repo() {
     | sed -E 's#^https?://[^/]*/##; s#^git@[^:]*:##; s#\.git$##'
 }
 
+# ── GitHub API curl config 헬퍼 (수정 102 — argv 토큰 노출 차단, 수정 84/77 패턴) ─
+# repo-scope PAT 를 curl argv(-H "Authorization: Bearer ...") 에 두면 ps 프로세스
+# 목록 / bash -x 로그에 그대로 노출된다. verify_cf_token 과 동일하게 토큰·URL 을
+# 임시 config(-K, chmod 600, 사용 후 rm -f) 로 주입한다. 인자: token url [추가
+# header 라인...] — 출력: config 파일 경로 (호출자가 rm -f 로 정리)
+gh_curl_cfg() {
+  local token="$1" url="$2" cfg h
+  cfg="$(mktemp)"
+  chmod 600 "$cfg"
+  {
+    printf 'url = "%s"\nheader = "Authorization: Bearer %s"\nheader = "Accept: application/vnd.github+json"\n' \
+      "$url" "$token"
+    shift 2
+    for h in "$@"; do
+      printf 'header = "%s"\n' "$h"
+    done
+  } > "$cfg"
+  printf '%s' "$cfg"
+}
+
 # ── 시크릿 updated_at 조회: OK|<ts> | MISSING | ERROR|<msg> ────────────────
 get_secret_updated_at() {
   local repo="$1" token="$2"
-  local body
-  body="$(curl -s -m 15 -H "Authorization: Bearer ${token}" -H "Accept: application/vnd.github+json" \
-    "https://api.github.com/repos/${repo}/actions/secrets" 2>/dev/null)"
+  local cfg body
+  cfg="$(gh_curl_cfg "$token" "https://api.github.com/repos/${repo}/actions/secrets")"
+  body="$(curl -s -m 15 -K "$cfg" 2>/dev/null)"
+  rm -f "$cfg"
   printf '%s' "$body" | SECRET_NAME="$SECRET_NAME" python3 -c '
 import json, os, sys
 name = os.environ["SECRET_NAME"]
@@ -165,12 +186,12 @@ print("MISSING|%s" % name)
 # ── deploy.yml workflow_dispatch: 204 성공 시 "OK|<run-id?>" ────────────────
 dispatch_deploy() {
   local repo="$1" token="$2"
-  local http
-  http="$(curl -s -o /dev/null -w '%{http_code}' -m 15 -X POST \
-    -H "Authorization: Bearer ${token}" -H "Accept: application/vnd.github+json" \
-    -H "Content-Type: application/json" \
-    "https://api.github.com/repos/${repo}/actions/workflows/deploy.yml/dispatches" \
+  local cfg http
+  # 수정 102 — 토큰·URL 은 config 로, -d 페이로드/`-w` 는 argv 유지 (토큰 없음).
+  cfg="$(gh_curl_cfg "$token" "https://api.github.com/repos/${repo}/actions/workflows/deploy.yml/dispatches" "Content-Type: application/json")"
+  http="$(curl -s -o /dev/null -w '%{http_code}' -m 15 -X POST -K "$cfg" \
     -d "{\"ref\":\"${DISPATCH_REF}\",\"inputs\":{\"environment\":\"${TARGET_ENV}\"}}" 2>/dev/null || echo '000')"
+  rm -f "$cfg"
   if [ "$http" != "204" ]; then
     echo "HTTP_${http}"
     return 1
@@ -180,8 +201,9 @@ dispatch_deploy() {
   # DISPATCH_RUN_SLEEP=0 으로 단축 가능)
   sleep "${DISPATCH_RUN_SLEEP:-5}"
   local runs run_id
-  runs="$(curl -s -m 15 -H "Authorization: Bearer ${token}" -H "Accept: application/vnd.github+json" \
-    "https://api.github.com/repos/${repo}/actions/workflows/deploy.yml/runs?event=workflow_dispatch&per_page=3" 2>/dev/null || echo '{}')"
+  cfg="$(gh_curl_cfg "$token" "https://api.github.com/repos/${repo}/actions/workflows/deploy.yml/runs?event=workflow_dispatch&per_page=3")"
+  runs="$(curl -s -m 15 -K "$cfg" 2>/dev/null || echo '{}')"
+  rm -f "$cfg"
   run_id="$(printf '%s' "$runs" | python3 -c '
 import json, sys
 try:
@@ -226,11 +248,16 @@ print(json.dumps({
 }))
 PYEOF
 )"
-  if curl -sf -m 10 -X POST -H 'Content-Type: application/json' -d "$payload" "$webhook" >/dev/null 2>&1; then
+  # 수정 102 — 웹훅 URL 도 자격증명(채널 포스팅)이라 argv 에 두지 않는다 (-K config).
+  local cfg
+  cfg="$(mktemp)"; chmod 600 "$cfg"
+  printf 'url = "%s"\nheader = "Content-Type: application/json"\n' "$webhook" > "$cfg"
+  if curl -sf -m 10 -X POST -K "$cfg" -d "$payload" >/dev/null 2>&1; then
     echo " ✅ Slack 알림 전송됨"
   else
     echo " ⚠️  Slack 알림 전송 실패 (webhook 응답 오류) — 로그로만 남깁니다" >&2
   fi
+  rm -f "$cfg"
 }
 
 # ── 새 토큰 값 자체를 Cloudflare /user/tokens/verify 로 검증 (수정 94) ─────

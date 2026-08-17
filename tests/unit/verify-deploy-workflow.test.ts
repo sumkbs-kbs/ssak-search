@@ -116,6 +116,25 @@ fi
 exit 1
 `
 
+/** 수정 102: 워처가 GitHub/웹훅 호출에 curl -K config(gh_curl_cfg) 를 쓰는 최소 마커. */
+// 템플릿 리터럴에서 `${` 는 \${ 로 이스케이프한다.
+const GOOD_WATCHER = `#!/usr/bin/env bash
+get_secret_updated_at() {
+  local repo="$1" token="$2"
+  local cfg body
+  cfg="$(gh_curl_cfg "$token" "https://api.github.com/repos/\${repo}/actions/secrets")"
+  body="$(curl -s -m 15 -K "$cfg" 2>/dev/null)"
+  rm -f "$cfg"
+  echo "$body"
+}
+gh_curl_cfg() {
+  local token="$1" url="$2" cfg
+  cfg="$(mktemp)"; chmod 600 "$cfg"
+  printf 'url = "%s"\nheader = "Authorization: Bearer %s"\n' "$url" "$token" > "$cfg"
+  printf '%s' "$cfg"
+}
+`
+
 /** 수정 77: rollback_pages 가 curl -K config 로 토큰을 주입하는 최소 마커. */
 // 템플릿 리터럴에서 `$` 는 이스케이프 불필요 — `${` 만 \${ 로 이스케이프한다.
 const GOOD_DEPLOY_SCRIPT = `#!/usr/bin/env bash
@@ -152,6 +171,9 @@ function writeRepo(
     skipBundleScript?: boolean
     deployScript?: string
     skipDeployScript?: boolean
+    /** 수정 102: watch-secret-rotation.sh 픽스처 */
+    watcher?: string
+    skipWatcher?: boolean
   } = {},
 ): string {
   const dir = mkdtempSync(join(tmpdir(), 'vdf-'))
@@ -169,6 +191,9 @@ function writeRepo(
   }
   if (!opts.skipDeployScript) {
     writeFileSync(join(dir, 'scripts', 'deploy-local-worktree.sh'), opts.deployScript ?? GOOD_DEPLOY_SCRIPT, 'utf-8')
+  }
+  if (!opts.skipWatcher) {
+    writeFileSync(join(dir, 'scripts', 'watch-secret-rotation.sh'), opts.watcher ?? GOOD_WATCHER, 'utf-8')
   }
   created.push(dir)
   return dir
@@ -780,6 +805,34 @@ ${STAGING_PAGES_DEPLOY}${BUNDLE_VERIFY_STEP}      - name: Deploy probe-scheduler
       const outcome = verifyDeployWorkflow(writeRepo({ guard: noRm }))
       expectStatus(outcome, 'FAIL')
       expect(outcome.detail).toContain('정리하지 않는다')
+    })
+  })
+
+  describe('12. watch-secret-rotation.sh token hygiene (수정 102)', () => {
+    it('PASSes when 워처가 gh_curl_cfg + -K config 를 쓴다', () => {
+      expectStatus(verifyDeployWorkflow(writeRepo()), 'PASS')
+    })
+
+    it('FAILs when 워처 curl argv 에 Authorization: Bearer 토큰이 남는다 (ps/bash -x 노출)', () => {
+      const leak = GOOD_WATCHER.replace('-K "$cfg"', '-H "Authorization: Bearer ${token}"')
+      const outcome = verifyDeployWorkflow(writeRepo({ watcher: leak }))
+      expectStatus(outcome, 'FAIL')
+      expect(outcome.detail).toContain('Authorization: Bearer 토큰이 남아')
+    })
+
+    it('FAILs when 워처에 gh_curl_cfg 헬퍼가 없다 (GitHub 호출이 argv 로 회귀)', () => {
+      const noHelper = GOOD_WATCHER.replace(/gh_curl_cfg\(\) \{[^}]*\}\n/g, '')
+      const outcome = verifyDeployWorkflow(writeRepo({ watcher: noHelper }))
+      expectStatus(outcome, 'FAIL')
+      expect(outcome.detail).toContain('gh_curl_cfg')
+    })
+
+    it('FAILs when Slack 웹훅 URL 이 curl argv 에 노출된다', () => {
+      const webhookLeak =
+        GOOD_WATCHER + '\nnotify_slack() {\n  curl -sf -m 10 -X POST -d "$payload" "$webhook" >/dev/null 2>&1\n}\n'
+      const outcome = verifyDeployWorkflow(writeRepo({ watcher: webhookLeak }))
+      expectStatus(outcome, 'FAIL')
+      expect(outcome.detail).toContain('웹훅 URL 이 curl argv')
     })
   })
 })

@@ -1106,6 +1106,19 @@
 - **해결**: ① 44dfff5 에 verify-do-binding.sh 수정(수정 84)을 접어넣어 amend — 체크 10/11 이 요구하는 트리 상태를 커밋 자체가 만족 (전용 커밋 3344907 은 드롭) ② `verify-commits-ci.sh` workflow 게이트를 **커밋의 자체 workflow.ts** 로 전환 — "해당 커밋 시점의 표준"으로 판정 (기존에 고쳐진 버그를 다시 도입하는 회귀는 그 커밋의 자체 체커가 잡음 — 회귀 보호 유지). 커밋의 체커 파일이 없으면 SKIP (deploy.yml 부재 SKIP 과 동일 의미론)
 - **판정 실측** (CI 로그): 수정 88~97 커밋은 7/5건 → 자체 체커에선 해당 체크 미존재 → PASS · 44dfff5' 는 자체 체커+자체 테스트 전부 PASS → **범위 전체 ALL GREEN**
 - **검증**: bash -n · tsc 0 · prettier clean · verify-deploy-workflow 56/56 · 로컬 verify-commits-ci.sh 전체 범위 재현 ALL GREEN 확인
+### 수정 102: 워처 GitHub/웹훅 curl argv 토큰 노출 — -K config(gh_curl_cfg) 전환 + 회귀 게이트 (2026-08-17)
+- **작업 ID**: FIX-2026-08-17-17 (구현 + 테스트 + 라이브 확인)
+- **요청**: 워처의 get_secret_updated_at 이 GitHub 토큰을 curl argv(-H Authorization: Bearer)에 노출하는 문제를 수정 84/77 패턴(-K config)으로 개선 (앞선 검토: 적용 권장 — 저비용·테스트 호환 확인)
+- **노출 지점 (전수)**: ① get_secret_updated_at(secrets 조회) ② dispatch_deploy POST ③ dispatch_deploy runs 조회 — repo-scope PAT 를 argv 에 노출 · ④ Slack 웹훅 URL(채널 포스팅 자격증명) 도 argv. ⑤ verify_cf_token 은 이미 -K (수정 84)
+- **구현** (`scripts/watch-secret-rotation.sh`):
+  - **`gh_curl_cfg()` 신규 헬퍼** — 토큰·URL·헤더를 임시 config(mktemp + chmod 600, 사용 후 rm -f) 로 주입, 추가 헤더 가변 인자 지원. verify_cf_token 과 동일 수명주기 패턴
+  - 3곳 GitHub 호출 → `curl -K "$cfg"` (dispatch POST 는 -d 페이로드/`-w http_code`/`-X POST` 만 argv 유지 — 토큰 없음) · Slack 웹훅 URL 도 config 로 이동
+  - 실측: 실 GitHub API 폴링 정상 (secrets 조회 성공, updated_at 표시) · 코드 내 argv Authorization 노출 0건
+- **테스트**:
+  - `watch-secret-rotation.test.ts` — fake curl 이 **config 에서 추출한 URL 을 로그에 기록**하도록 확장 (수정 102 로 argv 에 URL 이 없어져 secretGets/dispatchPosts 카운터가 0 이 되던 문제 — deploy-local-worktree fake 의 수정 77 패턴과 동일). CF -K 단언을 argv 라인 필터 + config-echo 증명으로 강화 (URL 부재를 argv 에 한정, config 경유는 포함으로) → **18/18**
+  - `verify-deploy-workflow.test.ts` — **check 11 (watcher-token-hygiene) 신규** (+4 → **60/60**): ① curl argv Authorization 금지 ② 웹훅 URL argv 금지 ③ `gh_curl_cfg()` 헬퍼 필수. GOOD_WATCHER 픽스처 + 실패 3케이스. 현재 repo 실측 PASS 포함 (실제 워처가 새 패턴)
+- **검증**: bash -n OK · tsc 0 · eslint 0 · prettier clean · 전체 unit **2,831/2,831** (1건은 기지의 verify-do-binding-token 동시 부하 flake — 단독 통과)
+
 ### 수정 101: credential fallback 그림자화 문서화 + gh 불요 사전 검증(--pre-check) 경로 설계 (2026-08-17)
 - **작업 ID**: FIX-2026-08-17-16 (문서화 + 설계)
 - **요청**: 수정 100 에서 확인한 '①단계 gh 하드 게이트로 credential fallback 그림자화'를 문서화하고, gh 미인증 환경에서도 API 토큰만으로 사전 검증할 수 있는 경로를 설계

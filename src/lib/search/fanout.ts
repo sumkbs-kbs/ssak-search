@@ -315,14 +315,15 @@ export async function fanoutBackends(
     }
     // P1-5 진단 로그 (2026-08-17): 태스크별 결과 건수 — 프로덕션에서
     // ddg-site-reddit 발화 여부와 DDG 202 차단을 확인하기 위한 운영 로그.
-    if (tasks[i].name === 'ddg-site-reddit' || tasks[i].name === 'reddit') {
-      logger.warn('[fanout] reddit task result', {
-        task: tasks[i].name,
-        resolved: s.resolved,
-        rejected: s.rejected,
-        count: s.value.length,
-      })
-    }
+    // P1-5 진단 (2026-08-17): 태스크별 결과 — 프로덕션에서 ddg-site-reddit
+    // 발화 여부와 DDG 202 차단 확인용. 사용된 백엔드만 목록에 포함되는
+    // 구조라 0건 태스크는 조용히 사라지므로, 전 태스크 로그를 남긴다.
+    logger.warn('[fanout] task result', {
+      task: tasks[i].name,
+      resolved: s.resolved,
+      rejected: s.rejected,
+      count: s.value.length,
+    })
   }
 
   return { resultSets, usedBackends }

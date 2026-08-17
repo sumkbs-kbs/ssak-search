@@ -54,10 +54,13 @@ describe('cron-probe scheduled handler (S104-③-fix)', () => {
 
   it('parses down backends from the probe response body', async () => {
     const infoSpy = vi.spyOn(logger, 'info').mockImplementation(() => {})
-    vi.stubGlobal(
-      'fetch',
-      vi.fn().mockResolvedValue(healthJson({ status: 'partial_outage', down: ['wikipedia', 'github'] })),
-    )
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(healthJson({ status: 'partial_outage', down: ['wikipedia', 'github'] }))
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ ok: true, articleCount: 987, outletCount: 21 }), { status: 200 }),
+      )
+    vi.stubGlobal('fetch', fetchMock)
 
     await scheduled(
       { cron: '*/15 * * * *' },
@@ -66,9 +69,19 @@ describe('cron-probe scheduled handler (S104-③-fix)', () => {
     )
 
     const calls = infoSpy.mock.calls.filter(([m]) => String(m).includes('[cron-probe]'))
-    expect(calls[calls.length - 1][1]).toMatchObject({
+    expect(calls.find(([m]) => String(m).includes('deep health probe'))![1]).toMatchObject({
       probe_status: 'partial_outage',
       down_backends: 'wikipedia,github',
+    })
+    // P2-2: 같은 틱에서 뉴스 허브 refresh 를 호출하고 결과를 로깅한다.
+    expect(fetchMock).toHaveBeenCalledWith(
+      'https://staging.search-engine-api.pages.dev/api/news-hub/refresh',
+      expect.objectContaining({ method: 'POST' }),
+    )
+    expect(calls.find(([m]) => String(m).includes('news hub refresh'))![1]).toMatchObject({
+      ok: true,
+      articles: 987,
+      outlets: 21,
     })
   })
 

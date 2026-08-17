@@ -11,6 +11,7 @@ import type { Env } from '../../types'
 import type { BackendTask, SearchContext } from './context'
 import { bingSearch, bingNewsSearch } from '../bing-search'
 import { bingNewsRssSearch, googleNewsRssSearch } from '../en-news-search'
+import { newsHubSearch, loadNewsHubArticles } from '../news-rss-hub'
 import { naverSearch } from '../naver-search'
 import { naverNewsSearch, isRecencyNewsQuery } from '../naver-news-search'
 import {
@@ -207,6 +208,30 @@ export function buildNewsOutletTask(ctx: SearchContext): BackendTask {
         env: ctx.env,
         locale: newsRssLocale(ctx),
       }),
+  }
+}
+
+/**
+ * News RSS Hub backend — P2-2 (2026-08-18).
+ *
+ * P1-7 파일럿 실측: 아웃렛 직접 RSS(신디케이션 우회)가 파일럿 5개 아웃렛
+ * gold 회수 100%(169/169)를 달성했다. NewsHubDO 가 15분마다 CACHE_KV 에
+ * 기사 풀(~1,000건)을 써 두면 이 태스크는 KV 1회 읽기 + computeScore 로
+ * ~ms 안에 아웃렛 URL 결과를 반환한다 (msn.com 리다이렉트가 아닌 실제
+ * gold 도메인). KV 미스면 3500ms 예산 내 라이브 폴백.
+ *
+ * 기여 설계: newsHubSearch 는 아웃렛별 최적 1건만 기여하므로 한 아웃렛이
+ * 풀을 독점하지 않고 여러 gold 도메인을 동시에 회수한다 (S95 news-outlet 과
+ * 같은 커버리지 패치 — 부가형, 랭킹/품질 임계값이 정렬).
+ */
+export function buildNewsHubTask(ctx: SearchContext, maxResults?: number): BackendTask {
+  return {
+    name: 'news-hub',
+    run: async () => {
+      const articles = await loadNewsHubArticles(ctx.env)
+      if (!articles) return []
+      return newsHubSearch(ctx.query, articles, { maxResults: maxResults ?? ctx.overFetch })
+    },
   }
 }
 

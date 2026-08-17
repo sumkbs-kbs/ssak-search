@@ -47,7 +47,8 @@
       { "name": "CRAWLER_DO", "class_name": "CrawlerDO" },
       { "name": "CLICK_LOG_DO", "class_name": "ClickLogDO" },
       { "name": "EXPERIMENT_DO", "class_name": "ExperimentDO" },
-      { "name": "CANARY_DO", "class_name": "CanaryOrchestratorDO" }
+      { "name": "CANARY_DO", "class_name": "CanaryOrchestratorDO" },
+      { "name": "NEWS_HUB_DO", "class_name": "NewsHubDO" }
     ]
   },
   "migrations": [
@@ -66,6 +67,11 @@
         "ExperimentDO",
         "CanaryOrchestratorDO"
       ]
+    },
+    // P2-2 (2026-08-18): 뉴스 RSS 허브 주기 수집 DO 신규 등록.
+    {
+      "tag": "v3",
+      "new_sqlite_classes": ["NewsHubDO"]
     }
   ],
   // ── Env bindings the DOs read from this.env (subset of Pages) ──────────

@@ -35,6 +35,7 @@ import {
   buildBingNewsRssTask,
   buildGoogleNewsRssTask,
   buildNewsOutletTask,
+  buildNewsHubTask,
   buildZhTravelCommunityTask,
   buildKoreanStockTask,
   buildYahooFinanceTask,
@@ -110,6 +111,10 @@ export class AllStrategy implements SearchStrategy {
       // the pool; ONE outlet per query keeps the shared feed/rate budget
       // finite (sim-news-outlet.ts: rank-2 insertion averages Δ+0.18/query).
       tasks.push(buildNewsOutletTask(ctx))
+      // P2-2 (2026-08-18): 뉴스 RSS 허브 백엔드 — NewsHubDO 가 CACHE_KV 에
+      // 써 둔 아웃렛 직접 RSS 기사 풀에서 아웃렛별 최적 1건씩 기여
+      // (신디케이션 우회, W4 해소). gold 도메인을 실제 아웃렛 URL 로 회수.
+      tasks.push(buildNewsHubTask(ctx))
     } else {
       tasks.push(buildBingTask(ctx))
 

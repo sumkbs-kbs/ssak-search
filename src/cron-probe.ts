@@ -65,6 +65,35 @@ export async function scheduled(
       cron: event.cron ?? 'unknown',
       probe_url: base,
     })
+
+    // P2-2 (2026-08-18): 뉴스 RSS 허브 주기 수집 — 같은 15분 틱에서
+    // POST /api/news-hub/refresh 를 호출한다 (DO alarm 이 1차 스케줄러,
+    // 이 호출은 보강 + 로그 신호). idempotent — DO 의 60초 min-interval
+    // 스로틀이 중복 수집을 버린다. 실패해도 health probe 는 이미 성공했으므로
+    // 이 틱을 실패로 만들지 않는다.
+    try {
+      const hubStart = Date.now()
+      const hubRes = await fetch(`${base}/api/news-hub/refresh`, {
+        method: 'POST',
+        headers: { 'User-Agent': 'ssak-cron-probe/1.0' },
+      })
+      let hubBody: { ok?: boolean; articleCount?: number; outletCount?: number; error?: string } | null = null
+      try {
+        hubBody = (await hubRes.json()) as { ok?: boolean; articleCount?: number; outletCount?: number; error?: string }
+      } catch {
+        hubBody = null
+      }
+      logger.info('[cron-probe] news hub refresh triggered', {
+        http_status: hubRes.status,
+        ok: hubBody?.ok ?? false,
+        articles: hubBody?.articleCount ?? 0,
+        outlets: hubBody?.outletCount ?? 0,
+        hub_error: hubBody?.error ?? null,
+        latency_ms: Date.now() - hubStart,
+      })
+    } catch (err) {
+      logger.error('[cron-probe] news hub refresh failed', { error: toError(err) })
+    }
   } catch (err) {
     logger.error('[cron-probe] trigger failed', { error: toError(err), latency_ms: Date.now() - start })
   }

@@ -46,6 +46,8 @@ const REQUIRED_DO_BINDINGS: DOBinding[] = [
   { name: 'CLICK_LOG_DO', class_name: 'ClickLogDO' },
   { name: 'EXPERIMENT_DO', class_name: 'ExperimentDO' },
   { name: 'CANARY_DO', class_name: 'CanaryOrchestratorDO' },
+  // P2-2 (2026-08-18): 뉴스 RSS 허브 주기 수집 DO — alarm 기반 15분 수집.
+  { name: 'NEWS_HUB_DO', class_name: 'NewsHubDO' },
 ]
 
 const REQUIRED_R2_BINDINGS = ['UPLOAD_BUCKET']

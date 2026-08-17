@@ -31,6 +31,7 @@ import { CrawlerDO } from '../lib/crawler-do'
 import { ClickLogDO } from '../lib/ltr/click-logger'
 import { ExperimentDO } from '../lib/experiments/ab-test'
 import { CanaryOrchestratorDO } from '../lib/canary/canary-orchestrator'
+import { NewsHubDO } from '../lib/news-hub-do'
 
 // Durable Object classes — discovered by wrangler from this entrypoint.
 // Migrations (wrangler.do.jsonc → migrations[].new_sqlite_classes) register
@@ -46,6 +47,7 @@ export { CrawlerDO }
 export { ClickLogDO }
 export { ExperimentDO }
 export { CanaryOrchestratorDO }
+export { NewsHubDO }
 
 /**
  * Minimal fetch handler — wrangler deploy requires a default export. This

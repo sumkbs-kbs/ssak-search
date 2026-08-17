@@ -8,6 +8,7 @@ import { healthRoute, metricsRoute } from './routes/health'
 import { usageRoute } from './routes/usage'
 import { imagesRoute } from './routes/images'
 import { newsRoute } from './routes/news'
+import { newsHubRoute } from './routes/news-hub'
 import { canaryRoute } from './routes/canary'
 import { CanaryOrchestratorDO } from './lib/canary/canary-orchestrator'
 import { suggestRoute } from './routes/suggest'
@@ -42,6 +43,7 @@ import { openaiRoute } from './routes/openai'
 import { analyticsProxyRoute } from './routes/analytics-proxy'
 import { CrawlerDO } from './lib/crawler-do'
 import { crawlRoute } from './routes/crawl'
+import { NewsHubDO } from './lib/news-hub-do'
 import { ClickLogDO } from './lib/ltr/click-logger'
 import { ltrRoute } from './routes/ltr'
 import { ExperimentDO } from './lib/experiments/ab-test'
@@ -67,6 +69,7 @@ export { CrawlerDO }
 export { ClickLogDO }
 export { ExperimentDO }
 export { CanaryOrchestratorDO }
+export { NewsHubDO }
 
 const app = new Hono<{ Bindings: AppBindings }>()
 
@@ -115,6 +118,7 @@ app.route('/api/metrics', metricsRoute)
 app.route('/api/usage', usageRoute)
 app.route('/api/images', imagesRoute)
 app.route('/api/news', newsRoute)
+app.route('/api/news-hub', newsHubRoute)
 app.route('/api/canary', canaryRoute)
 app.route('/api/suggest', suggestRoute)
 app.route('/api/research', researchRoute)

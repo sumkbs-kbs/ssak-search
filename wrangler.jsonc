@@ -112,6 +112,7 @@
       { "name": "CLICK_LOG_DO", "class_name": "ClickLogDO", "script_name": "ssak-do-worker" },
       { "name": "EXPERIMENT_DO", "class_name": "ExperimentDO", "script_name": "ssak-do-worker" },
       { "name": "CANARY_DO", "class_name": "CanaryOrchestratorDO", "script_name": "ssak-do-worker" },
+      { "name": "NEWS_HUB_DO", "class_name": "NewsHubDO", "script_name": "ssak-do-worker" },
     ],
   },
   // KV namespace for cross-restart cache persistence (Phase 5):

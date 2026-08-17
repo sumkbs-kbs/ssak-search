@@ -29,7 +29,8 @@
       { "name": "CRAWLER_DO", "class_name": "CrawlerDO" },
       { "name": "CLICK_LOG_DO", "class_name": "ClickLogDO" },
       { "name": "EXPERIMENT_DO", "class_name": "ExperimentDO" },
-      { "name": "CANARY_DO", "class_name": "CanaryOrchestratorDO" }
+      { "name": "CANARY_DO", "class_name": "CanaryOrchestratorDO" },
+      { "name": "NEWS_HUB_DO", "class_name": "NewsHubDO" }
     ]
   },
   // wrangler 4.112.0+ requires live exports entries for Durable Objects
@@ -46,7 +47,8 @@
     "CrawlerDO": { "type": "durable-object", "storage": "sqlite" },
     "ClickLogDO": { "type": "durable-object", "storage": "sqlite" },
     "ExperimentDO": { "type": "durable-object", "storage": "sqlite" },
-    "CanaryOrchestratorDO": { "type": "durable-object", "storage": "sqlite" }
+    "CanaryOrchestratorDO": { "type": "durable-object", "storage": "sqlite" },
+    "NewsHubDO": { "type": "durable-object", "storage": "sqlite" }
   },
   "r2_buckets": [
     { "binding": "UPLOAD_BUCKET", "bucket_name": "search-engine-uploads-dev" }

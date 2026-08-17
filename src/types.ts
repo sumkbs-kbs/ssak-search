@@ -689,6 +689,8 @@ export interface AppBindings {
   API_KEY_DO?: DurableObjectNamespace
   // Durable Object for web crawling (Phase 2.1)
   CRAWLER_DO?: DurableObjectNamespace
+  // Durable Object for the news RSS hub periodic collection (P2-2, 2026-08-18)
+  NEWS_HUB_DO?: DurableObjectNamespace
   // Durable Object for LTR click/impression events (Phase C.1)
   CLICK_LOG_DO?: DurableObjectNamespace
   // Durable Object for the self-hosted A/B testing framework (Phase C.2)

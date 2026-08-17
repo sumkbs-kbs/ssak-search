@@ -112,6 +112,10 @@ export const BACKEND_TIMEOUT_MS: Record<string, number> = {
   // never silently applied to a real fanout backend — every fanout name must
   // have an explicit entry (consistency test enforces this).
   'news-outlet': 4000,
+  // P2-2 (2026-08-18): 뉴스 RSS 허브 — CACHE_KV 1회 읽기 + computeScore
+  // (~ms). KV 미스 시 라이브 폴백이 loadNewsHubArticles 내부 3500ms 예산을
+  // 갖므로 fanout 창 안에서 라운드트립이 끝난다.
+  'news-hub': 4000,
   'stack-exchange': 4000,
   qiita: 4000,
   juejin: 4000,

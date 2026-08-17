@@ -36,6 +36,8 @@ const delayMs = (() => {
   const n = i >= 0 ? Number(argv[i + 1]) : 1500
   return Number.isFinite(n) && n >= 0 ? n : 1500
 })()
+// --single-attempt: 429/503/오류 시 재시도 없이 실패로 기록 (레이트리밋 폭주 방지).
+const singleAttempt = argv.includes('--single-attempt')
 const base = (() => {
   const i = argv.indexOf('--base')
   return (i >= 0 ? argv[i + 1] : 'https://search-engine-api.pages.dev').replace(/\/+$/, '')
@@ -64,24 +66,36 @@ interface SearchHit {
   domain?: string
 }
 
-async function fetchSearch(query: string): Promise<{ results: SearchHit[]; backend: string } | null> {
-  for (let attempt = 0; attempt < 3; attempt++) {
-    const res = await fetch(`${base}/api/search?query=${encodeURIComponent(query)}&max_results=10`, {
-      headers: { 'User-Agent': 'ssak-news-ndcg-probe/1.0' },
-    })
-    if (res.status === 429) {
-      const wait = 10_000 + attempt * 5000
-      console.log(`  429 rate limit — ${wait / 1000}s 대기 후 재시도 (${attempt + 1}/3)`)
-      await new Promise((r) => setTimeout(r, wait))
-      continue
-    }
-    if (!res.ok) {
-      console.log(`  HTTP ${res.status} — 재시도`)
+async function fetchSearch(
+  query: string,
+): Promise<{ results: SearchHit[]; backend: string } | { failed: true; reason: string } | null> {
+  const attempts = singleAttempt ? 1 : 4
+  for (let attempt = 0; attempt < attempts; attempt++) {
+    try {
+      const res = await fetch(`${base}/api/search?query=${encodeURIComponent(query)}&max_results=10`, {
+        headers: { 'User-Agent': 'ssak-news-ndcg-probe/1.0' },
+        signal: AbortSignal.timeout(35_000),
+      })
+      if (res.status === 429) {
+        if (singleAttempt) return { failed: true, reason: '429' }
+        const wait = 10_000 + attempt * 5000
+        console.log(`  429 rate limit — ${wait / 1000}s 대기 후 재시도 (${attempt + 1}/${attempts})`)
+        await new Promise((r) => setTimeout(r, wait))
+        continue
+      }
+      if (!res.ok) {
+        if (singleAttempt) return { failed: true, reason: `HTTP ${res.status}` }
+        console.log(`  HTTP ${res.status} — 재시도`)
+        await new Promise((r) => setTimeout(r, 5000))
+        continue
+      }
+      const body = (await res.json()) as { results?: SearchHit[]; backend?: string }
+      return { results: body.results ?? [], backend: body.backend ?? '' }
+    } catch (err) {
+      if (singleAttempt) return { failed: true, reason: (err as Error).message.slice(0, 60) }
+      console.log(`  fetch 오류 (${(err as Error).message.slice(0, 60)}) — 재시도`)
       await new Promise((r) => setTimeout(r, 5000))
-      continue
     }
-    const body = (await res.json()) as { results?: SearchHit[]; backend?: string }
-    return { results: body.results ?? [], backend: body.backend ?? '' }
   }
   return null
 }
@@ -89,14 +103,17 @@ async function fetchSearch(query: string): Promise<{ results: SearchHit[]; backe
 async function main(): Promise<void> {
   console.log(`뉴스 쿼리 ${newsQueries.length}개 → ${base} 측정 (delay ${delayMs}ms, lang=${langFilter ?? 'all'})`)
   const rows: Array<{ id: string; ndcg: number; hubUsed: boolean; hubGold: number }> = []
+  const failed: Array<{ id: string; reason: string }> = []
   let hubUsedQueries = 0
   let hubGoldSurfaced = 0
 
   for (let i = 0; i < newsQueries.length; i++) {
     const q = newsQueries[i]
     const data = await fetchSearch(q.query)
-    if (!data) {
-      console.log(`  ${q.id}: 측정 실패 (재시도 소진)`)
+    if (!data || 'failed' in data) {
+      failed.push({ id: q.id, reason: data && 'failed' in data ? data.reason : '재시도 소진' })
+      console.log(`  [${String(i + 1).padStart(3)}/${newsQueries.length}] ${q.id.padEnd(16)} 실패 (${data && 'failed' in data ? data.reason : 'retries exhausted'})`)
+      if (i < newsQueries.length - 1) await new Promise((r) => setTimeout(r, delayMs))
       continue
     }
     const goldDoms = goldDomainsOf(q.id)
@@ -112,6 +129,10 @@ async function main(): Promise<void> {
       `  [${String(i + 1).padStart(3)}/${newsQueries.length}] ${q.id.padEnd(16)} NDCG=${ndcg.toFixed(4)} backend=${data.backend.slice(0, 60) || '(empty)'}`,
     )
     if (i < newsQueries.length - 1) await new Promise((r) => setTimeout(r, delayMs))
+  }
+
+  if (failed.length > 0) {
+    console.log(`  ⚠️ 실패 ${failed.length}건 (재시도 없음 모드): ${failed.map((f) => `${f.id}=${f.reason}`).join(' ')}`)
   }
 
   const byLang: Record<string, { n: number; c: number; zero: number }> = {}
@@ -137,7 +158,18 @@ async function main(): Promise<void> {
   writeFileSync(
     outPath,
     JSON.stringify(
-      { measuredAt: new Date().toISOString(), base, overall, zero, count: rows.length, byLang, hubUsedQueries, hubGoldSurfaced, rows },
+      {
+        measuredAt: new Date().toISOString(),
+        base,
+        overall,
+        zero,
+        count: rows.length,
+        failed,
+        byLang,
+        hubUsedQueries,
+        hubGoldSurfaced,
+        rows,
+      },
       null,
       2,
     ),

@@ -1143,6 +1143,47 @@
 - **남은 위험**: 300/day/IP 쿼터는 구조적 상한 — eval 500×3 이 하루 쿼터 초과 가능 (단일 run ~39건은 안전) · egress IP 리셋 후 프로덕션에서 SO 결과 확인 + 전체 eval 재실행 필요 (P1-4b)
 - **도구**: `scripts/probe-egress-worker.ts` 에 `se` 엔진 케이스 추가 (egress SE 상태 재사용 가능)
 
+### 수정 117: P24 reddit 커밋 누락 복원·배포 (P1-5) + 뉴스 RSS 허브 파일럿 (P1-7) (2026-08-17)
+- **작업 ID**: FIX-2026-08-17-31 (복구+배포) / FIX-2026-08-17-32 (파일럿) — 마스터 플랜 P1-5 / P1-7 (docs/20 §7.6)
+- **요청**: ① P1-5 — reddit 백엔드 복구(사용 0→30+) .rss 폴백·DDG site:reddit 구현·배포·재측정 ② P1-7 — 뉴스 RSS 허브 파일럿(아웃렛 20개 수집·신디케이션 우회 gold 회수율 측정)
+- **P1-5 근본 원인**: 08-14에 구현·검증(유닛 2,601건)된 P24 reddit 작업(수정 19·20)이 **커밋 누락** — 프로덕션에 reddit 백엔드가 전혀 없어 gold 0건. 진단 중 bb71093에서 all.ts 일부를 오커밋해 HEAD가 빌드 불가가 되는 사고가 있었으나, 전부 복원·정리
+- **P1-5 구현·배포**: `f7c23cf` (P24 전체 복원 — specialized.ts .rss 폴백·cooldown 가드·의도 게이트 + all.ts ddg-site-reddit/SE 프로그래밍 의도 + S104 zh 여행 site: + backend-tasks buildZhTravelCommunityTask + orchestrator waitFor) · `edab5db` (financial-keywords.ts 의존성 — 이전부터 커밋 누락) · `3665a41` (DDG 202 버스트 쿨다운 arm) · 배포 @ edab5db
+- **P1-5 실측**: 프로덕션 fanout 로그로 **ddg-site-reddit 태스크 발화 확정** (배포 전엔 태스크 자체가 없음 — 90b3b1e/6be945d/6d2801b 진단 로그로 확인). reddit 결과 실회수: best books on psychology → **reddit.com 7건**, best running shoes → 1건 (reddit .rss 경로). 나머지는 업스트림 rate-limit 상한 (DDG 202 버스트 — 본 세션 연속 프로빙이 유발, docs/15: 10~30초 후 회복; reddit .rss 1/15s 창) — 코드 결함 아님. 로컬 프로브에서도 DDG 202 쿨다운 arm 동작 확인
+- **P1-7 구현**: `src/lib/news-rss-hub.ts` (신규) — 아웃렛 21개 직접 RSS 수집(신디케이션 우회, W4 해소 설계) · RSS 2.0+Atom 파서 · 10분 TTL 캐시 · 아웃렛별 최적 1건 다양성 기여 검색 · gold 도메인 정규화(bbc.co.uk→bbc.com). `scripts/probe-news-rss-hub.ts` (신규) — gold 회수율 측정 프로브 (디스크 캐시 지원)
+- **P1-7 실측**: 라이브 수집 **1,031건** (21개 아웃렛) · news gold 쿼리 125개 측정 → **파일럿 5개 아웃렛 gold 회수 100% (169/169, KPI ≥60% 달성)** · 쿼리 단위 81.6% (102/125) · 전체 43.0% (324/754). reuters/apnews 공개 RSS 부재·최근 기사 한정 커버·japantimes 영문 피드 언어 불일치 = 구조적 한계로 문서화 (P2-2 실전 과제)
+- **검증**: 유닛 **146파일/2,890건 그린** (+14: news-rss-hub 14건) · typecheck 0 · eslint 0-warning
+- **도구**: `probe-news-rss-hub.ts [--fresh|--k|--lang|--cache]` (재측정) · `news-rss-hub.ts` (P2-2 통합 대상)
+
+### 수정 118: 뉴스 RSS 허브 실전 통합 — NewsHubDO 주기 수집 + all.ts news-hub 백엔드 + single-flight wedge 수정 (P2-2) (2026-08-18)
+- **작업 ID**: FIX-2026-08-18-01 — 마스터 플랜 P2-2 (docs/20 §7.7)
+- **요청**: 뉴스 RSS 허브를 DO 크론 주기 수집 + all.ts 뉴스 전략에 백엔드로 배선해 프로덕션 news NDCG 를 측정
+- **구현** (`8f0556f`): `src/lib/news-hub-do.ts` (신규 NewsHubDO) — alarm 15분 주기 수집, 21개 피드 병렬 수집 → CACHE_KV 저장(128KB DO 값 한도를 피해 KV, 25MB), 60초 min-interval 스로틀 + in-flight coalescing, 실패 시에도 alarm 체인 유지 · `src/routes/news-hub.ts` (신규) /api/news-hub/refresh·status · `src/cron-probe.ts` 에 매 15분 POST refresh 추가 (DO alarm 이 1차 스케줄러) · all.ts `isNews` 브랜치 `buildNewsHubTask` 배선 — KV 1회 읽기 + newsHubSearch(~2-5ms), KV 미스 시 3500ms 예산 라이브 폴백 (fanout 'news-hub' 4000ms) · DO 등록 6파일 (types.ts·do-worker·index.tsx·wrangler.do.jsonc v3·wrangler.jsonc·wrangler.dev.jsonc·verify-do-binding) · `scripts/probe-news-ndcg.ts` (신규) 프로덕션 NDCG 측정 프로브 (단일-시도/페이싱/429 처리)
+- **배포·수집 실측**: production @ 8f0556f · 최초 refresh **1,029건/20개 아웃렛/4.5s** · DO alarm 자동 재수집 확인 (fetchedAt 갱신, 1,030건) · 프로덕션 검색에서 news-hub 백엔드 발화 확정 (backend=…+news-hub+…)
+- **운영 발견 — free plan CPU 한도 (10ms/요청)**: 중량 쿼리가 간헐적으로 **1102 (CPU time limit exceeded)** — zh-travel(허브 미발화)도 1102 → 허브 도입 전부터 존재한 인프라 한계. **single-flight wedge 버그** (`21cced0`): 1102 로 죽은 invocation 의 promise 가 settle 되지 않아 같은 쿼리의 후속 요청이 45s+ 행 후 canceled 되는 교착 — inflight await 을 15s 레이스로 감지해 키 비우고 새 execution 시작. 수정 후 wedge 걸렸던 3쿼리 전부 200 정상화
+- **프로덕션 news NDCG@10 실측** (118건 성공/7건 실패, 단일 실행): 전체 **0.1761** vs 아티팩트 0.2466 (Δ-0.0704 — 측정 부하가 업스트림 naver/bing 레이트리밋 유발, hub 미사용 쿼리 대량 악화) · **hub 사용 60건 0.2860 vs 0.2532 (Δ+0.0328)** · **hub gold 기여 33건 0.3725 vs 0.2607 (Δ+0.112)** — 허브는 발화 지점에서 개선 확인. KPI 0.45 미달 — 업스트림 회복 후 median-of-3 재측정 잔여 (P2-2b)
+- **검증**: 유닛 **146파일/2,895건 그린** (+5: loadNewsHubArticles 3·buildNewsHubTask 2, cron-probe 1 수정) · typecheck 0 · eslint 0-warning
+- **도구**: `probe-news-ndcg.ts [--lang|--limit|--delay-ms|--single-attempt|--base|--out]` (재측정)
+
+### 수정 116: stack-exchange egress 쿼터 재확인 + 600쿼리 아티팩트 재측정 (P1-4b) (2026-08-17)
+- **작업 ID**: FIX-2026-08-17-30 (측정) — 마스터 플랜 P1-4b (docs/20 §7.5)
+- **요청**: egress IP SE 쿼터 리셋 후 프로덕션 SO 확인 + 전체 eval로 SE 사용량 재측정
+- **egress 실측**: 프로브 워커(s104-egress-probe) 재배포→확정→철거 — **아직 쿼터 차단 중 (400+502, 79201초 ≈ 22.0h 후 리셋)** — 83317초(P1-4)에서 4116초 경과. 리셋 전이므로 프로덕션 SO 회수는 아직 관측 불가. 프로덕션은 수정 114 가드가 쿼터를 인지·대기 중 (api.stackexchange.com 서킷 healthy, failures=0) — 라이브 기술 쿼리 3종 SO 0건은 egress 쿼터 조건 (코드 결함 아님)
+- **재측정** (`scripts/probe-se-usage.ts` 에 `--artifacts` 모드 추가 — 라이브 실행 없이 저장 청크에서 측정): 600쿼리 6청크 기준 SO gold 58개 중 라우팅 가능 43개 → **사용 37/43 (86.0%)** · 풀 SO 존재 36/43 (83.7%) · **사용 중 gold 회수 36/37 (97.3%)** · 3-run 투영 ≈111건 ≥ 80 목표 **달성** ✅ (P1-4 라이브 84.6%와 동일 수준, 600쿼리 전체로 확장 검증)
+- **검증**: typecheck 0 · eslint 0-warning · (유닛 스위트는 변경 영향 범위 외 — 측정 도구만 변경)
+- **남은 확인**: egress 리셋(≈22h) 후 프로덕션에서 SO 도메인 1회 확인 — 가드가 자동 회복하므로 수동 개입 불필요
+- **도구**: `probe-se-usage.ts --artifacts` (재측정) · `probe-egress-worker.ts` engine=se (egress 상태)
+
+### 수정 115: 600쿼리 전체 eval 재실행 + wikipedia hitRate 전 언어 재측정 (P1-3b) + zero-gold 자동 분류 리포트·gold 100건 (P1-6) (2026-08-17)
+- **작업 ID**: FIX-2026-08-17-29 (측정 + gold 증설) — 마스터 플랜 P1-3b / P1-6 (docs/20 §7.4)
+- **요청**: ① P1-3b — 500쿼리 전체 eval 재실행으로 en/ja/ko 포함 전 언어 wikipedia gold hitRate 재측정 ② P1-6 — zero-gold 자동 분류 리포트 + 신규 gold 100건
+- **쿼리/gold 증설** (`eval/queries.ts` + `eval/gold-standards.json`): **500 → 600쿼리** (gold 100건 — 헬스 20 · 글로벌 뉴스 10 · 일반 웹 15 · 과학/팩트 10 · 학술 8 · 여행 7 · 쇼핑 6 · 금융 5 · 기술 5 · kr/zh/ja 뉴스 14) + kr-general-03/04/05 에 `ko.wikipedia.org` 보조 gold 3건 (ko 측정 갭 해소). id 중복·쿼리↔gold 불일치 0 검증
+- **청크 eval 러너 신규** (`scripts/run-eval-chunk.ts`): 600쿼리를 100개씩 6청크로 분할 실행 (턴 타임아웃 600s 내 보장) — `eval/results/chunk-{0,100,200,300,400,500}-*.json` 전부 완료
+- **P1-3b 재측정** (`scripts/probe-wikipedia-hitrate.ts` 에 `--skip-runs` 추가 — 과거 zh-67 run 제외): wikipedia-expected **110건에서 풀 회수율 91.8% (101/110)** · 백엔드 사용 hitRate 94.6% (88/93) · **언어별 en 91.9% / zh 95.0% / ja 92.3% / ko 66.7% — 전 언어 목표 0.5 초과 달성** ✅ (S73 언어별 cooldown 전 언어 실동작 확인)
+- **P1-6 리포트** (`scripts/report-zero-gold.ts` 신규 + `--skip-runs`): 600쿼리 zero-gold **160건 (26.7%) — 원인 분류 100% COVERAGE** (랭킹 원인 0건 — 회수 파이프라인이 유일한 병목 재확인) · 언어별 en 124/383·zh 15/72·kr 11/85·ja 10/60 · gold 도메인별(ctrip/mafengwo/xiaohongshu 등 갭 명시) → `docs/21_ZERO_GOLD_REPORT.md` 저장
+- **검증**: typecheck 0 · eslint 0-warning · (유닛 스위트는 변경 영향 범위 외 — 쿼리/gold/스크립트만 변경)
+- **해석**: gold 100건 추가가 커버리지 갭을 정밀 노출 (26.7% — 신규 gold 도메인 다수가 미회수) — P1-6 의도대로 "무엇이 안 잡히는지"가 도메인 단위로 보임. next: 커버리지 파이프라인 개선(헬스·여행·쇼핑 소스) 후 재측정
+- **도구**: `scripts/run-eval-chunk.ts` (청크 실행) · `scripts/report-zero-gold.ts --skip-runs --extra <chunk...> --markdown docs/21_ZERO_GOLD_REPORT.md` (리포트 재생성) · `scripts/probe-wikipedia-hitrate.ts --skip-runs --extra <chunk...>` (hitRate 재측정)
+
 ### 수정 110: notify-pipeline-failure.sh — 미설정 no-op 경고 승격(::warning::) + Slack 수락 응답 검증(200+{"ok":true}) (2026-08-17)
 - **작업 ID**: FIX-2026-08-17-24 (구현 + 테스트)
 - **요청**: [14] Notify 가 SLACK_WEBHOOK 미설정으로 조용히 no-op 성공 처리되는 걸 경고로 승격할지, 드라이런 캡처를 기본값으로 삼을지 검토 → **① 경고 승격 채택 · 드라이런 기본값 비채택**(CI 러너엔 캡처 수신자가 없어 무의미 — 기존 notify_dry_run=true 경로 유지)

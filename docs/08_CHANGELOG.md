@@ -1100,6 +1100,13 @@
 - **테스트**: `tests/unit/lib-verify-pace.test.ts` 신규 **5/5** — 낮음 연장(≥300ms)/높음 유지(<300ms)/스테일 복귀/레거시 마이그레이션/비숫자·빈 값 무시 (타이밍 기반, 100/500ms 축소 간격 + 여유 경계 300ms)
 - **검증**: bash -n 3개 OK · tsc 0 · eslint 0 · prettier clean · 전체 unit **143 파일 2,813/2,813 PASS** (중간 flake 는 기지의 동시 부하 bash 스폰 타임아웃 — 단독 전부 통과)
 
+### 수정 103: per-commit replay workflow 게이트를 커밋별 자체 체커로 전환 — 시간역행 체크 제거 (2026-08-17)
+- **요청**: 수정 89~99 배치(11커밋) cherry-pick push 후 per-commit replay 에서 중간 커밋 전부 red — 원인 진단 및 해결
+- **근본 원인**: `verify-commits-ci.sh` 의 workflow 게이트가 **ROOT(팁)의 verify-deploy-workflow.ts** 를 모든 커밋에 적용. 체커는 수정 84/92/99 로 성장하는데, 스크립트 수정(92/98/84)과 체크 추가(99)가 서로 다른 커밋이라 중간 커밋은 **구조적으로** 최신 체크를 만족 불가 (예: 수정 92 이전 커밋의 verify-pages-bundle.sh 는 정확 일치가 당시 표준 — 팁 체커가 prefix 를 요구해 오탐 FAIL). 추가로 44dfff5(수정 99)는 체크 코드가 808c2e7 통째 채택으로 이미 있는데 verify-do-binding.sh 수정(수정 84)이 다음 커밋이라 **자체 unit/workflow 게이트조차 통과 불가** (체리픽으로 생긴, 로컬에 존재하지 않던 트리 상태)
+- **해결**: ① 44dfff5 에 verify-do-binding.sh 수정(수정 84)을 접어넣어 amend — 체크 10/11 이 요구하는 트리 상태를 커밋 자체가 만족 (전용 커밋 3344907 은 드롭) ② `verify-commits-ci.sh` workflow 게이트를 **커밋의 자체 workflow.ts** 로 전환 — "해당 커밋 시점의 표준"으로 판정 (기존에 고쳐진 버그를 다시 도입하는 회귀는 그 커밋의 자체 체커가 잡음 — 회귀 보호 유지). 커밋의 체커 파일이 없으면 SKIP (deploy.yml 부재 SKIP 과 동일 의미론)
+- **판정 실측** (CI 로그): 수정 88~97 커밋은 7/5건 → 자체 체커에선 해당 체크 미존재 → PASS · 44dfff5' 는 자체 체커+자체 테스트 전부 PASS → **범위 전체 ALL GREEN**
+- **검증**: bash -n · tsc 0 · prettier clean · verify-deploy-workflow 56/56 · 로컬 verify-commits-ci.sh 전체 범위 재현 ALL GREEN 확인
+
 ### 수정 100: verify-secret-set.sh GitHub API 토큰 해석 — git credential helper 라이브 검증 + 경로별 실패 사유 안내 (2026-08-17)
 - **작업 ID**: FIX-2026-08-17-15 (라이브 검증 + 개선 + 테스트)
 - **요청**: verify-secret-set.sh 의 GitHub API 토큰 해석 경로에 git credential helper 가 실제로 동작하는지 라이브로 확인하고, 실패 시 오류 메시지를 개선

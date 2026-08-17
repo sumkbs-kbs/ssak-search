@@ -11,6 +11,7 @@
 import type { SearchResult } from '../../types'
 import type { BackendTask } from './context'
 import { CircuitBreaker, type CircuitState } from '../resilience/circuit-breaker'
+import { logger } from '../logger'
 import { DEFAULT_BACKEND_TIMEOUT_MS } from '../util'
 
 // Progressive collection phases — each phase waits up to waitMs, then checks
@@ -315,9 +316,12 @@ export async function fanoutBackends(
     // P1-5 진단 로그 (2026-08-17): 태스크별 결과 건수 — 프로덕션에서
     // ddg-site-reddit 발화 여부와 DDG 202 차단을 확인하기 위한 운영 로그.
     if (tasks[i].name === 'ddg-site-reddit' || tasks[i].name === 'reddit') {
-      console.warn(
-        `[fanout] ${tasks[i].name} resolved=${s.resolved} rejected=${s.rejected} count=${s.value.length}`,
-      )
+      logger.warn('[fanout] reddit task result', {
+        task: tasks[i].name,
+        resolved: s.resolved,
+        rejected: s.rejected,
+        count: s.value.length,
+      })
     }
   }
 

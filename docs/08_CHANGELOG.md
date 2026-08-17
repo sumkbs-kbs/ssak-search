@@ -1100,6 +1100,16 @@
 - **테스트**: `tests/unit/lib-verify-pace.test.ts` 신규 **5/5** — 낮음 연장(≥300ms)/높음 유지(<300ms)/스테일 복귀/레거시 마이그레이션/비숫자·빈 값 무시 (타이밍 기반, 100/500ms 축소 간격 + 여유 경계 300ms)
 - **검증**: bash -n 3개 OK · tsc 0 · eslint 0 · prettier clean · 전체 unit **143 파일 2,813/2,813 PASS** (중간 flake 는 기지의 동시 부하 bash 스폰 타임아웃 — 단독 전부 통과)
 
+### 수정 108: scan-credential-sweep.sh — check 11 규칙 재현 모니터 스캐너 (오탐 필터 고정 + FP 0건 감시) (2026-08-17)
+- **작업 ID**: FIX-2026-08-17-22 (구현 + 테스트)
+- **요청**: 전수 sweep 이 .py/.ts 등 비-.sh 파일(capture-webhook.py) 과 echo/printf 문서 라인의 오탐을 계속 걸러내는지, 실제 repo 에서 false positive 0건을 유지하는 모니터용 빠른 스캔 스크립트
+- **산출물**: `scripts/scan-credential-sweep.sh` — check 11 과 1:1 규칙(① argv Authorization 금지 · ② argv 웹훅 URL 금지 · ③ -K config chmod 600+rm -f 필수)을 bash 로 재구현, 수 초 내 실행 (~0.2s 실측)
+- **오탐 필터 실측 고정**: ① 비-.sh 제외(scripts/*.sh 만) — capture-webhook.py 는 애초에 스캔 대상 아님 ② 주석 라인(`#` 시작) 제외 ③ echo/printf 문서 라인은 "curl 명령 라인"만 매치하므로 자연 제외 — self-test 픽스처 4종(주석+echo+printf config/웹훅 주석/비-.sh)으로 0건 고정
+- **bash 3.2 실측 교훈**: ① `read` 는 개행 없는 입력을 버림 → `printf '%s\n'` 로 공급 ② 명령 치환이 후행 개행 제거 → 파일 경계 개행 명시 추가 ③ RETURN 트랩은 local 정리 후 실행 → `${d:-}` 방어
+- **check 11 연동**: `verify-deploy-workflow.ts` 가 스캐너 자신(self-test 픽스처 내장)을 제외 목록에 추가 — 스캐너 자체 규칙은 --self-test 가 고정
+- **검증**: self-test PASS(오탐 4종 0건 · 누수 4/4) · 실 repo 스캔 FP 0건(25개 .sh, ~0.2s) · 유닛 신규 9/9 (실 repo/self-test/--quiet/누수 ① ② ③/오탐 주석·echo·printf/비-.sh/check 11 제외 회귀) · 전체 2,857+3 통과 (3건은 기지 workerd 동시 부하 flake — 단독 85/85) · tsc 0 · eslint 0 · prettier clean · check 11 실 repo verify PASS (script-credential-sweep)
+- **사용**: `bash scripts/scan-credential-sweep.sh [--dir=<경로>] [--self-test] [--quiet]` — CI/로컬 모니터에서 주기 실행 권장
+
 ### 수정 107: -K config 수명주기 회귀 게이트 — chmod 600 + rm -f 필수 (check 11 ③) (2026-08-17)
 - **작업 ID**: FIX-2026-08-17-21 (실측 + 게이트 + 테스트)
 - **배경**: verify-env-equivalence.sh 실패 경로에서 -K config 가 600 권한으로 생성되고 rm -f 로 정리되는지(잔존 0건)를 캡처 서버 실측으로 확인 → 이를 check 11(전수 sweep)의 ③ 수명주기 규칙으로 고정

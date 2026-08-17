@@ -487,6 +487,10 @@ export function verifyDeployWorkflow(repoDir: string): GateOutcome {
     shFiles.sort()
   }
   for (const f of shFiles) {
+    // scan-credential-sweep.sh 는 self-test 픽스처(의도적 누수 문자열)와 grep
+    // 패턴 문자열을 내장해 스캔하면 항상 오탐 — 제외. 자체 규칙은 --self-test 가
+    // 고정하고, check 11 과 동일 규칙을 bash 로 재구현한 모니터 스캐너다 (수정 108).
+    if (f === 'scan-credential-sweep.sh') continue
     const cs = readFileSync(join(scriptsDir11, f), 'utf8')
     // ① argv Authorization: Bearer 토큰 주입 금지 — 실재하는 curl 명령 라인만
     // (주석 라인 과 printf config 지시어 라인 은 제외 — 오탐 방지).

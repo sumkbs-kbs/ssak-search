@@ -1164,9 +1164,10 @@
 - **공유 checkout 안전**: logger.ts/index.tsx 는 타 작업자의 미커밋 변경(traceId 블록 / tracing middleware) 과 혼재 — **hunk 단위 필터링으로 내 변경만 스테이징** (staged diff 에 traceId/createTracingMiddleware 0건, working tree 외부 변경은 보존)
 <<<<<<< HEAD
 - **라이브 검증 (staging @ 49231a1 배포 후 02:15Z 틱 실측)**: scheduler `[cron-probe]` **`ddEnv:"staging"`** (HTTP 200, 1526ms) · Pages `[health]` **`ddEnv:"staging"`** (uncached, 1381ms) — 양쪽 모두 production 에서 staging 으로 전환 확인 · verify-deep-probe-tick.sh exit 0. (참고: 로컬 main 계보는 타 작업자 미커밋 WIP 모듈 참조 커밋(d1d2430~6e47b90)이 있어 빌드 불가 — 배포는 d3dd9b6 위 cherry-pick `49231a1` 사용, 수정 91 로케일 수정 후 재발사 성공)
-=======
 - **라이브 검증**: staging 배포 후 verify-deep-probe-tick.sh 로 다음 틱의 ddEnv=staging 확인 (아래 이어짐)
->>>>>>> 924143f (수정 90: staging scheduler/Pages 로그 ddEnv=production 원인 제거 — 빌드 타임 DEPLOY_ENV 로 ddEnv 재정의)
+=======
+- **라이브 검증 (staging @ 49231a1 배포 후 02:15Z 틱 실측)**: scheduler `[cron-probe]` **`ddEnv:"staging"`** (HTTP 200, 1526ms) · Pages `[health]` **`ddEnv:"staging"`** (uncached, 1381ms) — 양쪽 모두 production 에서 staging 으로 전환 확인 · verify-deep-probe-tick.sh exit 0. (참고: 로컬 main 계보는 타 작업자 미커밋 WIP 모듈 참조 커밋(d1d2430~6e47b90)이 있어 빌드 불가 — 배포는 d3dd9b6 위 cherry-pick `49231a1` 사용, 수정 91 로케일 수정 후 재발사 성공)
+>>>>>>> 2bbff2f (docs(ops): 수정 90 라이브 검증 결과 기록 — staging 02:15Z 틱 ddEnv=staging 실측 확인)
 
 ### 수정 89: deep probe cron 틱 검증 스크립트 — 15분 틱 대기 → scheduler+Pages 단일 포그라운드 캡처 → `[health] deep health probe complete` 검증 (2026-08-17)
 - **작업 ID**: FIX-2026-08-17-04 (구현 + 실측)

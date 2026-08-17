@@ -10,6 +10,7 @@
 
 import type { SearchResult } from '../../types'
 import type { BackendTask } from './context'
+import { CircuitBreaker, type CircuitState } from '../resilience/circuit-breaker'
 import { DEFAULT_BACKEND_TIMEOUT_MS } from '../util'
 
 // Progressive collection phases — each phase waits up to waitMs, then checks
@@ -22,7 +23,9 @@ import { DEFAULT_BACKEND_TIMEOUT_MS } from '../util'
 // returns as soon as ONE primary backend (naver/bing/brave) resolves, which
 // typically happens in 300-700ms. Phase 2/3 still give slow backends room,
 // but the early-exit threshold at phase 1 is "enough to fill a page".
-const PHASES = [
+// Exported so the fanout latency load model (scripts/sim-fanout-latency.ts)
+// and its tests simulate the REAL phase cadence — single source of truth.
+export const PHASES = [
   { waitMs: 800, minResults: -1 }, // -1 → computed from maxResults at call time
   { waitMs: 1800, minResults: -1 },
   { waitMs: 3500, minResults: 0 },
@@ -104,6 +107,25 @@ export const BACKEND_TIMEOUT_MS: Record<string, number> = {
   brave: 2000,
   'yahoo-finance': 4500,
   youtube: 2500,
+  // Registered so the fanout's `?? DEFAULT_BACKEND_TIMEOUT_MS` fallback is
+  // never silently applied to a real fanout backend — every fanout name must
+  // have an explicit entry (consistency test enforces this).
+  'news-outlet': 4000,
+  'stack-exchange': 4000,
+  qiita: 4000,
+  juejin: 4000,
+  csdn: 4000,
+  'github-issues': 2000,
+  // P24 (2026-08-14): DDG site:reddit.com community augmentation — same
+  // round-trip as the main duckduckgo backend (~700ms–1.5s live); 2000ms keeps
+  // it inside the fanout window so reddit.com gold is not dropped by the
+  // per-backend timer (waitFor in orchestrator.ts recovers slow answers).
+  'ddg-site-reddit': 2000,
+  // S104 (2026-08-14): zh 여행·커뮤니티 gold site:-라우팅 — DDG site:<gold>
+  // 한 번의 라운드트립 (주 duckduckgo 백엔드와 동일 계열); SearXNG 경로는
+  // 메인 searxng 백엔드와 같은 3000ms 천장을 공유한다.
+  'ddg-site-zh-travel': 2000,
+  'searxng-site-zh-travel': 3000,
 }
 
 /**
@@ -141,6 +163,14 @@ export interface FanoutOptions {
    * early-exit (e.g. wikipedia's 429-retry chain).
    */
   waitFor?: string[]
+
+  /**
+   * Circuit breaker map keyed by backend name. Used to short-circuit calls to
+   * downstream backends whose circuit is already open — this prevents the fan-out
+   * from burning subrequest quota when all primary backends are down.
+   * Optional for backward-compat (tests, library reuse). When omitted, all tasks run.
+   */
+  breakerMap?: Record<string, CircuitBreaker>
 }
 
 /**
@@ -190,7 +220,7 @@ export async function fanoutBackends(
     const task = tasks[idx]
     const state = taskState[idx]
 
-    const bgPromise = new Promise<void>((resolve) => {
+    const bgPromise = new Promise<void>(async (resolve) => {
       let settled = false
       const timer = setTimeout(() => {
         if (settled) return
@@ -200,24 +230,39 @@ export async function fanoutBackends(
         resolve()
       }, backendTimeout)
 
-      task
-        .run()
-        .then((value) => {
-          if (settled) return
+      // Circuit breaker check: skip downstream fetch when circuit is already open.
+      // This prevents fan-out from burning the free-tier subrequest quota when a
+      // backend is down — the CB state propagates across concurrent searches too.
+      const breaker = options.breakerMap?.[task.name]
+      if (breaker && !breaker.canRequest()) {
+        console.warn(`[CB] skip: ${task.name} circuit open`)
+        settled = true
+        clearTimeout(timer)
+        state.resolved = true
+        state.rejected = true  // mark as rejected, not just empty
+        resolve()
+        return
+      }
+
+      try {
+        const value = await task.run()
+        if (!settled) {
+          breaker?.recordSuccess()
           settled = true
           clearTimeout(timer)
           state.value = value
           state.resolved = true
           resolve()
-        })
-        .catch(() => {
-          if (settled) return
-          settled = true
-          clearTimeout(timer)
-          state.resolved = true
-          state.rejected = true
-          resolve()
-        })
+        }
+      } catch (err) {
+        breaker?.recordFailure()
+        if (settled) return
+        settled = true
+        clearTimeout(timer)
+        state.resolved = true
+        state.rejected = true
+        resolve()
+      }
     })
 
     bgPromise.catch(() => {})
@@ -261,10 +306,18 @@ export async function fanoutBackends(
   const resultSets: SearchResult[][] = []
   const usedBackends: string[] = []
 
-  for (const s of taskState) {
+  for (let i = 0; i < taskState.length; i++) {
+    const s = taskState[i]
     if (s.resolved && !s.rejected && s.value.length > 0) {
       resultSets.push(s.value)
-      usedBackends.push(s.name)
+      usedBackends.push(tasks[i].name)
+    }
+    // P1-5 진단 로그 (2026-08-17): 태스크별 결과 건수 — 프로덕션에서
+    // ddg-site-reddit 발화 여부와 DDG 202 차단을 확인하기 위한 운영 로그.
+    if (tasks[i].name === 'ddg-site-reddit' || tasks[i].name === 'reddit') {
+      console.warn(
+        `[fanout] ${tasks[i].name} resolved=${s.resolved} rejected=${s.rejected} count=${s.value.length}`,
+      )
     }
   }
 

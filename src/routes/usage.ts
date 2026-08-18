@@ -14,7 +14,7 @@ const usageRoute = new Hono<{ Bindings: AppBindings }>()
 // Auth middleware (same pattern as search/extract, read-only so no rate limit)
 usageRoute.use('/*', async (c, next) => {
   const clientIp = getClientIp(c.req.raw.headers)
-  const authResult = validateApiKeyWithTenant(c.req.raw.headers, c.env.TENANTS_CONFIG, c.env.SEARCH_API_KEY)
+  const authResult = validateApiKeyWithTenant(c.req.raw.headers, c.env.TENANTS_CONFIG, c.env.SEARCH_API_KEY, c.env)
   if (!authResult.valid) {
     auditAuthFailure({
       reason: authResult.reason || 'Unauthorized',

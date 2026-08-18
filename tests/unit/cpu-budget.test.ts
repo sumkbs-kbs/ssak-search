@@ -23,11 +23,11 @@ describe('createCpuBudget', () => {
     vi.spyOn(Date, 'now').mockReturnValue(now)
 
     const budget = createCpuBudget(undefined, now)
-    expect(budget.maxWallTimeMs).toBe(7_000)
+    expect(budget.maxCpuTimeMs).toBe(10)
     expect(budget.startTime).toBe(now)
     expect(budget.isExhausted()).toBe(false)
     expect(budget.elapsed()).toBe(0)
-    expect(budget.remaining()).toBe(7_000)
+    expect(budget.remaining()).toBe(10)
   })
 
   it('creates a budget with custom ceiling', () => {
@@ -35,7 +35,7 @@ describe('createCpuBudget', () => {
     vi.spyOn(Date, 'now').mockReturnValue(now)
 
     const budget = createCpuBudget(3_000, now)
-    expect(budget.maxWallTimeMs).toBe(3_000)
+    expect(budget.maxCpuTimeMs).toBe(3_000)
     expect(budget.remaining()).toBe(3_000)
   })
 
@@ -60,7 +60,7 @@ describe('createCpuBudget', () => {
     vi.spyOn(Date, 'now').mockReturnValue(t0 + 7000) // exactly 7s
 
     const budget = createCpuBudget(7_000, t0)
-    // Date.now() - t0 > maxWallTimeMs is 7000 > 7000 → false
+    // Date.now() - t0 > maxCpuTimeMs is 7000 > 7000 → false
     // So at exactly the deadline, it's NOT exhausted (strictly greater than)
     expect(budget.isExhausted()).toBe(false)
   })
@@ -296,7 +296,7 @@ describe('shouldUseLightweightMode', () => {
     vi.spyOn(Date, 'now').mockReturnValue(t0 + 3500) // 3.5s of 7s = exactly 50%
 
     const budget = createCpuBudget(7_000, t0)
-    // elapsed > maxWallTimeMs * 0.5 → 3500 > 3500 → false (strict greater-than)
+    // elapsed > maxCpuTimeMs * 0.5 → 3500 > 3500 → false (strict greater-than)
     expect(shouldUseLightweightMode(budget, { FREE_PLAN_CPU_GUARD: '0' })).toBe(false)
   })
 

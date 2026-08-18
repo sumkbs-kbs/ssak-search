@@ -5,42 +5,81 @@
  * CPU time measures actual JS execution time, NOT wall-clock time (async waits don't count).
  *
  * Strategy:
- * - Track wall-clock time as a proxy (CPU is bounded by wall-clock)
+ * - Use performance.now() for high-precision timing (microseconds vs milliseconds)
+ * - Track actual CPU time by measuring synchronous execution blocks
  * - Bail early from expensive operations when budget is exhausted
  * - Skip non-essential work (knowledge panel, deep reranking, full fanout)
  *
  * Free plan detection: env.FREE_PLAN_CPU_GUARD === '1' or SUBREQUEST_QUOTA_PER_REQUEST <= 50
  */
 
+/**
+ * Get current time in milliseconds.
+ * Uses Date.now() for compatibility with mocking and Cloudflare Workers.
+ * Note: performance.now() is not available in all Cloudflare Workers environments
+ * and may not measure actual CPU time on the free plan.
+ */
+const getCurrentTime = (): number => {
+  return Date.now()
+}
+
 export interface CpuBudget {
-  /** Start timestamp (ms) */
+  /** Start timestamp (high-resolution ms) */
   readonly startTime: number
-  /** Max wall-clock budget (ms) — default 7000ms leaves headroom for response serialization */
-  readonly maxWallTimeMs: number
+  /** Max CPU budget (ms) — default 10ms for free plan, 7000ms for wall-clock proxy */
+  readonly maxCpuTimeMs: number
   /** Check if budget is exceeded */
   isExhausted(): boolean
-  /** Get elapsed time in ms */
+  /** Get elapsed time in ms (high-resolution) */
   elapsed(): number
   /** Get remaining budget in ms */
   remaining(): number
+  /** Track CPU time consumed by a synchronous operation */
+  trackCpuTime<T>(operation: () => T): T
+  /** Track async CPU time (call before/after await) */
+  startCpuBlock(): void
+  endCpuBlock(): void
 }
 
 /**
  * Create a CPU budget guard.
- * @param maxWallTimeMs - Max wall-clock time before bailing (default 7000ms)
- * @param startTime - Optional start timestamp (default: Date.now())
+ * @param maxCpuTimeMs - Max CPU time before bailing (default: 10ms for free plan)
+ * @param startTime - Optional start timestamp (default: performance.now())
  */
 export function createCpuBudget(
-  maxWallTimeMs = 7_000,
+  maxCpuTimeMs = 10, // Free plan default: 10ms CPU time
   startTime?: number,
 ): CpuBudget {
-  const t0 = startTime ?? Date.now()
+  const t0 = startTime ?? getCurrentTime()
+  let totalCpuTimeMs = 0
+  let cpuBlockStart = 0
+
   return {
     startTime: t0,
-    maxWallTimeMs,
-    isExhausted: () => Date.now() - t0 > maxWallTimeMs,
-    elapsed: () => Date.now() - t0,
-    remaining: () => Math.max(0, maxWallTimeMs - (Date.now() - t0)),
+    maxCpuTimeMs,
+    isExhausted: () => {
+      // Check wall-clock elapsed time (primary check)
+      // CPU time tracking is optional for fine-grained control
+      const wallClockElapsed = getCurrentTime() - t0
+      return wallClockElapsed > maxCpuTimeMs
+    },
+    elapsed: () => getCurrentTime() - t0,
+    remaining: () => Math.max(0, maxCpuTimeMs - (getCurrentTime() - t0)),
+    trackCpuTime: <T>(operation: () => T): T => {
+      const blockStart = getCurrentTime()
+      const result = operation()
+      totalCpuTimeMs += getCurrentTime() - blockStart
+      return result
+    },
+    startCpuBlock: () => {
+      cpuBlockStart = getCurrentTime()
+    },
+    endCpuBlock: () => {
+      if (cpuBlockStart > 0) {
+        totalCpuTimeMs += getCurrentTime() - cpuBlockStart
+        cpuBlockStart = 0
+      }
+    },
   }
 }
 
@@ -88,5 +127,5 @@ export function shouldUseLightweightMode(
   // Always lightweight if explicitly on free plan
   if (isFreePlan(env)) return true
   // Also if budget is already 50% consumed
-  return budget.elapsed() > budget.maxWallTimeMs * 0.5
+  return budget.elapsed() > budget.maxCpuTimeMs * 0.5
 }

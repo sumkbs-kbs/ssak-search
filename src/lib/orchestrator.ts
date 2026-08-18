@@ -55,6 +55,7 @@ import type { SearchContext, BackendTask } from './search/context'
 import { buildBackendTasks } from './search/strategies'
 import { fanoutBackends } from './search/fanout'
 import { CircuitBreaker, type CircuitState } from './resilience/circuit-breaker'
+import { getCircuitBreaker } from './resilience/circuit-breaker-registry'
 import { mergeAndDeduplicate, normalizeUrlForDedup, normalizeTitleForDedup } from './search/dedup'
 import { emergencyFallback } from './search/fallback'
 import { applyRankingPipeline, capSourceResults } from './search/ranking'
@@ -604,10 +605,11 @@ export async function executeSearch(request: SearchRequest, config: Orchestrator
     // as ddg-site-reddit. Bounded by the 2000/3000ms ceilings.
     // ── 4.9 Circuit breaker map for downstream backends — prevents quota burn on cascading failures ──
     // Each key is the task name used in BACKEND_TIMEOUT_MS; only primary REST backends get a breaker.
+    // Uses registry to share circuit state across requests within the same isolate.
     const breakerMap: Record<string, CircuitBreaker> = {}
     const PRIMARY_BACKENDS = ['bing', 'brave', 'naver', 'wikipedia'] as const
     for (const name of PRIMARY_BACKENDS) {
-      breakerMap[name] = new CircuitBreaker({ name, failureThreshold: 3, resetTimeoutMs: 20_000 }) // trip after 3 consecutive failures, 20s reset
+      breakerMap[name] = getCircuitBreaker(`${name}-fanout`, { failureThreshold: 3, resetTimeoutMs: 20_000 })
     }
 
     const { resultSets, usedBackends } = await fanoutBackends(tasks, max_results, {

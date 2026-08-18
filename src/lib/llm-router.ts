@@ -1,5 +1,6 @@
 import { logger, toError } from './logger'
 import { httpErrorFromResponse } from './resilience/retry'
+import { withSseTimeout } from './sse-timeout'
 /**
  * LLM Router — Multi-Model Routing & Cost Control
  *
@@ -640,10 +641,13 @@ async function* streamOpenAICompatible(
     )
   }
 
-  const reader = response.body?.getReader()
-  if (!reader) {
+  const rawReader = response.body?.getReader()
+  if (!rawReader) {
     throw new Error('Streaming response body is null')
   }
+
+  // Wrap with timeout protection to prevent infinite loops
+  const reader = withSseTimeout(rawReader, { chunkTimeoutMs: 30_000, totalTimeoutMs: 120_000 })
 
   const decoder = new TextDecoder()
   let buffer = ''
@@ -692,6 +696,7 @@ async function* streamOpenAICompatible(
       }
     }
   } finally {
+    reader.cleanup()
     reader.releaseLock()
   }
 
@@ -911,10 +916,13 @@ export async function* streamAnthropic(
     )
   }
 
-  const reader = response.body?.getReader()
-  if (!reader) {
+  const rawReader = response.body?.getReader()
+  if (!rawReader) {
     throw new Error('Anthropic streaming response body is null')
   }
+
+  // Wrap with timeout protection to prevent infinite loops
+  const reader = withSseTimeout(rawReader, { chunkTimeoutMs: 30_000, totalTimeoutMs: 120_000 })
 
   const decoder = new TextDecoder()
   let buffer = ''
@@ -965,6 +973,7 @@ export async function* streamAnthropic(
       }
     }
   } finally {
+    reader.cleanup()
     reader.releaseLock()
   }
 

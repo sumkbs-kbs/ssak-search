@@ -719,6 +719,8 @@ export interface AppBindings {
   ENVIRONMENT?: string
   // Slack webhook URL for alerts (health check failures, eval regressions)
   SLACK_WEBHOOK?: string
+  // Enable open mode (no API key required) — set to '1' for local development
+  AUTH_OPEN_MODE?: string
 }
 
 // ============================================================

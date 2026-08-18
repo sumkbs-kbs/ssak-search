@@ -61,9 +61,10 @@ const TENANTS_JSON = JSON.stringify([
 ])
 
 describe('validateApiKey', () => {
-  it('passes when no key is configured (open mode)', () => {
+  it('rejects when no key is configured (closed mode by default)', () => {
     const result = validateApiKey(makeHeaders({}), undefined)
-    expect(result.valid).toBe(true)
+    expect(result.valid).toBe(false)
+    expect(result.reason).toMatch(/API key required/)
   })
 
   it('rejects when no credential is sent but a key is configured', () => {
@@ -222,8 +223,14 @@ describe('getClientIp', () => {
 })
 
 describe('validateApiKeyWithTenant', () => {
-  it('passes in open mode (no keys configured)', () => {
+  it('rejects in closed mode (no keys configured, AUTH_OPEN_MODE not set)', () => {
     const result = validateApiKeyWithTenant(makeHeaders({}), undefined, undefined)
+    expect(result.valid).toBe(false)
+    expect(result.reason).toMatch(/API key required/)
+  })
+
+  it('passes in open mode (no keys configured, AUTH_OPEN_MODE enabled)', () => {
+    const result = validateApiKeyWithTenant(makeHeaders({}), undefined, undefined, { AUTH_OPEN_MODE: '1' })
     expect(result.valid).toBe(true)
     expect(result.tenant?.id).toBe('__default__')
   })
@@ -370,9 +377,15 @@ describe('extractApiKeyToken', () => {
 })
 
 describe('validateApiKeyAsync', () => {
-  it('passes in open mode (no bindings)', async () => {
-    const result = await validateApiKeyAsync(makeHeaders({}), {} as never)
+  it('passes in open mode (no bindings, AUTH_OPEN_MODE enabled)', async () => {
+    const result = await validateApiKeyAsync(makeHeaders({}), { AUTH_OPEN_MODE: '1' } as never)
     expect(result.valid).toBe(true)
+  })
+
+  it('rejects in closed mode (no bindings, AUTH_OPEN_MODE not set)', async () => {
+    const result = await validateApiKeyAsync(makeHeaders({}), {} as never)
+    expect(result.valid).toBe(false)
+    expect(result.reason).toMatch(/API key required/)
   })
 
   it('rejects a missing key when bindings are configured', async () => {

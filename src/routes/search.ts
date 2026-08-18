@@ -112,7 +112,7 @@ searchRoute.use('/*', async (c, next) => {
   }
 
   // Multi-tenant API key validation
-  const authResult = validateApiKeyWithTenant(c.req.raw.headers, c.env.TENANTS_CONFIG, c.env.SEARCH_API_KEY)
+  const authResult = validateApiKeyWithTenant(c.req.raw.headers, c.env.TENANTS_CONFIG, c.env.SEARCH_API_KEY, c.env)
   if (!authResult.valid) {
     auditAuthFailure({
       reason: authResult.reason || 'Invalid or missing API key',

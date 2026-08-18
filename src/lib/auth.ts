@@ -203,10 +203,17 @@ export function validateApiKeyWithTenant(
   headers: Headers,
   tenantsConfig: string | undefined,
   legacyKey: string | undefined,
+  env?: { AUTH_OPEN_MODE?: string },
 ): AuthResult {
-  // If no keys configured at all, open mode
+  // If no keys configured at all, check if open mode is explicitly enabled
+  // SECURITY: Default to closed mode (require API key) to prevent accidental
+  // exposure. Set AUTH_OPEN_MODE=1 to enable open mode for local development.
   if (!tenantsConfig && !legacyKey) {
-    return { valid: true, tenant: { id: '__default__', config: DEFAULT_TENANT } }
+    const openModeEnabled = env?.AUTH_OPEN_MODE === '1' || env?.AUTH_OPEN_MODE === 'true'
+    if (openModeEnabled) {
+      return { valid: true, tenant: { id: '__default__', config: DEFAULT_TENANT } }
+    }
+    return { valid: false, reason: 'API key required. Set SEARCH_API_KEY or TENANTS_CONFIG, or enable AUTH_OPEN_MODE=1 for development.' }
   }
 
   const token = extractApiKeyToken(headers)
@@ -234,9 +241,14 @@ export function validateApiKeyWithTenant(
  * Falls back to legacy TENANTS_CONFIG / SEARCH_API_KEY if DO is unavailable.
  */
 export async function validateApiKeyAsync(headers: Headers, env: AppBindings): Promise<AuthResult> {
-  // Open mode check
+  // Open mode check — requires explicit AUTH_OPEN_MODE=1 to disable API key requirement
+  // SECURITY: Default to closed mode to prevent accidental exposure
   if (!env.SEARCH_API_KEY && !env.TENANTS_CONFIG && !env.API_KEY_DO) {
-    return { valid: true, tenant: { id: '__default__', config: DEFAULT_TENANT } }
+    const openModeEnabled = env.AUTH_OPEN_MODE === '1' || env.AUTH_OPEN_MODE === 'true'
+    if (openModeEnabled) {
+      return { valid: true, tenant: { id: '__default__', config: DEFAULT_TENANT } }
+    }
+    return { valid: false, reason: 'API key required. Set SEARCH_API_KEY or TENANTS_CONFIG, or enable AUTH_OPEN_MODE=1 for development.' }
   }
 
   const token = extractApiKeyToken(headers)

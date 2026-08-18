@@ -60,7 +60,7 @@ const FINANCIAL_PATTERN = buildFinancialKeywordRegex(FINANCIAL_KEYWORDS, FINANCI
  */
 const WIKIPEDIA_CACHE_TTL_MS = 10 * 60 * 1000
 const WIKIPEDIA_CACHE_MAX = 500
-const wikipediaCache = new Map<string, { results: SearchResult[]; expiresAt: number }>()
+const wikipediaCache = new LruCache<SearchResult[]>(WIKIPEDIA_CACHE_MAX, WIKIPEDIA_CACHE_TTL_MS)
 
 // S75 (2026-08-13): github Search API result cache. The anonymous /search
 // quota is 10 req/min SHARED between repositories and issues — repeat calls
@@ -68,30 +68,39 @@ const wikipediaCache = new Map<string, { results: SearchResult[]; expiresAt: num
 // budget for nothing and 403 the later queries in a burst, dropping the
 // github.com gold. wikipediaCache-style TTL + empty-result policy (never
 // cache 403/empty so the quota window is re-tried after recovery).
+// LRU eviction added to prevent unbounded memory growth (max 500 entries).
+import { LruCache } from './lru-cache'
 const GITHUB_CACHE_TTL_MS = 10 * 60 * 1000
-const githubCache = new Map<string, { results: SearchResult[]; expiresAt: number }>()
+const GITHUB_CACHE_MAX = 500
+const githubCache = new LruCache<SearchResult[]>(GITHUB_CACHE_MAX, GITHUB_CACHE_TTL_MS)
 
 function githubCacheKey(query: string, maxResults: number, source: 'repos' | 'issues'): string {
   return `github|${source}|${query.trim().toLowerCase()}|${maxResults}`
 }
 
 function githubCacheGet(key: string): SearchResult[] | undefined {
-  const entry = githubCache.get(key)
-  if (entry && entry.expiresAt > Date.now()) {
-    return entry.results.map((r) => ({ ...r }))
+  const results = githubCache.get(key)
+  if (results) {
+    // Shallow-copy each result: the orchestrator mutates SearchResult objects
+    // in place AFTER the cache read
+    return results.map((r) => ({ ...r }))
   }
-  githubCache.delete(key)
   return undefined
 }
 
 function githubCacheSet(key: string, results: SearchResult[]): void {
   if (results.length === 0) return // never cache 403/empty — allow a real retry later
-  githubCache.set(key, { results, expiresAt: Date.now() + GITHUB_CACHE_TTL_MS })
+  githubCache.set(key, results)
 }
 
 /** TEST HOOK: clear the in-process github result cache. */
 export function clearGithubCache(): void {
   githubCache.clear()
+}
+
+/** Periodic cleanup of expired entries — call from cron or middleware. */
+export function cleanupGithubCache(): void {
+  githubCache.cleanup()
 }
 
 function wikipediaCacheKey(language: string, query: string, maxResults: number, source = 'rest'): string {
@@ -102,27 +111,21 @@ function wikipediaCacheKey(language: string, query: string, maxResults: number, 
 }
 
 function wikipediaCacheGet(key: string): SearchResult[] | undefined {
-  const entry = wikipediaCache.get(key)
-  if (entry && entry.expiresAt > Date.now()) {
+  const results = wikipediaCache.get(key)
+  if (results) {
     // Shallow-copy each result: the orchestrator mutates SearchResult objects
     // in place AFTER the cache read (mergeAndDeduplicate keeps first-seen
     // references, then ranking recomputes score, enrichment rewrites content,
     // matchImagesToResults attaches images). Returning the cached references
     // directly would leak one request's post-processing into the next.
-    return entry.results.map((r) => ({ ...r }))
+    return results.map((r) => ({ ...r }))
   }
-  if (entry) wikipediaCache.delete(key) // expired — clean up
   return undefined
 }
 
 function wikipediaCacheSet(key: string, results: SearchResult[]): void {
   if (results.length === 0) return // never cache 429/empty — allow real retry later
-  wikipediaCache.set(key, { results, expiresAt: Date.now() + WIKIPEDIA_CACHE_TTL_MS })
-  // Bound memory: evict oldest entry past 500 unique queries
-  if (wikipediaCache.size > WIKIPEDIA_CACHE_MAX) {
-    const oldest = wikipediaCache.entries().next().value
-    if (oldest) wikipediaCache.delete(oldest[0])
-  }
+  wikipediaCache.set(key, results)
 }
 
 /**
@@ -132,6 +135,11 @@ function wikipediaCacheSet(key: string, results: SearchResult[]): void {
  */
 export function clearWikipediaCache(): void {
   wikipediaCache.clear()
+}
+
+/** Periodic cleanup of expired entries — call from cron or middleware. */
+export function cleanupWikipediaCache(): void {
+  wikipediaCache.cleanup()
 }
 
 // ============================================================

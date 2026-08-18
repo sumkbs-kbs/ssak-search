@@ -171,6 +171,77 @@ export class ClickLogDO extends DurableObject<Env> {
     return rows
   }
 
+  /**
+   * Export training data in LightGBM format for model training.
+   * Format: label group features...
+   */
+  async exportLightGBMFormat(days = 7, limit = 10000): Promise<string> {
+    const rows = await this.getTrainingData(days, limit)
+    if (rows.length === 0) return ''
+
+    const lines: string[] = []
+    let lastGroup = ''
+    for (const row of rows) {
+      if (row.group !== lastGroup) {
+        lines.push(`# query: ${row.query}`)
+        lastGroup = row.group
+      }
+      const featureStr = row.features.map(f => f.toFixed(6)).join(' ')
+      lines.push(`${row.label} ${row.group} ${featureStr}`)
+    }
+    return lines.join('\n')
+  }
+
+  /**
+   * Get click-through rate statistics for monitoring.
+   */
+  async getCtrStats(days = 7): Promise<{
+    totalImpressions: number
+    totalClicks: number
+    ctr: number
+    topClickedDomains: Array<{ domain: string; count: number }>
+    topQueries: Array<{ query: string; count: number }>
+  }> {
+    const since = Date.now() - days * 86_400_000
+    const imps = await this.listRange<Impression>('imp:', since)
+    const clicks = await this.listRange<ClickEvent>('click:', since)
+
+    // Count clicks per domain
+    const domainClicks = new Map<string, number>()
+    for (const c of clicks) {
+      try {
+        const domain = new URL(c.url).hostname
+        domainClicks.set(domain, (domainClicks.get(domain) ?? 0) + 1)
+      } catch {
+        // skip invalid URLs
+      }
+    }
+
+    // Count queries
+    const queryCounts = new Map<string, number>()
+    for (const imp of imps) {
+      queryCounts.set(imp.query, (queryCounts.get(imp.query) ?? 0) + 1)
+    }
+
+    const topDomains = [...domainClicks.entries()]
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 10)
+      .map(([domain, count]) => ({ domain, count }))
+
+    const topQueries = [...queryCounts.entries()]
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 10)
+      .map(([query, count]) => ({ query, count }))
+
+    return {
+      totalImpressions: imps.length,
+      totalClicks: clicks.length,
+      ctr: imps.length > 0 ? clicks.length / imps.length : 0,
+      topClickedDomains: topDomains,
+      topQueries,
+    }
+  }
+
   async getStats(): Promise<ClickLogStats> {
     return {
       impressions: this.meta.impressionCount,

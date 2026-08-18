@@ -19,6 +19,7 @@ import { domainMatches, computeScore, timeRangeToDays } from '../util'
 import { bm25Score, tokenize as bm25Tokenize } from '../retrieval/bm25'
 import { logger, toError } from '../logger'
 import { applyLtrRanking } from '../ltr/ranker'
+import { applyLtrRankingV2 } from '../ltr/ranker-v2'
 import { expandQuery } from '../understanding/query-expander'
 
 /**
@@ -1002,8 +1003,9 @@ export async function applyRankingPipeline(results: SearchResult[], ctx: SearchC
   r = recomputeScores(r, ctx)
   r = await applyDomainBoosting(r, ctx)
   // A/B 테스트: control variant는 LTR 없이 기존 순위를 유지 (C.2)
+  // v2 ranker uses 32 features for better accuracy
   if (ctx.experimentVariant !== 'control') {
-    r = await applyLtrRanking(r, ctx)
+    r = await applyLtrRankingV2(r, ctx)
   }
   r = sortResults(r, ctx)
   r = applyQualityThreshold(r, ctx)

@@ -66,9 +66,12 @@ export class AllStrategy implements SearchStrategy {
     const searxngConfigured = !!ctx.env?.SEARXNG_URL
     const freePlan = isFreePlanEnv(ctx.env)
 
-    // Free plan: limit maxResults to reduce CPU overhead in scoring/dedup
+    // Free plan: limit maxResults to reduce CPU overhead in scoring/dedup.
+    // Tuned (2026-08-18): 1.5x from 2x — production data shows scoring/dedup
+    // is a significant CPU consumer; 15 results (for limit=10) provides adequate
+    // ranking diversity while saving ~25% CPU vs 20 results.
     // Full plan: use overFetch (3x) for better ranking diversity
-    const effectiveOverFetch = freePlan ? Math.max(ctx.maxResults * 2, 20) : ctx.overFetch
+    const effectiveOverFetch = freePlan ? Math.max(Math.round(ctx.maxResults * 1.5), 15) : ctx.overFetch
 
     // 0. Brave Search API (PRIMARY for non-Korean, official API, ToS-safe)
     const braveTask = buildBraveTask(ctx)
@@ -155,31 +158,32 @@ export class AllStrategy implements SearchStrategy {
         tasks.push(buildGithubIssuesTask(ctx, 5))
       }
 
-      // Free plan: skip StackExchange, DDG-site-MDN (saves 2-3 subrequests)
-      if (!freePlan) {
-        if (
-          (ctx.queryType === 'technical' || ctx.queryType === 'academic') &&
-          !ctx.korean &&
-          !ctx.chinese &&
-          !ctx.japanese
-        ) {
-          tasks.push(buildStackExchangeTask(ctx, 8))
+      // Tuned (2026-08-18): StackExchange re-enabled on free plan — production
+      // data shows 0.2% error rate (826 req) which is excellent reliability.
+      // DDG-site-MDN still skipped on free plan (saves 1 subrequest + CPU).
+      if (
+        (ctx.queryType === 'technical' || ctx.queryType === 'academic') &&
+        !ctx.korean &&
+        !ctx.chinese &&
+        !ctx.japanese
+      ) {
+        tasks.push(buildStackExchangeTask(ctx, freePlan ? 5 : 8))
 
-          if (
-            /\b(docs?|documentation|reference|guide|tutorial|example|examples|api|how\s+to|explain(ed)?|what\s+is)\b/i.test(
-              ctx.query,
-            )
-          ) {
-            tasks.push({
-              name: 'ddg-site-mdn',
-              run: () =>
-                duckDuckGoSearch(`site:developer.mozilla.org ${ctx.query}`, {
-                  maxResults: 5,
-                  timeoutMs: 6000,
-                  env: ctx.env,
-                }),
-            })
-          }
+        if (
+          !freePlan &&
+          /\b(docs?|documentation|reference|guide|tutorial|example|examples|api|how\s+to|explain(ed)?|what\s+is)\b/i.test(
+            ctx.query,
+          )
+        ) {
+          tasks.push({
+            name: 'ddg-site-mdn',
+            run: () =>
+              duckDuckGoSearch(`site:developer.mozilla.org ${ctx.query}`, {
+                maxResults: 5,
+                timeoutMs: 6000,
+                env: ctx.env,
+              }),
+          })
         }
       }
 
@@ -202,6 +206,7 @@ export class AllStrategy implements SearchStrategy {
     }
 
     // 5. Reddit — Free plan: skip entirely (saves 1 subrequest)
+    // Production data: 524 req, 1.3% error — reliable but low priority on free plan
     if (ctx.sources.useReddit && !freePlan) {
       tasks.push(buildRedditTask(ctx, 5))
     }
@@ -226,15 +231,18 @@ export class AllStrategy implements SearchStrategy {
       })
     }
 
-    // 5a2. Stack Exchange for programming-intent — Free plan: skip
+    // 5a2. Stack Exchange for programming-intent
+    // Tuned (2026-08-18): Re-enabled on free plan — production data shows
+    // 0.2% error rate (826 req, 2 failures) which is excellent reliability.
+    // StackExchange provides high-value programming Q&A that Bing/DDG don't
+    // cover as well, and the 1-subrequest cost is justified by the quality gain.
     if (
       !ctx.korean &&
       !ctx.chinese &&
       !ctx.japanese &&
-      isProgrammingIntent(ctx.query) &&
-      !freePlan
+      isProgrammingIntent(ctx.query)
     ) {
-      tasks.push(buildStackExchangeTask(ctx, 8))
+      tasks.push(buildStackExchangeTask(ctx, freePlan ? 5 : 8))
     }
 
     // 5b. arXiv — Free plan: reduce from 8→5
@@ -244,6 +252,7 @@ export class AllStrategy implements SearchStrategy {
     }
 
     // 5c. OpenAlex — Free plan: skip entirely (saves 1 subrequest)
+    // Production data: 165 req, 19.4% error — unreliable, low ROI on free plan
     if (ctx.sources.useOpenAlex && !freePlan) {
       tasks.push(buildOpenAlexTask(ctx, 8))
     }
@@ -254,7 +263,12 @@ export class AllStrategy implements SearchStrategy {
     }
 
     // 6. DuckDuckGo (fallback: only when SearXNG is NOT configured)
-    if (!searxngConfigured && !ctx.korean && !ctx.isNews) {
+    // Tuned (2026-08-18): Skip on free plan — production data shows 2.5% error
+    // rate (2,955 req) with DDG HTML at 19.7% error (1,984 req). Bing is the
+    // primary backend with 0% error and 17,101 req; DDG adds redundancy but
+    // costs 1 subrequest + CPU for scoring. On free plan, the subrequest budget
+    // (50) is better spent on higher-value backends (StackExchange, GitHub, HN).
+    if (!searxngConfigured && !ctx.korean && !ctx.isNews && !freePlan) {
       tasks.push(buildDuckDuckGoTask(ctx))
     }
 

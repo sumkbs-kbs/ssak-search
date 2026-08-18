@@ -145,6 +145,34 @@ export function backendTimeoutMs(name: string, fallbackMs?: number): number {
   return BACKEND_TIMEOUT_MS[name] ?? fallbackMs ?? DEFAULT_BACKEND_TIMEOUT_MS
 }
 
+/**
+ * Free-plan timeout overrides — tuned from production circuit breaker data (2026-08-18).
+ *
+ * Only applied when FanoutOptions.freePlan === true. Reduces timeouts for backends
+ * with high error rates to save CPU time on the free plan (10ms CPU limit).
+ *
+ * Backends NOT in this table keep their default BACKEND_TIMEOUT_MS ceilings.
+ * Backends with excellent reliability (<2% error) are not overridden.
+ */
+const FREE_PLAN_TIMEOUT_OVERRIDES: Record<string, number> = {
+  // Wikipedia: 22.2% error rate (4,226 req, 939 failures)
+  // Normal responses arrive in 300-800ms; 3s covers retries (429/backoff)
+  // while saving ~1.5s CPU per failure vs 4.5s ceiling.
+  wikipedia: 3_000,
+  // DDG HTML: 19.7% error rate (1,984 req, 391 failures)
+  // Healthy responses in 300-700ms; 1.5s covers normal round-trip.
+  duckduckgo: 1_500,
+  // OpenAlex: 19.4% error rate (165 req, 32 failures)
+  // JSON API usually fast (~200ms-1s); 2.5s covers slow responses.
+  openalex: 2_500,
+  // DDG site:reddit — 0 req in production (skipped on free plan already)
+  // but include for completeness if code path is reached.
+  'ddg-site-reddit': 1_500,
+  // StackExchange: 0.2% error (excellent) — slight reduction for free plan
+  // Normal responses ~200-500ms; 3s gives margin without wasting CPU.
+  'stack-exchange': 3_000,
+}
+
 interface TaskResult {
   name: string
   value: SearchResult[]
@@ -176,6 +204,18 @@ export interface FanoutOptions {
    * Optional for backward-compat (tests, library reuse). When omitted, all tasks run.
    */
   breakerMap?: Record<string, CircuitBreaker>
+
+  /**
+   * Free plan mode: apply reduced timeouts for unreliable backends.
+   * Tuned (2026-08-18) from production circuit breaker data:
+   * - Wikipedia: 22% error rate → reduce from 4500ms to 3000ms
+   *   (saves ~1.5s CPU per Wikipedia failure; still enough for normal responses)
+   * - DDG HTML: 19.7% error rate → reduce from 2000ms to 1500ms
+   *   (failures are fast timeouts; 1.5s covers healthy responses)
+   * - OpenAlex: 19.4% error rate → reduce from 4500ms to 2500ms
+   *   (academic API usually fast when healthy; failures are slow timeouts)
+   */
+  freePlan?: boolean
 }
 
 /**
@@ -201,11 +241,22 @@ export async function fanoutBackends(
   // Phase 1 threshold is deliberately loose (just one full page worth) so a
   // healthy primary backend resolves the request in ~800ms instead of waiting
   // for an over-fetch that only helps ranking marginally.
-  const phases = [
-    { waitMs: PHASES[0].waitMs, minResults: Math.max(maxResults, 8) },
-    { waitMs: PHASES[1].waitMs, minResults: Math.max(maxResults + 3, 10) },
-    { waitMs: PHASES[2].waitMs, minResults: 0 },
-  ]
+  //
+  // Free plan: tighter phases — fewer backends (6-8 vs 15+) means faster
+  // collection. Phase 1 at 600ms catches Bing/Naver/Brave (primary backends
+  // that resolve in 300-700ms). Phase 2 at 1200ms catches secondary backends
+  // (GitHub, HN, StackExchange). Phase 3 at 2500ms is the safety net.
+  const phases = options.freePlan
+    ? [
+        { waitMs: 600, minResults: Math.max(maxResults, 5) },
+        { waitMs: 1_200, minResults: Math.max(maxResults + 2, 8) },
+        { waitMs: 2_500, minResults: 0 },
+      ]
+    : [
+        { waitMs: PHASES[0].waitMs, minResults: Math.max(maxResults, 8) },
+        { waitMs: PHASES[1].waitMs, minResults: Math.max(maxResults + 3, 10) },
+        { waitMs: PHASES[2].waitMs, minResults: 0 },
+      ]
 
   // Initialize task state
   const taskState: TaskResult[] = tasks.map((task) => ({
@@ -221,7 +272,11 @@ export async function fanoutBackends(
 
   // Start all tasks with per-backend timeout (fire-and-forget — they update taskState)
   for (let idx = 0; idx < tasks.length; idx++) {
-    const backendTimeout = BACKEND_TIMEOUT_MS[tasks[idx].name] ?? DEFAULT_BACKEND_TIMEOUT_MS
+    const baseTimeout = BACKEND_TIMEOUT_MS[tasks[idx].name] ?? DEFAULT_BACKEND_TIMEOUT_MS
+    // Free plan: apply reduced timeouts for unreliable backends (production data tuned)
+    const backendTimeout = options.freePlan
+      ? FREE_PLAN_TIMEOUT_OVERRIDES[tasks[idx].name] ?? baseTimeout
+      : baseTimeout
     const task = tasks[idx]
     const state = taskState[idx]
 

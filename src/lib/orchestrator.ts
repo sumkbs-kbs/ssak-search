@@ -628,6 +628,7 @@ export async function executeSearch(request: SearchRequest, config: Orchestrator
         'searxng-site-zh-travel',
       ],
       breakerMap,
+      freePlan: lightweightMode,
     })
 
     // ── 5b. Cross-infrastructure wikipedia mirror fallback (S35 EN / S36 non-EN / S38 ja) ──

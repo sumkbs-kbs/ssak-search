@@ -63,6 +63,10 @@ case "$1" in
     echo "Logged in to github.com"; exit 0 ;;
   secret)
     if [ "${2:-}" = "set" ]; then
+      # 본 스크립트는 `printf ... | gh secret set` 형태로 stdin을 파이프한다.
+      # mock이 stdin을 읽지 않고 즉시 종료하면 상위 printf가 SIGPIPE(exit 141)로
+      # 죽어 파이프라인 종료코드가 1이 되므로, 반드시 stdin을 소비해야 한다.
+      cat >/dev/null 2>&1
       echo "✓ Set Actions secret ALERT_SLACK_WEBHOOK"; exit 0
     elif [ "${2:-}" = "list" ]; then
       echo "ALERT_SLACK_WEBHOOK  Updated just now"; exit 0

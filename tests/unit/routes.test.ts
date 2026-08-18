@@ -210,11 +210,12 @@ describe('Route Handlers', () => {
         expect(body.page_size).toBe(5)
       })
 
-      it('caps max_results at 20', async () => {
+      // 개선(P1-8): 범위를 벗어난 max_results 를 조용히 클램프하지 않고 400 으로 거부한다.
+      it('rejects max_results above the 20 limit with 400', async () => {
         const res = await requestWithEnv(app, '/api/search?q=test&max_results=100')
-        expect(res.status).toBe(404)
+        expect(res.status).toBe(400)
         const body = (await res.json()) as any
-        expect(body.page_size).toBe(20)
+        expect(body.code ?? body.error).toBeTruthy()
       })
 
       it('parses include_answer parameter', async () => {

@@ -106,6 +106,13 @@ app.use('/static/*', serveStatic({ root: './public' }))
 // API Routes
 // ============================================================
 app.route('/api/search', searchRoute)
+// Tavily drop-in alias (P1-5): mounting the same router under /api/tavily makes
+// the path itself opt into the strict Tavily response projection (answer as a
+// plain string, response_time in seconds, images/raw_content always present) —
+// see wantsTavilyCompat() in lib/tavily-compat.ts. This lets a Tavily SDK client
+// switch by changing only the base URL, while /api/search keeps serving the
+// richer native shape that the dashboard and /v1 route depend on.
+app.route('/api/tavily/search', searchRoute)
 app.route('/api/extract', extractRoute)
 app.route('/api/health', healthRoute)
 // Dedicated metrics route — separate Hono app so its `/` handler serves
@@ -271,6 +278,11 @@ app.all('/api/*', (c) => {
 // ============================================================
 app.get('/docs', (c) => c.html(docsPage()))
 app.get('/', (c) => c.html(dashboardPage()))
+// /dashboard was documented and linked but never registered, so it returned 404
+// while every sibling page worked (P1-6, 2026-08-18). The dashboard IS the root
+// page, so this serves the same component rather than redirecting — a redirect
+// would break relative fetches issued from the page's inline scripts.
+app.get('/dashboard', (c) => c.html(dashboardPage()))
 app.get('/chat', (c) => c.html(chatPage()))
 app.get('/page/:id', (c) => c.html(pageViewPage()))
 app.get('/status', (c) => c.html(statusPage()))

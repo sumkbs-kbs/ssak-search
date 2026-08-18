@@ -45,10 +45,26 @@
   // Cloudflare Dashboard → Workers & Pages → Vectorize → Create index
   // (name: search-engine-dense, dimensions: 768, metric: cosine)
   //
-  // remote:true lets `wrangler pages dev` (local dev) talk to the REAL remote
-  // Vectorize index — Vectorize does not support local simulation, so without
-  // this flag local dev gets "not supported" and indexing/search no-ops.
-  // Production deploys are unaffected (they always use the remote index).
+  // ⚠️ remote:true was REMOVED here (P0-3, 2026-08-18).
+  //
+  // Rationale: `remote: true` only affects LOCAL tooling (`wrangler pages dev`,
+  // `@hono/vite-dev-server`, vitest-pool-workers) — it tells them to proxy the
+  // binding to the real Cloudflare account. Production deploys ALWAYS use the
+  // remote resource regardless of this flag, so removing it is a zero-impact
+  // change for production.
+  //
+  // The problem it caused: proxying requires credentials, so on any machine
+  // without CLOUDFLARE_API_TOKEN (fresh clone, CI, contributor laptop) it made
+  //   - `npm run dev`             → 500 "Could not start remote dev session"
+  //   - `npm run test:integration` → 8 files "Failed to start cloudflare-pool"
+  // i.e. BOTH documented local entry points were unusable out of the box.
+  //
+  // Opt in to real remote resources for local dev when you do have a token via
+  // the dedicated config, which keeps remote:true scoped to that workflow:
+  //   npm run dev:remote      (wrangler.remote.jsonc)
+  // Plain local dev now uses Miniflare's local D1 + a no-op Vectorize (search
+  // gracefully falls back to live scraping, which is the default path anyway).
+  //
   // Phase C.3: Semantic cache index — SEPARATE from the document index so
   // cached-query vectors never pollute document search results (and vice
   // versa: document chunks must not match as "similar queries").
@@ -60,8 +76,8 @@
   // Without this binding, semanticCacheLookup()/semanticCacheStore() no-op —
   // the exact-match tiers keep working unchanged.
   "vectorize": [
-    { "binding": "VECTORIZE_INDEX", "index_name": "search-engine-dense", "remote": true },
-    { "binding": "SEMANTIC_CACHE_INDEX", "index_name": "semantic-cache-dense", "remote": true },
+    { "binding": "VECTORIZE_INDEX", "index_name": "search-engine-dense" },
+    { "binding": "SEMANTIC_CACHE_INDEX", "index_name": "semantic-cache-dense" },
   ],
   // D1 database — create via Dashboard or CLI and set the real UUID:
   //   npx wrangler d1 create search-engine-index
@@ -69,17 +85,16 @@
   // "auto" only works for local dev; production needs a concrete database_id.
   // Then run schema: curl -X POST https://your.domain/api/index/init
   //
-  // remote:true makes `wrangler pages dev` (local dev) talk to the REAL remote
-  // D1 database. This is REQUIRED when Vectorize is also remote:true — otherwise
-  // Vectorize (remote) returns chunk IDs that the local D1 doesn't know about,
-  // and every search silently returns 0 results. Production deploys are
-  // unaffected (always remote).
+  // remote:true was REMOVED here too (P0-3) — same reasoning as Vectorize
+  // above. It must stay in lockstep with the Vectorize binding: when Vectorize
+  // is remote but D1 is local, remote chunk IDs don't resolve locally and every
+  // indexed search silently returns 0 results. Both are now local-by-default
+  // and both flip to remote together in wrangler.remote.jsonc.
   "d1_databases": [
     {
       "binding": "SEARCH_INDEX_DB",
       "database_name": "search-engine-index",
       "database_id": "74e4966f-2496-491f-afbc-f26ffd109f25",
-      "remote": true,
     },
   ],
   // Queue binding for async indexing (Phase 2.2):

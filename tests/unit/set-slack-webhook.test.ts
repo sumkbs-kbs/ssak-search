@@ -45,12 +45,23 @@ function runScript(opts: {
   const ghLogSh = ghLog.replace(/\\/g, '/')
   const countDir = join(dir, 'count')
   mkdirSync(countDir, { recursive: true })
+  // 가짜 gh.
+  //
+  // ⚠️ "secret set" 분기는 반드시 stdin 을 소비해야 한다 (P1-7, 2026-08-18).
+  // 스크립트는 argv 노출을 피하려고
+  //     printf '%s' "$URL" | gh secret set ...
+  // 형태로 값을 stdin 주입한다. 실제 gh 는 stdin 을 끝까지 읽지만, 이전 버전의
+  // 가짜 gh 는 읽지 않고 즉시 exit 했다. 그러면 파이프 읽는 쪽이 먼저 닫혀
+  // printf 가 SIGPIPE 로 죽고, 파이프라인 종료코드가 141 이 되어
+  //     "❌ gh secret set 실패 (exit 141)"
+  // 로 4개 테스트가 환경에 따라 실패했다. `cat >/dev/null` 로 실제 gh 와 동일한
+  // stdin 소비 동작을 재현해 SIGPIPE 를 제거한다.
   const fakeGh = [
     '#!/usr/bin/env bash',
     `echo "gh $*" >> ${JSON.stringify(ghLogSh)}`,
     'case "$1 $2" in',
     '  "auth status") [ -n "${FAKE_AUTH_STATUS_FAIL:-}" ] && exit 1; printf "%s" "$FAKE_AUTH_STATUS"; exit 0 ;;',
-    '  "secret set") exit "${FAKE_SECRET_SET_RC:-0}" ;;',
+    '  "secret set") cat >/dev/null 2>&1; exit "${FAKE_SECRET_SET_RC:-0}" ;;',
     'esac',
     'exit 1',
     '',

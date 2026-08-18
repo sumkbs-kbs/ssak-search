@@ -47,29 +47,34 @@ export function createCpuBudget(
 /**
  * Check if the environment is on Cloudflare free plan.
  * Free plan indicators:
- * - FREE_PLAN_CPU_GUARD is explicitly set to '1' (recommended)
- * - SUBREQUEST_QUOTA_PER_REQUEST is explicitly set to ≤ 50
+ * - FREE_PLAN_CPU_GUARD is explicitly set to '1' (opt-out for paid plans)
+ * - SUBREQUEST_QUOTA_PER_REQUEST is unset or ≤ 50 (free tier default)
  *
- * IMPORTANT: When neither env var is set, we default to NOT free plan
- * (assume paid plan for safety — better to use full resources than skip
- * unnecessarily). Operators on free plan should set FREE_PLAN_CPU_GUARD=1
- * or SUBREQUEST_QUOTA_PER_REQUEST=50.
+ * NOTE: Cloudflare Pages free plan defaults to 50 subrequests/request.
+ * The route handler (resolveSubrequestLimit) already defaults to 50 when
+ * SUBREQUEST_QUOTA_PER_REQUEST is not set. We mirror that logic here:
+ * when neither env var is set, assume free plan (the common case).
+ * Paid plan operators should set FREE_PLAN_CPU_GUARD=0 to opt out.
  */
 export function isFreePlan(env?: {
   SUBREQUEST_QUOTA_PER_REQUEST?: string
   FREE_PLAN_CPU_GUARD?: string
 }): boolean {
-  // Explicit free plan guard — highest priority
+  // Explicit opt-out for paid plans — highest priority
+  if (env?.FREE_PLAN_CPU_GUARD === '0' || env?.FREE_PLAN_CPU_GUARD === 'false') {
+    return false
+  }
+  // Explicit free plan guard
   if (env?.FREE_PLAN_CPU_GUARD === '1' || env?.FREE_PLAN_CPU_GUARD === 'true') {
     return true
   }
-  // Explicit subrequest quota — only treat as free when explicitly set ≤ 50
+  // Explicit subrequest quota — treat as free when ≤ 50
   if (env?.SUBREQUEST_QUOTA_PER_REQUEST !== undefined) {
     const quota = parseInt(env.SUBREQUEST_QUOTA_PER_REQUEST, 10)
     return Number.isFinite(quota) && quota <= 50
   }
-  // Default: assume paid plan (safe default — full resources)
-  return false
+  // Default: assume free plan (Cloudflare Pages default is 50 subrequests)
+  return true
 }
 
 /**

@@ -21,7 +21,7 @@ import { logger, toError } from '../lib/logger'
 import { cors } from 'hono/cors'
 import type { AppBindings } from '../types'
 import { getBackendHealth } from '../lib/rate-limiter'
-import { getPrometheusMetrics, setMetricsEnv } from '../lib/metrics'
+import { getPrometheusMetrics, setMetricsEnv, getCpuBudgetMetrics } from '../lib/metrics'
 import { getActiveClientCount } from '../lib/auth'
 import { braveHealthCheck } from '../lib/brave-search'
 import { alertBackendDown, resolveWebhookUrl } from '../lib/slack-alert'
@@ -44,6 +44,14 @@ interface HealthData {
     mode: 'durable_object' | 'in_memory_fallback'
     source: 'local' | 'durable'
     hosts_tracked: number
+  }
+  cpu_budget?: {
+    lightweight_requests: number
+    full_mode_requests: number
+    lightweight_ratio: number
+    triggered_by_free_plan: number
+    triggered_by_exhaustion: number
+    subrequests_saved: number
   }
 }
 
@@ -328,6 +336,17 @@ export async function runDeepHealthProbe(
       source: rateLimiterSource,
       hosts_tracked: Object.keys(circuitHealth).length,
     },
+    cpu_budget: (() => {
+      const cb = getCpuBudgetMetrics()
+      return {
+        lightweight_requests: cb.lightweightRequests,
+        full_mode_requests: cb.fullModeRequests,
+        lightweight_ratio: cb.lightweightRatio,
+        triggered_by_free_plan: cb.triggeredByFreePlan,
+        triggered_by_exhaustion: cb.triggeredByExhaustion,
+        subrequests_saved: cb.subrequestsSaved,
+      }
+    })(),
   }
 
   // Cache for 30 seconds (consumed by ?depth=full and /api/metrics index section)

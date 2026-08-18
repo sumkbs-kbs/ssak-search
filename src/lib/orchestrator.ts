@@ -46,7 +46,7 @@ import { buildKnowledgePanel, matchImagesToResults } from './knowledge-panel'
 import { hybridSearch } from './retrieval'
 import { generateRelatedQueries, truncateToTokens, countryToBingMkt, countryToLanguageTag } from './util'
 import { type AgenticSearchOptions, executeAgenticSearch } from './agentic'
-import { recordAgenticPipeline, getAgenticMetrics } from './metrics'
+import { recordAgenticPipeline, getAgenticMetrics, recordCpuBudgetActivation } from './metrics'
 import { maybeAlertHighRegenerationRate } from './slack-alert'
 import { cacheKey, cacheParamsSignature } from './cache'
 import { semanticCacheLookup, semanticCacheStore } from './semantic-cache'
@@ -478,6 +478,14 @@ export async function executeSearch(request: SearchRequest, config: Orchestrator
         cpuBudgetRemaining: cpuBudget.remaining(),
       })
     }
+    // Record CPU budget metrics (fire-and-forget, lightweight mode tracking)
+    recordCpuBudgetActivation({
+      lightweight: lightweightMode,
+      trigger: lightweightMode ? (freePlan ? 'free_plan' : 'exhaustion') : 'none',
+      elapsedMs: cpuBudget.elapsed(),
+      // On free plan, lightweight mode saves ~5-7 subrequests (reddit, stackexchange, openalex, csdn, news-aug, newshub)
+      estimatedSubrequestsSaved: lightweightMode && freePlan ? 6 : 0,
+    })
 
     // ── 2. Build SearchContext ──
     const ctx = await buildSearchContext(request, config)

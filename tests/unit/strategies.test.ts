@@ -52,7 +52,7 @@ function makeCtx(overrides: Partial<SearchContext> & { focus?: FocusMode } = {})
   return {
     query: 'test query',
     request,
-    env: undefined,
+    env: { FREE_PLAN_CPU_GUARD: '0' } as never,
     korean: false,
     chinese: false,
     japanese: false,

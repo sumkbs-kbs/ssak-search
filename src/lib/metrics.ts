@@ -248,8 +248,74 @@ export function getPrometheusMetrics(): string {
   lines.push('# HELP agentic_synthesis_confidence_avg Average synthesis confidence')
   lines.push('# TYPE agentic_synthesis_confidence_avg gauge')
   lines.push(`agentic_synthesis_confidence_avg ${agentic.avgSynthesisConfidence.toFixed(4)}`)
-
   lines.push('')
+  lines.push('# HELP agentic_synthesis_regenerations_total Total low-confidence LLM regenerations')
+  lines.push('# TYPE agentic_synthesis_regenerations_total counter')
+  lines.push(`agentic_synthesis_regenerations_total ${agentic.synthesisRegenerations}`)
+  lines.push('')
+  lines.push('# HELP agentic_synthesis_regeneration_ratio Regenerations per synthesis attempt')
+  lines.push('# TYPE agentic_synthesis_regeneration_ratio gauge')
+  lines.push(`agentic_synthesis_regeneration_ratio ${agentic.regenerationRatio.toFixed(4)}`)
+  lines.push('')
+  lines.push('# HELP agentic_synthesis_regeneration_trigger_confidence_avg Rolling avg of the rejected confidence that triggered regenerations (last 50)')
+  lines.push('# TYPE agentic_synthesis_regeneration_trigger_confidence_avg gauge')
+  lines.push(`agentic_synthesis_regeneration_trigger_confidence_avg ${agentic.regenerationTriggerConfidenceAvg.toFixed(4)}`)
+  lines.push('')
+  lines.push('# HELP agentic_synthesis_regeneration_trigger_confidence_samples Trigger-confidence samples in the rolling window')
+  lines.push('# TYPE agentic_synthesis_regeneration_trigger_confidence_samples gauge')
+  lines.push(`agentic_synthesis_regeneration_trigger_confidence_samples ${agentic.regenerationTriggerConfidenceSamples}`)
+  lines.push('')
+  lines.push('# HELP agentic_gap_fill_researches_total Quality-gate gap-fill re-search events')
+  lines.push('# TYPE agentic_gap_fill_researches_total counter')
+  lines.push(`agentic_gap_fill_researches_total ${agentic.gapFillResearches}`)
+  lines.push('')
+  lines.push('# HELP agentic_gap_fill_research_rate Gap-fill re-searches per pipeline that reached the quality gate')
+  lines.push('# TYPE agentic_gap_fill_research_rate gauge')
+  lines.push(`agentic_gap_fill_research_rate ${agentic.gapFillReSearchRate.toFixed(4)}`)
+
+  // CPU Budget / Lightweight Mode metrics
+  const cpuBudget = getCpuBudgetMetrics()
+  lines.push('')
+  lines.push('# HELP cpu_budget_lightweight_requests_total Requests using lightweight mode (free plan / CPU exhaustion)')
+  lines.push('# TYPE cpu_budget_lightweight_requests_total counter')
+  lines.push(`cpu_budget_lightweight_requests_total ${cpuBudget.lightweightRequests}`)
+  lines.push('')
+  lines.push('# HELP cpu_budget_full_mode_requests_total Requests using full mode')
+  lines.push('# TYPE cpu_budget_full_mode_requests_total counter')
+  lines.push(`cpu_budget_full_mode_requests_total ${cpuBudget.fullModeRequests}`)
+  lines.push('')
+  lines.push('# HELP cpu_budget_lightweight_ratio Fraction of requests using lightweight mode')
+  lines.push('# TYPE cpu_budget_lightweight_ratio gauge')
+  lines.push(`cpu_budget_lightweight_ratio ${cpuBudget.lightweightRatio.toFixed(4)}`)
+  lines.push('')
+  lines.push('# HELP cpu_budget_triggered_by_free_plan_total Lightweight activations due to free plan detection')
+  lines.push('# TYPE cpu_budget_triggered_by_free_plan_total counter')
+  lines.push(`cpu_budget_triggered_by_free_plan_total ${cpuBudget.triggeredByFreePlan}`)
+  lines.push('')
+  lines.push('# HELP cpu_budget_triggered_by_exhaustion_total Lightweight activations due to CPU budget exhaustion')
+  lines.push('# TYPE cpu_budget_triggered_by_exhaustion_total counter')
+  lines.push(`cpu_budget_triggered_by_exhaustion_total ${cpuBudget.triggeredByExhaustion}`)
+  lines.push('')
+  lines.push('# HELP cpu_budget_elapsed_seconds CPU budget elapsed time per request')
+  lines.push('# TYPE cpu_budget_elapsed_seconds summary')
+  lines.push(`cpu_budget_elapsed_seconds{quantile="0.5"} ${(cpuBudget.p50ElapsedMs / 1000).toFixed(3)}`)
+  lines.push(`cpu_budget_elapsed_seconds{quantile="0.95"} ${(cpuBudget.p95ElapsedMs / 1000).toFixed(3)}`)
+  lines.push(`cpu_budget_elapsed_seconds_avg ${(cpuBudget.avgElapsedMs / 1000).toFixed(3)}`)
+  lines.push('')
+  lines.push('# HELP cpu_budget_subrequests_saved_total Estimated subrequests saved by lightweight mode')
+  lines.push('# TYPE cpu_budget_subrequests_saved_total counter')
+  lines.push(`cpu_budget_subrequests_saved_total ${cpuBudget.subrequestsSaved}`)
+
+
+  // CB state (Phase 1.2)
+  for (const n of ['bing','brave','naver','wikipedia']) {
+    lines.push('CB_' + n);
+  }
+
+  // Quota (Phase 1.3)
+  lines.push('# HELP search_subrequests_total');
+  lines.push('search_subrequests_total ' + totalSubrequests);
+
   return lines.join('\n')
 }
 
@@ -262,6 +328,20 @@ let agenticQualityGatePassed = 0
 let agenticQualityGateFailed = 0
 const agenticSynthesisConfidences: number[] = []
 const MAX_CONFIDENCE_SAMPLES = 100
+// Regeneration-rate denominator: pipelines whose synthesis actually produced
+// a confidence sample. Regeneration events (recordAgenticRegeneration) are the
+// numerator — the ratio is low-confidence LLM regenerations per synthesis.
+let agenticSynthesisAttempts = 0
+let agenticSynthesisRegenerations = 0
+// Quality-gate gap-fill re-search counter (numerator of the re-search rate).
+// Denominator is every pipeline that reached the quality gate (passed+failed).
+let agenticGapFillResearches = 0
+// Rolling window of the REJECTED confidence (reason.score) that triggered each
+// regeneration — bounded so the average reflects recent events, not history.
+// When the regeneration ratio rises, a trigger avg near the gate threshold
+// points at threshold tuning; a low avg points at synthesis quality degradation.
+const agenticRegenerationTriggerScores: number[] = []
+const MAX_REGENERATION_TRIGGER_SAMPLES = 50
 
 /**
  * Record an agentic pipeline execution.
@@ -279,7 +359,47 @@ export function recordAgenticPipeline(params: {
     if (agenticSynthesisConfidences.length > MAX_CONFIDENCE_SAMPLES) {
       agenticSynthesisConfidences.shift()
     }
+    // A synthesis that produced a confidence sample counts toward the
+    // regeneration-rate denominator.
+    agenticSynthesisAttempts++
   }
+}
+
+/**
+ * Record a synthesis regeneration — the synthesizer's low-confidence gate
+ * rejected a candidate and a stricter-prompt regeneration is about to run.
+ * The structured reason (from withResultRetry's onRetry) carries the
+ * rejected confidence + quality warnings so the regeneration metric is
+ * diagnosable, not just countable.
+ *
+ * The trigger SCORE (rejected confidence) is kept in a bounded rolling window
+ * so the average is a live diagnostic (see getAgenticMetrics); warnings are
+ * categorical (not averageable) and stay in the per-event structured logs
+ * (Logpush), which the synthesizer's onRetry already emits.
+ */
+export function recordAgenticRegeneration(params: {
+  reason: { kind: string; score?: number; warnings?: string[] }
+}): void {
+  agenticSynthesisRegenerations++
+  if (typeof params.reason.score === 'number') {
+    agenticRegenerationTriggerScores.push(params.reason.score)
+    if (agenticRegenerationTriggerScores.length > MAX_REGENERATION_TRIGGER_SAMPLES) {
+      agenticRegenerationTriggerScores.shift()
+    }
+  }
+}
+
+/**
+ * Record a quality-gate gap-fill re-search — the Phase 6 loop re-queried a
+ * reformulated plan after the gate failed below threshold. The structured
+ * reason (below-threshold score + quality warnings) comes from
+ * withResultRetry's reasonFor via onRetry; per-event warnings stay in the
+ * structured logs (Logpush), same contract as recordAgenticRegeneration.
+ */
+export function recordAgenticGapFillResearches(_params: {
+  reason: { kind: string; score?: number; warnings?: string[] }
+}): void {
+  agenticGapFillResearches++
 }
 
 /**
@@ -291,6 +411,17 @@ export function getAgenticMetrics(): {
   qualityGateFailed: number
   qualityGatePassRate: number
   avgSynthesisConfidence: number
+  synthesisAttempts: number
+  synthesisRegenerations: number
+  regenerationRatio: number
+  /** Rolling avg of the rejected confidence that triggered regenerations (last 50) */
+  regenerationTriggerConfidenceAvg: number
+  /** Number of trigger-confidence samples in the rolling window */
+  regenerationTriggerConfidenceSamples: number
+  /** Quality-gate gap-fill re-search events (numerator of the re-search rate) */
+  gapFillResearches: number
+  /** Gap-fill re-searches per pipeline that reached the quality gate */
+  gapFillReSearchRate: number
 } {
   const total = agenticQualityGatePassed + agenticQualityGateFailed
   const avgConf =
@@ -303,6 +434,110 @@ export function getAgenticMetrics(): {
     qualityGateFailed: agenticQualityGateFailed,
     qualityGatePassRate: total > 0 ? agenticQualityGatePassed / total : 0,
     avgSynthesisConfidence: avgConf,
+    synthesisAttempts: agenticSynthesisAttempts,
+    synthesisRegenerations: agenticSynthesisRegenerations,
+    regenerationRatio: agenticSynthesisAttempts > 0 ? agenticSynthesisRegenerations / agenticSynthesisAttempts : 0,
+    regenerationTriggerConfidenceSamples: agenticRegenerationTriggerScores.length,
+    regenerationTriggerConfidenceAvg:
+      agenticRegenerationTriggerScores.length > 0
+        ? agenticRegenerationTriggerScores.reduce((a, b) => a + b, 0) / agenticRegenerationTriggerScores.length
+        : 0,
+    gapFillResearches: agenticGapFillResearches,
+    gapFillReSearchRate: total > 0 ? agenticGapFillResearches / total : 0,
+  }
+}
+
+// ============================================================
+// CPU Budget / Lightweight Mode Metrics (in-memory per-isolate)
+// ============================================================
+
+let cpuBudgetLightweightRequests = 0
+let cpuBudgetFullModeRequests = 0
+let cpuBudgetTriggeredByFreePlan = 0
+let cpuBudgetTriggeredByExhaustion = 0
+// Rolling window of CPU budget elapsed times (ms) for percentile tracking
+const cpuBudgetElapsedSamples: number[] = []
+const MAX_CPU_BUDGET_SAMPLES = 200
+// Estimated subrequests saved by lightweight mode (full_fanout - lightweight_fanout)
+let cpuBudgetSubrequestsSaved = 0
+
+/**
+ * Record a CPU budget activation event.
+ * Called once per search request to track whether lightweight mode was used.
+ */
+export function recordCpuBudgetActivation(params: {
+  lightweight: boolean
+  trigger: 'free_plan' | 'exhaustion' | 'none'
+  elapsedMs: number
+  estimatedSubrequestsSaved?: number
+}): void {
+  if (params.lightweight) {
+    cpuBudgetLightweightRequests++
+  } else {
+    cpuBudgetFullModeRequests++
+  }
+  if (params.trigger === 'free_plan') cpuBudgetTriggeredByFreePlan++
+  if (params.trigger === 'exhaustion') cpuBudgetTriggeredByExhaustion++
+  if (typeof params.estimatedSubrequestsSaved === 'number') {
+    cpuBudgetSubrequestsSaved += params.estimatedSubrequestsSaved
+  }
+  // Track elapsed time for percentile analysis
+  cpuBudgetElapsedSamples.push(params.elapsedMs)
+  if (cpuBudgetElapsedSamples.length > MAX_CPU_BUDGET_SAMPLES) {
+    cpuBudgetElapsedSamples.shift()
+  }
+  // Fire-and-forget Analytics Engine write for cross-isolate visibility
+  if (currentEnv?.ANALYTICS) {
+    try {
+      currentEnv.ANALYTICS.writeDataPoint({
+        blobs: ['cpu_budget', params.trigger],
+        doubles: [
+          params.elapsedMs / 1000,
+          params.lightweight ? 1 : 0,
+          params.estimatedSubrequestsSaved ?? 0,
+        ],
+        indexes: ['cpu_budget'],
+      })
+    } catch (_err) {
+      // Analytics write failure should not affect the request
+    }
+  }
+}
+
+export interface CpuBudgetMetrics {
+  lightweightRequests: number
+  fullModeRequests: number
+  totalRequests: number
+  /** Fraction of requests using lightweight mode */
+  lightweightRatio: number
+  triggeredByFreePlan: number
+  triggeredByExhaustion: number
+  /** Avg elapsed CPU budget time (ms) across recent requests */
+  avgElapsedMs: number
+  p50ElapsedMs: number
+  p95ElapsedMs: number
+  /** Cumulative subrequests saved by lightweight mode */
+  subrequestsSaved: number
+}
+
+/** Get CPU budget metrics for Prometheus output and health endpoint. */
+export function getCpuBudgetMetrics(): CpuBudgetMetrics {
+  const sorted = [...cpuBudgetElapsedSamples].sort((a, b) => a - b)
+  return {
+    lightweightRequests: cpuBudgetLightweightRequests,
+    fullModeRequests: cpuBudgetFullModeRequests,
+    totalRequests: cpuBudgetLightweightRequests + cpuBudgetFullModeRequests,
+    lightweightRatio:
+      cpuBudgetLightweightRequests + cpuBudgetFullModeRequests > 0
+        ? cpuBudgetLightweightRequests / (cpuBudgetLightweightRequests + cpuBudgetFullModeRequests)
+        : 0,
+    triggeredByFreePlan: cpuBudgetTriggeredByFreePlan,
+    triggeredByExhaustion: cpuBudgetTriggeredByExhaustion,
+    avgElapsedMs:
+      sorted.length > 0 ? sorted.reduce((a, b) => a + b, 0) / sorted.length : 0,
+    p50ElapsedMs: percentile(sorted, 50),
+    p95ElapsedMs: percentile(sorted, 95),
+    subrequestsSaved: cpuBudgetSubrequestsSaved,
   }
 }
 
@@ -401,4 +636,22 @@ export function resetMetrics(): void {
   extractSubrequests = 0
   trackedSince = Date.now()
   requestTimestamps.length = 0
+  cacheHits = 0
+  cacheMisses = 0
+  cacheTier1Hits = 0
+  cacheTier2Hits = 0
+  agenticPlanSteps = 0
+  agenticQualityGatePassed = 0
+  agenticQualityGateFailed = 0
+  agenticSynthesisConfidences.length = 0
+  agenticSynthesisAttempts = 0
+  agenticSynthesisRegenerations = 0
+  agenticRegenerationTriggerScores.length = 0
+  agenticGapFillResearches = 0
+  cpuBudgetLightweightRequests = 0
+  cpuBudgetFullModeRequests = 0
+  cpuBudgetTriggeredByFreePlan = 0
+  cpuBudgetTriggeredByExhaustion = 0
+  cpuBudgetElapsedSamples.length = 0
+  cpuBudgetSubrequestsSaved = 0
 }

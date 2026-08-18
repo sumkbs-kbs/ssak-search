@@ -38,7 +38,7 @@ import {
   dbpediaSearch,
   wikidataWikiSearch,
   dbpediaLangSearch,
-  isWikipediaRateLimited,
+  isWikipediaRateLimitedShared,
 } from './specialized'
 import { extractContent } from './extractor'
 import { generateAnswer, attachFactCheckToAnswer } from './answer'
@@ -46,15 +46,19 @@ import { buildKnowledgePanel, matchImagesToResults } from './knowledge-panel'
 import { hybridSearch } from './retrieval'
 import { generateRelatedQueries, truncateToTokens, countryToBingMkt, countryToLanguageTag } from './util'
 import { type AgenticSearchOptions, executeAgenticSearch } from './agentic'
-import { recordAgenticPipeline } from './metrics'
+import { recordAgenticPipeline, getAgenticMetrics } from './metrics'
+import { maybeAlertHighRegenerationRate } from './slack-alert'
 import { cacheKey, cacheParamsSignature } from './cache'
 import { semanticCacheLookup, semanticCacheStore } from './semantic-cache'
 // Phase 2: decomposed search modules
 import type { SearchContext, BackendTask } from './search/context'
 import { buildBackendTasks } from './search/strategies'
 import { fanoutBackends } from './search/fanout'
+import { CircuitBreaker, type CircuitState } from './resilience/circuit-breaker'
+import { mergeAndDeduplicate, normalizeUrlForDedup, normalizeTitleForDedup } from './search/dedup'
 import { emergencyFallback } from './search/fallback'
 import { applyRankingPipeline, capSourceResults } from './search/ranking'
+import { createCpuBudget, isFreePlan, type CpuBudget } from './resilience/cpu-budget'
 
 // ============================================================
 // Phase 2.4: Isolate-level in-memory result cache
@@ -161,6 +165,14 @@ export interface OrchestratorConfig {
    * generation can be traced end-to-end in Logpush.
    */
   requestId?: string
+  /**
+   * Trace ID (distributed tracing, Action Item 1.1) — sourced from cf-ray by
+   * the tracing middleware (src/middleware/tracing.ts). When set, every
+   * orchestrator log line AND the agentic pipeline sub-modules (planner,
+   * executor, quality gate, synthesizer, search tools) emit it, so one search
+   * request is traceable across all pipeline stages in Logpush.
+   */
+  traceId?: string
   /** A/B experiment variant (Phase C.2) — 'control' disables LTR ranking */
   experimentVariant?: string
   /**
@@ -304,90 +316,10 @@ function cleanChineseQuery(query: string): string {
   )
 }
 
-/** Normalize a URL for deduplication (strip protocol, trailing slash, fragments, tracking params) */
-function normalizeUrlForDedup(url: string): string {
-  try {
-    const u = new URL(url)
-    // Remove common tracking params
-    const trackingParams = [
-      'utm_source',
-      'utm_medium',
-      'utm_campaign',
-      'utm_term',
-      'utm_content',
-      'gclid',
-      'fbclid',
-      'ref',
-      'ref_src',
-    ]
-    trackingParams.forEach((p) => u.searchParams.delete(p))
-    const path = u.pathname.replace(/\/+$/, '') // strip trailing slashes
-    const search = u.search ? u.search : ''
-    return `${u.hostname.toLowerCase()}${path}${search}`.toLowerCase()
-  } catch (err) {
-    logger.warn('URL normalization failed:', { error: toError(err) })
-    return url
-      .toLowerCase()
-      .replace(/^https?:\/\//, '')
-      .replace(/\/+$/, '')
-  }
-}
-
-/** Normalize a title for deduplication (lowercase, strip punctuation, collapse spaces) */
-function normalizeTitleForDedup(title: string): string {
-  return (
-    title
-      .toLowerCase()
-      // Use Unicode property escapes so CJK/Hangul characters are PRESERVED.
-      // The old [^\w\s] regex stripped ALL non-ASCII letters (\w = [A-Za-z0-9_]),
-      // turning every Chinese title into an empty string — causing ALL CJK results
-      // to dedup to the same titleKey and wiping out 90% of Chinese query results.
-      .replace(/[^\p{L}\p{N}\s]/gu, ' ') // strip punctuation, keep all letters+digits
-      .replace(/\s+/g, ' ')
-      .trim()
-      .slice(0, 80)
-  ) // only compare first 80 chars
-}
-
-/** Merge multiple result sets, deduplicating by URL and title, keeping the highest score */
-function mergeAndDeduplicate(resultSets: SearchResult[][]): SearchResult[] {
-  const seenUrl = new Map<string, SearchResult>()
-  const seenTitle = new Map<string, string>() // normalizedTitle → urlKey
-
-  for (const set of resultSets) {
-    for (const r of set) {
-      const urlKey = normalizeUrlForDedup(r.url)
-      const titleKey = normalizeTitleForDedup(r.title)
-
-      // URL dedup: keep highest score
-      const existingByUrl = seenUrl.get(urlKey)
-      if (!existingByUrl) {
-        // Title dedup: if same title seen at different URL, skip lower-score one
-        const existingUrlKeyForTitle = seenTitle.get(titleKey)
-        if (existingUrlKeyForTitle) {
-          const existingByTitle = seenUrl.get(existingUrlKeyForTitle)
-          if (existingByTitle && r.score > existingByTitle.score) {
-            // New result has better score: remove old and add new
-            seenUrl.delete(existingUrlKeyForTitle)
-            seenTitle.set(titleKey, urlKey)
-            seenUrl.set(urlKey, r)
-          }
-          // else: old result wins, skip this one
-        } else {
-          seenUrl.set(urlKey, r)
-          seenTitle.set(titleKey, urlKey)
-        }
-      } else {
-        // Same URL already seen — keep highest score
-        if (r.score > existingByUrl.score) {
-          seenUrl.set(urlKey, { ...r })
-        }
-      }
-    }
-  }
-
-  return [...seenUrl.values()]
-}
+// Dedup/score-merge rules (normalizeUrlForDedup / normalizeTitleForDedup /
+// mergeAndDeduplicate) were extracted to ./search/dedup — shared with the
+// agentic light pipeline (searchWeb) so both paths merge results identically.
+// Re-exported in the export block below for the unit tests.
 
 /** Convert a TimeRange string to Bing's freshness parameter format */
 function toBingTimeRange(range: string | undefined): 'day' | 'week' | 'month' | 'year' | undefined {
@@ -463,11 +395,14 @@ export async function executeSearch(request: SearchRequest, config: Orchestrator
   const startTime = Date.now()
   const { env } = config
 
-  // Request-scoped logger. When a requestId flows in from the route handler
-  // (sourced from x-request-id / cf-ray), every orchestrator log line carries
-  // it — making a single request's fan-out/fallback/answer traceable end-to-end
-  // in Logpush instead of requiring time-window grepping.
-  const log = config.requestId ? logger.child({ requestId: config.requestId, query: request.query }) : logger
+  // Request-scoped logger. When a requestId / traceId flows in from the route
+  // handler (sourced from x-request-id / cf-ray), every orchestrator log line
+  // carries it — making a single request's fan-out/fallback/answer traceable
+  // end-to-end in Logpush instead of requiring time-window grepping.
+  const log =
+    config.requestId || config.traceId
+      ? logger.child({ requestId: config.requestId, traceId: config.traceId, query: request.query })
+      : logger
 
   // ── 1. Cache check ──
   const memCacheKey = getMemoryCacheKey(request, config.experimentVariant)
@@ -527,6 +462,22 @@ export async function executeSearch(request: SearchRequest, config: Orchestrator
       max_tokens = 4000,
       page = 1,
     } = request
+
+    // ── P2-3: CPU Budget Guard for free plan 10ms CPU limit (error 1102) ──
+    // Wall-clock time is used as a proxy for CPU time (async I/O waits don't
+    // count). When the budget is exhausted, skip expensive operations:
+    // knowledge panel, reranking, MMR diversity, content enrichment.
+    // Free plan: 7s wall-clock budget leaves headroom for response serialization.
+    const cpuBudget = createCpuBudget(7_000, startTime)
+    const freePlan = isFreePlan(env)
+    const lightweightMode = freePlan || cpuBudget.isExhausted()
+    if (lightweightMode) {
+      log.info('[Orchestrator] Lightweight mode active — skipping CPU-heavy operations', {
+        freePlan,
+        cpuBudgetElapsed: cpuBudget.elapsed(),
+        cpuBudgetRemaining: cpuBudget.remaining(),
+      })
+    }
 
     // ── 2. Build SearchContext ──
     const ctx = await buildSearchContext(request, config)
@@ -592,7 +543,9 @@ export async function executeSearch(request: SearchRequest, config: Orchestrator
     // leave a discarded promise behind if wikipedia recovers mid-flight;
     // rare, and mirrors swallow their own errors so nothing leaks).
     let mirrorPromise: Promise<MirrorResult> | null = null
-    if (ctx.sources.useWikipedia && isWikipediaRateLimited()) {
+    // Cross-isolate: the shared check also adopts a 429 window that another
+    // isolate already discovered, so the mirror fires fleet-wide consistently.
+    if (ctx.sources.useWikipedia && (await isWikipediaRateLimitedShared(env, effectiveWikiLang))) {
       mirrorPromise = runWikipediaMirrorChain(query, effectiveWikiLang, env)
     }
 
@@ -623,12 +576,32 @@ export async function executeSearch(request: SearchRequest, config: Orchestrator
     // same 800ms early-exit race that dropped arxiv results could drop them on a
     // slow network, leaving the qiita.com/juejin.cn gold absent. Bounded by
     // their 2500ms ceilings like the other waitFor entries.
+    // waitFor=['github','github-issues']: S75 — github.com is the #1 technical
+    // gold domain (250 attributed hits across the 3 stored runs) and the
+    // GitHub Search API answers in ~500ms, but a fast bing/community pool that
+    // fills the page by phase 1 dropped the github task's results wholesale
+    // (08-13 flicker attribution: 20/29 github-miss runs had NO github backend
+    // in the final list — wikipedia/arxiv/qiita/juejin were all protected by
+    // waitFor, github was not). Bounded by the 2000ms ceiling like the rest.
     // waitFor=['reddit','ddg-site-reddit']: P24 — the reddit backend's .rss
     // fallback and the DDG site:reddit.com task (~700ms–1.5s live) frequently
     // land just after phase 1's 800ms early-exit; reddit.com is gold in 15/16
     // English general queries, so awaiting them (bounded by the 2000ms
     // ceilings) keeps the community gold from being dropped on a fast bing
     // pool (same S75 pattern).
+    // waitFor=['ddg-site-zh-travel','searxng-site-zh-travel']: S104 — the zh
+    // 여행·커뮤니티 gold site: task is the ONLY backend that can surface
+    // ctrip/mafengwo/dianping/xiaohongshu (bing ignores site:), and it shares
+    // the DDG 700ms–1.5s live round-trip — the same phase-1 early-exit race
+    // as ddg-site-reddit. Bounded by the 2000/3000ms ceilings.
+    // ── 4.9 Circuit breaker map for downstream backends — prevents quota burn on cascading failures ──
+    // Each key is the task name used in BACKEND_TIMEOUT_MS; only primary REST backends get a breaker.
+    const breakerMap: Record<string, CircuitBreaker> = {}
+    const PRIMARY_BACKENDS = ['bing', 'brave', 'naver', 'wikipedia'] as const
+    for (const name of PRIMARY_BACKENDS) {
+      breakerMap[name] = new CircuitBreaker({ name, failureThreshold: 3, resetTimeoutMs: 20_000 }) // trip after 3 consecutive failures, 20s reset
+    }
+
     const { resultSets, usedBackends } = await fanoutBackends(tasks, max_results, {
       waitFor: [
         'wikipedia',
@@ -639,9 +612,14 @@ export async function executeSearch(request: SearchRequest, config: Orchestrator
         'arxiv',
         'qiita',
         'juejin',
+        'github',
+        'github-issues',
         'reddit',
         'ddg-site-reddit',
+        'ddg-site-zh-travel',
+        'searxng-site-zh-travel',
       ],
+      breakerMap,
     })
 
     // ── 5b. Cross-infrastructure wikipedia mirror fallback (S35 EN / S36 non-EN / S38 ja) ──
@@ -733,7 +711,8 @@ export async function executeSearch(request: SearchRequest, config: Orchestrator
     // Skipped when the subrequest budget is exhausted — enrichment can issue
     // up to 9 extra fetches (3 URLs × Jina/sidecar/direct chain), and pushing
     // past the 50-subrequest cap turns a slow result into a 500.
-    if (search_depth === 'advanced' && results.length > 0 && !config.subrequestTracker?.budgetExhausted()) {
+    // P2-3: Also skipped on free plan/lightweight mode to save CPU time.
+    if (search_depth === 'advanced' && results.length > 0 && !config.subrequestTracker?.budgetExhausted() && !lightweightMode) {
       for (const r of results.slice(0, 3)) {
         if (r.content.length < 200 && r.raw_content) {
           r.content = truncateToTokens(r.raw_content, 800)
@@ -796,13 +775,16 @@ export async function executeSearch(request: SearchRequest, config: Orchestrator
     // pipeline alone can issue 20–30 subrequests (planner + executePlan across
     // up to 10 steps × 3 backends + quality-gate + synthesizer). Entering it
     // with the budget already near the cap guarantees a 500 from Cloudflare.
+    // P2-3: Also skipped on free plan/lightweight mode — agentic pipeline is
+    // the #1 CPU consumer (5-10 Workers AI calls + plan/execute/quality/synthesize).
     let answer: SearchAnswer | undefined
     if (
       search_depth === 'advanced' &&
       include_answer &&
       config.ai &&
       results.length >= 3 &&
-      !config.subrequestTracker?.budgetExhausted()
+      !config.subrequestTracker?.budgetExhausted() &&
+      !lightweightMode
     ) {
       try {
         log.info('[Orchestrator] Running Agentic Pipeline (Pro mode)', { query, resultCount: results.length })
@@ -824,6 +806,7 @@ export async function executeSearch(request: SearchRequest, config: Orchestrator
           ai: config.ai,
           env: config.env,
           jinaApiKey: config.jinaApiKey,
+          traceId: config.traceId,
         })
         if (agentic) {
           if (agentic.results && agentic.results.length > results.length) {
@@ -835,6 +818,11 @@ export async function executeSearch(request: SearchRequest, config: Orchestrator
             qualityGatePassed: agentic.qualityGate?.passed ?? false,
             synthesisConfidence: agentic.answer?.confidence,
           })
+          // Alerting rule: synthesis regeneration rate above the threshold
+          // (DEFAULT_AGENTIC_ALERT_RULE.regenerationRateThreshold = 0.3) → Slack
+          // alert. Fire-and-forget + KV/in-memory dedup (cooldown) — never
+          // blocks the request path; no webhook configured = silent no-op.
+          void maybeAlertHighRegenerationRate(config.env, getAgenticMetrics()).catch(() => {})
         }
       } catch (err) {
         log.warn('[Orchestrator] Agentic pipeline failed, falling back to standard search:', { error: toError(err) })
@@ -891,7 +879,10 @@ export async function executeSearch(request: SearchRequest, config: Orchestrator
     // upstream 429s and drops the wikipedia backend from otherwise-fine queries
     // (en-fact-01 requiredBackends regression). The eval measures search quality;
     // the panel is tested implicitly by every non-eval request.
-    if (!knowledgeGraph && results.length >= 3 && !isEvalMode(env)) {
+    // P2-3: SKIPPED on free plan to save CPU time (10ms limit, error 1102).
+    // The knowledge panel issues 2-4 extra wikipedia requests + JSON parsing,
+    // which can push heavy queries over the CPU budget.
+    if (!knowledgeGraph && results.length >= 3 && !isEvalMode(env) && !lightweightMode) {
       parallelTasks.push(
         (async () => {
           const kg = await buildKnowledgePanel(query, results.slice(0, 10), { language: effectiveWikiLang, env })
@@ -922,7 +913,9 @@ export async function executeSearch(request: SearchRequest, config: Orchestrator
     }
 
     // ── 11. Reranking (advanced depth only, after answer is set) ──
-    if (config.ai && !isNews && !isFinance && results.length >= 3 && search_depth === 'advanced') {
+    // P2-3: SKIP on free plan/lightweight mode to save CPU time (Workers AI
+    // reranking consumes significant CPU for model inference + JSON parsing).
+    if (config.ai && !isNews && !isFinance && results.length >= 3 && search_depth === 'advanced' && !lightweightMode) {
       try {
         const { rerankSearchResultsRaw } = await import('./retrieval/reranker')
         const rerankResult = await rerankSearchResultsRaw(query, results.slice(0, 15), config.env, {
@@ -935,7 +928,9 @@ export async function executeSearch(request: SearchRequest, config: Orchestrator
     }
 
     // ── 12. MMR Diversity Filter ──
-    if (results.length > max_results * 1.5) {
+    // P2-3: SKIP on free plan/lightweight mode to save CPU time.
+    // MMR computes pairwise similarity matrix which is O(n²) in result count.
+    if (results.length > max_results * 1.5 && !lightweightMode) {
       try {
         const { applyDiversityFilter } = await import('./retrieval/diversity')
         results = applyDiversityFilter(results, query, max_results * 2)

@@ -1,0 +1,49 @@
+/**
+ * OPT-IN remote-resource dev config (P0-3, 2026-08-18).
+ *
+ * `wrangler.jsonc` deliberately keeps D1/Vectorize LOCAL so that a fresh clone
+ * can run `npm run dev` and `npm run test:integration` with no Cloudflare
+ * credentials. This file is the escape hatch for when you *do* have a token and
+ * want local dev to read the real remote index (e.g. verifying that indexed
+ * search returns hits, debugging embedding drift).
+ *
+ * Usage:
+ *   export CLOUDFLARE_API_TOKEN=...        # or: npx wrangler login
+ *   npm run dev:remote
+ *
+ * Both bindings flip to remote TOGETHER — that pairing is mandatory. If
+ * Vectorize is remote while D1 is local, Vectorize returns chunk IDs that the
+ * local D1 has never seen and every indexed search silently yields 0 results.
+ *
+ * Production deploys never read this file; `wrangler pages deploy` uses
+ * wrangler.jsonc and always talks to the remote resources anyway.
+ */
+{
+  "name": "ssak-search-remote-dev",
+  "compatibility_date": "2026-07-10",
+  "compatibility_flags": ["nodejs_compat"],
+  "pages_build_output_dir": "./dist",
+
+  "ai": { "binding": "AI" },
+
+  // Remote dense-vector index — Vectorize has no local simulator, so reading
+  // real vectors requires proxying to the account.
+  "vectorize": [
+    { "binding": "VECTORIZE_INDEX", "index_name": "search-engine-dense", "remote": true },
+    { "binding": "SEMANTIC_CACHE_INDEX", "index_name": "semantic-cache-dense", "remote": true },
+  ],
+
+  // Must be remote whenever Vectorize is remote (chunk-ID parity).
+  "d1_databases": [
+    {
+      "binding": "SEARCH_INDEX_DB",
+      "database_name": "search-engine-index",
+      "database_id": "74e4966f-2496-491f-afbc-f26ffd109f25",
+      "remote": true,
+    },
+  ],
+
+  "kv_namespaces": [{ "binding": "CACHE_KV", "id": "1f5b3825e6a240a5b500d0f2faed15a8" }],
+
+  "analytics_engine_datasets": [{ "binding": "ANALYTICS", "dataset": "ssak_search" }],
+}

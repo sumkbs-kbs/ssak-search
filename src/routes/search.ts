@@ -13,7 +13,7 @@
 import { Hono } from 'hono'
 import { logger, toError, getRequestId } from '../lib/logger'
 import { cors } from 'hono/cors'
-import type { AppBindings, SearchRequest, SearchResponse, ErrorResponse, FocusMode } from '../types'
+import type { AppBindings, SearchRequest, SearchResponse, ErrorResponse, FocusMode, ImageResult } from '../types'
 import { executeSearch } from '../lib/orchestrator'
 import { cacheKey, getCached, setCached } from '../lib/cache'
 import { indexFromSearchResults } from '../lib/search/auto-index'
@@ -32,6 +32,8 @@ import { createAnswerTokenStream, generateAnswer, type AnswerStreamResult } from
 import { classifyQuery, DEFAULT_CLASSIFIER_CONFIG } from '../lib/agentic/classifier'
 import { normalizeQuery, SubrequestTracker, installSubrequestTracker } from '../lib/util'
 import { expandCompanyAlias } from '../lib/stock-finance'
+import { withCompatFields, toTavilyResponse, wantsTavilyCompat } from '../lib/tavily-compat'
+import { searchAllFreeImageSources } from '../lib/free-image-search'
 
 /**
  * Resolve the per-request subrequest budget. The header value must mirror the
@@ -75,6 +77,61 @@ function resolveSearchDepth(
     return { depth: isPro ? 'advanced' : 'basic', mode: classification.mode }
   }
   return { depth: 'basic', mode: 'fast' }
+}
+
+/**
+ * Upper bound for `max_results` (P1-8).
+ *
+ * Matches Tavily's documented maximum of 20 so a compatible client never has a
+ * valid request rejected. Requests above this are now a 400 instead of being
+ * silently clamped.
+ */
+const MAX_RESULTS_LIMIT = 20
+
+/**
+ * Parse and validate a `max_results` query parameter (P1-8).
+ *
+ * Previously both GET handlers used
+ *   `parseInt(param, 10) || 10` → clamp
+ * which silently accepted invalid input: `?max_results=abc` became 10,
+ * `?max_results=0` became 1, and `?max_results=99999` became 20 — the caller was
+ * never told its parameter was wrong. Shared here so GET / and GET /stream stay
+ * consistent with the POST handler.
+ *
+ * @returns the validated integer, or `null` when the value is invalid.
+ */
+function parseMaxResults(param: string | undefined): number | null {
+  if (param === undefined || param === '') return 10
+  const parsed = Number(param)
+  if (!Number.isInteger(parsed) || parsed < 1 || parsed > MAX_RESULTS_LIMIT) return null
+  return parsed
+}
+
+/**
+ * Fetch image results for `include_images` (P1-5).
+ *
+ * Tavily returns an `images` array when `include_images: true`. The capability
+ * already existed in lib/free-image-search.ts (and is exposed at /api/images),
+ * but /api/search never called it, so the documented flag was silently ignored.
+ *
+ * Best-effort by design: image search hitting its own upstream limits must never
+ * fail the primary search, so failures resolve to an empty array.
+ */
+async function fetchImagesForSearch(
+  query: string,
+  maxResults: number,
+  env: AppBindings,
+): Promise<ImageResult[]> {
+  try {
+    const images = await searchAllFreeImageSources(query, {
+      maxResults: Math.min(maxResults, 10),
+      env,
+    })
+    return images ?? []
+  } catch (err) {
+    logger.warn('include_images: image search failed (non-fatal)', { error: toError(err) })
+    return []
+  }
 }
 
 const searchRoute = new Hono<{ Bindings: AppBindings; Variables: { tenantId: string; tenantPlan: string } }>()
@@ -199,8 +256,46 @@ searchRoute.post('/', async (c) => {
   // Auto-routing: classify query complexity → basic (fast) or advanced (pro)
   const { depth: searchDepth, mode: searchMode } = resolveSearchDepth(body.query.trim(), body.search_depth, c.env)
 
-  // Validate max_results
-  const maxResults = Math.min(Math.max(body.max_results ?? 10, 1), 20)
+  // Validate max_results (P1-8, 2026-08-18).
+  //
+  // Previously this only clamped: `max_results: 99999` was silently accepted and
+  // served as 20, and a non-numeric value became NaN → Math.min/max produced
+  // NaN → downstream slice() returned 0 results with a 200 status. Now the
+  // request is rejected up front so clients learn their parameter was wrong,
+  // matching the existing 400-on-bad-input behaviour of query/domain filters.
+  if (body.max_results !== undefined) {
+    const raw = body.max_results
+    if (typeof raw !== 'number' || !Number.isFinite(raw)) {
+      return c.json<ErrorResponse>(
+        { detail: 'max_results must be a number', code: 'invalid_max_results' },
+        400,
+      )
+    }
+    if (!Number.isInteger(raw) || raw < 1 || raw > MAX_RESULTS_LIMIT) {
+      return c.json<ErrorResponse>(
+        {
+          detail: `max_results must be an integer between 1 and ${MAX_RESULTS_LIMIT}`,
+          code: 'invalid_max_results',
+        },
+        400,
+      )
+    }
+  }
+  const maxResults = Math.min(Math.max(body.max_results ?? 10, 1), MAX_RESULTS_LIMIT)
+
+  // Tavily parity flags (P1-5). Both accept boolean true and the string "true"
+  // so query-serialized clients behave the same as JSON ones, matching the
+  // existing include_answer/include_fact_check coercion style.
+  const includeImages = Boolean(body.include_images)
+  const includeImageDescriptions = Boolean(
+    (body as { include_image_descriptions?: unknown }).include_image_descriptions,
+  )
+  // Strict Tavily projection opt-in: body flag, header, or /api/tavily/* path.
+  const tavilyCompat = wantsTavilyCompat({
+    bodyFlag: (body as { api_compat?: unknown }).api_compat,
+    header: c.req.header('X-API-Compat'),
+    path: new URL(c.req.url).pathname,
+  })
 
   const request: SearchRequest = {
     query: expandCompanyAlias(normalizeQuery(body.query)),
@@ -252,7 +347,13 @@ searchRoute.post('/', async (c) => {
           )
           c.executionCtx.waitUntil(logExperimentLatency(c.env, experiment, Date.now() - startTime))
         }
-        return c.json<SearchResponse>({ ...cached, cached: true, ...(experiment ? { experiment } : {}) })
+        // Cache hits go through the same compat projection as fresh responses
+        // (P1-5) — otherwise a cached reply would omit response_time/images and
+        // a Tavily client would see a different shape depending on cache state.
+        const cachedPayload = { ...cached, cached: true, ...(experiment ? { experiment } : {}) }
+        return tavilyCompat
+          ? c.json(toTavilyResponse(cachedPayload, { includeImageDescriptions }))
+          : c.json(withCompatFields(cachedPayload))
       }
     }
 
@@ -273,6 +374,21 @@ searchRoute.post('/', async (c) => {
 
     // Add subrequest estimate header for quota monitoring
     subrequestEstimate = (result as SearchResponse & { subrequest_estimate?: number }).subrequest_estimate ?? 0
+
+    // include_images (P1-5): populate the documented-but-previously-ignored
+    // `images` array. Fetched AFTER the main search so it never delays the
+    // primary result path on failure, and BEFORE caching so a cache hit serves
+    // the images too.
+    //
+    // ⚠️ 알려진 제약 (2026-08-18 실측): 배선은 정상 동작하지만 무료 이미지 소스
+    // (Bing/DuckDuckGo HTML 스크래핑)가 현재 빈 배열을 반환한다. Bing 응답 HTML 에
+    // 파서가 기대하는 `murl` 마커가 1개만 존재해(구조 변경) 추출이 0건이 된다.
+    // 즉 `images` 는 스키마상 항상 존재하지만 실제 채워지려면 free-image-search 의
+    // 파서 갱신 또는 FLICKR_API_KEY / UNSPLASH_ACCESS_KEY 설정이 필요하다.
+    // 이 경로는 실패해도 non-fatal 이므로 주 검색 결과에는 영향이 없다.
+    if (includeImages) {
+      result.images = await fetchImagesForSearch(request.query, maxResults, c.env)
+    }
 
     // Cache the result, but ONLY if it's worth reusing — don't poison the cache
     // with empty results from transient backend failures or rate limits.
@@ -325,7 +441,15 @@ searchRoute.post('/', async (c) => {
     const statusCode = result.no_results ? 404 : 200
     // Attach experiment metadata to the response (never to the cached copy —
     // impression_id is per-request, so it must not be serialized into cache).
-    const response = c.json<SearchResponse>(experiment ? { ...result, experiment } : result, statusCode)
+    const payload = experiment ? { ...result, experiment } : result
+    // Tavily wire compatibility (P1-5).
+    //  - strict mode: flatten to Tavily's exact field set (answer as a string,
+    //    response_time in seconds, images/raw_content always present).
+    //  - default: keep every native field and ADD the missing Tavily ones, so
+    //    no existing consumer (dashboard, /v1 route, SSE) can regress.
+    const response = tavilyCompat
+      ? c.json(toTavilyResponse(payload, { includeImageDescriptions }), statusCode)
+      : c.json(withCompatFields(payload), statusCode)
     response.headers.set('X-Search-Mode', searchMode)
     response.headers.set('X-Subrequests-Used', String(reportedSubrequests))
     response.headers.set('X-Subrequests-Limit', String(resolveSubrequestLimit(c.env)))
@@ -373,8 +497,16 @@ searchRoute.get('/', async (c) => {
     return c.json<ErrorResponse>({ detail: 'Query parameter "query" or "q" is required', code: 'missing_query' }, 400)
   }
 
-  const maxResultsParam = c.req.query('max_results') || c.req.query('limit')
-  const maxResults = maxResultsParam ? Math.min(Math.max(parseInt(maxResultsParam, 10) || 10, 1), 20) : 10
+  const maxResults = parseMaxResults(c.req.query('max_results') ?? c.req.query('limit'))
+  if (maxResults === null) {
+    return c.json<ErrorResponse>(
+      {
+        detail: `max_results must be an integer between 1 and ${MAX_RESULTS_LIMIT}`,
+        code: 'invalid_max_results',
+      },
+      400,
+    )
+  }
 
   // Default to false — users want answers, not just link lists
   const includeAnswerParam = c.req.query('include_answer')
@@ -382,6 +514,14 @@ searchRoute.get('/', async (c) => {
     includeAnswerParam === undefined ? false : includeAnswerParam === 'true' || c.req.query('answer') === 'true'
   const includeRawContent = c.req.query('include_raw_content') === 'true'
   const includeFactCheck = c.req.query('include_fact_check') === 'true'
+  // Tavily parity flags (P1-5) — same semantics as the POST handler.
+  const includeImages = c.req.query('include_images') === 'true'
+  const includeImageDescriptions = c.req.query('include_image_descriptions') === 'true'
+  const tavilyCompat = wantsTavilyCompat({
+    bodyFlag: c.req.query('api_compat'),
+    header: c.req.header('X-API-Compat'),
+    path: new URL(c.req.url).pathname,
+  })
 
   const { depth: searchDepth } = resolveSearchDepth(query, c.req.query('search_depth'), c.env)
 
@@ -443,7 +583,12 @@ searchRoute.get('/', async (c) => {
           )
           c.executionCtx.waitUntil(logExperimentLatency(c.env, experiment, Date.now() - startTime))
         }
-        const response = c.json<SearchResponse>({ ...cached, cached: true, ...(experiment ? { experiment } : {}) })
+        // Same compat projection as the fresh path (P1-5) so cache state never
+        // changes the response shape a client sees.
+        const cachedPayload = { ...cached, cached: true, ...(experiment ? { experiment } : {}) }
+        const response = tavilyCompat
+          ? c.json(toTavilyResponse(cachedPayload, { includeImageDescriptions }))
+          : c.json(withCompatFields(cachedPayload))
         response.headers.set('X-Cache', 'HIT')
         return response
       }
@@ -466,6 +611,10 @@ searchRoute.get('/', async (c) => {
 
     // Cache the result if it's worth reusing (same logic as POST route)
     subrequestEstimate = (result as SearchResponse & { subrequest_estimate?: number }).subrequest_estimate ?? 0
+    // include_images (P1-5) — populated before caching so cache hits carry them.
+    if (includeImages) {
+      result.images = await fetchImagesForSearch(request.query, maxResults, c.env)
+    }
     const hasUsableResults = result.results && result.results.length > 0
     const notFailed = result.backend !== 'failed' && !result.fallback_used
     const skipForTopic = request.topic === 'news' || request.topic === 'finance'
@@ -498,7 +647,11 @@ searchRoute.get('/', async (c) => {
     if (!result.no_results) result.no_results = !(result.results && result.results.length > 0)
     // Empty-result → HTTP 404 (agent-friendly; see POST handler for rationale).
     const statusCode = result.no_results ? 404 : 200
-    const response = c.json<SearchResponse>(experiment ? { ...result, experiment } : result, statusCode)
+    // Tavily wire compatibility (P1-5) — identical handling to the POST route.
+    const getPayload = experiment ? { ...result, experiment } : result
+    const response = tavilyCompat
+      ? c.json(toTavilyResponse(getPayload, { includeImageDescriptions }), statusCode)
+      : c.json(withCompatFields(getPayload), statusCode)
     response.headers.set('X-Subrequests-Used', String(reportedSubrequests))
     response.headers.set('X-Subrequests-Limit', String(resolveSubrequestLimit(c.env)))
     response.headers.set('X-Cache', 'MISS')
@@ -548,8 +701,16 @@ searchRoute.get('/stream', async (c) => {
     return c.json<ErrorResponse>({ detail: 'Query parameter "query" or "q" is required', code: 'missing_query' }, 400)
   }
 
-  const maxResultsParam = c.req.query('max_results') || c.req.query('limit')
-  const maxResults = maxResultsParam ? Math.min(Math.max(parseInt(maxResultsParam, 10) || 10, 1), 20) : 10
+  const maxResults = parseMaxResults(c.req.query('max_results') ?? c.req.query('limit'))
+  if (maxResults === null) {
+    return c.json<ErrorResponse>(
+      {
+        detail: `max_results must be an integer between 1 and ${MAX_RESULTS_LIMIT}`,
+        code: 'invalid_max_results',
+      },
+      400,
+    )
+  }
 
   const { depth: streamDepth } = resolveSearchDepth(query, c.req.query('search_depth'), c.env)
 

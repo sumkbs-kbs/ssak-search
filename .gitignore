@@ -42,3 +42,6 @@ searxng/
 
 # Freebuff desktop local DB (dev artifact, not project content)
 .freebuff/
+
+# 로컬 wrangler pages dev 검증용 임시 디렉터리
+.tmpdev/

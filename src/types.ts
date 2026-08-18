@@ -58,6 +58,29 @@ export interface SearchRequest {
   include_raw_content?: boolean
   /** Attach a cross-source fact-check report to the AI answer (answer.ts includeFactCheck) */
   include_fact_check?: boolean
+  /**
+   * Include image results in the response (Tavily parity, P1-5).
+   *
+   * Populates `SearchResponse.images` via lib/free-image-search.ts. Previously
+   * this documented flag was accepted and silently ignored by /api/search.
+   */
+  include_images?: boolean
+  /**
+   * Return images as `{url, description}` objects instead of bare URL strings.
+   * Mirrors Tavily's `include_image_descriptions`. Only meaningful together with
+   * `include_images` and the strict Tavily projection.
+   */
+  include_image_descriptions?: boolean
+  /**
+   * Opt into the strict Tavily response projection (`"tavily"`).
+   *
+   * Default responses keep this project's richer native shape (structured
+   * `answer` object plus extra metadata) and merely add the Tavily fields that
+   * were missing. Set this to `"tavily"` — or send `X-API-Compat: tavily`, or
+   * POST to `/api/tavily/search` — to get Tavily's exact field set, where
+   * `answer` is a plain string. @see lib/tavily-compat.ts
+   */
+  api_compat?: 'tavily' | 'native'
   /** Include a list of query suggestions */
   include_domains?: string[]
   /** Exclude these domains from results */
@@ -102,8 +125,16 @@ export interface SearchResult {
   content: string
   /** Score 0-1 (higher = more relevant) */
   score: number
-  /** Full extracted content (when include_raw_content=true) */
-  raw_content?: string
+  /**
+   * Full extracted content (when include_raw_content=true).
+   *
+   * `null` is permitted for Tavily wire compatibility (P1-5): Tavily's schema
+   * declares `raw_content: string | null` and always emits the key, so strictly
+   * typed clients (e.g. the Python SDK's pydantic models) reject a missing
+   * field. `withCompatFields()` in lib/tavily-compat.ts normalizes `undefined`
+   * to `null` on the way out.
+   */
+  raw_content?: string | null
   /** Published date if available (ISO 8601) */
   published_date?: string
   /** Author if available */

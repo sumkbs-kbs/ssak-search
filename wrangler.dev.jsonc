@@ -1,6 +1,18 @@
 /**
- * Local development config — used with:
- *   npx wrangler pages dev dist/ --port 8788 -c wrangler.dev.jsonc
+ * Local development config.
+ *
+ * 주의: wrangler 4.x 의 `pages dev` 는 `-c` 커스텀 설정 경로를 거부합니다
+ * ("Pages does not support custom paths for the Wrangler configuration file").
+ * 따라서 이 파일은 아래 두 방법으로만 사용합니다:
+ *
+ *   1) 임시로 wrangler.jsonc 위치에 복사해 사용
+ *        cp wrangler.dev.jsonc /tmp/w/wrangler.jsonc && (cd /tmp/w && npx wrangler pages dev <dist>)
+ *   2) Workers dev 모드로 직접 기동 (권장)
+ *        npm run build && npx wrangler dev -c wrangler.dev.jsonc
+ *
+ * 가장 단순한 로컬 실행 경로는 `npm run dev` (vite + @hono/vite-dev-server) 입니다.
+ * 원격 바인딩(실계정 D1/Vectorize)이 필요하면 `npm run dev:remote` 를 사용하세요
+ * (CLOUDFLARE_API_TOKEN 필요, wrangler.remote.jsonc).
  *
  * Enables the Durable Object bindings that `wrangler pages deploy` rejects
  * (Pages can't supply script_name). For local dev, the DO classes resolve

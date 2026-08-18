@@ -626,6 +626,7 @@ export async function executeSearch(request: SearchRequest, config: Orchestrator
         'ddg-site-reddit',
         'ddg-site-zh-travel',
         'searxng-site-zh-travel',
+        'stack-exchange',
       ],
       breakerMap,
       freePlan: lightweightMode,

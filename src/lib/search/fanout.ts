@@ -168,9 +168,9 @@ const FREE_PLAN_TIMEOUT_OVERRIDES: Record<string, number> = {
   // DDG site:reddit — 0 req in production (skipped on free plan already)
   // but include for completeness if code path is reached.
   'ddg-site-reddit': 1_500,
-  // StackExchange: 0.2% error (excellent) — slight reduction for free plan
-  // Normal responses ~200-500ms; 3s gives margin without wasting CPU.
-  'stack-exchange': 3_000,
+  // StackExchange: 0.2% error (excellent) — match phase 3 ceiling
+  // Normal responses ~200-500ms; 2.5s aligns with free plan phase 3 (2500ms).
+  'stack-exchange': 2_500,
 }
 
 interface TaskResult {

@@ -9,11 +9,21 @@
  */
 
 import type { SubQueryPlan, Citation } from './planner'
-import { logger, toError } from '../../lib/logger'
+import { logger, toError, type Logger } from '../../lib/logger'
+import { recordAgenticRegeneration } from '../metrics'
+import { generateSpanId } from '../../middleware/tracing'
 import type { StepResult } from './executor'
 import type { Ai } from '@cloudflare/workers-types'
 import { sanitizeEvidenceContent, detectPromptInjection, PROMPT_INJECTION_DEFENSE } from '../../lib/prompt-guard'
 import { auditPromptInjection } from '../../lib/audit'
+import {
+  withResultRetry,
+  isRateLimitError,
+  retryAfterMsFromError,
+  clampRetryAfterMs,
+  SAFE_RETRY_AFTER_RANGE_MS,
+  type RetryAfterRange,
+} from '../../lib/resilience/retry'
 
 // ============================================================
 // Types
@@ -42,6 +52,24 @@ export interface SynthesizerOptions {
   confidenceThreshold?: number
   /** Max retry attempts when confidence is below threshold (default: 1) */
   maxRetries?: number
+  /**
+   * Backoff sequence between LLM rate-limit (429 quota) retries, ms
+   * (default [2000, 4000] — plan-level quotas reset within seconds). Wired
+   * into withResultRetry's retryableError path; result-gated (low-confidence)
+   * regenerations stay delay-free.
+   */
+  rateLimitDelaysMs?: number[]
+  /**
+   * Retry-After 안전 범위 클램프 — 429 응답의 Retry-After가 이 범위를
+   * 벗어나면 경계값으로 수렴시킨다. 기본 [1s, 120s]
+   * (SAFE_RETRY_AFTER_RANGE_MS): 1s 미만 대기(429 직후 즉시 재시도 →
+   * hammering)는 1s로 상향, 비현실적 긴 대기는 120s(네트워크 쿨다운 상한과
+   * 동일 철학)로 하향. retryAfterMsFromError의 15s 기본 캡보다 더 좁은
+   * 상한(운영 예산)을 두고 싶으면 maxMs를 줄인다. getRetryAfterMs에 적용.
+   */
+  retryAfterRangeMs?: RetryAfterRange
+  /** Trace-scoped logger (Action Item 1.1) — carries traceId/spanId */
+  logger?: Logger
 }
 
 // ============================================================
@@ -139,7 +167,8 @@ Content (JSON data): ${sanitized.safe}`
 
       const blockTokens = estimateTokens(block)
       if (totalTokens + blockTokens > tokenBudget) {
-        logger.warn(`[Synthesizer] Evidence token budget exceeded, truncating at ${evidenceIdx} citations`)
+        const log = opts.logger ?? logger
+        log.warn(`[Synthesizer] Evidence token budget exceeded, truncating at ${evidenceIdx} citations`)
         break
       }
 
@@ -215,6 +244,11 @@ export class AnswerSynthesizer {
   private confidenceThreshold: number
   /** Max retry attempts when confidence is below threshold */
   private maxRetries: number
+  /** Backoff between LLM 429 quota retries (see SynthesizerOptions). */
+  private rateLimitDelaysMs: number[]
+  /** Retry-After 클램프 범위 (see SynthesizerOptions.retryAfterRangeMs). */
+  private retryAfterRangeMs: RetryAfterRange
+  private log: Logger
 
   constructor(opts: SynthesizerOptions = {}) {
     this.ai = opts.ai
@@ -224,15 +258,21 @@ export class AnswerSynthesizer {
     this.minEvidenceScore = opts.minEvidenceScore ?? 0.08
     this.confidenceThreshold = opts.confidenceThreshold ?? 0.4
     this.maxRetries = opts.maxRetries ?? 1
+    this.rateLimitDelaysMs = opts.rateLimitDelaysMs ?? [2000, 4000]
+    this.retryAfterRangeMs = opts.retryAfterRangeMs ?? SAFE_RETRY_AFTER_RANGE_MS
+    this.log = opts.logger ?? logger
   }
 
   /**
    * Generate answer from plan execution results.
    *
    * Quality gate: if confidence < threshold after generation, retry with a
-   * stricter prompt (max `maxRetries` times). If still below threshold after
-   * all retries, fall back to extractive summary which is deterministic and
-   * guaranteed to cite real sources.
+   * stricter prompt (max `maxRetries` times). The retry policy runs through
+   * the shared result-gated retry (withResultRetry) — the same retryable /
+   * onRetry vocabulary as withRetry — so LLM regeneration policy is
+   * configured identically to network retry policy. If still below threshold
+   * after all retries, fall back to extractive summary which is deterministic
+   * and guaranteed to cite real sources.
    */
   async synthesize(plan: SubQueryPlan, stepResults: StepResult[]): Promise<SynthesizedAnswer> {
     // Filter citations by minimum evidence score
@@ -251,56 +291,82 @@ export class AnswerSynthesizer {
       minEvidenceScore: this.minEvidenceScore,
     })
 
-    // Generate answer with quality gate (retry on low confidence)
-    let bestAnswer: SynthesizedAnswer | null = null
+    // Generate answer with the quality gate. The accepted result is whatever
+    // the loop returns: the gate passes, OR the final attempt is accepted
+    // regardless (withResultRetry's last-attempt rule) — so this always
+    // produces an answer. LLM quota 429s are retried with the rateLimitDelaysMs
+    // backoff (withResultRetry's retryableError path); other AI errors
+    // propagate immediately, exactly like the old loop.
+    const accepted = await withResultRetry(
+      async (attempt) => {
+        let answerText: string
+        if (this.ai) {
+          // On retry, append stricter instruction to the prompt
+          const attemptPrompt =
+            attempt > 0
+              ? `${prompt}\n\nSTRICT REMINDER: You MUST cite every factual claim with [N]. Do NOT make any claim without a citation. If unsure, say "insufficient evidence".`
+              : prompt
+          answerText = await this.generateWithAI(attemptPrompt)
+        } else {
+          answerText = this.generateExtractive(plan.original_query, filteredResults, evidenceMap)
+        }
 
-    for (let attempt = 0; attempt <= this.maxRetries; attempt++) {
-      let answerText: string
-      if (this.ai) {
-        // On retry, append stricter instruction to the prompt
-        const attemptPrompt =
-          attempt > 0
-            ? `${prompt}\n\nSTRICT REMINDER: You MUST cite every factual claim with [N]. Do NOT make any claim without a citation. If unsure, say "insufficient evidence".`
-            : prompt
-        answerText = await this.generateWithAI(attemptPrompt)
-      } else {
-        answerText = this.generateExtractive(plan.original_query, filteredResults, evidenceMap)
-      }
+        // Post-process: verify citations are valid
+        const usedCitations = this.extractUsedCitations(answerText, evidenceMap)
+        const warnings = this.validateAnswer(answerText, usedCitations, stepResults)
 
-      // Post-process: verify citations are valid
-      const usedCitations = this.extractUsedCitations(answerText, evidenceMap)
-      const warnings = this.validateAnswer(answerText, usedCitations, stepResults)
+        // Calculate confidence based on evidence coverage
+        const confidence = this.calculateConfidence(usedCitations, stepResults, warnings.length)
 
-      // Calculate confidence based on evidence coverage
-      const confidence = this.calculateConfidence(usedCitations, stepResults, warnings.length)
-
-      const candidate: SynthesizedAnswer = {
-        text: answerText.trim(),
-        confidence,
-        citations: usedCitations,
-        sourceSteps: Array.from(new Set(usedCitations.map((c) => c.stepId))).sort((a, b) => a - b),
-        warnings,
-      }
-
-      // Accept if confidence meets threshold, or this was the last attempt
-      if (confidence >= this.confidenceThreshold || attempt === this.maxRetries) {
-        bestAnswer = candidate
-        break
-      }
-
-      // Keep the best candidate so far (highest confidence)
-      if (!bestAnswer || confidence > bestAnswer.confidence) {
-        bestAnswer = candidate
-      }
-
-      logger.info(
-        `[Synthesizer] Confidence ${confidence} below threshold ${this.confidenceThreshold}, retrying (${attempt + 1}/${this.maxRetries})`,
-      )
-    }
+        return {
+          text: answerText.trim(),
+          confidence,
+          citations: usedCitations,
+          sourceSteps: Array.from(new Set(usedCitations.map((c) => c.stepId))).sort((a, b) => a - b),
+          warnings,
+        }
+      },
+      {
+        maxRetries: this.maxRetries,
+        retryable: (candidate) => candidate.confidence < this.confidenceThreshold,
+        // LLM plan-level quota (429) → backoff and retry instead of failing
+        // the whole answer synthesis; other AI errors still fail fast.
+        retryableError: isRateLimitError,
+        delaysMs: this.rateLimitDelaysMs,
+        jitter: false,
+        // A 429 response carrying a Retry-After hint overrides the fixed
+        // backoff for the next attempt (server-authoritative wait, used raw).
+        // [1s, 120s] 안전 범위로 클램프 — 1s 미만(hammering)과 비현실적 긴
+        // 대기(요청 정지) 양쪽을 차단한다 (retryAfterRangeMs 옵션으로 조정).
+        getRetryAfterMs: (err) => {
+          const waitMs = retryAfterMsFromError(err)
+          return waitMs === undefined ? undefined : clampRetryAfterMs(waitMs, this.retryAfterRangeMs)
+        },
+        onErrorRetry: (attempt, delayMs, err) =>
+          this.log.warn(`[Synthesizer] AI rate-limited (429), retrying in ${delayMs}ms (${attempt}/${this.maxRetries})`, {
+            error: toError(err),
+          }),
+        // Structured failure reason (rejected confidence + quality warnings)
+        // surfaced through withResultRetry's onRetry third argument.
+        reasonFor: (candidate) => ({
+          kind: 'gate',
+          score: candidate.confidence,
+          warnings: candidate.warnings,
+        }),
+        onRetry: (attempt, candidate, reason) => {
+          this.log.info(
+            `[Synthesizer] Confidence ${candidate.confidence} below threshold ${this.confidenceThreshold}, retrying (${attempt}/${this.maxRetries})`,
+          )
+          // 재생성률 지표 — the structured reason feeds the agentic
+          // regeneration counter (regenerations per synthesis attempt).
+          recordAgenticRegeneration({ reason })
+        },
+      },
+    )
 
     // Final fallback: if AI generation produced very low confidence, use extractive
-    if (bestAnswer && bestAnswer.confidence < this.confidenceThreshold * 0.5 && this.ai) {
-      logger.warn('[Synthesizer] AI answer confidence too low, falling back to extractive summary')
+    if (accepted.confidence < this.confidenceThreshold * 0.5 && this.ai) {
+      this.log.warn('[Synthesizer] AI answer confidence too low, falling back to extractive summary')
       const { prompt: fallbackPrompt, evidenceMap: fallbackMap } = assembleSynthesizerPrompt(
         plan.original_query,
         filteredResults,
@@ -314,8 +380,8 @@ export class AnswerSynthesizer {
       const confidence = this.calculateConfidence(usedCitations, stepResults, warnings.length)
 
       // Only use extractive if it's actually better
-      if (confidence > bestAnswer.confidence) {
-        bestAnswer = {
+      if (confidence > accepted.confidence) {
+        return {
           text: extractiveText.trim(),
           confidence,
           citations: usedCitations,
@@ -325,11 +391,7 @@ export class AnswerSynthesizer {
       }
     }
 
-    // bestAnswer is always assigned: the loop breaks either on the confidence
-    // threshold or on the final attempt (attempt === maxRetries), so this
-    // guard is unreachable in practice — kept for the type system.
-    if (!bestAnswer) throw new Error('Synthesizer failed to produce an answer')
-    return bestAnswer
+    return accepted
   }
 
   private async generateWithAI(prompt: string): Promise<string> {
@@ -347,7 +409,7 @@ export class AnswerSynthesizer {
 
       return this.extractText(response)
     } catch (err) {
-      logger.warn('[Synthesizer] AI generation failed:', { error: toError(err) })
+      this.log.warn('[Synthesizer] AI generation failed:', { error: toError(err) })
       throw err
     }
   }
@@ -521,7 +583,12 @@ export async function synthesizeAnswer(
   stepResults: StepResult[],
   ai?: Ai,
   model?: string,
+  traceId?: string,
 ): Promise<SynthesizedAnswer> {
-  const synthesizer = new AnswerSynthesizer({ ai, model })
+  const synthesizer = new AnswerSynthesizer({
+    ai,
+    model,
+    logger: traceId ? logger.child({ traceId, spanId: generateSpanId(), span: 'synthesizer' }) : undefined,
+  })
   return synthesizer.synthesize(plan, stepResults)
 }

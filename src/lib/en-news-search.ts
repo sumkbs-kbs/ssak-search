@@ -41,6 +41,8 @@
 import type { SearchResult, Env } from '../types'
 import { logger, toError } from './logger'
 import { fetchWithTimeout, extractDomain, decodeEntities, computeScore, truncateToTokens } from './util'
+import { withRetry, splitRetryBudget } from './resilience/retry'
+import { BACKEND_TIMEOUT_MS } from './search/fanout'
 
 const BING_NEWS_RSS_URL = 'https://www.bing.com/news/search'
 const GOOGLE_NEWS_RSS_URL = 'https://news.google.com/rss/search'
@@ -65,15 +67,23 @@ export interface EnNewsSearchOptions {
 }
 
 /**
- * Fetch an RSS feed with one transient-failure retry (mirrors the
- * fetchYahooJson / naverNewsExtract availability pattern — RSS feeds can 429
- * under fan-out, and a single dropped fetch silently starves the gold domains
- * from the pool). The caller's total budget is split across the two attempts.
+ * Fetch an RSS feed with one transient-failure retry via the shared withRetry
+ * decorator (mirrors the fetchYahooJson / naverNewsExtract availability pattern
+ * — RSS feeds can 429 under fan-out, and a single dropped fetch silently
+ * starves the gold domains from the pool). The caller's total budget is split
+ * across the two attempts; a 300ms beat (mid-point of the old 200–400ms
+ * jittered sleep) sits between them. Transient statuses (429/5xx) and
+ * network/timeout errors are retried; anything else (4xx, ok) returns the
+ * response. Returns null once retries are exhausted.
  */
 async function fetchRssWithRetry(env: Env | undefined, url: string, timeoutMs: number): Promise<Response | null> {
-  const perAttempt = Math.max(Math.floor(timeoutMs / 2), 1000)
-  for (let attempt = 0; attempt < 2; attempt++) {
-    try {
+  // Ceiling-safe: fanout's RSS ceiling is 2500ms — cap the caller's budget at
+  // it and reserve the 300ms beat, so the chain's worst case (2 timeouts +
+  // beat) completes at the ceiling instead of being rejected mid-chain.
+  const rssCeiling = BACKEND_TIMEOUT_MS['bing-news-rss'] ?? 2500
+  const perAttempt = splitRetryBudget(Math.min(timeoutMs, rssCeiling), 2, 300, 1000)
+  return withRetry(
+    async () => {
       const res = await fetchWithTimeout(
         env,
         url,
@@ -86,21 +96,24 @@ async function fetchRssWithRetry(env: Env | undefined, url: string, timeoutMs: n
         },
         perAttempt,
       )
+      // Transient under fan-out — throw so withRetry backs off and retries.
       if (res.status === 429 || res.status >= 500) {
+        // Free the subrequest slot: on Workers an unconsumed response body
+        // holds the slot until GC, so every retry would otherwise leak one.
         res.body?.cancel().catch(() => {})
-        if (attempt === 0) await sleep(200 + Math.floor(Math.random() * 200))
-        continue
+        throw new Error(`RSS HTTP ${res.status} for ${url}`)
       }
+      // 4xx / ok — returned, i.e. fail fast (no retry).
       return res
-    } catch (_err) {
-      if (attempt === 0) await sleep(200 + Math.floor(Math.random() * 200))
-    }
-  }
-  return null
-}
-
-function sleep(ms: number): Promise<void> {
-  return new Promise((r) => setTimeout(r, ms))
+    },
+    {
+      maxRetries: 1,
+      delaysMs: [300], // mid-point of the old 200–400ms jittered beat
+      jitter: false,
+      // Every thrown error is retryable: transient HTTP (429/5xx) above plus
+      // network/timeout errors from fetchWithTimeout — exactly the old loop.
+    },
+  ).catch(() => null)
 }
 
 /**

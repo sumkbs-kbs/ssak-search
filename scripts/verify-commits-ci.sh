@@ -215,23 +215,8 @@ run_gate() {
     # skip-propagation). verify-deploy-workflow.ts exits 0=PASS 1=FAIL
     # 2=SKIP (no deploy.yml in this commit) 3=ERROR (unparseable). SKIP must
     # not fail the pre-flight; ERROR is a distinct red state.
-    #
-    # S103: run the COMMIT's OWN verify-deploy-workflow.ts, not the root/tip
-    # one. The checker grows over time (수정 84/92/99 added prefix-matching +
-    # guard-token-hygiene checks); running the tip checker against commits
-    # that PREDATE those checks time-travels the standard and false-fails any
-    # range where the script fix and its check land in different commits (the
-    # per-commit gate is "was this commit green under the rules in force at
-    # that commit" — a regression that REINTRODUCES a previously-fixed bug
-    # still trips that commit's own checker, which contains the check).
     workflow)
-      if [ ! -f "$wt/scripts/verify-deploy-workflow.ts" ]; then
-        # Commit predates the deploy-workflow checker itself → nothing to
-        # replay (mirrors the SKIP-for-missing-deploy.yml semantics).
-        echo "SKIP" > "$WORKTREE_BASE/results/$short.workflow"
-        return
-      fi
-      (cd "$wt" && npx tsx "$wt/scripts/verify-deploy-workflow.ts" "$wt" > "$log" 2>&1)
+      (cd "$wt" && npx tsx "$ROOT/scripts/verify-deploy-workflow.ts" "$wt" > "$log" 2>&1)
       rc=$?
       if [[ $rc -eq 2 ]]; then
         echo "SKIP" > "$WORKTREE_BASE/results/$short.workflow"

@@ -100,6 +100,9 @@ function runGuard(verifyBody: string, extraEnv: Record<string, string> = {}): Ru
     encoding: 'utf8',
     maxBuffer: 10 * 1024 * 1024,
     env: { ...baseEnv, ...extraEnv },
+    // 수정 112: 병렬 부하에서 스크립트 실행이 느려져 vitest 기본 5s 테스트
+    // 타임아웃을 초과하는 flaky 실패 방지 (전체 스위트 실행 시 실측 재현).
+    timeout: 60_000,
   })
   try {
     const out = `${res.stdout ?? ''}${res.stderr ?? ''}`
@@ -116,20 +119,20 @@ describe.skipIf(!BASH_AVAILABLE)('verify-do-binding.sh verify_cf_token (만료 �
     expect(r.out).toContain('CLOUDFLARE_API_TOKEN verified (active)')
     expect(r.out).toContain('expires in 3 day(s)')
     expect(r.out).toContain('rotate soon')
-  })
+  }, 60_000)
 
   it('만료 먼 토큰(300일): guard 통과 + 경고 없음', () => {
     const r = runGuard(JSON.stringify({ success: true, result: { status: 'active', expires_on: isoDaysFromNow(300) } }))
     expect(r.exit).toBe(0)
     expect(r.out).toContain('verified (active)')
     expect(r.out).not.toContain('expires in')
-  })
+  }, 60_000)
 
   it('만료 없는 토큰(expires_on null): guard 통과 + 경고 없음', () => {
     const r = runGuard(JSON.stringify({ success: true, result: { status: 'active', expires_on: null } }))
     expect(r.exit).toBe(0)
     expect(r.out).not.toContain('expires in')
-  })
+  }, 60_000)
 
   it('무효 토큰: guard BLOCK (exit 1 + INVALID/EXPIRED)', () => {
     const r = runGuard(JSON.stringify({ success: false, errors: [{ code: 1000 }] }))
@@ -137,7 +140,7 @@ describe.skipIf(!BASH_AVAILABLE)('verify-do-binding.sh verify_cf_token (만료 �
     expect(r.out).toContain('INVALID/EXPIRED')
     // deployment 해석(wrangler)에 도달하지 않고 verify 단계에서 차단
     expect(r.log).not.toContain('wrangler pages deployment list')
-  })
+  }, 60_000)
 
   it('TOKEN_EXPIRY_WARN_DAYS 오버라이드: 10일 토큰이 14 설정에서 경고, 기본 7에서 미경고', () => {
     const body = JSON.stringify({ success: true, result: { status: 'active', expires_on: isoDaysFromNow(10) } })
@@ -147,5 +150,5 @@ describe.skipIf(!BASH_AVAILABLE)('verify-do-binding.sh verify_cf_token (만료 �
     const withDefault = runGuard(body)
     expect(withDefault.exit).toBe(0)
     expect(withDefault.out).not.toContain('expires in')
-  })
+  }, 60_000)
 })

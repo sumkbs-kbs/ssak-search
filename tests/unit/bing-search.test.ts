@@ -408,6 +408,36 @@ describe('bingSearch', () => {
     expect(results[0].url).toBe('https://example.com/result1')
   })
 
+  it('strips does/do/did after a question word before querying bing (en-fact-11)', async () => {
+    const html = `
+      <ol>
+        <li class="b_algo">
+          <div class="b_algoheader">
+            <a href="https://en.wikipedia.org/wiki/Global_Positioning_System">GPS</a>
+          </div>
+          <div class="b_caption"><p class="b_lineclamp3">snippet</p></div>
+          <cite>en.wikipedia.org</cite>
+        </li>
+      </ol>
+    `
+    mockFetchWithTimeout.mockResolvedValue({ ok: true, text: () => Promise.resolve(html) })
+
+    await bingSearch('how does GPS work', { maxResults: 5 })
+    // The first fetch must carry the stripped keyword query, not the raw
+    // natural-language form bing mis-keywords on (grammar pages for "does").
+    // URLSearchParams encodes spaces as '+' (not %20).
+    const url = mockFetchWithTimeout.mock.calls[0][1] as string
+    expect(url).toContain('q=how+GPS+work')
+    expect(url).not.toContain('does')
+  })
+
+  it('KEEPS is/are in natural-language queries (stripping degrades results)', async () => {
+    mockFetchWithTimeout.mockResolvedValue({ ok: true, text: () => Promise.resolve('<ol></ol>') })
+    await bingSearch('what is blockchain technology', { maxResults: 5 })
+    const url = mockFetchWithTimeout.mock.calls[0][1] as string
+    expect(url).toContain('q=what+is+blockchain+technology')
+  })
+
   it('returns empty array on network error', async () => {
     mockFetchWithTimeout.mockRejectedValue(new Error('Network failure'))
     const results = await bingSearch('test query')

@@ -18,6 +18,7 @@ import { Hono } from 'hono'
 import { logger, toError } from '../lib/logger'
 import { cors } from 'hono/cors'
 import type { AppBindings, ErrorResponse } from '../types'
+import { withRetry, isRateLimitError, retryAfterMsFromError, httpErrorFromResponse } from '../lib/resilience/retry'
 
 const councilRoute = new Hono<{ Bindings: AppBindings }>()
 councilRoute.use('/*', cors({ origin: '*' }))
@@ -125,67 +126,103 @@ async function invokeWorkersAI(query: string, ai: Ai, systemPrompt?: string): Pr
   return text || ''
 }
 
-async function invokeOpenAI(query: string, apiKey: string, model: string, systemPrompt?: string): Promise<string> {
-  const resp = await fetch('https://api.openai.com/v1/chat/completions', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${apiKey}`,
-    },
-    body: JSON.stringify({
-      model,
-      messages: [
-        {
-          role: 'system',
-          content: systemPrompt || 'You are a helpful AI assistant. Provide clear, concise, and accurate answers.',
+export async function invokeOpenAI(query: string, apiKey: string, model: string, systemPrompt?: string): Promise<string> {
+  return withRetry(
+    async () => {
+      const resp = await fetch('https://api.openai.com/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${apiKey}`,
         },
-        { role: 'user', content: query },
-      ],
-      max_tokens: 1500,
-      temperature: 0.3,
-    }),
-  })
+        body: JSON.stringify({
+          model,
+          messages: [
+            {
+              role: 'system',
+              content: systemPrompt || 'You are a helpful AI assistant. Provide clear, concise, and accurate answers.',
+            },
+            { role: 'user', content: query },
+          ],
+          max_tokens: 1500,
+          temperature: 0.3,
+        }),
+      })
 
-  if (!resp.ok) {
-    const err = await resp.text().catch(() => 'Unknown error')
-    throw new Error(`OpenAI API error (${resp.status}): ${err.slice(0, 200)}`)
-  }
+      if (!resp.ok) {
+        const err = await resp.text().catch(() => 'Unknown error')
+        // fetch 기반 게이트웨이 429의 Retry-After 헤더를 오류에 실어 재시도
+        // 파이프라인(getRetryAfterMs)이 서버 지시 대기를 소비하게 한다.
+        throw httpErrorFromResponse(resp, `OpenAI API error (${resp.status}): ${err.slice(0, 200)}`)
+      }
 
-  const data = (await resp.json()) as {
-    choices?: Array<{ message?: { content?: string } }>
-  }
-  return data?.choices?.[0]?.message?.content || ''
+      const data = (await resp.json()) as {
+        choices?: Array<{ message?: { content?: string } }>
+      }
+      return data?.choices?.[0]?.message?.content || ''
+    },
+    {
+      maxRetries: 1,
+      // 429만 재시도 — 다른 오류는 fail-fast (라우트가 available:false로 소화).
+      retryable: isRateLimitError,
+      // LLM 파이프라인(planner/synthesizer/quality-gate)과 동일한 시퀀스.
+      rateLimitDelaysMs: [2000, 4000],
+      // 429 응답의 Retry-After가 고정 시퀀스를 재정의 (maxDelayMs×3 캡).
+      getRetryAfterMs: retryAfterMsFromError,
+      onRetry: (attempt, delayMs, err) =>
+        logger.warn(`[Council] OpenAI rate-limited (429), retrying in ${delayMs}ms`, {
+          error: toError(err),
+          attempt,
+        }),
+    },
+  )
 }
 
-async function invokeClaude(query: string, apiKey: string, systemPrompt?: string): Promise<string> {
-  const resp = await fetch('https://api.anthropic.com/v1/messages', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'x-api-key': apiKey,
-      'anthropic-version': '2023-06-01',
+export async function invokeClaude(query: string, apiKey: string, systemPrompt?: string): Promise<string> {
+  return withRetry(
+    async () => {
+      const resp = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-api-key': apiKey,
+          'anthropic-version': '2023-06-01',
+        },
+        body: JSON.stringify({
+          model: 'claude-sonnet-4-20250514',
+          max_tokens: 1500,
+          system: systemPrompt || 'You are a helpful AI assistant. Provide clear, concise, and accurate answers.',
+          messages: [{ role: 'user', content: query }],
+        }),
+      })
+
+      if (!resp.ok) {
+        const err = await resp.text().catch(() => 'Unknown error')
+        // invokeOpenAI와 동일: Retry-After 헤더를 오류에 실어 재시도가 소비.
+        throw httpErrorFromResponse(resp, `Anthropic API error (${resp.status}): ${err.slice(0, 200)}`)
+      }
+
+      const data = (await resp.json()) as {
+        content?: Array<{ text?: string }>
+      }
+      return (
+        data?.content
+          ?.map((c) => c.text)
+          .filter(Boolean)
+          .join('\n') || ''
+      )
     },
-    body: JSON.stringify({
-      model: 'claude-sonnet-4-20250514',
-      max_tokens: 1500,
-      system: systemPrompt || 'You are a helpful AI assistant. Provide clear, concise, and accurate answers.',
-      messages: [{ role: 'user', content: query }],
-    }),
-  })
-
-  if (!resp.ok) {
-    const err = await resp.text().catch(() => 'Unknown error')
-    throw new Error(`Anthropic API error (${resp.status}): ${err.slice(0, 200)}`)
-  }
-
-  const data = (await resp.json()) as {
-    content?: Array<{ text?: string }>
-  }
-  return (
-    data?.content
-      ?.map((c) => c.text)
-      .filter(Boolean)
-      .join('\n') || ''
+    {
+      maxRetries: 1,
+      retryable: isRateLimitError,
+      rateLimitDelaysMs: [2000, 4000],
+      getRetryAfterMs: retryAfterMsFromError,
+      onRetry: (attempt, delayMs, err) =>
+        logger.warn(`[Council] Anthropic rate-limited (429), retrying in ${delayMs}ms`, {
+          error: toError(err),
+          attempt,
+        }),
+    },
   )
 }
 

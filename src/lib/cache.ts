@@ -52,6 +52,8 @@ export interface CacheKeyRequest {
   include_answer?: boolean
   include_raw_content?: boolean
   include_fact_check?: boolean
+  max_tokens?: number            // result content length cap (affects fetch depth)
+  chunks_per_source?: number     // chunked mode: only applicable for advanced search
   country?: string
   language?: string
   location?: string
@@ -83,6 +85,11 @@ function buildCacheParams(request: CacheKeyRequest, variant?: string): string[] 
     `exc=${excludeSorted.join(',')}`,
     `fc=${request.focus ?? 'all'}`,
     `exp=${variant ?? ''}`,
+    // max_tokens affects how much content is fetched/stored per result —
+    // different values must NOT share a cache entry (defect: phase 1.3).
+    `mt=${request.max_tokens ?? 0}`,
+    // chunks_per_source changes whether results contain full content or just summary chunks.
+    `cs=${request.chunks_per_source ?? 0}`,
   ]
 
   // Include location-aware params in cache key

@@ -1,13 +1,13 @@
 # 05. 마스터 체크리스트 (MASTER CHECKLIST)
 
 > 상태: `[x]` 완료·검증 · `[~]` 일부 구현/추가 검증 · `[ ]` 미구현 · `[!]` 문제 발견 · `[?]` 자료 부족
-> 기준: 2026-08-07 재감사 (코드 분석 + 실행 검증) — S18~S23 미커밋 변경 포함, CI 린트 게이트 복구 완료
+> 기준: 2026-08-13 3차 재검증 (코드 분석 + 실행 검증) — 08-07 재감사 기준에 이번 세션 결과 반영
 
 ## 1. 프로젝트 실행
 - [x] 의존성 설치 (node_modules 정상)
 - [x] 타입체크 0 에러 (`npm run typecheck`)
-- [x] 빌드 성공 (`npm run build`, 1,041 kB / gzip 302 kB)
-- [x] 유닛 테스트 **1,351건** 통과 (`npm test`, 70파일 0 실패)
+- [x] 빌드 성공 (`npm run build`, 1,113.74 kB / gzip 326.89 kB — 08-13 실측)
+- [x] 유닛 테스트 **2,543건** 통과 (`npm test`, 129파일 0 실패 — 08-13 실측)
 - [x] eval 벤치마크 실행 가능 (**500쿼리 × median-of-3, 99.6% pass — 08-06 최신 런**)
 - [x] **CI 린트 게이트 복구** (lint:eslint:ci exit 0 — 세션 전 38 errors+467 warnings로 레드)
 - [x] **lint:eslint:ci(--max-warnings=0) CI 연결 명시화 (S29)** — ci.yml `Lint (ESLint — 0-warning gate)` 스텝 + Step Summary, README 수치 갱신
@@ -125,6 +125,8 @@
 - [x] 서킷 브레이커 self-healing
 - [x] DDG 폴백 / 부분 결과 반환
 - [x] canary 파서 회귀 감지
+- [x] **arxiv/openalex/brave 일시 장애 1회 재시도 (08-13)** — 5xx/네트워크만, 회로 개방·429·4xx fail-fast, 예산 worst=ceiling
+- [~] searxng/reddit/stack-exchange 재시도 — 조건부 권고로 보류 (docs/16 §4, 저우선)
 - [~] DO 미바인딩 시 약화 (P2)
 - [~] 재해복구/멀티리전 — 미구현
 
@@ -140,17 +142,34 @@
 - [~] open mode 기본값 — 배포 시 SEARCH_API_KEY 필수 안내
 
 ## 15. 개인정보보호
-- [x] 쿼리 로그 (요청 추적)
-- [~] 보존기간·삭제 정책 — 문서화 필요
+- [x] 쿼리 로그 (요청 추적) — 쿼리 문자열은 로그에 기록하지 않음 (logger.ts 실측 확인)
+- [x] 보존기간·삭제 정책 — **PRIVACY_POLICY.md 5.1 (08-13 실측)** — DO별 보존 기간·삭제 경로(deleteAll 라인) 명시
+- [~] 사용자 자가삭제 API — 미구현 (상용화 전 필수, P22 후속)
 - [~] user_id 수집 정책 — 명시 필요
 
 ## 16. 테스트
-- [x] 유닛 **1,351건**
-- [x] 통합 7개 파일
-- [x] eval **500쿼리 + gold 1:1** + median-of-3 집계
+- [x] 유닛 **2,589건** (129파일 — 08-13 실측)
+- [x] 통합 **8파일/108건** — **DO 분리 배포 후 깨졌던 시작 오류 복구 (08-13, self-referencing 바인딩)**
+- [x] eval **500쿼리 + gold 1:1** + median-of-3 집계 — 08-13 P20 분석으로 평균 NDCG 안정성 재확증
+- [x] **gold 표준 shift 오류 7건 수정 (08-13)** — en-tech-04/05/07/08/09/10/11 쿼리-도메인 정렬 교정, 해당 쿼리 NDCG +0.19~0.27 개선
+- [x] **자연어 질문 쿼리 변환 (08-13, en-fact-11)** — bingSearch 전 does/do/did 제거(naturalLanguageToKeywords), is/are 유지, 신규 테스트 7건
+- [x] **자연어 변환 전 백엔드 확장 (08-13)** — simplifyQuery 진입점 연동으로 HN/reddit/github/dbpedia/arxiv/qiita/stack-exchange 일괄 적용
+- [x] **학술 eval arxiv 페이싱 (08-13)** — eval 벌크가 arxiv 30/min 초과로 en-acad 백엔드 누락되던 문제, 2200ms 페이싱으로 해소
+- [x] **arxiv 429 cooldown 가드 (08-13)** — 프로덕션 보호 (local + shared DO, Retry-After 준수), 신규 테스트 4건
+- [x] **openalex locations 수집 (08-13)** — arxiv.org preprint 유입 (기존 doi.org 위주 → arxiv gold), 신규 테스트 3건
+- [x] **gold EN_FACT nasa.gov 오버브레스 교정 (08-13, S72)** — en-fact-16~40 중 14건에서 nasa.gov 제거(풀 전무 + 의도 불일치, S63/S69 선례), 유지 11건 명시화. 전체 NDCG +0.5~0.7 mNdcg (평가 기준 정밀화)
+- [x] **wikipedia 429 cooldown 언어별 분리 (08-13, S73)** — en 429가 모든 언어 wikipedia를 죽이던 전역 창 → 언어별 독립 (wikimedia per-site rate limit 실측 근거). zh flicker 20%의 직접 원인 해소, 신규 테스트 3건
+- [x] **gold drift 감지 실행 (08-13, S60)** — S72 교정 후 저장 풀 재계산: drift 17건 전부 양수(net +0.1042), 음수 0건. S58 gate gold-robust 확인, baseline refresh 권장
+- [x] **백엔드별 gold 기여 리포트 (08-13)** — scripts/report-backend-coverage.ts + docs/02 §2.5: arxiv 0.878 > yahoo-finance 0.750 > naver 0.705 > github 0.581(절대 1위). 최대 갭 stack-exchange(162)/reddit(51) 미가동 + openalex missUsed 22
+- [x] **wikidata mirror sitelink 오염 필터 (08-13, S74)** — URL 제목 ↔ 쿼리 관련성 검증(오염 sitelink 스킵, 번체 변형 보존), 신규 테스트 2건. zh 검색 0건 결론은 프로브 아티팩트로 정정 — 6개 zh/ja 쿼리 라이브 검증 완료
+- [x] **github.com gold flicker 해결 (08-13, S75)** — early-exit(20건): waitFor에 github/github-issues 추가. quota(라이브 재현): githubSearch 캐시 추가 + eval 페이싱 6000ms. 랭킹 아웃 9건은 잔여로 문서화. 신규 테스트 4건
+- [x] **openalex 429 cooldown 가드 (08-13, S76)** — S73 재측정 중 발견: openalex는 가드 부재로 429 시 hammering. wikipedia/arxiv 패턴 적용 + Retry-After 1h 클램프(실측 12h 창). 신규 테스트 3건. S73 재측정 결과: arxiv 17/17(FIX-09 확정) · zh-fact wikipedia 9/16(기준선 평균과 동등, run-3 전멸 구조 불가) · openalex 0/17은 IP-level 429(12h)로 코드 문제 아님 확인
 - [x] k6 부하 스크립트
 - [x] canary 스냅샷
-- [x] health 상태 롤업 유닛 테스트 (이번 세션 신규 8건)
+- [x] health 상태 롤업 유닛 테스트 (신규 8건)
+- [x] **auth DO mock flaky 고정 (08-13)** — hoisted vi.mock, 15회 연속 통과
+- [x] **백엔드 재시도 정책 테스트 27건 (08-13)** — arxiv/openalex/brave/searxng/reddit/stack-exchange 5xx 재시도/소진/네트워크/429·4xx·회로 fail-fast
+- [x] **fetch 타임아웃 정합성 테스트 (08-13)** — 재시도 체인 분할 예산 = ceiling (20건)
 - [~] E2E 사용자 시나리오 — 부족
 - [~] 부하·장시간 테스트 실행 — 대기
 

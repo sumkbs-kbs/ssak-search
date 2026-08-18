@@ -20,6 +20,7 @@
 
 import type { SearchResult, SearchAnswer } from '../types'
 import { logger, toError } from './logger'
+import { httpErrorFromResponse } from './resilience/retry'
 import {
   MODEL_REGISTRY,
   getAvailableModels,
@@ -812,7 +813,8 @@ async function generateWithOpenAI(
   })
 
   if (!response.ok) {
-    throw new Error(`OpenAI API error: ${response.status} ${response.statusText}`)
+    // Retry-After 헤더를 오류(retryAfterMs)에 실어 — 재시도 파이프라인이 서버 지시 대기를 소비.
+    throw httpErrorFromResponse(response, `OpenAI API error: ${response.status} ${response.statusText}`)
   }
 
   const data = (await response.json()) as { choices?: Array<{ message?: { content?: string } }> }
@@ -856,7 +858,7 @@ async function generateWithAnthropic(
   })
 
   if (!response.ok) {
-    throw new Error(`Anthropic API error: ${response.status} ${response.statusText}`)
+    throw httpErrorFromResponse(response, `Anthropic API error: ${response.status} ${response.statusText}`)
   }
 
   const data = (await response.json()) as { content?: Array<{ text?: string }> }

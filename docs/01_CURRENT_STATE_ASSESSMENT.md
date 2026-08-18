@@ -1,9 +1,9 @@
 # 01. 현재 상태 평가서 (CURRENT STATE ASSESSMENT)
 
-> 작성일: 2026-08-07 (재감사) · 작성자: CTO 태스크포스
+> 작성일: 2026-08-07 (재감사) · 2026-08-13 (3차 재검증) · 작성자: CTO 태스크포스
 > **근거**: 실제 코드 분석 + 빌드/타입체크/테스트/eval 실행 결과만 사용. 추측은 "가설"로 명시.
-> **이번 재감사 (2026-08-07 KST)**: typecheck 0 에러 · 유닛 테스트 **70파일 1,351건 통과** · 빌드 1,061.78 kB (gzip 309.42 kB) · **CI 린트 게이트 복구** (lint:eslint:ci exit 0, 세션 전 38 errors+467 warnings로 레드) · eval 최신 median-of-3 (08-06 14:52Z) NDCG@10 0.5113, pass 498/500
-> **이번 세션 수정**: page-view.ts 브라우저 SyntaxError(인용/볼드 렌더링 복구) · util.ts isComparison 정규식 바이트 손상(한국어 비교 감지 복구) · ESLint 38 errors→0. 상세는 STRATEGIC_PLAN S24 / 08_CHANGELOG 참조.
+> **3차 재검증 (2026-08-13)**: typecheck 0 에러 · 빌드 성공 (1,113.74 kB / gzip 326.89 kB) · 유닛 테스트 **129파일 2,561건 통과** (수정 전 2,526+1 flaky 실패 → 08-13 2,561건으로 확정) · **통합 테스트 8파일/108건 통과** (DO 분리 배포 후 깨졌던 시작 오류 복구) · 라이브 eval 기술 태그 **158/158 통과** (p50 824ms, NDCG@10 0.306, MRR 0.577) · arxiv/openalex 라이브 프로브 정상 · 백엔드 6종(arxiv/openalex/brave/searxng/reddit/stack-exchange) 5xx 재시도 구현 · **gold 표준 shift 오류 7건 수정** (P13 커버리지 미스 근본 원인, 7쿼리 NDCG +0.19~0.27)
+> **3차 세션 수정 (2026-08-13)**: ① auth.test.ts `requireAdmin` DO mock flaky 테스트 고정(hoisted `vi.mock` 전환, 15회 반복 안정) ② docs/16 권고 반영 — arxiv/openalex/brave 5xx·네트워크 1회 재시도 구현(회로 개방·429·4xx는 fail-fast, 예산 worst=ceiling) + 유닛 테스트 17건 추가. 상세는 08_CHANGELOG.md 참조.
 
 ---
 
@@ -41,12 +41,14 @@
 |---|---|---|
 | 의존성 설치 | `node_modules` 존재 | ✅ OK |
 | 타입체크 | `npm run typecheck` | ✅ **0 에러** (tsc strict) |
-| 빌드 | `npm run build` | ✅ 성공, 1,041.57 kB / gzip 302.56 kB |
-| 유닛 테스트 | `npm test` | ✅ **66개 파일 / 1,230건 통과** (0 실패) |
-| eval 벤치마크 | `eval/baselines/latest.json` | ✅ **500쿼리 × median-of-3, pass 500/500 (100%)**, NDCG@10 0.533 |
-| 프로덕션 | `search-engine-api.pages.dev` | ✅ **HTTP 200 — 가동 중** (partial_outage: brave 미설정 + 일부 백엔드 degraded) |
-| 라이브 검색 (en) | `POST /api/search` quantum computing | ✅ bing+wikipedia+hackernews, 2.8s, 결과 정상 |
-| 라이브 검색 (ko) | `POST /api/search` 삼성전자 주가 | ✅ naver+naver-finance+wikipedia, 1.0s, 결과 정상 |
+| 빌드 | `npm run build` | ✅ 성공, 1,113.74 kB / gzip 326.89 kB |
+| 유닛 테스트 | `npm test` | ✅ **129개 파일 / 2,561건 통과** (2026-08-13 실측, 0 실패) |
+| 통합 테스트 | `npm run test:integration` | ✅ **8개 파일 / 108건 통과** (2026-08-13 복구 — self-referencing DO 바인딩) |
+| 라이브 eval | `npx tsx eval/index.ts --tag technical` | ✅ **158/158 통과** (2026-08-13 실측, avg 1,219ms / p50 824ms / p95 3,503ms, 평균 9.9건) |
+| 라이브 프로브 | arxiv/openalex 검색 | ✅ 각 3건 정상 (재시도 래퍼 적용 후) |
+| 프로덕션 | `search-engine-api.pages.dev` | ✅ **HTTP 200 — 가동 중** (2026-08-07 실측; 08-13 세션에서는 접근 불가로 미재확인) |
+| 라이브 검색 (en) | `POST /api/search` quantum computing | ✅ bing+wikipedia+hackernews, 2.8s, 결과 정상 (08-07 실측) |
+| 라이브 검색 (ko) | `POST /api/search` 삼성전자 주가 | ✅ naver+naver-finance+wikipedia, 1.0s, 결과 정상 (08-07 실측) |
 
 ### 2.1 eval 기준선 (최신 아티팩트 2026-08-06 14:52Z, 500쿼리 median-of-3)
 | 지표 | 값 | 비고 |
@@ -130,12 +132,16 @@
 | P8 | en-fact-01 wikipedia 백엔드 누락 (가용성) | Medium | ✅ **S9 해소** (캐시+EVAL_MODE 페이싱, 88/88 통과) |
 | P9 | 멀티리전 미구현 — 단일 리전 장애 시 전체 중단 | Medium | 🔴 미해결 |
 | P10 | 로그의 쿼리/개인정보 보존·삭제 정책 미문서화 | Medium | 🔴 미해결 |
-| P11 | **헬스 체크 false-positive**: 키 미설정 brave가 down으로 보고되어 전역 상태가 partial_outage로 표시됨 | Medium | ✅ **이번 세션 수정** (선택적 백엔드 `unconfigured` 처리 + computeOverallStatus/isBackendEnabled 순수 함수 + 유닛 테스트 8건) |
+| P11 | **헬스 체크 false-positive**: 키 미설정 brave가 down으로 보고되어 전역 상태가 partial_outage로 표시됨 | Medium | ✅ 수정 (08-07, 선택적 백엔드 `unconfigured` 처리) |
+| P12 | **유닛 테스트 flaky**: `requireAdmin` DO mock이 vitest 모듈 레지스트리 경합으로 ~10% 확률 실패 (CI 레드 위험) | Medium | ✅ **수정 (08-13)** — hoisted `vi.mock` + 가변 mock 구현체 주입으로 결정적 전환, 15회 연속 통과 |
+| P13 | **백엔드 일시 장애 시 결과 전량 손실**: arxiv 503(실측 빈번)·openalex(로컬 보호 부재)·brave(회로 차단기 부재)가 5xx/네트워크 블립 한 번에 0건 처리 | High | ✅ **수정 (08-13)** — 5xx/네트워크 1회 재시도(회로 개방·429·4xx fail-fast), 예산 worst=ceiling, 유닛 테스트 17건 |
 
 ---
 
 ## 6. 결론
 - 코드베이스는 **기능·품질·보안·테스트 모두 우수**하며 베타~상용 경계 수준.
-- 프로덕션(`search-engine-api.pages.dev`)은 **가동 중(HTTP 200)** 확인. eval은 **500쿼리 median-of-3 100% pass**로 공식 baseline 갱신.
+- 프로덕션(`search-engine-api.pages.dev`)은 **가동 중(HTTP 200)** 확인(08-07). 08-13 라이브 재검증: 기술 태그 eval **158/158 통과**, 유닛 테스트 **2,543건 전체 통과**.
+- 08-13 세션에서 **테스트 안정성(P12)과 백엔드 재시도(P13)** 2건을 수정·검증 완료 — CI 신뢰도와 학술/브레이브 백엔드 가용성이 개선됨.
 - 잔여 운영 작업은 DO 8종·Analytics Engine 바인딩(대시보드 수동), 멀티리전, 개인정보 정책 — 코드 결함 위주는 아님.
-- 이번 재검증 세션에서 헬스 체크 false-positive(P11)를 수정·검증 완료 (08_CHANGELOG.md 참조).
+- **08-13 추가 관찰 (가설 아님)**: 기술 태그 eval의 NDCG@10 0.306은 실행 간 노이즈가 크고(베이스라인 대비 87건 regression 플래그 중 다수가 gold 표준 노이즈) — **gold-standard 기반 랭킹 지표의 안정성 개선이 다음 우선순위**로 판단됨 (04/07 문서 참조).
+- **08-13 P13 근본 원인 (실측)**: gold 표준 자체에 **shift 오류 7건** 발견 — en-tech-04(PostgreSQL) gold=kubernetes.io, en-tech-05(Kubernetes) gold=nodejs.org 등 쿼리-도메인이 한 칸씩 어긋남. 검색은 정상인데 평가 기준이 틀려 NDCG가 과소평가됐던 구조적 문제. 수정 후 7쿼리 NDCG 0.19~0.28 → 0.36~0.54. 전체 500쿼리 평균 0.279/0.297/0.284 → 0.281/0.300/0.287.

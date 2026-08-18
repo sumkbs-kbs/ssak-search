@@ -20,7 +20,12 @@ const ROOT = resolve(process.cwd())
 function run(args: string[], opts: { dir?: string } = {}): { rc: number; out: string } {
   const full = opts.dir ? [...args, `--dir=${opts.dir}`] : args
   try {
-    const out = execFileSync('bash', [SCRIPT, ...full], { encoding: 'utf8', stdio: ['pipe', 'pipe', 'pipe'] })
+    const out = execFileSync('bash', [SCRIPT, ...full], {
+      encoding: 'utf8',
+      stdio: ['pipe', 'pipe', 'pipe'],
+      // 수정 112: 병렬 부하 flaky 방지 — 셸 spawn 명시적 타임아웃
+      timeout: 60_000,
+    })
     return { rc: 0, out }
   } catch (e: any) {
     return { rc: e.status ?? 1, out: (e.stdout ?? '') + (e.stderr ?? '') }

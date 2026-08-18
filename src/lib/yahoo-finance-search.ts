@@ -16,6 +16,7 @@
 import type { SearchResult, StockData, Env } from '../types'
 import { logger, toError } from './logger'
 import { fetchWithTimeout, computeScore } from './util'
+import { withRetry, splitRetryBudget } from './resilience/retry'
 
 export interface YahooFinanceOptions {
   maxResults?: number
@@ -24,16 +25,6 @@ export interface YahooFinanceOptions {
 }
 
 const YAHOO_UA = 'Mozilla/5.0 (compatible; SearchBot/1.0)'
-
-function sleep(ms: number): Promise<void> {
-  return new Promise((r) => setTimeout(r, ms))
-}
-
-/** Backoff delay for a retry attempt: short base + jitter to avoid thundering herds. */
-function backoffDelay(attempt: number): number {
-  const base = [150, 350, 700][attempt] ?? 700
-  return base + Math.floor(Math.random() * 100)
-}
 
 /**
  * Fetch a Yahoo endpoint with transient-failure retry + backoff. EXPORTED FOR TESTING.
@@ -44,16 +35,21 @@ function backoffDelay(attempt: number): number {
  * transient statuses (429, 5xx) and network/timeout errors are retried; 4xx
  * (genuinely no data) fail fast. The caller's total timeout budget is split
  * across attempts so the retry chain can't balloon past the fanout ceiling.
+ *
+ * The retry policy is the shared withRetry decorator with the hand-tuned
+ * 150/350ms backoff the old loop used (exact, jitter disabled — the old
+ * additive 0–99ms jitter is subsumed by the budget split).
  */
 export async function fetchYahooJson(env: Env | undefined, url: string, timeoutMs: number): Promise<Response> {
   const maxRetries = 2
-  // Split the budget: 3 attempts × ~⅓ each (min 800ms so a healthy first
-  // attempt isn't starved by the split).
-  const perAttempt = Math.max(Math.floor(timeoutMs / (maxRetries + 1)), 800)
-  let lastError: unknown
+  // Split the budget with the 150/350ms beats reserved, so the chain's worst
+  // case (3 timeouts + beats) fits the 4500ms yahoo-finance fanout ceiling:
+  // 3×1333 + 500 = 4499ms ≤ 4500. (min 800ms keeps the first attempt from
+  // being starved by the split.)
+  const perAttempt = splitRetryBudget(timeoutMs, maxRetries + 1, 150 + 350, 800)
 
-  for (let attempt = 0; attempt <= maxRetries; attempt++) {
-    try {
+  return withRetry(
+    async () => {
       const res = await fetchWithTimeout(
         env,
         url,
@@ -63,24 +59,24 @@ export async function fetchYahooJson(env: Env | undefined, url: string, timeoutM
         perAttempt,
       )
 
-      // Transient under fan-out — back off and retry.
+      // Transient under fan-out — throw so withRetry backs off and retries.
       if (res.status === 429 || res.status >= 500) {
-        lastError = new Error(`Yahoo HTTP ${res.status} for ${url}`)
         // Free the subrequest slot: on Workers an unconsumed response body
         // holds the slot until GC, so every retry would otherwise leak one.
         res.body?.cancel().catch(() => {})
-        if (attempt < maxRetries) await sleep(backoffDelay(attempt))
-        continue
+        throw new Error(`Yahoo HTTP ${res.status} for ${url}`)
       }
+      // 4xx (genuinely no data) — returned, i.e. fail fast (no retry).
       return res
-    } catch (err) {
-      // Network error / abort / timeout — transient, retry.
-      lastError = err
-      if (attempt < maxRetries) await sleep(backoffDelay(attempt))
-    }
-  }
-
-  throw lastError instanceof Error ? lastError : new Error(String(lastError))
+    },
+    {
+      maxRetries,
+      delaysMs: [150, 350],
+      jitter: false,
+      // Every thrown error is retryable: transient HTTP (429/5xx) above plus
+      // network/timeout errors from fetchWithTimeout — exactly the old loop.
+    },
+  )
 }
 
 /** v1 search quote item */

@@ -45,6 +45,8 @@ import { logger, toError } from '../lib/logger'
 import { cors } from 'hono/cors'
 import { streamSSE } from 'hono/streaming'
 import type { AppBindings, ErrorResponse } from '../types'
+import type { ContentfulStatusCode } from 'hono/utils/http-status'
+import { withRetry, isRateLimitError, retryAfterMsFromError, httpErrorFromResponse } from '../lib/resilience/retry'
 
 const openaiRoute = new Hono<{ Bindings: AppBindings }>()
 
@@ -114,6 +116,64 @@ function estimateTokens(text: string): number {
   const cjkCount = (text.match(/[\u4e00-\u9fff\uac00-\ud7af]/g) || []).length
   const wordCount = text.split(/\s+/).filter(Boolean).length
   return Math.ceil(wordCount * 1.3 + cjkCount * 2.5)
+}
+
+interface InternalApiResponseData {
+  results?: Array<{ title?: string; url?: string; content?: string; score?: number }>
+  sources?: Array<{ title?: string; url?: string; content?: string; score?: number }>
+  answer?: { text?: string }
+  backend?: string
+}
+
+/**
+ * 내부 검색/리서치 API 호출 — LLM 파이프라인(planner/synthesizer/quality-gate)
+ * 및 council.ts와 동일한 429 재시도 정책으로 통일한다:
+ *   - httpErrorFromResponse: 비-OK 응답의 Retry-After 헤더를 오류(status +
+ *     retryAfterMs)에 실어 던진다.
+ *   - withRetry(retryable: isRateLimitError, rateLimitDelaysMs [2000, 4000],
+ *     getRetryAfterMs): 429만 백오프 재시도 — 서버 지시 대기가 고정 시퀀스를
+ *     재정의하고, 소진 시 오류가 호출부로 전파된다. 비-429는 fail-fast.
+ */
+export async function callInternalApi(
+  baseUrl: string,
+  path: string,
+  authHeaders: Record<string, string>,
+  body: Record<string, unknown>,
+  label: 'search' | 'research',
+): Promise<InternalApiResponseData> {
+  return withRetry(
+    async () => {
+      const res = await fetch(`${baseUrl}${path}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...authHeaders },
+        body: JSON.stringify(body),
+      })
+
+      if (!res.ok) {
+        let detail: string | undefined
+        try {
+          const e = (await res.json()) as Record<string, unknown>
+          detail = e?.detail as string | undefined
+        } catch {
+          // JSON이 아닌 오류 본문 — 기본 메시지 유지
+        }
+        throw httpErrorFromResponse(res, String(detail ?? '') || `${label} failed`)
+      }
+
+      return (await res.json()) as InternalApiResponseData
+    },
+    {
+      maxRetries: 1,
+      retryable: isRateLimitError,
+      rateLimitDelaysMs: [2000, 4000],
+      getRetryAfterMs: retryAfterMsFromError,
+      onRetry: (attempt, delayMs, err) =>
+        logger.warn(`[OpenAI] ${label} rate-limited (429), retrying in ${delayMs}ms`, {
+          error: toError(err),
+          attempt,
+        }),
+    },
+  )
 }
 
 function safeUrl(url: string): string {
@@ -227,65 +287,55 @@ openaiRoute.post('/chat/completions', async (c) => {
 
     if (isResearch) {
       // Call the research API for true multi-step deep research
-      const researchRes = await fetch(`${baseUrl}/api/research`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', ...authHeaders },
-        body: JSON.stringify({
-          query,
-          depth: 'quick',
-          max_sources: maxResults,
-        }),
-      })
-
-      if (!researchRes.ok) {
-        let errDetail: string | undefined
-        try {
-          const e = (await researchRes.json()) as Record<string, unknown>
-          errDetail = e?.detail as string | undefined
-        } catch (err) {
-          logger.warn('[OpenAI] Failed to parse research error response:', { error: toError(err) })
-        }
+      try {
+        responseData = await callInternalApi(
+          baseUrl,
+          '/api/research',
+          authHeaders,
+          { query, depth: 'quick', max_sources: maxResults },
+          'research',
+        )
+      } catch (err) {
+        const status = (err as { status?: number }).status
+        // 429(Retry-After 재시도 소진)는 클라이언트가 백오프하도록 실제 상태를
+        // 패스스루하고, 그 외 오류는 기존대로 502.
+        const statusCode: ContentfulStatusCode =
+          status && status >= 400 && status < 600 ? (status as ContentfulStatusCode) : 502
         return c.json(
           {
-            error: { message: String(errDetail ?? '') || 'Research failed', type: 'research_error' },
+            error: { message: err instanceof Error ? err.message : 'Research failed', type: 'research_error' },
           },
-          502,
+          statusCode,
         )
       }
-
-      responseData = await researchRes.json()
       responseTime = Date.now() - startTime
     } else {
       // Call the search API
-      const searchRes = await fetch(`${baseUrl}/api/search`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', ...authHeaders },
-        body: JSON.stringify({
-          query,
-          search_depth: isDeep ? 'advanced' : 'basic',
-          max_results: maxResults,
-          include_answer: true,
-          include_raw_content: false,
-        }),
-      })
-
-      if (!searchRes.ok) {
-        let errDetail: string | undefined
-        try {
-          const e = (await searchRes.json()) as Record<string, unknown>
-          errDetail = e?.detail as string | undefined
-        } catch (err) {
-          logger.warn('[OpenAI] Failed to parse search error response:', { error: toError(err) })
-        }
+      try {
+        responseData = await callInternalApi(
+          baseUrl,
+          '/api/search',
+          authHeaders,
+          {
+            query,
+            search_depth: isDeep ? 'advanced' : 'basic',
+            max_results: maxResults,
+            include_answer: true,
+            include_raw_content: false,
+          },
+          'search',
+        )
+      } catch (err) {
+        const status = (err as { status?: number }).status
+        const statusCode: ContentfulStatusCode =
+          status && status >= 400 && status < 600 ? (status as ContentfulStatusCode) : 502
         return c.json(
           {
-            error: { message: String(errDetail ?? '') || 'Search failed', type: 'search_error' },
+            error: { message: err instanceof Error ? err.message : 'Search failed', type: 'search_error' },
           },
-          502,
+          statusCode,
         )
       }
-
-      responseData = await searchRes.json()
       responseTime = Date.now() - startTime
     }
 

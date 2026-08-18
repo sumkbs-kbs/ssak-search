@@ -10,6 +10,7 @@ import { searchRoute } from '../../src/routes/search'
 import { healthRoute, metricsRoute } from '../../src/routes/health'
 import { imagesRoute } from '../../src/routes/images'
 import { newsRoute } from '../../src/routes/news'
+import { extractRoute } from '../../src/routes/extract'
 
 // Mock environment bindings — passed to app.request() as the third arg (sets c.env)
 // Include executionCtx shim since routes call c.executionCtx.waitUntil()
@@ -76,6 +77,8 @@ vi.mock('../../src/lib/cache', () => ({
 vi.mock('../../src/lib/metrics', () => ({
   recordSearchRequest: vi.fn(),
   recordSearchSubrequests: vi.fn(),
+  recordExtractRequest: vi.fn(),
+  recordExtractSubrequests: vi.fn(),
   setMetricsEnv: vi.fn(),
   getPrometheusMetrics: vi.fn().mockReturnValue(''),
 }))
@@ -130,6 +133,12 @@ vi.mock('../../src/lib/answer', () => ({
   }),
 }))
 
+vi.mock('../../src/lib/extractor', () => ({
+  extractContent: vi.fn().mockResolvedValue([
+    { url: 'https://example.com', title: 'Example', raw_content: 'content', success: true },
+  ]),
+}))
+
 vi.mock('../../src/lib/ltr/click-logger', () => ({
   logSearchImpression: vi.fn(),
 }))
@@ -159,6 +168,10 @@ function createImagesApp() {
 
 function createNewsApp() {
   return createTestApp((app) => app.route('/api/news', newsRoute))
+}
+
+function createExtractApp() {
+  return createTestApp((app) => app.route('/api/extract', extractRoute))
 }
 
 describe('Route Handlers', () => {
@@ -720,6 +733,130 @@ describe('/api/news', () => {
       expect(res.status).toBe(200)
       const body = (await res.json()) as any
       expect(Array.isArray(body.trending)).toBe(true)
+    })
+  })
+})
+
+describe('/api/extract', () => {
+  let app: ReturnType<typeof createExtractApp>
+
+  beforeEach(() => {
+    app = createExtractApp()
+    vi.clearAllMocks()
+  })
+
+  describe('POST /api/extract', () => {
+    it('returns 400 for invalid JSON', async () => {
+      const res = await requestWithEnv(app, '/api/extract', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: 'not json',
+      })
+      expect(res.status).toBe(400)
+      const body = (await res.json()) as any
+      expect(body.code).toBe('invalid_body')
+    })
+
+    it('returns 400 missing_urls when urls is absent', async () => {
+      const res = await requestWithEnv(app, '/api/extract', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ include_images: true }),
+      })
+      expect(res.status).toBe(400)
+      const body = (await res.json()) as any
+      expect(body.code).toBe('missing_urls')
+    })
+
+    it('returns 400 missing_urls for an empty urls array', async () => {
+      const res = await requestWithEnv(app, '/api/extract', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ urls: [] }),
+      })
+      expect(res.status).toBe(400)
+      const body = (await res.json()) as any
+      expect(body.code).toBe('missing_urls')
+    })
+
+    it('returns 400 invalid_urls for a non-string urls field', async () => {
+      const res = await requestWithEnv(app, '/api/extract', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ urls: 123 }),
+      })
+      expect(res.status).toBe(400)
+      const body = (await res.json()) as any
+      expect(body.code).toBe('invalid_urls')
+    })
+
+    it('returns 400 invalid_urls for more than 20 URLs', async () => {
+      const urls = Array.from({ length: 21 }, (_, i) => `https://site${i}.com`)
+      const res = await requestWithEnv(app, '/api/extract', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ urls }),
+      })
+      expect(res.status).toBe(400)
+      const body = (await res.json()) as any
+      expect(body.code).toBe('invalid_urls')
+    })
+
+    it('returns 400 invalid_urls for an oversized URL', async () => {
+      const res = await requestWithEnv(app, '/api/extract', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ urls: `https://example.com/${'x'.repeat(2100)}` }),
+      })
+      expect(res.status).toBe(400)
+      const body = (await res.json()) as any
+      expect(body.code).toBe('invalid_urls')
+    })
+
+    it('returns 200 with results for a valid single URL', async () => {
+      const res = await requestWithEnv(app, '/api/extract', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ urls: 'https://example.com' }),
+      })
+      expect(res.status).toBe(200)
+      const body = (await res.json()) as any
+      expect(body.results).toHaveLength(1)
+      expect(body.results[0].success).toBe(true)
+      expect(body.failed_results).toEqual([])
+    })
+
+    it('returns 200 for a valid URL array', async () => {
+      const res = await requestWithEnv(app, '/api/extract', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ urls: ['https://a.com', 'https://b.com'], include_images: true }),
+      })
+      expect(res.status).toBe(200)
+    })
+  })
+
+  describe('GET /api/extract', () => {
+    it('returns 400 missing_urls when urls is absent', async () => {
+      const res = await requestWithEnv(app, '/api/extract')
+      expect(res.status).toBe(400)
+      const body = (await res.json()) as any
+      expect(body.code).toBe('missing_urls')
+    })
+
+    it('returns 400 invalid_urls for more than 20 URLs', async () => {
+      const urls = Array.from({ length: 21 }, (_, i) => `https://site${i}.com`).join(',')
+      const res = await requestWithEnv(app, `/api/extract?urls=${encodeURIComponent(urls)}`)
+      expect(res.status).toBe(400)
+      const body = (await res.json()) as any
+      expect(body.code).toBe('invalid_urls')
+    })
+
+    it('returns 200 for a valid comma-separated URL list', async () => {
+      const res = await requestWithEnv(app, '/api/extract?urls=https://example.com,https://test.com')
+      expect(res.status).toBe(200)
+      const body = (await res.json()) as any
+      expect(body.results).toHaveLength(1)
     })
   })
 })

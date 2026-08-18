@@ -59,6 +59,11 @@ export interface HostHealth {
   probeInFlight?: boolean
   backoffMs?: number
   /**
+   * 서킷이 열린(트립된) 시각 (epoch ms, 0 = 닫힘). 회복 예정 시각
+   * (openedAt + backoffMs) 산출을 위해 헬스 응답에 노출 (수정 82).
+   */
+  openedAt?: number
+  /**
    * 'durable' — state persisted in DO storage, shared across isolates
    * (S88 evidence surfacing: getBackendHealth's DO path stamps every host
    * with this so /api/health clearly distinguishes cross-isolate state from
@@ -739,6 +744,7 @@ export class RateLimiterDO extends DurableObject<Env> {
         tripCount: circuit.tripCount,
         probeInFlight: circuit.probeInFlight,
         backoffMs: getBackoffMs(circuit.tripCount),
+        openedAt: circuit.openedAt,
         // Cross-isolate marker — this state lives in DO storage, visible to
         // every isolate's /api/health (S88: contrast with 'local').
         source: 'durable',

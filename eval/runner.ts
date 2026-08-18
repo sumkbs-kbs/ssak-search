@@ -154,6 +154,26 @@ export async function runEval(
   const useOverride = Number.isFinite(delayOverride)
   const wikiPaceMs = useOverride ? Math.max(0, delayOverride) : 1200
   const fastPaceMs = useOverride ? Math.max(0, delayOverride) : 400
+  // arXiv paces at ~30 req/min anonymous (live-verified 2026-08-13: rapid
+  // academic-query bursts trip export.arxiv.org to HTTP 429 for ~1min, no
+  // Retry-After header). The wikipedia pace (1200ms = 50/min) is NOT enough
+  // for arxiv — a back-to-back academic batch (17 en-acad + ds-* queries)
+  // starves the later queries of the arxiv backend entirely (run-1 snapshot:
+  // en-acad-08..17 all absent, NDCG 0.000). 2200ms caps sustained arxiv load
+  // at ~27/min, inside the anonymous limit. Arxiv queries are a strict subset
+  // of wikipedia-routing ones (academic useWikipedia=true), so this is the
+  // ONLY pace that needs the longer window.
+  const arxivPaceMs = useOverride ? Math.max(0, delayOverride) : 2200
+  // S75 (2026-08-13): github Search API paces at ~10 req/min anonymous
+  // (live-verified 2026-08-13: a technical-tag eval burst starves the github
+  // backend — 403 on the 11th+ consecutive call, S23 cooldown then skips it
+  // for the rest of the run, dropping the github.com gold that 250/1500
+  // query-runs rely on). githubSearch + githubIssuesSearch share the same
+  // budget, so 6000ms (≈10/min) keeps BOTH inside the limit when the issues
+  // backend fires. github-routing queries are a strict subset of
+  // wikipedia-routing ones (technical/academic useWikipedia=true), so the
+  // longer window only applies to the queries that need it.
+  const githubPaceMs = useOverride ? Math.max(0, delayOverride) : 6000
 
   // S80 (2026-08-09): INTERLEAVED warm pass. The old design ran the warm pass
   // AFTER the entire cold pass — for a 500-query eval the cold pass takes ~23
@@ -267,8 +287,21 @@ export async function runEval(
     // the wikipediaSearch in-process result cache already collapses the
     // 3-run eval's wikipedia load to run 1, so this is just burst protection
     // for that first run.
-    const usesWikipedia = getSourcesForQueryType(detectQueryType(q.query)).useWikipedia
-    const paceMs = usesWikipedia ? wikiPaceMs : fastPaceMs
+    const srcs = getSourcesForQueryType(detectQueryType(q.query))
+    const usesWikipedia = srcs.useWikipedia
+    // arXiv rate limit (30/min) is tighter than wikipedia's — arxiv-routing
+    // queries get the longest pace so the backend survives the whole batch.
+    // GitHub's anonymous Search API limit (10/min) is tighter STILL — a
+    // technical-tag burst 403s past ~10 calls and drops the github backend
+    // for the rest of the run (S75), so github-routing queries get the
+    // longest pace of all.
+    const paceMs = srcs.useArxiv
+      ? arxivPaceMs
+      : srcs.useGitHub
+        ? githubPaceMs
+        : usesWikipedia
+          ? wikiPaceMs
+          : fastPaceMs
     if (paceMs > 0) {
       await new Promise((r) => setTimeout(r, paceMs))
     }

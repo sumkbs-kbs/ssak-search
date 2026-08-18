@@ -64,11 +64,19 @@ const EN_NEWS = [
 const EN_FACT = [
   'en.wikipedia.org',
   'britannica.com',
-  'nasa.gov',
   'howstuffworks.com',
   'scientificamerican.com',
   'nationalgeographic.com',
 ]
+// S72 (2026-08-13): nasa.gov is NOT a generic science template domain — it is
+// topic-specific (astronomy/space/aeronautics/climate/cryosphere). The old
+// EN_FACT base included it for ALL 25 en-fact-16..40 entries; 14 of those
+// (vaccines, immune system, entropy, diamonds, memory, black swan, anesthesia,
+// periodic table, WiFi, artificial photosynthesis, CRISPR, metaverse,
+// echolocation, nervous system) never surface a nasa.gov result in any of the
+// 3 stored run pools AND NASA is not an authority for the topic → removed
+// (S63/S69 precedent: zero pool presence + intent mismatch). NASA remains
+// explicit only on the 11 space/physics-relevant queries below.
 const EN_ACAD = ['arxiv.org', 'semanticscholar.org', 'paperswithcode.com', 'openreview.net', 'acm.org']
 const EN_GENERAL = ['reddit.com', 'quora.com', 'healthline.com', 'webmd.com', 'nytimes.com', 'wikihow.com']
 
@@ -267,25 +275,25 @@ const NEW_GOLD: Record<string, string[]> = {
   // ENGLISH — factual (25)
   'en-fact-16': [...EN_FACT, 'nasa.gov'],
   'en-fact-17': [...EN_FACT, 'cdc.gov', 'nih.gov'],
-  'en-fact-18': [...EN_FACT, 'iaea.org', 'energy.gov'],
+  'en-fact-18': [...EN_FACT, 'nasa.gov', 'iaea.org', 'energy.gov'],
   'en-fact-19': [...EN_FACT, 'nih.gov'],
   'en-fact-20': EN_FACT,
   'en-fact-21': [...EN_FACT, 'gemsociety.org'],
   'en-fact-22': [...EN_FACT, 'noaa.gov', 'nasa.gov'],
   'en-fact-23': [...EN_FACT, 'nasa.gov'],
-  'en-fact-24': [...EN_FACT, 'nist.gov'],
+  'en-fact-24': [...EN_FACT, 'nasa.gov', 'nist.gov'],
   'en-fact-25': [...EN_FACT, 'nih.gov'],
-  'en-fact-26': [...EN_FACT, 'climate.gov', 'epa.gov'],
-  'en-fact-27': [...EN_FACT, 'noaa.gov'],
+  'en-fact-26': [...EN_FACT, 'nasa.gov', 'climate.gov', 'epa.gov'],
+  'en-fact-27': [...EN_FACT, 'nasa.gov', 'noaa.gov'],
   'en-fact-28': [...EN_FACT, 'investopedia.com'],
   'en-fact-29': [...EN_FACT, 'mayoclinic.org'],
   'en-fact-30': [...EN_FACT, 'rsc.org'],
   'en-fact-31': [...EN_FACT, 'ieee.org'],
   'en-fact-32': [...EN_FACT, 'energy.gov'],
-  'en-fact-33': [...EN_FACT, 'seti.org'],
+  'en-fact-33': [...EN_FACT, 'nasa.gov', 'seti.org'],
   'en-fact-34': [...EN_FACT, 'nih.gov', 'nature.com'],
   'en-fact-35': [...EN_FACT, 'nasa.gov'],
-  'en-fact-36': [...EN_FACT, 'usgs.gov'],
+  'en-fact-36': [...EN_FACT, 'nasa.gov', 'usgs.gov'],
   'en-fact-37': [...EN_FACT, 'wired.com'],
   'en-fact-38': [...EN_FACT, 'nih.gov'],
   'en-fact-39': [...EN_FACT, 'fnal.gov', 'nasa.gov'],

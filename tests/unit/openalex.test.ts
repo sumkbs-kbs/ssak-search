@@ -21,10 +21,14 @@ import {
   workUrlCandidates,
   openAlexWorkToResult,
   openalexSearch,
+  resetOpenalexRateState,
+  isOpenalexRateLimitedShared,
+  recordOpenalexRateLimit,
   type OpenAlexWork,
 } from '../../src/lib/openalex'
 import { extractDomain } from '../../src/lib/util'
 import { logger } from '../../src/lib/logger'
+import { resetSharedCooldownLocal } from '../../src/lib/rate-limiter'
 
 /** Same label-suffix rule the eval matcher uses (eval/metrics.ts isRelevant). */
 function matchesGold(domain: string, gold: string[]): boolean {
@@ -65,6 +69,48 @@ describe('pickWorkUrl', () => {
       doi: 'https://doi.org/10.1038/s42256-023-00626-4',
     })
     expect(pickWorkUrl(work, ACADEMIC_PREFERRED_DOMAINS)).toBe('https://arxiv.org/abs/2304.0001')
+  })
+
+  it('surfaces an arxiv copy from locations when primary/best-oa are publisher links (2026-08-13)', () => {
+    // Live-verified root cause: OpenAlex carries arxiv preprints in the
+    // `locations` array even when primary_location/best_oa_location point at
+    // the publisher (doi.org). Without locations, arxiv-gold queries landed
+    // on doi.org. The arxiv copy must win under ACADEMIC_PREFERRED_DOMAINS.
+    const work = BASE_WORK({
+      primary_location: { landing_page_url: 'https://doi.org/10.1109/cvpr.2016.90' },
+      best_oa_location: null,
+      doi: 'https://doi.org/10.1109/cvpr.2016.90',
+      locations: [
+        { landing_page_url: 'http://arxiv.org/abs/1512.03385' },
+        { landing_page_url: 'https://doi.org/10.1109/cvpr.2016.90' },
+      ],
+    })
+    const url = pickWorkUrl(work, ACADEMIC_PREFERRED_DOMAINS)
+    expect(url).toBe('https://arxiv.org/abs/1512.03385')
+  })
+
+  it('collects locations URLs into the candidate list after primary/best-oa', () => {
+    const work = BASE_WORK({
+      primary_location: { landing_page_url: 'https://doi.org/10.1109/cvpr.2016.90' },
+      best_oa_location: null,
+      locations: [
+        { landing_page_url: 'http://arxiv.org/abs/1512.03385' },
+        { landing_page_url: 'https://openreview.net/forum?id=x' },
+      ],
+    })
+    const cands = workUrlCandidates(work)
+    expect(cands[0]).toBe('https://doi.org/10.1109/cvpr.2016.90')
+    expect(cands).toContain('https://arxiv.org/abs/1512.03385')
+    expect(cands).toContain('https://openreview.net/forum?id=x')
+  })
+
+  it('ignores null and openalex.org entries in locations', () => {
+    const work = BASE_WORK({
+      locations: [null, { landing_page_url: null }, { landing_page_url: 'https://api.openalex.org/works/W1' }],
+    })
+    const cands = workUrlCandidates(work)
+    expect(cands.some((c) => c.includes('openalex.org'))).toBe(false)
+    expect(cands.every((c) => /^https?:\/\//.test(c))).toBe(true)
   })
 
   it('falls back to the primary landing page when no preferred domain matches', () => {
@@ -153,6 +199,8 @@ describe('openAlexWorkToResult', () => {
 describe('openalexSearch', () => {
   beforeEach(() => {
     mockFetchWithTimeout.mockReset()
+    resetOpenalexRateState()
+    resetSharedCooldownLocal('cooldown:openalex')
   })
   afterEach(() => {
     vi.restoreAllMocks()
@@ -218,5 +266,101 @@ describe('openalexSearch', () => {
       new Error('Upstream unavailable (circuit open or at capacity): https://api.openalex.org/works'),
     )
     expect(await openalexSearch('query')).toEqual([])
+    expect(mockFetchWithTimeout).toHaveBeenCalledTimes(1)
+  })
+
+  // ── docs/16 §3.4 retry policy (5xx/network → 1 retry; 4xx/429/circuit fail-fast) ──
+  it('retries a 5xx once and succeeds on the second attempt', async () => {
+    const warn = vi.spyOn(logger, 'warn').mockImplementation(() => {})
+    mockFetchWithTimeout
+      .mockResolvedValueOnce({ ok: false, status: 503, json: () => Promise.reject(new Error('no body')) })
+      .mockResolvedValueOnce(jsonResponse([WORK_WITH('https://arxiv.org/abs/1706.03762')]))
+    const results = await openalexSearch('transformer')
+    expect(mockFetchWithTimeout).toHaveBeenCalledTimes(2)
+    expect(results.length).toBeGreaterThanOrEqual(1)
+    expect(results[0].url).toContain('arxiv.org')
+    warn.mockRestore()
+  })
+
+  it('returns [] after two consecutive 5xx responses (retries exhausted)', async () => {
+    mockFetchWithTimeout
+      .mockResolvedValueOnce({ ok: false, status: 503, json: () => Promise.reject(new Error('no body')) })
+      .mockResolvedValueOnce({ ok: false, status: 500, json: () => Promise.reject(new Error('no body')) })
+    const results = await openalexSearch('retry twice')
+    expect(mockFetchWithTimeout).toHaveBeenCalledTimes(2)
+    expect(results).toEqual([])
+  })
+
+  it('retries a network error once and succeeds on the second attempt', async () => {
+    mockFetchWithTimeout
+      .mockRejectedValueOnce(new Error('socket hang up'))
+      .mockResolvedValueOnce(jsonResponse([WORK_WITH('https://openreview.net/forum?id=x')]))
+    const results = await openalexSearch('network retry')
+    expect(mockFetchWithTimeout).toHaveBeenCalledTimes(2)
+    expect(results.length).toBeGreaterThanOrEqual(1)
+  })
+
+  it('does NOT retry 429 (quota window)', async () => {
+    mockFetchWithTimeout.mockResolvedValue({ ok: false, status: 429, json: () => Promise.reject(new Error('no body')) })
+    const results = await openalexSearch('no 429 retry')
+    expect(mockFetchWithTimeout).toHaveBeenCalledTimes(1)
+    expect(results).toEqual([])
+  })
+
+  // ── S76: 429 cooldown guard (wikipedia B1 / arxiv S23 pattern) ──
+  it('arms a cooldown on 429 and skips the network chain for later calls', async () => {
+    const warn = vi.spyOn(logger, 'warn').mockImplementation(() => {})
+    mockFetchWithTimeout.mockResolvedValue({ ok: false, status: 429, json: () => Promise.reject(new Error('no body')) })
+    expect(await openalexSearch('first 429')).toEqual([])
+    expect(mockFetchWithTimeout).toHaveBeenCalledTimes(1)
+    // Second call hits the armed guard → [] without any fetch.
+    expect(await openalexSearch('second call')).toEqual([])
+    expect(mockFetchWithTimeout).toHaveBeenCalledTimes(1)
+    expect(warn).toHaveBeenCalledWith(
+      expect.stringContaining('OpenAlex search skipped (429 cooldown window)'),
+      expect.anything(),
+    )
+    warn.mockRestore()
+  })
+
+  it('honours Retry-After but clamps it to the 1h cap', async () => {
+    // Live-verified: exhausted anonymous pool → retry-after 43186s (~12h).
+    const res = {
+      headers: { get: (k: string) => (k === 'retry-after' ? '43186' : null) },
+    }
+    const fakeNow = 1_700_000_000_000
+    recordOpenalexRateLimit(res as unknown as Response, fakeNow)
+    // Clamped to 1h, not the raw 12h.
+    expect(await isOpenalexRateLimitedShared(undefined, fakeNow + 3_600_000 - 1)).toBe(true)
+    expect(await isOpenalexRateLimitedShared(undefined, fakeNow + 3_600_000 + 1)).toBe(false)
+  })
+
+  it('resetOpenalexRateState clears the armed guard', async () => {
+    const warn = vi.spyOn(logger, 'warn').mockImplementation(() => {})
+    mockFetchWithTimeout.mockResolvedValue({ ok: false, status: 429, json: () => Promise.reject(new Error('no body')) })
+    expect(await openalexSearch('arm')).toEqual([])
+    expect(mockFetchWithTimeout).toHaveBeenCalledTimes(1)
+    resetOpenalexRateState()
+    // mirrorOpenalexCooldown also wrote the shared local cache — clear both.
+    resetSharedCooldownLocal('cooldown:openalex')
+    mockFetchWithTimeout.mockResolvedValue(jsonResponse([WORK_WITH('https://arxiv.org/abs/1')]))
+    const results = await openalexSearch('after reset')
+    expect(results.length).toBeGreaterThanOrEqual(1)
+    expect(mockFetchWithTimeout).toHaveBeenCalledTimes(2)
+    warn.mockRestore()
+  })
+
+  it('does NOT retry 4xx (permanent refusal)', async () => {
+    mockFetchWithTimeout.mockResolvedValue({ ok: false, status: 400, json: () => Promise.reject(new Error('no body')) })
+    const results = await openalexSearch('no 4xx retry')
+    expect(mockFetchWithTimeout).toHaveBeenCalledTimes(1)
+    expect(results).toEqual([])
+  })
+
+  it('does NOT retry the rate-limiter capacity-race throw', async () => {
+    mockFetchWithTimeout.mockRejectedValue(new Error('Rate limiter rejected (capacity race): https://api.openalex.org/works'))
+    const results = await openalexSearch('no capacity retry')
+    expect(mockFetchWithTimeout).toHaveBeenCalledTimes(1)
+    expect(results).toEqual([])
   })
 })

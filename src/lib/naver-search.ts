@@ -29,18 +29,36 @@ import {
   truncateToTokens,
   parseFlexibleDate,
 } from './util'
+import { withRetry, splitRetryBudget } from './resilience/retry'
+import { BACKEND_TIMEOUT_MS } from './search/fanout'
 
 const NAVER_SEARCH_URL = 'https://m.search.naver.com/search.naver'
 
+// Fanout's naver ceiling (2500ms) is the hard budget for the retry chain.
+// With the 600ms beat reserved, the per-attempt timeout must be
+// ≤ (2500−600)/2 = 950ms so the chain's worst case (2 timeouts + beat) lands
+// exactly on the ceiling — a slow-but-healthy ~800ms fetch still fits. The
+// old beat was 1200ms, which left only 650ms/attempt (starving the healthy
+// tail); cross-query 429 windows are covered by the shared cooldown guard.
+const NAVER_RETRY_DELAY_MS = 600
+
 const MOBILE_UA =
   'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1'
+
+/** Thrown for a transient Naver throttle/overload status (429/5xx) so withRetry retries it. */
+class NaverThrottledError extends Error {
+  readonly status: number
+  constructor(status: number) {
+    super(`Naver HTTP ${status}`)
+    this.status = status
+    this.name = 'NaverThrottledError'
+  }
+}
 
 export interface NaverSearchOptions {
   maxResults?: number
   timeoutMs?: number
   env?: Env
-  /** Internal: set when retrying after throttle/overload (prevents infinite retry loops) */
-  _retry?: boolean
 }
 
 /**
@@ -52,42 +70,68 @@ export async function naverSearch(query: string, opts: NaverSearchOptions = {}):
   const results: SearchResult[] = []
   const seenUrls = new Set<string>()
 
+  // Ceiling-safe per-attempt budget: min(caller budget, fanout naver ceiling)
+  // with the 600ms beat reserved. The default (12000) is always capped to the
+  // 2500ms ceiling so the chain can never outlive the fanout timer.
+  const naverCeiling = BACKEND_TIMEOUT_MS.naver ?? 2500
+  const perAttempt = splitRetryBudget(Math.min(timeoutMs, naverCeiling), 2, NAVER_RETRY_DELAY_MS, 500)
+
   try {
     const params = new URLSearchParams()
     params.append('query', query)
     params.append('where', 'm')
     params.append('sm', 'mtb_hty.top')
 
-    const response = await fetchWithTimeout(
-      env,
-      `${NAVER_SEARCH_URL}?${params.toString()}`,
+    // Retry once on 429 (throttle) or 5xx (overload) with a beat, via the
+    // shared withRetry decorator. The old `_retry` recursion guard is replaced
+    // by maxRetries=1 — the second attempt never retries again. Naver
+    // sometimes returns Cloudflare challenge pages (403) for aggressive
+    // scraping — no amount of retries will help; fail fast (returned below).
+    // Network/timeout errors are NOT retried (matches the old catch).
+    const response = await withRetry(
+      async () => {
+        const res = await fetchWithTimeout(
+          env,
+          `${NAVER_SEARCH_URL}?${params.toString()}`,
+          {
+            method: 'GET',
+            headers: {
+              'User-Agent': MOBILE_UA,
+              Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+              'Accept-Language': 'ko-KR,ko;q=0.9,en-US;q=0.8,en;q=0.7',
+              'Cache-Control': 'no-cache',
+            },
+          },
+          perAttempt,
+        )
+        if (res.ok) return res
+        if (res.status === 429 || res.status >= 500) {
+          throw new NaverThrottledError(res.status)
+        }
+        return res // 403 / other 4xx — fail fast
+      },
       {
-        method: 'GET',
-        headers: {
-          'User-Agent': MOBILE_UA,
-          Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-          'Accept-Language': 'ko-KR,ko;q=0.9,en-US;q=0.8,en;q=0.7',
-          'Cache-Control': 'no-cache',
+        maxRetries: 1,
+        delaysMs: [NAVER_RETRY_DELAY_MS], // ceiling-safe beat (see above)
+        jitter: false,
+        retryable: (err) => err instanceof NaverThrottledError,
+        onRetry: (_attempt, _delayMs, err) => {
+          const status = err instanceof NaverThrottledError ? err.status : '?'
+          logger.info(`[ssak] Retrying Naver (status=${status})`)
         },
       },
-      timeoutMs,
-    )
+    ).catch((err) => {
+      // Network error / timeout — not retryable, matches the old outer catch.
+      logger.warn('Naver search failed:', { error: toError(err) })
+      return null
+    })
 
+    if (!response) return results
     if (!response.ok) {
-      // Retry once on 429 (throttle) or 5xx (overload) with jitter.
-      // Naver sometimes returns Cloudflare challenge pages (403) for
-      // aggressive scraping — no amount of retries will help; just return empty.
-      const status = response.status
-      if ((status === 429 || status >= 500) && !opts._retry) {
-        const jitter = Math.random() * 1500 + 500 // 0.5–2s
-        await new Promise((r) => setTimeout(r, jitter))
-        logger.info('[ssak] Retrying Naver (status=' + status + ')')
-        return naverSearch(query, { ...opts, _retry: true })
-      }
-      if (status === 403) {
+      if (response.status === 403) {
         logger.warn('[ssak] Naver returned 403 — Cloudflare challenge detected; skipping this backend')
       } else {
-        logger.warn('[ssak] Naver search non-OK:', { status })
+        logger.warn('[ssak] Naver search non-OK:', { status: response.status })
       }
       return results
     }

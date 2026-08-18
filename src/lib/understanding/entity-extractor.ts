@@ -480,8 +480,16 @@ const PATTERNS: Array<{
   { type: 'date', regex: /\b(\d{1,2})[/-](\d{1,2})[/-](\d{2,4})\b/g, confidence: 0.8 },
   { type: 'date', regex: /\b(20\d{2})\b/g, confidence: 0.6 }, // years
 
-  // Numbers (prices, percentages, quantities)
-  { type: 'number', regex: /\b\d{1,3}(?:,\d{3})*(?:\.\d+)?\s*(?:USD|KRW|EUR|JPY|%|만|억|조)?\b/g, confidence: 0.7 },
+  // Numbers (prices, percentages, quantities). The trailing boundary is a
+  // non-digit lookahead, NOT \b — \b is ASCII-only, so a Korean unit (만/억/조)
+  // could never match when followed by Hangul/space ("1조원" degraded to "1",
+  // "5,000억원" to "5,000"). % stays OUT of the unit group so the existing
+  // contract holds: "10%" extracts as "10" (unit not part of the number text).
+  {
+    type: 'number',
+    regex: /\b\d{1,3}(?:,\d{3})*(?:\.\d+)?\s*(?:USD|KRW|EUR|JPY|만|억|조)?(?=\D|$)/g,
+    confidence: 0.7,
+  },
   { type: 'number', regex: /\b(?:USD|KRW|EUR|JPY|£|€|¥|\$|₩)\s*\d[\d,.]*\b/g, confidence: 0.85 },
 
   // Version numbers

@@ -2,6 +2,36 @@
 
 > 문서 ID: 13 · 작성: 2026-08-07 · 관련: S26 (zh-general-12 완화), S16 (커뮤니티 라우팅)
 
+## 0. 실측 갱신 (2026-08-14 — S104 zh site: 라우팅 검증, FIX-2026-08-14-05)
+
+자체 호스팅 SearXNG(2026.7.9, docker)에서 7개 zh gold 도메인 site: 배터리
+(`scripts/probe-searxng-zh.ts`) 실측 결과 — **CN Baidu/Bing 가정을 반증하고 google cse로
+결정**:
+
+| 엔진 | site: 인정 | 실측 | 결론 |
+|---|---|---|---|
+| **google cse** | ✅ | top5 gold 5/5 (ctrip/dianping/trip/qunar/zhihu) · xiaohongshu 4/5 · mafengwo 1/5 | **S104 site: 라우트의 주력** — 단, **language 파라미터를 명시하면 site: 쿼리에서 0건** (plain은 무관) → S104 태스크는 language 없이 호출 |
+| bing | ❌ | `site:ctrip.com 张家界旅游攻略`이 mafengwo 자연 랭킹 반환 (여행 쿼리 10/10은 우연), ctrip/dianping/xiaohongshu/qunar 0건 | 비활성 (bing site: 무시는 모바일/데스크톱/RSS에 이어 4번째 경로 확정) |
+| baidu | ✅ (CN IP) | 비CN IP에서 wappass CAPTCHA (HTTP 302, suspended 3600) | CN VPS 배치 시에만 gold 공급 — 설정에 유지 (비CN IP에선 결과만 비어 무해) |
+| duckduckgo/brave/startpage | — | 이 egress에서 CAPTCHA/rate-limit | 비활성 |
+
+**설정 결론** (`searxng/settings.yml`): `use_default_settings: true` + bing/duckduckgo/brave/startpage
+`disabled: true` + google cse·baidu `disabled: false`. 주의:
+- **레거시 `engines=google,baidu` 요청 파라미터는 2026.7.9에서 폐지** (`disabled_engines=<name>__<category>`
+  로 대체 — `parse_dict`→`EnginesSetting.parse_cookie`). `engines` 파라미터를 보내면 조용히 무시되어
+  전체 엔진이 돌므로(오염) 반드시 settings 레벨로 고정한다.
+- `- name: google`은 no-op — 이 버전의 활성 google 엔진 이름은 **`google cse`** (google.py는 HTML
+  스크래퍼로 기본 비활성, google_cse.py가 활성).
+- **google cse도 과도한 연속 호출(~40건/수분) 시 Google bot 감지 suspension** (suspended_time=180).
+  DDG 202 버스트와 같은 클래스의 상한 — 자연 간격 호출은 정상, eval 벌크도 쿼리당 1회·간격이면 유지.
+  프로덕션은 이 한도를 넘지 않도록 `server.limiter` + 요청 페이싱을 권장 (docs/16 재시도 정책과 상충 없음).
+
+**S104 태스크 배선**: `buildZhTravelCommunityTask`는 SEARXNG_URL 설정 시 `site:<gold> <query>`를
+**language 없이** searxngSearch로 호출 (maxResults 5). DDG 폴백 경로와는 독립 — SEARXNG_URL이
+설정돼 있으면 DDG site: 태스크는 생성되지 않는다 (P24의 !searxngConfigured 규칙).
+
+---
+
 ## 1. 왜 필요한가 — 문제 데이터
 
 `bing mkt=zh-CN`은 미국 IP에서 **교차언어 결과로 오염**된다. eval:median (2026-08-07,
@@ -50,7 +80,8 @@ Worker (search-engine-api)
   └─ searxngSearch(query, { language: 'zh-CN', category: 'general' })
        └─ GET {SEARXNG_URL}/search?q=...&format=json&language=zh-CN
             └─ SearXNG (자체호스팅, Docker)
-                 ├─ baidu / bing / google / sogou (zh 엔진)
+                 ├─ google cse (site: 인정 — S104 주력, §0 실측)
+                 ├─ baidu (CN VPS 배치 시 gold 커버리지 강화)
                  └─ valkey (rate limiter)
 ```
 
@@ -107,28 +138,26 @@ search:
 valkey:
   url: valkey://searxng-valkey:6379/0
 
-# 중국어 쿼리를 위한 엔진 — 해외 IP면 Baidu는 CAPTCHA 가능성이 있으므로
-# bing/google zh를 우선. 국내(중국) 배포 시 baidu/sogou 추가.
-#
-# 참고: SearXNG는 요청 시 language=zh-CN 파라미터로 엔진을 자동 매칭한다
-# (per-engine language 키는 baidu/bing/google에 표준 옵션이 아님). 아래
-# language는 예시일 뿐 — 실제로는 /search?language=zh-CN 파라미터가 언어를
-# 결정하므로, 설정을 따라 적을 때 "이 키 때문에 zh 엔진이 켜진다"고 오해하지
-# 않도록 주의.
+# S104 site: 라우팅 실측 기준 (2026-08-14, §0) — google cse만 site: 인정.
+# bing은 site: 무시(자연 랭킹만)라 site: 라우트에서 오염 — 비활성.
+# baidu는 CN IP에서만 동작 — CN VPS 배치 시 활성 효과.
 engines:
+  - name: google cse
+    disabled: false
   - name: baidu
-    engine: baidu
     disabled: false
-    categories: general
   - name: bing
-    engine: bing
-    disabled: false
-    categories: general
-  - name: google
-    engine: google
-    disabled: false
-    categories: general
+    disabled: true
+  - name: duckduckgo
+    disabled: true
+  - name: brave
+    disabled: true
+  - name: startpage
+    disabled: true
 ```
+
+> 주의: `- name: google`은 no-op (활성 엔진은 `google cse`). 요청 파라미터
+> `engines=...`는 2026.7.9에서 폐지 — 엔진 고정은 settings 레벨로만 한다 (§0).
 
 ### 3.3 Worker에 연결 (`wrangler.jsonc`)
 
@@ -195,9 +224,9 @@ npm run eval:median:save
 
 **해결되는 것:**
 - zh-general (考研复习计划, 手游排行榜 등) 쿼리의 교차언어 영어 오염 → SearXNG의
-  중국어 엔진 + language=zh-CN으로 중국어 결과 우선 공급
-- zh-tech 커뮤니티 갭 (zhihu가 차단돼 있어도 Baidu/Bing zh 엔진이 zhihu.com 결과
-  표면화 가능)
+  google cse로 중국어 결과 우선 공급 (S104 site: 라우트는 language 없이 — §0 퀴크)
+- zh-tech 커뮤니티 갭 (zhihu가 차단돼 있어도 google cse site:zhihu.com이 표면화 —
+  실측 top5 5/5)
 
 **해결되지 않는 것 (별도 레버):**
 - zhihu.com 검색 API 자체 (비CN IP 400) — SearXNG의 Baidu/Bing zh 엔진이 페이지

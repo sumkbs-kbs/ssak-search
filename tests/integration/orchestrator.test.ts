@@ -693,24 +693,21 @@ describe('Orchestrator executeSearch() Integration', () => {
   // queries. wikipediaSearch itself skips its network chain while the guard
   // is armed (pacing), so the mirror is the ONLY wikipedia-gold path.
 
-  it('skips REST but still tries Action in-window — mirror fires only when Action also 429s (B1 완화, 수정 68)', async () => {
+  it('starts the mirror in parallel with the fanout when the pacing guard is armed (B1)', async () => {
     let dbpediaCalled = false
-    let restSearchCalled = false
-    let actionCalled = false
+    let wikipediaSearchCalled = false
     mockFetch.mockImplementation(async (url: string | URL) => {
       const urlStr = url.toString()
-      // 수정 68: 창 내에서 REST 검색 체인은 호출되지 않는다 (재-429 만 반복해 창을
-      // 연장). Action API 는 **시도**된다 — 이 테스트에선 Action 도 429 로 응답해
-      // (게이트웨이 버스트) wikipedia 가 missing → DBpedia mirror 가 gold 를
-      // 회복한다. NOTE: knowledge-panel summary (rest_v1/page/summary) 는 별도
-      // best-effort 호출로 검색 체인 밖 — 아래 단언에 포함하지 않는다.
-      if (urlStr.includes('wikipedia.org/w/rest.php/v1/search/page')) {
-        restSearchCalled = true
+      // The wikipediaSearch REST + Action chain must NOT be touched — the
+      // pacing guard skips it entirely (the mock would succeed if it WERE
+      // called, so a call is a real failure of the pacing semantics). NOTE:
+      // the knowledge-panel summary endpoint (rest_v1/page/summary) is a
+      // SEPARATE best-effort call that the panel fires in non-eval mode and
+      // is NOT part of the search chain under test — only the search endpoints
+      // are asserted below.
+      if (urlStr.includes('wikipedia.org/w/rest.php/v1/search/page') || urlStr.includes('wikipedia.org/w/api.php')) {
+        wikipediaSearchCalled = true
         return wikiResponse()
-      }
-      if (urlStr.includes('wikipedia.org/w/api.php')) {
-        actionCalled = true
-        return new Response('', { status: 429 })
       }
       if (urlStr.includes('wikipedia.org')) {
         return wikiResponse()
@@ -744,10 +741,9 @@ describe('Orchestrator executeSearch() Integration', () => {
     const request = createSearchRequest({ query: 'what is quantum computing' })
     const result = await executeSearch(request, { env })
 
-    // Pacing (수정 68): REST 검색 체인은 미호출 — 창 내 재시도 생략. Action 은
-    // 시도됨(완화 증명) but 429 → wikipedia missing → mirror 가 gold 회복.
-    expect(restSearchCalled).toBe(false)
-    expect(actionCalled).toBe(true)
+    // Pacing: the wikipedia SEARCH chain was never fetched; the mirror
+    // recovered the gold instead (started in parallel with the fanout).
+    expect(wikipediaSearchCalled).toBe(false)
     expect(dbpediaCalled).toBe(true)
     expect(result.backend).toContain('dbpedia')
     const wikiHit = result.results.find((r) => r.url === 'https://en.wikipedia.org/wiki/Quantum_computing')

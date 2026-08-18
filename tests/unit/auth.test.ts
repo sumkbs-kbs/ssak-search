@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, vi } from 'vitest'
 import {
   validateApiKey,
   validateApiKeyWithTenant,
@@ -8,7 +8,48 @@ import {
   getClientIp,
   getTenantRateLimit,
   getTenantPerIpRateLimit,
+  extractApiKeyToken,
+  validateApiKeyAsync,
+  hasSufficientScope,
+  getActiveClientCount,
+  requireAuth,
+  requireAdmin,
 } from '../../src/lib/auth'
+
+// ---------------------------------------------------------------------------
+// Deterministic ApiKeyDO mock (hoisted vi.mock, no runtime registry race).
+//
+// The real api-key-do module imports { DurableObject } from 'cloudflare:workers',
+// which is unresolvable in the node unit environment. Earlier attempts to mock
+// it with vi.doMock inside individual tests were flaky (~10% failures): once
+// the module had been resolved in vitest's registry, a later vi.doMock silently
+// no-ops. vi.mock (hoisted, applied at module-resolution time) has no such
+// race. Each DO test sets mockValidateKey, then restores it in finally.
+// ---------------------------------------------------------------------------
+type MockValidateKey = (token: string) => Promise<{
+  valid: boolean
+  meta?: { scope: string; owner: string; keyId: string; name: string }
+  reason?: string
+}>
+let mockValidateKey: MockValidateKey = async () => ({ valid: false, reason: 'mock_unset' })
+
+vi.mock('../../src/lib/api-key-do', () => ({
+  getApiKeyStub: () => ({
+    validateKey: async (token: string) => mockValidateKey(token),
+  }),
+}))
+
+type AuthEnv = {
+  SEARCH_API_KEY?: string
+  TENANTS_CONFIG?: string
+  API_KEY_DO?: unknown
+}
+
+function makeCtx(env: AuthEnv, headers: Record<string, string> = {}) {
+  const req = { raw: { headers: new Headers(headers) } }
+  const json = vi.fn((detail: unknown, status: number) => new Response(JSON.stringify(detail), { status }))
+  return { env, req, json } as never
+}
 
 function makeHeaders(obj: Record<string, string>): Headers {
   return new Headers(obj)
@@ -286,5 +327,179 @@ describe('checkClientRateLimit with tenant', () => {
     }
     expect(last?.allowed).toBe(false)
     expect(last?.remaining).toBe(0)
+  })
+})
+
+describe('getTenantRateLimit / getTenantPerIpRateLimit', () => {
+  it('returns the default for __default__ tenant', () => {
+    expect(getTenantRateLimit('__default__', undefined)).toBe(30)
+    expect(getTenantPerIpRateLimit('__default__', undefined)).toBe(30)
+  })
+
+  it('returns the tenant rate limit when configured', () => {
+    expect(getTenantRateLimit('tenant-1', TENANTS_JSON)).toBe(60)
+    expect(getTenantRateLimit('tenant-2', TENANTS_JSON)).toBe(10)
+  })
+
+  it('falls back to default for unknown tenants', () => {
+    expect(getTenantRateLimit('ghost', TENANTS_JSON)).toBe(30)
+  })
+
+  it('prefers perIpRateLimit when set, else falls back to rateLimitPerMinute', () => {
+    const cfg = JSON.stringify([
+      { id: 'a', name: 'A', apiKey: 'k', rateLimitPerMinute: 10, perIpRateLimit: 3 },
+      { id: 'b', name: 'B', apiKey: 'k2', rateLimitPerMinute: 7 },
+    ])
+    expect(getTenantPerIpRateLimit('a', cfg)).toBe(3)
+    expect(getTenantPerIpRateLimit('b', cfg)).toBe(7)
+  })
+})
+
+describe('extractApiKeyToken', () => {
+  it('extracts Bearer tokens and trims them', () => {
+    expect(extractApiKeyToken(makeHeaders({ Authorization: 'Bearer  abc  ' }))).toBe('abc')
+  })
+
+  it('extracts X-API-Key with trimming', () => {
+    expect(extractApiKeyToken(makeHeaders({ 'X-API-Key': '  key-x  ' }))).toBe('key-x')
+  })
+
+  it('returns null when no auth header is present', () => {
+    expect(extractApiKeyToken(makeHeaders({}))).toBeNull()
+  })
+})
+
+describe('validateApiKeyAsync', () => {
+  it('passes in open mode (no bindings)', async () => {
+    const result = await validateApiKeyAsync(makeHeaders({}), {} as never)
+    expect(result.valid).toBe(true)
+  })
+
+  it('rejects a missing key when bindings are configured', async () => {
+    const result = await validateApiKeyAsync(makeHeaders({}), { SEARCH_API_KEY: 'sk' } as never)
+    expect(result.valid).toBe(false)
+    expect(result.reason).toMatch(/Missing API key/)
+  })
+
+  it('validates via legacy SEARCH_API_KEY', async () => {
+    const result = await validateApiKeyAsync(makeHeaders({ Authorization: 'Bearer sk-1' }), {
+      SEARCH_API_KEY: 'sk-1',
+    } as never)
+    expect(result.valid).toBe(true)
+    expect(result.tenant?.id).toBe('__default__')
+  })
+
+  it('validates via TENANTS_CONFIG', async () => {
+    const result = await validateApiKeyAsync(makeHeaders({ Authorization: 'Bearer sk-acme-123' }), {
+      TENANTS_CONFIG: TENANTS_JSON,
+    } as never)
+    expect(result.valid).toBe(true)
+    expect(result.tenant?.id).toBe('tenant-1')
+  })
+
+  it('maps ApiKeyDO revocation/expiry reasons to friendly messages', async () => {
+    mockValidateKey = async () => ({ valid: false, reason: 'key_revoked' })
+    try {
+      const result = await validateApiKeyAsync(makeHeaders({ Authorization: 'Bearer revoked' }), {
+        API_KEY_DO: {},
+      } as never)
+      expect(result.valid).toBe(false)
+      expect(result.reason).toMatch(/revoked/)
+    } finally {
+      mockValidateKey = async () => ({ valid: false, reason: 'mock_unset' })
+    }
+  })
+
+  it('falls back to legacy validation when ApiKeyDO throws', async () => {
+    mockValidateKey = async () => {
+      throw new Error('DO down')
+    }
+    try {
+      const result = await validateApiKeyAsync(makeHeaders({ Authorization: 'Bearer sk-legacy' }), {
+        API_KEY_DO: {},
+        SEARCH_API_KEY: 'sk-legacy',
+      } as never)
+      expect(result.valid).toBe(true)
+      expect(result.tenant?.id).toBe('__default__')
+    } finally {
+      mockValidateKey = async () => ({ valid: false, reason: 'mock_unset' })
+    }
+  })
+})
+
+describe('hasSufficientScope', () => {
+  it('grants legacy keys (no meta) full access', () => {
+    expect(hasSufficientScope('admin')).toBe(true)
+  })
+
+  it('enforces the scope hierarchy', () => {
+    const meta = { scope: 'write' } as never
+    expect(hasSufficientScope('read', meta)).toBe(true)
+    expect(hasSufficientScope('write', meta)).toBe(true)
+    expect(hasSufficientScope('admin', meta)).toBe(false)
+    const admin = { scope: 'admin' } as never
+    expect(hasSufficientScope('admin', admin)).toBe(true)
+  })
+})
+
+describe('getActiveClientCount', () => {
+  it('reports the tracked client count', () => {
+    checkClientRateLimit('9.8.7.6')
+    expect(getActiveClientCount()).toBeGreaterThan(0)
+  })
+})
+
+describe('requireAuth / requireAdmin middleware', () => {
+  it('requireAuth denies in open mode (no keys configured)', async () => {
+    const c = makeCtx({})
+    const next = vi.fn()
+    await requireAuth(c, next)
+    expect(next).not.toHaveBeenCalled()
+    expect((c as { json: ReturnType<typeof vi.fn> }).json).toHaveBeenCalledWith(expect.any(Object), 401)
+  })
+
+  it('requireAuth passes a valid key and calls next', async () => {
+    const c = makeCtx({ SEARCH_API_KEY: 'sk-ok' }, { Authorization: 'Bearer sk-ok' })
+    const next = vi.fn()
+    await requireAuth(c, next)
+    expect(next).toHaveBeenCalledTimes(1)
+  })
+
+  it('requireAuth rejects an invalid key with 401', async () => {
+    const c = makeCtx({ SEARCH_API_KEY: 'sk-ok' }, { Authorization: 'Bearer sk-bad' })
+    const next = vi.fn()
+    await requireAuth(c, next)
+    expect(next).not.toHaveBeenCalled()
+  })
+
+  it('requireAdmin denies in open mode', async () => {
+    const c = makeCtx({})
+    const next = vi.fn()
+    await requireAdmin(c, next)
+    expect(next).not.toHaveBeenCalled()
+    expect((c as { json: ReturnType<typeof vi.fn> }).json).toHaveBeenCalledWith(expect.any(Object), 403)
+  })
+
+  it('requireAdmin passes a valid legacy key (no DO) and calls next', async () => {
+    const c = makeCtx({ SEARCH_API_KEY: 'sk-admin' }, { Authorization: 'Bearer sk-admin' })
+    const next = vi.fn()
+    await requireAdmin(c, next)
+    expect(next).toHaveBeenCalledTimes(1)
+  })
+
+  it('requireAdmin rejects a non-admin DO key with 403', async () => {
+    mockValidateKey = async () => ({
+      valid: true,
+      meta: { scope: 'read', owner: 'u', keyId: 'k', name: 'n' },
+    })
+    try {
+      const c = makeCtx({ API_KEY_DO: {} }, { Authorization: 'Bearer sk-read' })
+      const next = vi.fn()
+      await requireAdmin(c, next)
+      expect(next).not.toHaveBeenCalled()
+      expect((c as { json: ReturnType<typeof vi.fn> }).json).toHaveBeenCalledWith(expect.any(Object), 403)
+    } finally {
+      mockValidateKey = async () => ({ valid: false, reason: 'mock_unset' })
+    }
   })
 })

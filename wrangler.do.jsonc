@@ -48,6 +48,8 @@
       { "name": "CLICK_LOG_DO", "class_name": "ClickLogDO" },
       { "name": "EXPERIMENT_DO", "class_name": "ExperimentDO" },
       { "name": "CANARY_DO", "class_name": "CanaryOrchestratorDO" },
+      { "name": "TENANT_AUDIT_DO", "class_name": "AuditLogDO" },
+      { "name": "TENANCY_DO", "class_name": "TenancyDO" },
       { "name": "NEWS_HUB_DO", "class_name": "NewsHubDO" }
     ]
   },
@@ -68,6 +70,11 @@
         "CanaryOrchestratorDO"
       ]
     },
+    // 수정: 테넌시/감사 DO 신규 등록 — v1 은 이미 적용된 tag 라 새 v2 로 추가한다.
+    {
+      "tag": "v2",
+      "new_sqlite_classes": ["AuditLogDO", "TenancyDO"]
+    },
     // P2-2 (2026-08-18): 뉴스 RSS 허브 주기 수집 DO 신규 등록.
     {
       "tag": "v3",
@@ -81,7 +88,7 @@
   // cache no-ops gracefully without them — DO-hosted search paths don't need
   // them) and all secrets (set via `wrangler secret put ssak-do-worker <NAME>`).
   //
-  // ⚠️ The 11-DO list lives in FOUR places — keep in sync when adding a DO:
+  // ⚠️ The 13-DO list lives in FOUR places — keep in sync when adding a DO:
   //    1. this file (bindings + migrations)
   //    2. wrangler.jsonc (script_name bindings)
   //    3. wrangler.dev.jsonc (exports + bindings)

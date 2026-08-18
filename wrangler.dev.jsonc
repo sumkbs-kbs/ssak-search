@@ -6,7 +6,7 @@
  * (Pages can't supply script_name). For local dev, the DO classes resolve
  * from _worker.js directly.
  *
- * Includes ALL 10 DO bindings + R2 + INDEX_QUEUE so every feature is testable
+ * Includes ALL 13 DO bindings + R2 + INDEX_QUEUE so every feature is testable
  * in local dev. Production DO bindings must be configured via Cloudflare
  * Dashboard (Pages Settings → Functions → Durable Objects) — see
  * UNIFIED_ROADMAP.md Phase A.2 and the consolidated setup checklist at the
@@ -30,6 +30,8 @@
       { "name": "CLICK_LOG_DO", "class_name": "ClickLogDO" },
       { "name": "EXPERIMENT_DO", "class_name": "ExperimentDO" },
       { "name": "CANARY_DO", "class_name": "CanaryOrchestratorDO" },
+      { "name": "TENANT_AUDIT_DO", "class_name": "AuditLogDO" },
+      { "name": "TENANCY_DO", "class_name": "TenancyDO" },
       { "name": "NEWS_HUB_DO", "class_name": "NewsHubDO" }
     ]
   },
@@ -48,6 +50,8 @@
     "ClickLogDO": { "type": "durable-object", "storage": "sqlite" },
     "ExperimentDO": { "type": "durable-object", "storage": "sqlite" },
     "CanaryOrchestratorDO": { "type": "durable-object", "storage": "sqlite" },
+    "AuditLogDO": { "type": "durable-object", "storage": "sqlite" },
+    "TenancyDO": { "type": "durable-object", "storage": "sqlite" },
     "NewsHubDO": { "type": "durable-object", "storage": "sqlite" }
   },
   "r2_buckets": [

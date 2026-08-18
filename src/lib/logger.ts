@@ -186,8 +186,19 @@ export function createLoggingMiddleware(opts: LoggingOptions = {}) {
     // Add request ID to response headers for tracing
     c.res.headers.set('x-request-id', requestId)
 
+    // trace_id is injected by the tracing middleware (src/middleware/tracing.ts)
+    // which runs BEFORE this middleware. Every request-scoped log line carries
+    // it so a single request is traceable end-to-end in Logpush. The
+    // typeof guard keeps embedded contexts working (unit tests pass a mock
+    // context without .get).
+    const traceId =
+      (typeof c.get === 'function' ? (c.get('traceId') as string | undefined) : undefined) ??
+      getRequestId(c.req.raw.headers)
+    c.res.headers.set('x-trace-id', traceId)
+
     const requestLogger = logger.child({
       requestId,
+      traceId,
       method: c.req.method,
       path: c.req.path,
       clientIp: c.req.header('cf-connecting-ip') || c.req.header('x-forwarded-for') || 'unknown',

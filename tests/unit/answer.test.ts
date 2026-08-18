@@ -12,7 +12,7 @@ import type { SearchResult } from '../../src/types'
 const mockFetch = vi.fn()
 vi.stubGlobal('fetch', mockFetch)
 
-import { generateAnswer } from '../../src/lib/answer'
+import { generateAnswer, createAnswerTokenStream, attachFactCheckToAnswer } from '../../src/lib/answer'
 
 // Helper to create search results
 function makeResult(overrides: Partial<SearchResult> = {}): SearchResult {
@@ -261,5 +261,60 @@ describe('generateAnswer', () => {
     const answer = await generateAnswer('react', results, mockAi as never, {})
     // Falls to extractive
     expect(answer.text.length).toBeGreaterThan(20)
+  })
+})
+
+describe('attachFactCheckToAnswer', () => {
+  it('appends a fact-check section and attaches the report', async () => {
+    const base = { text: 'React hooks are useful [1].', confidence: 0.8, sources: [0] }
+    const results = [
+      makeResult({
+        title: 'React Guide',
+        content:
+          'React hooks are functions that let you use state. The React team recommends using them in all new code.',
+        url: 'https://react.dev/hooks',
+        domain: 'react.dev',
+      }),
+      makeResult({
+        title: 'Another Guide',
+        content: 'React hooks are functions that let you use state. The React team recommends using them in all new code.',
+        url: 'https://another.dev/hooks',
+        domain: 'another.dev',
+      }),
+    ]
+    const out = attachFactCheckToAnswer(base as never, results)
+    expect(out.text).toContain(base.text)
+    expect(out.text.length).toBeGreaterThan(base.text.length)
+    expect(out.factCheck).toBeDefined()
+    expect(typeof out.factCheck?.confidence).toBe('number')
+  })
+})
+
+describe('createAnswerTokenStream', () => {
+  it('returns null for empty results or empty context', async () => {
+    expect(await createAnswerTokenStream('q', [])).toBeNull()
+    expect(await createAnswerTokenStream('q', [makeResult({ content: 'x' })])).toBeNull()
+  })
+
+  it('produces a word-streamed extractive stream when no model is available', async () => {
+    const results = [
+      makeResult({
+        title: 'React Guide',
+        content:
+          'React hooks are functions that let you use state without writing a class. The useState hook is the most common one.',
+      }),
+    ]
+    const out = await createAnswerTokenStream('react hooks', results)
+    expect(out).not.toBeNull()
+    expect(out!.modelUsed.provider).toBe('extractive')
+    // Read the stream fully
+    const reader = out!.stream.getReader()
+    let text = ''
+    for (;;) {
+      const { done, value } = await reader.read()
+      if (done) break
+      text += value
+    }
+    expect(text.length).toBeGreaterThan(0)
   })
 })

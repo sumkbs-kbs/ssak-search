@@ -12,6 +12,7 @@
 
 import { Hono } from 'hono'
 import { logger, toError, getRequestId } from '../lib/logger'
+import { extractTraceId } from '../middleware/tracing'
 import { cors } from 'hono/cors'
 import type { AppBindings, SearchRequest, SearchResponse, ErrorResponse, FocusMode } from '../types'
 import { executeSearch } from '../lib/orchestrator'
@@ -32,6 +33,7 @@ import { createAnswerTokenStream, generateAnswer, type AnswerStreamResult } from
 import { classifyQuery, DEFAULT_CLASSIFIER_CONFIG } from '../lib/agentic/classifier'
 import { normalizeQuery, SubrequestTracker, installSubrequestTracker } from '../lib/util'
 import { expandCompanyAlias } from '../lib/stock-finance'
+import { parseSearchRequest } from '../lib/validation/schemas'
 
 /**
  * Resolve the per-request subrequest budget. The header value must mirror the
@@ -158,6 +160,11 @@ searchRoute.use('/*', async (c, next) => {
 // POST /api/search - primary Tavily-compatible endpoint
 searchRoute.post('/', async (c) => {
   setMetricsEnv(c.env)
+  // request-scoped child logger
+  const log = logger.child({
+    requestId: getRequestId(c.req.raw.headers),
+    traceId: extractTraceId(c.req.raw.headers),
+  })
   // Track subrequests for quota monitoring (Cloudflare Pages free: 50 subrequests/request).
   // The tracker wraps globalThis.fetch and is shared with the orchestrator so
   // fan-out can shed backends once the soft limit is approached.
@@ -165,70 +172,47 @@ searchRoute.post('/', async (c) => {
   const uninstallTracker = installSubrequestTracker(tracker)
   c.executionCtx.waitUntil(Promise.resolve().then(uninstallTracker))
 
-  let body: Partial<SearchRequest>
+  // Defensive validation gate — every untrusted field is validated/coerced by
+  // the zod schema (src/lib/validation/schemas.ts). The schema preserves the
+  // legacy clamping/fallback semantics while rejecting malformed types.
+  let body: unknown
   try {
     body = await c.req.json()
   } catch (_err) {
     return c.json<ErrorResponse>({ detail: 'Invalid JSON body', code: 'invalid_body' }, 400)
   }
 
-  if (!body.query || typeof body.query !== 'string' || body.query.trim().length === 0) {
-    return c.json<ErrorResponse>({ detail: 'Query is required', code: 'missing_query' }, 400)
-  }
-
-  // Cap query length to prevent abuse
-  if (body.query.length > 2000) {
-    return c.json<ErrorResponse>({ detail: 'Query too long (max 2000 chars)', code: 'query_too_long' }, 400)
-  }
-
-  // Cap domain filter arrays to prevent O(N×M) CPU burn in domainMatches().
-  const MAX_DOMAIN_FILTERS = 20
-  if (body.include_domains && body.include_domains.length > MAX_DOMAIN_FILTERS) {
-    return c.json<ErrorResponse>(
-      { detail: `include_domains max ${MAX_DOMAIN_FILTERS} entries`, code: 'too_many_domains' },
-      400,
-    )
-  }
-  if (body.exclude_domains && body.exclude_domains.length > MAX_DOMAIN_FILTERS) {
-    return c.json<ErrorResponse>(
-      { detail: `exclude_domains max ${MAX_DOMAIN_FILTERS} entries`, code: 'too_many_domains' },
-      400,
-    )
+  const parsedBody = parseSearchRequest(body)
+  if (!parsedBody.ok) {
+    return c.json<ErrorResponse>({ detail: parsedBody.detail, code: parsedBody.code }, 400)
   }
 
   // Auto-routing: classify query complexity → basic (fast) or advanced (pro)
-  const { depth: searchDepth, mode: searchMode } = resolveSearchDepth(body.query.trim(), body.search_depth, c.env)
-
-  // Validate max_results
-  const maxResults = Math.min(Math.max(body.max_results ?? 10, 1), 20)
+  const { depth: searchDepth, mode: searchMode } = resolveSearchDepth(
+    parsedBody.data.query,
+    parsedBody.data.search_depth,
+    c.env,
+  )
 
   const request: SearchRequest = {
-    query: expandCompanyAlias(normalizeQuery(body.query)),
+    query: expandCompanyAlias(normalizeQuery(parsedBody.data.query)),
     search_depth: searchDepth,
-    topic: body.topic && ['general', 'news', 'finance'].includes(body.topic) ? body.topic : 'general',
-    max_results: maxResults,
-    include_answer: body.include_answer ?? false,
-    include_raw_content: body.include_raw_content ?? false,
-    // Truthy coercion matches the sibling include_answer handling — accepts
-    // boolean true and string "true" from form/query-serialized clients.
-    include_fact_check: Boolean(body.include_fact_check),
-    include_domains: body.include_domains,
-    exclude_domains: body.exclude_domains,
-    time_range: body.time_range,
-    // Preserve unspecified (undefined) so ranking.ts can apply the default
-    // relevance+freshness blend — mapping it to 'relevance' here would force
-    // pure relevance for every request that omits sort_by.
-    sort_by: body.sort_by === 'date' ? 'date' : body.sort_by === 'relevance' ? 'relevance' : undefined,
-    max_tokens: Math.min(body.max_tokens ?? 4000, 8000),
-    page: Math.min(Math.max(body.page ?? 1, 1), 10),
-    country: body.country,
-    language: body.language,
-    location: body.location,
-    focus:
-      body.focus && ['all', 'academic', 'news', 'writing', 'video', 'social', 'finance', 'math'].includes(body.focus)
-        ? (body.focus as FocusMode)
-        : 'all',
-    user_id: typeof body.user_id === 'string' ? body.user_id.slice(0, 200) : undefined,
+    topic: parsedBody.data.topic,
+    max_results: parsedBody.data.max_results,
+    include_answer: parsedBody.data.include_answer,
+    include_raw_content: parsedBody.data.include_raw_content,
+    include_fact_check: parsedBody.data.include_fact_check,
+    include_domains: parsedBody.data.include_domains,
+    exclude_domains: parsedBody.data.exclude_domains,
+    time_range: parsedBody.data.time_range,
+    sort_by: parsedBody.data.sort_by,
+    max_tokens: parsedBody.data.max_tokens,
+    page: parsedBody.data.page,
+    country: parsedBody.data.country,
+    language: parsedBody.data.language,
+    location: parsedBody.data.location,
+    focus: parsedBody.data.focus,
+    user_id: parsedBody.data.user_id,
   }
 
   const startTime = Date.now()
@@ -262,6 +246,7 @@ searchRoute.post('/', async (c) => {
       env: c.env,
       subrequestTracker: tracker,
       requestId: getRequestId(c.req.raw.headers),
+      traceId: extractTraceId(c.req.raw.headers),
       experimentVariant: experiment?.variant,
       // Phase C.3: semantic cache tier (Vectorize) — opt-in per route so the
       // eval runner / research pipeline never receive cached responses.
@@ -358,6 +343,11 @@ searchRoute.post('/', async (c) => {
 // GET /api/search - simplified GET interface for quick testing
 searchRoute.get('/', async (c) => {
   setMetricsEnv(c.env)
+  // request-scoped child logger
+  const log = logger.child({
+    requestId: getRequestId(c.req.raw.headers),
+    traceId: extractTraceId(c.req.raw.headers),
+  })
   // Same subrequest tracking as POST — the 50-subrequest cap applies equally.
   const tracker = new SubrequestTracker()
   const uninstallTracker = installSubrequestTracker(tracker)
@@ -455,6 +445,7 @@ searchRoute.get('/', async (c) => {
       env: c.env,
       subrequestTracker: tracker,
       requestId: getRequestId(c.req.raw.headers),
+      traceId: extractTraceId(c.req.raw.headers),
       experimentVariant: experiment?.variant,
       // Phase C.3: semantic cache tier (Vectorize) — opt-in per route so the
       // eval runner / research pipeline never receive cached responses.
@@ -537,6 +528,11 @@ searchRoute.get('/', async (c) => {
 //   event: keepalive → { ts }  (every 10s during generation)
 searchRoute.get('/stream', async (c) => {
   setMetricsEnv(c.env)
+  // request-scoped child logger
+  const log = logger.child({
+    requestId: getRequestId(c.req.raw.headers),
+    traceId: extractTraceId(c.req.raw.headers),
+  })
   // Subrequest cap applies to SSE responses too.
   const tracker = new SubrequestTracker()
   const uninstallTracker = installSubrequestTracker(tracker)
@@ -608,6 +604,7 @@ searchRoute.get('/stream', async (c) => {
           env: c.env,
           subrequestTracker: tracker,
           requestId: getRequestId(c.req.raw.headers),
+          traceId: extractTraceId(c.req.raw.headers),
           experimentVariant: experiment?.variant,
           // Phase C.3: semantic cache tier (Vectorize) — opt-in per route so the
           // eval runner / research pipeline never receive cached responses.

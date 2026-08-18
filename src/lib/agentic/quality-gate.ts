@@ -9,7 +9,9 @@
 
 import type { SubQueryPlan } from './planner'
 import { logger, toError } from '../../lib/logger'
+import { generateSpanId } from '../../middleware/tracing'
 import type { StepResult } from './executor'
+import { withRetry, isRateLimitError, retryAfterMsFromError } from '../../lib/resilience/retry'
 
 // ============================================================
 // Types
@@ -207,7 +209,12 @@ export async function reformulateQuery(
   originalQuery: string,
   failedResults: StepResult[],
   ai?: unknown,
+  traceId?: string,
 ): Promise<string> {
+  // Trace-scoped logger — carries the request trace_id so quality-gate logs
+  // are linkable to the originating search (Action Item 1.1).
+  const log = traceId ? logger.child({ traceId, spanId: generateSpanId(), span: 'quality-gate' }) : logger
+
   // If AI available, use it for intelligent reformulation
   if (ai) {
     try {
@@ -230,11 +237,31 @@ Generate ONE improved search query that:
 
 Reply with ONLY the reformulated query, nothing else.`
 
-      const response = await aiBinding.run('@cf/meta/llama-3.1-8b-instruct', {
-        messages: [{ role: 'user', content: prompt }],
-        max_tokens: 100,
-        temperature: 0.3,
-      })
+      // LLM 429 quota → retried with the same seconds-scale backoff as the
+      // planner/synthesizer (rateLimitDelaysMs), so a quota window does not
+      // drop reformulation to the heuristic fallback. Non-429 AI errors keep
+      // the existing fail-fast → heuristic path (retryable: isRateLimitError).
+      const response = await withRetry(
+        () =>
+          aiBinding.run('@cf/meta/llama-3.1-8b-instruct', {
+            messages: [{ role: 'user', content: prompt }],
+            max_tokens: 100,
+            temperature: 0.3,
+          }),
+        {
+          maxRetries: 1,
+          retryable: isRateLimitError,
+          rateLimitDelaysMs: [2000, 4000],
+          // 429 응답의 Retry-After 힌트가 고정 시퀀스를 재정의한다 (캡은
+          // maxDelayMs×3) — planner/synthesizer와 동일한 계약.
+          getRetryAfterMs: retryAfterMsFromError,
+          onRetry: (attempt, delayMs, err) =>
+            log.warn(`[QualityGate] AI reformulation rate-limited (429), retrying in ${delayMs}ms`, {
+              error: toError(err),
+              attempt,
+            }),
+        },
+      )
 
       const text = extractText(response)
       if (text) {
@@ -244,12 +271,12 @@ Reply with ONLY the reformulated query, nothing else.`
           .split('\n')[0]
           .trim()
         if (cleaned.length > 5 && cleaned.length < 200 && cleaned !== originalQuery) {
-          logger.info(`[QualityGate] AI reformulated query: "${originalQuery}" -> "${cleaned}"`)
+          log.info(`[QualityGate] AI reformulated query: "${originalQuery}" -> "${cleaned}"`)
           return cleaned
         }
       }
     } catch (err) {
-      logger.warn('[QualityGate] AI reformulation failed, using heuristic:', { error: toError(err) })
+      log.warn('[QualityGate] AI reformulation failed, using heuristic:', { error: toError(err) })
     }
   }
 
@@ -274,7 +301,7 @@ Reply with ONLY the reformulated query, nothing else.`
   for (const strategy of strategies) {
     const result = strategy(originalQuery)
     if (result && result !== originalQuery) {
-      logger.info(`[QualityGate] Heuristic reformulated query: "${originalQuery}" -> "${result}"`)
+      log.info(`[QualityGate] Heuristic reformulated query: "${originalQuery}" -> "${result}"`)
       return result
     }
   }
@@ -305,13 +332,14 @@ export async function runQualityGate(
   stepResults: StepResult[],
   config: QualityGateConfig = DEFAULT_QUALITY_CONFIG,
   ai?: unknown,
+  traceId?: string,
 ): Promise<QualityGateResult & { reQueryPlan?: SubQueryPlan }> {
   const evaluation = evaluatePlanQuality(stepResults, config)
   evaluation.originalQuery = originalQuery
 
   if (!evaluation.passed && config.maxRetries > 0) {
     // Try to reformulate and re-query
-    const reformulated = await reformulateQuery(originalQuery, stepResults, ai)
+    const reformulated = await reformulateQuery(originalQuery, stepResults, ai, traceId)
 
     if (reformulated !== originalQuery) {
       evaluation.reQueried = true

@@ -8,6 +8,7 @@ import {
   generateRelatedQueries,
   getDomainAuthority,
   safeFetchWithRedirects,
+  naturalLanguageToKeywords,
 } from '../../src/lib/util'
 
 describe('normalizeUrl', () => {
@@ -135,6 +136,63 @@ describe('simplifyQuery', () => {
     expect(simplifyQuery('Cloudflare Workers D1 tutorial 2025')).toBe('cloudflare workers d1')
     // "practices" is a content word (not noise) — only filler is stripped.
     expect(simplifyQuery('React state management best practices')).toBe('react state management practices')
+  })
+
+  it('strips question auxiliaries before keyword simplification (en-fact-11 extension)', () => {
+    // Every keyword-API consumer (HN/reddit/github/dbpedia/arxiv/stack-exchange)
+    // funnels through simplifyQuery — the auxiliary must be gone so the API
+    // matches on 'gps work', not 'does gps work' (45 vs 327 HN hits, live).
+    expect(simplifyQuery('how does GPS work', 4)).toBe('gps work')
+    expect(simplifyQuery('how do solar panels work', 5)).toBe('solar panels work')
+    // 'what does DNA do' → 'what DNA do' → noise-strip 'what' → 'dna do'.
+    // The trailing 'do' (verb) survives — only the question auxiliary is
+    // guaranteed gone; the API now matches on the subject instead of 'does'.
+    expect(simplifyQuery('what does DNA do', 4)).toBe('dna do')
+  })
+
+  it('leaves technical do/does phrases untouched in non-question queries', () => {
+    // naturalLanguageToKeywords only fires on question-word + auxiliary;
+    // 'do' is NOT in QUERY_NOISE_WORDS, so a bare technical phrase keeps it
+    // intact ('do while loop' must not lose its keyword).
+    expect(simplifyQuery('do while loop javascript', 5)).toBe('do while loop javascript')
+    expect(simplifyQuery('haskell do notation', 5)).toBe('haskell do notation')
+  })
+})
+
+describe('naturalLanguageToKeywords (en-fact-11: bing "does" keyword misfire)', () => {
+  it('strips does/do/did after a question word', () => {
+    expect(naturalLanguageToKeywords('how does GPS work')).toBe('how GPS work')
+    expect(naturalLanguageToKeywords('how do solar panels work')).toBe('how solar panels work')
+    expect(naturalLanguageToKeywords('why did the Titanic sink')).toBe('why the Titanic sink')
+    expect(naturalLanguageToKeywords('what does DNA do')).toBe('what DNA do')
+    expect(naturalLanguageToKeywords('where does pandas live')).toBe('where pandas live')
+  })
+
+  it('is case-insensitive', () => {
+    expect(naturalLanguageToKeywords('How Does GPS Work')).toBe('How GPS Work')
+    expect(naturalLanguageToKeywords('HOW DOES GPS WORK')).toBe('HOW GPS WORK')
+  })
+
+  it('KEEPS is/are/was/were — stripping them degrades results (live-verified)', () => {
+    // "what is blockchain" is handled correctly by bing; the stripped
+    // "what blockchain technology" returns qoo10/ja.wikipedia junk.
+    expect(naturalLanguageToKeywords('what is blockchain')).toBe('what is blockchain')
+    expect(naturalLanguageToKeywords('what is blockchain technology')).toBe('what is blockchain technology')
+    expect(naturalLanguageToKeywords('why was the war fought')).toBe('why was the war fought')
+  })
+
+  it('leaves non-question and keyword queries untouched', () => {
+    expect(naturalLanguageToKeywords('GPS navigation system')).toBe('GPS navigation system')
+    expect(naturalLanguageToKeywords('does anyone sell GPS trackers')).toBe('does anyone sell GPS trackers')
+    expect(naturalLanguageToKeywords('do does did grammar')).toBe('do does did grammar')
+    expect(naturalLanguageToKeywords('site:youtube.com how does GPS work')).toBe('site:youtube.com how does GPS work')
+  })
+
+  it('never returns an empty or degenerate query', () => {
+    // "how does" with nothing after → the trailing-token requirement fails,
+    // so the query stays untouched rather than being reduced to just "how".
+    expect(naturalLanguageToKeywords('how does')).toBe('how does')
+    expect(naturalLanguageToKeywords('what do')).toBe('what do')
   })
 })
 

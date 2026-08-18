@@ -7,12 +7,27 @@
  */
 
 import { describe, it, expect, vi, afterEach } from 'vitest'
+
+// Bypass the hostname-keyed circuit breaker: yahooFinanceSearch hardcodes
+// query1.finance.yahoo.com, so a persistent-failure test would trip the
+// shared circuit and poison later tests (the fetchYahooJson tests above use
+// distinct hosts for exactly this reason). Passing through to globalThis.fetch
+// keeps the retry logic under test while isolating the breaker.
+vi.mock('../../src/lib/rate-limiter', () => ({
+  canRequest: vi.fn(async () => true),
+  rateLimitedFetch: vi.fn(async (_env: unknown, url: string, init: RequestInit) => {
+    const res = await fetch(url, init)
+    return res.ok || res.status < 500 ? res : res
+  }),
+}))
+
 import {
   resolveTickerAlias,
   bestQuoteMatch,
   tokenizeWords,
   buildYahooStockData,
   fetchYahooJson,
+  yahooFinanceSearch,
 } from '../../src/lib/yahoo-finance-search'
 
 function makeQuote(symbol: string, name: string, quoteType = 'EQUITY') {
@@ -220,5 +235,140 @@ describe('resolveTickerAlias', () => {
     // infix matches of the whole alias string, so standalone words pass through.
     expect(resolveTickerAlias('What is a dax')).toBeNull()
     expect(resolveTickerAlias('casey jones biography')).toBeNull()
+  })
+})
+
+describe('yahooFinanceSearch — end-to-end with mocked fetchYahooJson', () => {
+  const originalFetch = globalThis.fetch
+
+  afterEach(() => {
+    globalThis.fetch = originalFetch
+  })
+
+  function stubFetch(sequence: Array<Record<string, unknown>>) {
+    const fetchMock = vi.fn()
+    for (const item of sequence) {
+      fetchMock.mockResolvedValueOnce(item)
+    }
+    globalThis.fetch = fetchMock as unknown as typeof fetch
+  }
+
+  it('returns a single structured quote result for a resolvable query', async () => {
+    // v1 search → quotes list; v8 chart → price meta
+    stubFetch([
+      {
+        ok: true,
+        status: 200,
+        json: async () => ({
+          quotes: [{ symbol: 'AAPL', shortname: 'Apple Inc.', quoteType: 'EQUITY', longname: 'Apple Inc.' }],
+        }),
+      },
+      {
+        ok: true,
+        status: 200,
+        json: async () => ({
+          chart: {
+            result: [
+              {
+                meta: {
+                  regularMarketPrice: 220.1,
+                  chartPreviousClose: 218.5,
+                  longName: 'Apple Inc.',
+                  exchangeName: 'NMS',
+                  currency: 'USD',
+                },
+              },
+            ],
+          },
+        }),
+      },
+    ])
+
+    const results = await yahooFinanceSearch('Apple stock price', { env: undefined })
+    expect(results).toHaveLength(1)
+    expect(results[0].title).toBe('Apple Inc. (AAPL)')
+    expect(results[0].url).toBe('https://finance.yahoo.com/quote/AAPL')
+    expect(results[0].stock_data?.price).toBe(220.1)
+    expect(results[0].score).toBe(0.98) // structured data pin
+  })
+
+  it('returns [] when no ticker is found', async () => {
+    stubFetch([{ ok: true, status: 200, json: async () => ({ quotes: [] }) }])
+    const results = await yahooFinanceSearch('some unknown entity', { env: undefined })
+    expect(results).toEqual([])
+  })
+
+  it('returns [] when every fetch is exhausted (network failure)', async () => {
+    stubFetch([
+      { ok: false, status: 500 },
+      { ok: false, status: 500 },
+      { ok: false, status: 500 },
+    ])
+    const results = await yahooFinanceSearch('Apple', { env: undefined })
+    expect(results).toEqual([])
+  })
+
+  it('falls back to a text result (no stock_data) when the chart meta has no price', async () => {
+    stubFetch([
+      {
+        ok: true,
+        status: 200,
+        json: async () => ({
+          quotes: [{ symbol: 'AAPL', shortname: 'Apple Inc.', quoteType: 'EQUITY' }],
+        }),
+      },
+      { ok: true, status: 200, json: async () => ({ chart: { result: [{ meta: {} }] } }) },
+    ])
+    const results = await yahooFinanceSearch('Apple', { env: undefined })
+    // buildResult still emits a text fallback card without structured data
+    expect(results).toHaveLength(1)
+    expect(results[0].title).toBe('Apple Inc. (AAPL)')
+    expect(results[0].stock_data).toBeUndefined()
+  })
+
+  it('resolves index aliases through the alias path (S&P 500 → ^GSPC)', async () => {
+    stubFetch([
+      {
+        ok: true,
+        status: 200,
+        json: async () => ({
+          quotes: [{ symbol: '^GSPC', shortname: 'S&P 500', quoteType: 'INDEX', longname: 'S&P 500' }],
+        }),
+      },
+      {
+        ok: true,
+        status: 200,
+        json: async () => ({
+          chart: { result: [{ meta: { regularMarketPrice: 5500, longName: 'S&P 500' } }] },
+        }),
+      },
+    ])
+    const results = await yahooFinanceSearch('S&P 500', { env: undefined })
+    expect(results).toHaveLength(1)
+    expect(results[0].title).toBe('S&P 500 (^GSPC)')
+  })
+
+  it('falls back to shorter query candidates when the full query finds nothing', async () => {
+    // "apple stock split" cleans to the 2-word "apple split" → head-word
+    // fallback candidate "apple". Primary (q=apple+split) → empty, then the
+    // fallback "apple" → quote, then the chart fetch.
+    stubFetch([
+      { ok: true, status: 200, json: async () => ({ quotes: [] }) },
+      {
+        ok: true,
+        status: 200,
+        json: async () => ({
+          quotes: [{ symbol: 'AAPL', shortname: 'Apple Inc.', quoteType: 'EQUITY', longname: 'Apple Inc.' }],
+        }),
+      },
+      {
+        ok: true,
+        status: 200,
+        json: async () => ({ chart: { result: [{ meta: { regularMarketPrice: 220.1, longName: 'Apple Inc.' } }] } }),
+      },
+    ])
+    const results = await yahooFinanceSearch('apple stock split', { env: undefined })
+    expect(results).toHaveLength(1)
+    expect(results[0].stock_data?.ticker).toBe('AAPL')
   })
 })

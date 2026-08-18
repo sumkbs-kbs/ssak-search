@@ -95,6 +95,33 @@ describe('fanoutBackends', () => {
     expect(result.resultSets[1][0].domain).toBe('yahoo-finance.example')
   })
 
+  // S75: github/github-issues joined waitFor — a fast bing/community pool that
+  // fills phase 1 must NOT drop the github task's results (08-13 flicker
+  // attribution: 20/29 github-miss runs had no github backend in the final
+  // list because it was the one high-value backend NOT in waitFor).
+  it('waitFor recovers a slow github backend after phase 1 early-exit (S75)', async () => {
+    const tasks = [fastTask('bing', 10), slowTask('github', 1500, 8)]
+    const promise = fanoutBackends(tasks, 8, { waitFor: ['github'] })
+
+    await vi.advanceTimersByTimeAsync(800)
+    await vi.advanceTimersByTimeAsync(1500)
+    const result = await promise
+
+    expect(result.usedBackends).toEqual(['bing', 'github'])
+    expect(result.resultSets[1]).toHaveLength(8)
+  })
+
+  it('waitFor recovers a slow github-issues backend (S75)', async () => {
+    const tasks = [fastTask('bing', 10), slowTask('github-issues', 1500, 5)]
+    const promise = fanoutBackends(tasks, 8, { waitFor: ['github-issues'] })
+
+    await vi.advanceTimersByTimeAsync(800)
+    await vi.advanceTimersByTimeAsync(1500)
+    const result = await promise
+
+    expect(result.usedBackends).toEqual(['bing', 'github-issues'])
+  })
+
   it('waitFor is bounded by BACKEND_TIMEOUT_MS — a never-settling task does not hang', async () => {
     // BACKEND_TIMEOUT_MS.wikipedia = 4500ms. Phase 1 breaks at 800ms, then
     // waitFor awaits the wikipedia bgPromise; its timeout timer fires at 4500ms

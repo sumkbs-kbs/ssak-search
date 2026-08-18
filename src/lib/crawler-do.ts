@@ -894,7 +894,15 @@ export class CrawlerDO extends DurableObject<Env> {
     if (!this.config.webhook_url) return
 
     try {
-      await fetch(this.config.webhook_url, {
+      // SSRF guard DNS rebinding (사용자 제공 URL이므로 필수)
+      let webhook = this.config.webhook_url.trim()
+      if (!webhook) return
+      if (!/^https:/.test(webhook)) {
+        logger.warn('[CrawlerDO] Webhook URL 강제 HTTPS:', { url: webhook })
+        webhook = webhook.replace(/^http:/, 'https:')
+      }
+      await assertSafeFetchUrl(webhook)
+      await fetch(webhook, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

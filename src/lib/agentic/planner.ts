@@ -8,8 +8,11 @@
  */
 
 import { z } from 'zod'
-import { logger, toError } from '../../lib/logger'
+import { logger, toError, type Logger } from '../../lib/logger'
+import { generateSpanId } from '../../middleware/tracing'
 import type { Ai } from '@cloudflare/workers-types'
+import { withRetry, isRateLimitError, retryAfterMsFromError } from '../../lib/resilience/retry'
+import { FINANCIAL_KEYWORDS, FINANCIAL_PLANNER_ONLY } from '../financial-keywords'
 
 // ============================================================
 // Zod Schemas (Runtime Validation)
@@ -72,6 +75,7 @@ AVAILABLE TOOLS:
    - query (string): Search query
    - recency_days (number, optional): Limit to last N days
    - max_results (number, optional): Max results to return (default 10)
+   - topic (string, optional): 'finance' routes to Naver Finance/Yahoo stock backends, 'news' routes to Bing News
 
 2. fetch_url — Fetch full content from a specific URL. Parameters:
    - url (string): URL to fetch
@@ -87,6 +91,7 @@ PLANNING RULES:
 - Use depends_on to chain steps that need previous results
 - Prefer web_search for fact-finding, fetch_url for specific sources, compute for math
 - For "compare X vs Y" queries: search for X, search for Y, then compute/compare
+- For financial/stock queries (Korean: 주가/실적/배당/시총/시가총액/ETF/연금저축펀드 등 — English: stock/price/earnings/revenue): set topic: 'finance' on web_search steps so the executor routes to the Naver Finance/Yahoo backends
 - For "what is the history of X" queries: search for timeline, then fetch key sources
 - For multi-part questions: one step per part, then synthesis
 - Maximum 10 steps; prefer 3-6 for most queries
@@ -94,7 +99,8 @@ PLANNING RULES:
 
 OUTPUT FORMAT: JSON matching the SubQueryPlan schema exactly.`
 
-const FEW_SHOT_EXAMPLES = [
+// Exported for the prompt-integrity test (every example must pass SubQueryPlanSchema).
+export const FEW_SHOT_EXAMPLES = [
   {
     query:
       'Compare the energy efficiency (kWh/100mi and MPGe) of Tesla Model 3, Chevrolet Bolt, and Nissan Leaf using EPA data',
@@ -221,7 +227,7 @@ const FEW_SHOT_EXAMPLES = [
           id: 1,
           question: '삼성전자 2024년 연간 실적 (매출, 영업이익, 순이익)',
           tool: 'web_search',
-          params: { query: '삼성전자 2024년 연간 실적 매출 영업이익', recency_days: 90, max_results: 5 },
+          params: { query: '삼성전자 2024년 연간 실적 매출 영업이익', recency_days: 90, max_results: 5, topic: 'finance' },
           output_role: 'evidence',
           depends_on: [],
         },
@@ -229,7 +235,7 @@ const FEW_SHOT_EXAMPLES = [
           id: 2,
           question: '삼성전자 2024년 분기별 실적 추이',
           tool: 'web_search',
-          params: { query: '삼성전자 2024년 1분기 2분기 3분기 4분기 실적', recency_days: 180, max_results: 5 },
+          params: { query: '삼성전자 2024년 1분기 2분기 3분기 4분기 실적', recency_days: 180, max_results: 5, topic: 'finance' },
           output_role: 'evidence',
           depends_on: [],
         },
@@ -237,7 +243,7 @@ const FEW_SHOT_EXAMPLES = [
           id: 3,
           question: '삼성전자 2025년 전망 및 증권가 목표주가',
           tool: 'web_search',
-          params: { query: '삼성전자 2025년 전망 목표주가 증권사 리포트', recency_days: 90, max_results: 5 },
+          params: { query: '삼성전자 2025년 전망 목표주가 증권사 리포트', recency_days: 90, max_results: 5, topic: 'finance' },
           output_role: 'evidence',
           depends_on: [],
         },
@@ -245,7 +251,7 @@ const FEW_SHOT_EXAMPLES = [
           id: 4,
           question: '반도체 업황 및 메모리 가격 전망 2025년',
           tool: 'web_search',
-          params: { query: '2025년 메모리 반도체 가격 전망 D램 낸드플래시', recency_days: 90, max_results: 5 },
+          params: { query: '2025년 메모리 반도체 가격 전망 D램 낸드플래시', recency_days: 90, max_results: 5, topic: 'finance' },
           output_role: 'evidence',
           depends_on: [],
         },
@@ -589,6 +595,45 @@ const FEW_SHOT_EXAMPLES = [
       confidence: 0.86,
     },
   },
+  // Korean financial example (heuristic-parity): the expanded Korean financial
+  // vocabulary (연금저축펀드 — isFinancial keyword) AND topic:'finance' routing,
+  // so the LLM path emits the same classification the heuristicPlan produces.
+  {
+    query: '연금저축펀드 추천 순위 및 수수료 비교 2025',
+    plan: {
+      original_query: '연금저축펀드 추천 순위 및 수수료 비교 2025',
+      complexity: 'moderate',
+      estimated_steps: 3,
+      steps: [
+        {
+          id: 1,
+          question: '2025년 연금저축펀드 추천 순위',
+          tool: 'web_search',
+          params: { query: '2025 연금저축펀드 추천 순위', recency_days: 180, max_results: 8, topic: 'finance' },
+          output_role: 'evidence',
+          depends_on: [],
+        },
+        {
+          id: 2,
+          question: '연금저축펀드 수수료 및 세제 혜택',
+          tool: 'web_search',
+          params: { query: '연금저축펀드 수수료 세제 혜택', recency_days: 365, max_results: 5, topic: 'finance' },
+          output_role: 'evidence',
+          depends_on: [],
+        },
+        {
+          id: 3,
+          question: '상품별 수수료·수익률 비교 정리',
+          tool: 'compute',
+          params: { formula: 'Compare fees and returns across recommended funds', context: { year: 2025 } },
+          output_role: 'verification',
+          depends_on: [1, 2],
+        },
+      ],
+      synthesis_instruction: '추천 순위와 수수료·세제 혜택을 표로 정리하고 상품별 장단점을 비교한다. 모든 수치는 [step_number]로 인용한다.',
+      confidence: 0.86,
+    },
+  },
 ]
 
 // ============================================================
@@ -600,10 +645,25 @@ export interface PlannerOptions {
   ai?: Ai
   /** Model to use for planning */
   model?: string
+  /**
+   * Max AI planning retries after a failure (AI run throw or malformed /
+   * schema-invalid JSON). Unified with the shared withRetry policy
+   * (maxRetries/retryable/onRetry vocabulary). Default 1 — one retry with a
+   * strict-JSON reminder, then heuristic fallback.
+   */
+  maxPlanRetries?: number
+  /**
+   * Backoff sequence for LLM 429 quota errors (withRetry.rateLimitDelaysMs).
+   * Same default as the synthesizer ([2000, 4000]) so the whole LLM pipeline
+   * handles rate limits with one consistent policy.
+   */
+  rateLimitDelaysMs?: number[]
   /** Temperature for planning (lower = more deterministic) */
   temperature?: number
   /** Max tokens for planner response */
   maxTokens?: number
+  /** Trace-scoped logger (Action Item 1.1) — carries traceId/spanId */
+  logger?: Logger
 }
 
 export class QueryPlanner {
@@ -611,12 +671,18 @@ export class QueryPlanner {
   private model: string
   private temperature: number
   private maxTokens: number
+  private maxPlanRetries: number
+  private rateLimitDelaysMs: number[]
+  private log: Logger
 
   constructor(opts: PlannerOptions = {}) {
     this.ai = opts.ai
     this.model = opts.model ?? '@cf/meta/llama-3.1-8b-instruct'
     this.temperature = opts.temperature ?? 0.2
     this.maxTokens = opts.maxTokens ?? 2000
+    this.maxPlanRetries = opts.maxPlanRetries ?? 1
+    this.rateLimitDelaysMs = opts.rateLimitDelaysMs ?? [2000, 4000]
+    this.log = opts.logger ?? logger
   }
 
   /**
@@ -627,24 +693,58 @@ export class QueryPlanner {
     if (!this.ai) {
       return this.heuristicPlan(query)
     }
+    const ai = this.ai // const capture — narrows the optional binding for the closure
 
-    const prompt = this.buildPrompt(query)
+    const basePrompt = this.buildPrompt(query)
 
     try {
-      const response = await this.ai.run(this.model, {
-        messages: [
-          { role: 'system', content: PLANNER_SYSTEM_PROMPT },
-          { role: 'user', content: prompt },
-        ],
-        max_tokens: this.maxTokens,
-        temperature: this.temperature,
-      })
-
-      const text = this.extractText(response)
-      const parsed = this.parseAndValidate(text)
-      return parsed
+      // Unified retry policy (withRetry — same retryable/onRetry vocabulary as
+      // the network backends and the synthesizer's withResultRetry). Both
+      // failure modes are retried: the AI run throwing (transient) AND
+      // malformed / schema-invalid JSON (parseAndValidate throws) — a re-run
+      // with a strict-JSON reminder frequently recovers the latter. Only after
+      // the retries exhaust does the heuristic fallback engage.
+      return await withRetry(
+        async (attempt) => {
+          // Attempt-index-based prompt strengthening (synthesizer STRICT
+          // REMINDER pattern): on retry, demand bare JSON so the parser has a
+          // second chance at a well-formed plan.
+          const prompt = attempt > 0 ? `${basePrompt}\n\nSTRICT REMINDER: Reply with ONLY valid JSON matching the plan schema — no prose, no code fences.` : basePrompt
+          const response = await ai.run(this.model, {
+            messages: [
+              { role: 'system', content: PLANNER_SYSTEM_PROMPT },
+              { role: 'user', content: prompt },
+            ],
+            max_tokens: this.maxTokens,
+            temperature: this.temperature,
+          })
+          const text = this.extractText(response)
+          return this.parseAndValidate(text)
+        },
+        {
+          maxRetries: this.maxPlanRetries,
+          baseDelayMs: 250,
+          retryable: () => true, // AI run throw + parse/validation throw 모두 재시도
+          // LLM 429 quota → seconds-scale rate-limit backoff (same sequence as
+          // the synthesizer's rateLimitDelaysMs) so the whole LLM pipeline
+          // handles 429s consistently; other AI failures keep the fast 250ms
+          // exponential path.
+          rateLimitDelaysMs: this.rateLimitDelaysMs,
+          // A 429 response carrying a Retry-After hint overrides the fixed
+          // sequence for the next attempt (server-authoritative wait, capped at
+          // maxDelayMs×3) — same contract as the synthesizer's withResultRetry.
+          getRetryAfterMs: retryAfterMsFromError,
+          onRetry: (attempt, delayMs, err) =>
+            this.log.warn(
+              isRateLimitError(err)
+                ? `[Planner] AI planning rate-limited (429), retrying in ${delayMs}ms`
+                : `[Planner] AI planning attempt ${attempt} failed, retrying:`,
+              { error: toError(err), delayMs, attempt },
+            ),
+        },
+      )
     } catch (err) {
-      logger.warn('[Planner] AI planning failed, falling back to heuristic:', { error: toError(err) })
+      this.log.warn('[Planner] AI planning failed, falling back to heuristic:', { error: toError(err) })
       return this.heuristicPlan(query)
     }
   }
@@ -684,9 +784,34 @@ export class QueryPlanner {
       })
       return validated
     } catch (err) {
-      logger.warn('[Planner] JSON parse/validation failed:', { error: toError(err) })
+      this.log.warn('[Planner] JSON parse/validation failed:', { error: toError(err) })
       throw err
     }
+  }
+
+  /**
+   * CJK-safe word-boundary matching for intent detection.
+   *
+   * JS `\b` only understands ASCII `\w` — Hangul (and CJK generally) is a
+   * non-word char, so `\b실적\b` NEVER fires in "삼성전자 실적 분석": the
+   * space before 실 and the Hangul char itself are both non-word, so no
+   * boundary exists. Tokenizing the query on non-letter/digit runs and
+   * testing whole-token membership treats Latin and Hangul uniformly —
+   * English keywords keep their old `\b` semantics (no "stockholm" false
+   * positives) and Korean keywords become first-class tokens. Multi-word
+   * phrases (e.g. "how to") require the words to appear consecutively.
+   */
+  private hasIntentKeywords(query: string, keywords: string[]): boolean {
+    const words = query
+      .toLowerCase()
+      .split(/[^\p{L}\p{N}]+/u)
+      .filter((t) => t.length > 0)
+    return keywords.some((k) => {
+      const parts = k.split(' ')
+      if (parts.length === 1) return words.includes(k)
+      // Phrase: the parts must appear consecutively (avoids "how tokyo").
+      return words.some((_, i) => parts.every((p, j) => words[i + j] === p))
+    })
   }
 
   /**
@@ -697,11 +822,54 @@ export class QueryPlanner {
     const steps: SubQueryStep[] = []
     let stepId = 1
 
-    // Detect query patterns
-    const isComparison = /\b(vs|versus|compare|comparison|difference|better|worse)\b/i.test(query)
-    const isFinancial = /\b(stock|price|earnings|revenue|실적|주가|매출|영업이익)\b/i.test(query)
-    const isTechnical = /\b(tutorial|guide|how to|api|implementation|code|구현|튜토리얼)\b/i.test(query)
-    const isNews = /\b(latest|news|recent|announcement|release|최신|뉴스|발표)\b/i.test(query)
+    // Detect query patterns (CJK-safe: the old \b-wrapped regexes could never
+    // match Korean tokens like 실적/주가/구현/최신 — see hasIntentKeywords).
+    const isComparison = this.hasIntentKeywords(query, [
+      'vs',
+      'versus',
+      'compare',
+      'comparison',
+      'difference',
+      'better',
+      'worse',
+      // Korean comparison keywords — whole-token CJK-safe (see hasIntentKeywords).
+      // '비교'/'차이'/'대비' are plain tokens; '어느 것이' is a consecutive-token
+      // phrase. 2026-08-13: added so '연금저축펀드 비교' (kr-stock-15) and similar
+      // queries match comparison BEFORE the financial branch — isComparison is
+      // evaluated first in the else-if chain, so a financial keyword alone no
+      // longer shadows a Korean comparison intent.
+      '비교',
+      '차이',
+      '대비',
+      '어느 것이',
+    ])
+    // Single source of truth — src/lib/financial-keywords.ts. Previously a private
+    // list here drifted from extractCompanyName (stock-finance.ts) and
+    // isFinancialPattern (specialized.ts); adding a keyword to the planner silently
+    // left the other two stale. FINANCIAL_KEYWORDS + FINANCIAL_PLANNER_ONLY are the
+    // whole-token intent vocabulary (phrases like '리서치 리포트' match as
+    // consecutive tokens via hasIntentKeywords).
+    const isFinancial = this.hasIntentKeywords(query, [...FINANCIAL_KEYWORDS, ...FINANCIAL_PLANNER_ONLY])
+    const isTechnical = this.hasIntentKeywords(query, [
+      'tutorial',
+      'guide',
+      'how to',
+      'api',
+      'implementation',
+      'code',
+      '구현',
+      '튜토리얼',
+    ])
+    const isNews = this.hasIntentKeywords(query, [
+      'latest',
+      'news',
+      'recent',
+      'announcement',
+      'release',
+      '최신',
+      '뉴스',
+      '발표',
+    ])
 
     // Build steps based on patterns
     if (isComparison) {
@@ -739,11 +907,14 @@ export class QueryPlanner {
         })
       }
     } else if (isFinancial) {
+      // topic='finance' routes the executor's searchWeb fan-out to the finance
+      // backends (Naver Finance searchKoreanStock + Yahoo Finance) so the
+      // generated queries actually reach Naver/Yahoo, not just Bing/Naver/Wiki.
       steps.push({
         id: stepId++,
         question: `${query} 관련 재무 데이터 및 최신 소식`,
         tool: 'web_search',
-        params: { query: `${query} 실적 주가 재무`, recency_days: 90, max_results: 8 },
+        params: { query: `${query} 실적 주가 재무`, recency_days: 90, max_results: 8, topic: 'finance' },
         output_role: 'evidence',
         depends_on: [],
       })
@@ -751,7 +922,7 @@ export class QueryPlanner {
         id: stepId++,
         question: '전문가 분석 및 전망 수집',
         tool: 'web_search',
-        params: { query: `${query} 분석 전망 목표주가 리포트`, recency_days: 90, max_results: 5 },
+        params: { query: `${query} 분석 전망 목표주가 리포트`, recency_days: 90, max_results: 5, topic: 'finance' },
         output_role: 'evidence',
         depends_on: [1],
       })
@@ -773,11 +944,14 @@ export class QueryPlanner {
         depends_on: [1],
       })
     } else if (isNews) {
+      // topic='news' routes the executor's searchWeb fan-out to the Bing News
+      // endpoint (bingNewsSearch) so news-intent queries actually reach a
+      // news source, not just the generic Bing/Naver/Wikipedia fan-out.
       steps.push({
         id: stepId++,
         question: `${query} 최신 뉴스 및 발표`,
         tool: 'web_search',
-        params: { query: `${query} latest news`, recency_days: 30, max_results: 8 },
+        params: { query: `${query} latest news`, recency_days: 30, max_results: 8, topic: 'news' },
         output_role: 'evidence',
         depends_on: [],
       })
@@ -846,7 +1020,11 @@ export class QueryPlanner {
 // Convenience function
 // ============================================================
 
-export async function createPlan(query: string, ai?: Ai, model?: string): Promise<SubQueryPlan> {
-  const planner = new QueryPlanner({ ai, model })
+export async function createPlan(query: string, ai?: Ai, model?: string, traceId?: string): Promise<SubQueryPlan> {
+  const planner = new QueryPlanner({
+    ai,
+    model,
+    logger: traceId ? logger.child({ traceId, spanId: generateSpanId(), span: 'planner' }) : undefined,
+  })
   return planner.plan(query)
 }

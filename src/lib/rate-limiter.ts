@@ -29,6 +29,11 @@ export interface HostHealth {
   probeInFlight?: boolean
   backoffMs?: number
   /**
+   * 서킷이 열린(트립된) 시각 (epoch ms, 0 = 닫힘). 회복 예정 시각
+   * (openedAt + backoffMs) 산출을 위해 헬스 응답에 노출 (수정 82).
+   */
+  openedAt?: number
+  /**
    * Where this host's state is tracked (S88 evidence surfacing):
    * - 'local': in-memory per-isolate maps (LOCAL_CIRCUITS) — invisible across
    *   isolates; hosts_tracked fluctuates as /api/health lands on different
@@ -469,6 +474,7 @@ export async function getBackendHealth(env: AppBindings): Promise<Record<string,
       tripCount: circuit.tripCount,
       probeInFlight: circuit.probeInFlight,
       backoffMs: getBackoffMs(circuit.tripCount),
+      openedAt: circuit.openedAt,
       // Per-isolate visibility marker — this host is tracked in THIS isolate's
       // module maps only (S88): a different isolate's /api/health may not see
       // it at all, which is exactly why hosts_tracked fluctuates.

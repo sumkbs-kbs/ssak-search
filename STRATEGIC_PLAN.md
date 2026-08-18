@@ -3578,6 +3578,74 @@ production 실토큰으로 verify-do-binding.sh 전체 실행 3회 연속 (기�
 - 미캡처 의미론 보존 확인: 3회 시도 × 3회 프로브(HTTP 200) · 소진 경고 유지 · rc=0 (DO 체크 권위)
 - self-test 5종 PASS · bash -n OK — 기본값만 변경이라 TS/게이트 영향 없음
 
+#### ⑦-② 미캡처 소진 경로의 블라인드 스팟 — FAIL_ON_CAPTURE_MISS 옵트인 하드 게이트 (2026-08-12)
+
+분석: `FAIL_ON_REGRESSION=1`은 "백엔드 회귀를 게이트로 삼겠다"는 의미인데, 캡처 소진 시
+회귀 비교 분기 자체에 진입하지 않아 **게이트가 조용히 무력화**됨 (블라인드 스팟이 그린을 위장).
+무조건 실패 승격은 거짓 레드로 게이트 신뢰를 잃는 역효과가 있어 **계층형 설계** 채택:
+
+| 경로 | 동작 (변경 전) | 동작 (변경 후) |
+|---|---|---|
+| 캡처 성공 + 신규 down | `FAIL_ON_REGRESSION=1` → exit 1 | 동일 (변경 없음) |
+| 캡처 성공 + 변화 없음 | exit 0 | 동일 |
+| **캡처 소진 (3회 미스)** | 경고만 + exit 0 (게이트 무력화) | **기본 동일** + `FAIL_ON_CAPTURE_MISS=1` 시 exit 1 (unverifiable) |
+
+구현 (`scripts/verify-do-binding.sh`):
+- `FAIL_ON_CAPTURE_MISS=1` — 소진 분기에서 `exit 1` ("backend availability unverifiable"),
+  `FAIL_ON_REGRESSION=1`과 함께 쓰면 "회귀 + 미검증 둘 다 레드"로 의미 완성
+- 기본값 fail-open 유지 — 미캡처는 tail/전달 지연 문제이지 백엔드 소견이 아니므로 배포를 막지 않음
+  (fresh-deploy 로그 파이프라인 웜업에서 드물지 않은 정상 조건, 이전 실측 3/3 소진)
+- 요약 삼분화: `✅ none / ⚠️ DOWN=x / ⚠️ UNVERIFIED — log not captured`
+- 소진 안내에 크론 브리지 추가: 15분 scheduled 딥 프로브가 여전히 down_backends를 기록하므로
+  그 크론 로그를 확인하라는 지침 (블라인드 스팟의 실질 영향 완화)
+- deploy.yml 사후 게이트에는 **미배선** (기본 유지가 의도 — 사후 게이트 목적은 커밋 일치 + DO 바인딩)
+
+실측 (production, `TAIL_CMD='sleep 60'` 강제 미캡처, 새 기본값 5/15/5):
+
+| 구성 | rc | 관측 |
+|---|---|---|
+| 플래그 없음 | **0** | 소진 경고 + `UNVERIFIED` 요약 (fail-open 보존) |
+| `FAIL_ON_CAPTURE_MISS=1` | **1** | `❌ exiting 1 (backend availability unverifiable)` |
+| happy path (실 tail) | **0** | `✅ no down backends` 캡처 정상 — 회귀 분기 무영향 |
+
+self-test 5종 PASS · bash -n OK.
+
+#### ⑦-③ 크론 브리지 — 캡처 소진 시 scheduled probe 상태 자동 대체 (2026-08-12)
+
+⑦-②의 UNVERIFIED 블라인드 스팟을 **해소**: 15분 scheduled 딥 프로브가 계속 기록하는
+`down_backends`를 상태 파일로 보존해, tail 캡처가 소진되면 그 값을 자동으로 대신 읽음
+(전달 미스가 백엔드 소견을 가리는 문제 제거).
+
+구현 3파일:
+1. **`scripts/parse-cron-health.py`** (신규) — wrangler-tail 캡처 로그에서 `[health] deep health
+   probe complete` 라인을 추출(verify-do-binding.sh parse_tail과 동일 엔벨로프 처리:
+   string/array message·pretty multi-line·bare line), **마지막 틱**의 down_backends를
+   `/tmp/ssak-cron-health.json`에 기록. `--self-test` 모드 포함.
+2. **`scripts/run-prod-cron-tail.py`** — 캡처 완료 후 파서 호출 → 상태 파일 기록. stale 하드코딩
+   PROD_DEPLOY_ID를 **동적 해석**(wrangler pages deployment list → Environment==Production)으로
+   교체 (실패 시 scheduler-only tail로 graceful fallback).
+3. **`scripts/verify-do-binding.sh`** — 소진 분기에 브리지: `CRON_HEALTH_STATE`(기본
+   `/tmp/ssak-cron-health.json`)·`CRON_HEALTH_MAX_AGE_SECONDS`(기본 2400 = 40분 ≈ 2.6틱).
+   - 신선하면: `ℹ️ [cron-bridge] tail capture missed → using last scheduled deep-probe state` +
+     회귀 비교·상태 persist·`FAIL_ON_REGRESSION` 게이트를 **공유 함수 `compare_and_persist()`**로 실행
+   - 브리지로 가용성이 해결되면 `FAIL_ON_CAPTURE_MISS` **미발동** (unverifiable이 아니게 됨)
+   - 신선하지 않으면: 원인 명시(`stale (7526s > 2400s max)` / `no health line in cron capture`)
+     후 기존 UNVERIFIED 경로 유지
+   - 요약 삼분화 확장: `✅ none (cron bridge)` / `⚠️ DOWN=x (cron bridge)` / `⚠️ UNVERIFIED`
+
+실측 (production, `TAIL_CMD='sleep 60'` 강제 미캡처):
+
+| 구성 | rc | 관측 |
+|---|---|---|
+| 신선 상태 none | **0** | `✅ Backend availability: no down backends (cron bridge)` |
+| 신선 상태 down + `FAIL_ON_CAPTURE_MISS=1` | **0** | 브리지가 가용성 해결 → `DOWN = wikipedia,bing (cron bridge)` (하드 게이트 미발동 — 의도) |
+| **stale 상태** + `FAIL_ON_CAPTURE_MISS=1` | **1** | `state unusable: stale (7526s > 2400s max)` → exit 1 |
+| 상태 파일 없음 + 플래그 없음 | **0** | UNVERIFIED 유지 + "run run-prod-cron-tail.py" 안내 |
+| happy path (실 tail) | **0** | 캡처 정상 — 브리지 경로 무영향 |
+
+테스트: 파서 self-test 8건 + `tests/unit/parse-cron-health.test.ts` 9건(python3 spawn, CI에서
+ubuntu python3로 실행) — 유닛 전체 2,610건 통과. tsc 0 · lint 0(내 파일 기준) · bash -n OK.
+
 #### ⑦ workflow_run 아티팩트 다운로드 실패 원인 규명 + 수정 (2026-08-12)
 
 **현상**: 매 workflow_run 배포에서 `Download CI artifact`가 "Artifact not found for name: worker-bundle"으로 실패 — 아티팩트는 트리거 CI run에 존재(API 확인 · PAT로 REST 다운로드 200/318KB)했고 폴백 빌드가 마스킹.

@@ -100,6 +100,108 @@
 
 ---
 
+### 2.5 백엔드별 커버리지 vs gold 기여 (2026-08-13, run-1..3 × 500쿼리 집계)
+> 산출물: `scripts/report-backend-coverage.ts` (gold 도메인 → 시그니처 백엔드 우선순위 체인으로 히트 귀속).
+> 전체 1,500 query-run 중 **zero-gold 405건 (27.0%)** — 73%의 query-run이 gold 히트.
+
+**gold 기여율 (사용 대비 gold 히트 — hitRate 상위):**
+
+| 백엔드 | 사용 | gold 기여 | 기여율 | 해석 |
+|---|---|---:|---:|---|
+| arxiv | 74 | 65 | **0.878** | 전용 백엔드 최고 — 사용 시 gold 거의 보장 |
+| yahoo-finance | 96 | 72 | **0.750** | 금융 쿼리 gold(quote) 보장 |
+| naver | 234 | 165 | **0.705** | kr 금융·일반 gold 보장 |
+| qiita | 33 | 23 | **0.697** | ja 기술 gold 보장 |
+| github | 430 | 250 | **0.581** | 절대 기여 1위 (250건) |
+| juejin | 48 | 27 | 0.563 | zh 기술 gold |
+| wikipedia | 594 | 148 | 0.249 | **429 문제로 저조 — S73 언어별 cooldown으로 완화 예정** |
+| openalex | 34 | 9 | 0.265 | expected 48 중 missUsed 22 + missAbsent 29 — 사용해도 미스 절반 (FIX-11 locations 수집 후 개선 예정) |
+| stack-exchange | 4 | 0 | 0.000 | **expected 162 중 사용 4건 — 백엔드 사실상 미가동 (08-11 스냅샷, FIX-04 재시도 전)** |
+| reddit | 0 | 0 | 0.000 | **expected 51 전부 미사용 (스냅샷 당시 차단)** |
+| naver-finance | 60 | 2 | 0.033 | 시그니처 체인상 naver에 먼저 귀속 — 단독 기여 과소평가 |
+
+**핵심 발견:**
+1. **시그니처 백엔드가 없는 gold 히트 726건** — 뉴스·일반 웹 gold(reuters/nytimes 등)의 대부분은 bing 일반 검색 경유 (신디케이션 포함). bing은 gold 히트 최대 단일 공급원 (1,403 query-run 사용).
+2. **최대 커버리지 갭 = stack-exchange(162) + reddit(51)** — 전용 백엔드가 사실상 꺼져 있어 gold(stackoverflow.com/reddit.com)를 전량 bing 의존. FIX-04(재시도) 후 재측정 필요.
+3. **openalex missUsed 22건** — 사용했는데도 학술 gold 미스 (arxiv.org 유입 문제, FIX-11 locations 수집으로 개선).
+4. **wikipedia hitRate 0.249** — 전 세계 fact/기술 gold의 핵심인데 429 전멸이 지배. S73(언어별 cooldown) + mirror로 복원 중.
+5. **github 절대 기여 1위 (250건)** — 기술 gold의 최대 시그니처 공급원, 기여율 0.581로 안정적.
+6. **github flicker 20건 귀속 (08-13, S75)**: early-exit 20건(waitFor 누락 — bing이 빨리 채우면 github 결과 폐기) → waitFor 추가 해소. github quota 403(무인증 10 req/min, technical 벌크에서 11번째 호출부터) → 캐시 + eval 페이싱 6000ms 추가. 랭킹 아웃 9건(github 결과가 top-10 밖, BM25에서 docs에 밀림)은 잔여로 문서화.
+
+### 2.6 general 태그 NDCG=0 재진단 (2026-08-14, run-1..3 재계산)
+> 산출물: `scripts/probe-general-zero.ts` (`npm run eval:general-zero`) — probe-p1-zero (S54)와 동일한
+> 검사 규칙(label-suffix + computeNdcg 실시간 재계산)으로 general 91쿼리만 집중 진단.
+> general zero 45/91 (49.5%) — **전체 zero 100건의 45%**.
+
+**원인 분류 (probe-p1-zero 동일 규칙):**
+
+| 분류 | 건수 | 비율 |
+|---|---:|---:|
+| COVERAGE (어떤 run에서도 gold 미유입) | 40 | 88.9% |
+| MIXED (run 간 gold 유무 갈림 — 가용성 노이즈) | 5 | 11.1% |
+| RANKING (gold는 풀에 있으나 rank 10 밖) | 0 | 0.0% |
+
+→ **기존 P1 결론 유지: 랭킹 계층 정상, 원인 100% 회수(커버리지)**. 언어별: en 27/36 (75%) > ja 7/15 (47%) > zh 9/20 (45%) > kr 2/20 (10%).
+
+**gold 도메인 레벨 갭 (general 91쿼리, gold 등장 쿼리 수 ≥2):**
+
+| gold 도메인 | gold쿼리 | 풀등장 | top10 | 전무 |
+|---|---:|---:|---:|---:|
+| healthline.com | 21 | 0 | 0 | **21** |
+| webmd.com | 18 | 0 | 0 | **18** |
+| japan-guide.com | 16 | 0 | 0 | **16** |
+| quora.com | 15 | 0 | 0 | **15** |
+| wikihow.com | 15 | 0 | 0 | **15** |
+| xiaohongshu.com | 15 | 0 | 0 | **15** |
+| terms.naver.com | 13 | 0 | 0 | **13** |
+| dianping.com | 11 | 0 | 0 | **11** |
+| yahoo.co.jp | 11 | 0 | 0 | **11** |
+| tripadvisor.com | 10 | 0 | 0 | **10** |
+| mayoclinic.org · qunar.com | 5 | 0 | 0 | **5** |
+| nih.gov · zh.wikipedia.org · lonelyplanet.com | 4 | 0 | 0 | **4** |
+| ctrip.com | 17 | 2 | 2 | 15 |
+| reddit.com | 16 | 1 | 1 | 15 |
+| mafengwo.cn | 18 | 4 | 4 | 14 |
+| nytimes.com | 15 | 1 | 1 | 14 |
+| trip.com | 15 | 3 | 3 | 12 |
+| namu.wiki | 13 | 3 | 3 | 10 |
+| tripadvisor.jp | 11 | 1 | 1 | 10 |
+| blog.naver.com | 18 | 17 | 17 | 1 |
+| zhihu.com | 11 | 9 | 9 | 2 |
+
+**구조적 원인 3종 (실측):**
+1. **커뮤니티·헬스 gold 전용 백엔드 부재 + bing 미회수** — reddit 16쿼리 중 풀 등장 1건, quora/healthline/webmd/wikihow 15~21쿼리 전부 풀 전무. §2.5의 reddit 51 전부 미사용·stack-exchange 4건 사용과 일치 (전용 백엔드가 꺼진 상태에서 bing 일반 검색이 커뮤니티/하우투 gold를 top-10에 못 넣음). kr의 blog.naver.com 17/18은 naver 전용 백엔드가 직접 공급하는 것과 정면 대조.
+2. **CJK 여행·커뮤니티 gold 전용 백엔드 부재** — ctrip/mafengwo/dianping/xiaohongshu/trip/qunar (zh 15쿼리 전무 다수), yahoo.co.jp/tripadvisor.jp/japan-guide (ja 전무 다수). zh-travel 5쿼리·ja-travel/general 5쿼리 전부 COVERAGE.
+3. **zh.wikipedia.org gold 4/4 전무** — S73 언어별 cooldown이 zh-fact는 9/16으로 복원했지만 zh 일반·여행 gold는 여전히 0 (S73 재측정이 en-acad+zh-fact 한정 — zh 일반/여행 경로는 wikidata 미러 S36/S74 커버 미검증). en.wikipedia.org은 풀에서 20쿼리 등장하나 en-general gold는 커뮤니티/헬스라 매칭 안 됨.
+
+**부수 관찰:**
+- 백엔드 구성: bing 44/45 (전무후무 의존) · hackernews 25 · dbpedia 25 · wikipedia 18 — HN이 general 쿼리 풀을 지배 (news.ycombinator.com 18쿼리 등장)하나 gold와 무관.
+- 사전류 도메인 오염: ko.wordow.com 5 · dictionary.cambridge.org 5 · merriam-webster.com 6쿼리 — bing이 일반 쿼리를 사전 페이지로 해석 (en-travel-01 등).
+- MIXED 5건 (zh-general-01/ja-travel-02/en-general-06/en-shopping-01/ja-travel-08): run 간 gold 유무 갈림 — 라이브 API 비결정성 + early-exit (해당 run만 gold rank 1~8).
+
+**레버 ① 실행 (2026-08-14, FIX-2026-08-14-02 — reddit/stack-exchange 복구):**
+- **진단 확정**: general 쿼리는 `getSourcesForQueryType`에서 **구조적으로 `useReddit:false`** (reddit/stack-exchange가 general에서 미호출) + reddit `.json` 엔드포인트가 데이터센터 IP에서 **403 Blocked** (RSS 대체 필요) + stack-exchange 게이트가 technical/academic 전용.
+- **구현**: ① `redditSearch`에 **공식 Atom 검색 피드(`search.rss`, 실측 200 OK) 폴백** + 429 `x-ratelimit-reset` 기반 cooldown 가드 ② general에 `useReddit:true` ③ **DDG `site:reddit.com` 커뮤니티 태스크** (bing은 site: 연산자를 무시, DDG는 실측 10/10 reddit gold 반환) ④ stack-exchange를 프로그래밍 의도 쿼리로 확장 (adv-11 gold stackoverflow.com) ⑤ fanout waitFor에 reddit/ddg-site-reddit 등록 (early-exit 방지, 2000ms ceiling) ⑥ **게이트를 queryType → 의도 기반으로 전환** — `detectQueryType`가 how-to를 technical/financial/factual로 오분류해 `queryType==='general'` 게이트가 reddit-gold 16쿼리 중 15개를 놓쳤던 문제 해소, `isCommunityAdviceIntent`로 **16/16 전 쿼리 스케줄**.
+- **측정 (라이브 단일 run 01:32:56Z, general 91쿼리)**: general NDCG@10 **0.1420 → 0.1553**, zero **45/91 → 43/91 (47.3%)**, 커뮤니티 gold(reddit/stackoverflow) **NDCG>0 회수 4/16** (런마다 rate-limit 윈도우 위치가 달라 회수 쿼리 교체). **단일·격리 호출은 DDG site:reddit 10/10 · RSS 유효 포스트** — 버스트 한계가 유일 제약.
+- **잔여 제약 (구조적, 실측)**: ① **DDG html 202이 ~10~30초 버스트 윈도우** (첫 호출 5/5 → 이후 연속 0, lite도 403) — eval 벌크 연속 실행 시 회수 상한 ② **reddit RSS ~1/15~60초 cooldown** (x-ratelimit-reset). 생산 단일 사용자 트래픽(자연 간격)에서는 두 경로 모두 정상 동작. ③ **지연 trade-off**: waitFor로 커뮤니티 쿼리 평균 1,945ms (p95 4,255ms) — reddit gold 회수 대가.
+- **검증**: 유닛 테스트 2,601건 (신규: .rss 폴백·RSS 파서·isProgrammingIntent·P24 게이팅) · typecheck 0 · eslint 0경고.
+
+**레버 ② 실행 (2026-08-14, S104 / FIX-2026-08-14-03 — zh 여행·커뮤니티 gold site: 라우팅):**
+- **진단 확정 (스크립트 실측)**: **bing은 `site:` 연산자를 무시한다** — `scripts/probe-bing-site.ts`(모바일 HTML)·`probe-bing-site-raw.ts`(데스크톱 HTML)·`probe-bing-rss-site.ts`(`format=rss`) 3개 엔드포인트 모두 `site:mafengwo.cn 张家界旅游攻略`이 plain 검색과 동일 결과를 반환했고, 일부 쿼리는 site:가 키워드로 오염되어 크로스랭귀지 쓰레기 (예: `site:dianping.com 上海美食推荐` → support.google.com·merriam-webster). **부수 발견**: 기존 video 전략 `bing-youtube`(`site:youtube.com`)도 동일하게 무시되어 쓰레기 반환 — 후속 점검 대상. → **문자 그대로의 "bing site: 라우팅"은 불가능**.
+- **레버 재설계**: site:를 인정하는 엔진으로 라우팅 (P24 ddg-site-reddit 선례). ① `isZhTravelCommunityIntent` 의도 게이트 — 15쿼리 중 13개 스케줄 (考研复习计划/手游排行榜는 의도적 제외 — S26 CSDN 경로 전담) ② `pickZhTravelCommunityDomain` — 쿼리당 ONE gold 도메인을 FNV-1a 해시로 결정적 선택 (ctrip/mafengwo/dianping/xiaohongshu/trip/qunar/zhihu 7개 분산, S95 pickNewsOutlet 패턴) ③ `buildZhTravelCommunityTask` — `site:<gold> <query>` 부가형 태스크 (SEARXNG_URL 설정 시 SearXNG site: 라우팅 — **검증 실측(FIX-2026-08-14-05): google cse만 site: 인정, bing은 SearXNG 경유여도 무시 → settings.yml에서 bing 비활성, google cse·baidu 활성 + S104 호출은 language 없이** (language 명시 시 google cse 0건 퀴크), docs/13 §0; 미설정 시 DDG site:).
+- **구현**: `specialized.ts` 게이트 · `backend-tasks.ts` 도메인/피커/빌더 · `all.ts` zh 일반 브랜치 배선 · `fanout.ts` `ddg-site-zh-travel` 2000ms / `searxng-site-zh-travel` 3000ms 등록 · `orchestrator.ts` waitFor 추가.
+- **기대 효과**: run-3에서 7/15 NDCG 0.000이던 zh-travel-01~05 + zh-general-06~15에 gold 도메인 유입 (S95 뉴스 아웃렛과 동일한 COVERAGE 패치). DDG 버스트 202 윈도우 한계 공유 — 부가형이므로 빈 풀은 기존 bing/csdn 경로에 폴백.
+- **검증**: typecheck 0 · 유닛 테스트 2,615건 통과 (게이트 15쿼리 커버리지, 도메인 결정성, 태스크 구성·SearXNG 분기).
+- **Workers egress 실측 (2026-08-14, `scripts/probe-egress-worker.ts` → 신규 격리 프로젝트 `s104-egress-probe` 배포, HKG colo)**:
+  - **DDG site:는 Workers egress에서 gold 도메인을 100% 회수** — 격리 호출 기준 site:mafengwo.cn 11/11 · site:ctrip.com 12/12 · site:dianping.com 10/10 · site:trip.com 12/12 · site:qunar.com 10/10 · site:zhihu.com 10/10 · site:xiaohongshu.com 9/9 (재시도). **우려했던 "DDG가 zh gold 도메인을 인덱싱하지 않는다"는 반증 — 전 도메인 인덱스 존재 + site: 필터 정상 동작.**
+  - **DDG 버스트 202 확인 (구조적 상한)**: 연속 호출 2~4회 후 모든 쿼리(plain·reddit 대조 포함)가 ~10~30초 202 — docs/15 IP-지속 가정과 일치. eval 벌크에선 윈도우당 소수 쿼리만 gold 회수, **생산 단일 사용자 트래픽(자연 간격)은 정상**.
+  - **bing site:는 Workers egress에서도 무시 확정**: site:·plain 쿼리가 **완전 동일 결과** (site:mafengwo.cn == plain 张家界旅游攻略 → 동일 5건, site:dianping.com == plain 上海美食推荐 → 동일 5건). HKG colo에서는 plain 검색이 이미 gold 도메인을 반환해 site: 라우팅이 불필요해 보이지만 이는 bing의 지역 랭킹 우연일 뿐 — eval(로컬 egress)에서는 여전히 전무.
+  - **부수 발견**: 프로덕션(`search-engine-api.pages.dev`)은 partial_outage 상태에서 검색이 backend:failed를 반환 (bing 서킷은 healthy인데 검색 실패 — 별도 점검 필요).
+
+**레버 (잔여 후속):** ~~② zh/ja 여행·커뮤니티 gold bing site: 라우팅~~ → **S104 실행 완료 + Workers egress 실측 검증 완료** (DDG site: 100% 회수 확인, bing site: 무시 확정, 버스트 202가 유일 상한) ③ zh 일반·여행 wikipedia 유입 경로 점검 (S73 후 미검증 구간) ④ general 컨텍스트 HN 가중치 하향 (KOREAN_TECH_BLOG_PANELTY 패턴).
+
+---
+
 ## 3. 목표 지표 (12개월)
 
 | 지표 | 현재 | 3개월 | 6개월 | 12개월 | 측정 방법 |

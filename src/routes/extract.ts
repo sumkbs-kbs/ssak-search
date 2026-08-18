@@ -12,11 +12,12 @@
 import { Hono } from 'hono'
 import { logger, toError } from '../lib/logger'
 import { cors } from 'hono/cors'
-import type { AppBindings, ExtractRequest, ExtractResponse, ErrorResponse } from '../types'
+import type { AppBindings, ExtractResponse, ErrorResponse } from '../types'
 import { extractContent } from '../lib/extractor'
 import { validateApiKeyWithTenant, checkClientRateLimit, getClientIp } from '../lib/auth'
 import { recordExtractRequest, recordExtractSubrequests, setMetricsEnv } from '../lib/metrics'
 import { auditAuthFailure, auditRateLimit, audit } from '../lib/audit'
+import { parseExtractRequest, validateUrl, MAX_EXTRACT_URLS } from '../lib/validation/schemas'
 
 const extractRoute = new Hono<{ Bindings: AppBindings; Variables: { tenantId: string; tenantPlan: string } }>()
 
@@ -93,62 +94,26 @@ extractRoute.use('/*', async (c, next) => {
 
 // Hard cap on number of URLs per extract request — protects the
 // Cloudflare subrequest quota (free: 50/req, paid: 1000/req).
-const MAX_EXTRACT_URLS = 20
-
-/** Validate and normalize a single URL string; throws on rejected input. */
-function validateSingleUrl(raw: unknown): string {
-  if (typeof raw !== 'string') throw new Error('URL must be a string')
-  const trimmed = raw.trim()
-  if (trimmed.length === 0) throw new Error('URL is empty')
-  if (trimmed.length > 2048) throw new Error('URL too long (max 2048 chars)')
-  // Scheme validation — reject non-http(s) at the boundary.
-  // normalizeUrl adds https:// if missing; full SSRF check lives in extractor.ts.
-  return trimmed
-}
-
-/** Coerce the `urls` field from body into a string[] with size cap + per-URL validation. */
-function coerceUrlList(input: unknown): string[] {
-  if (typeof input === 'string') {
-    return [validateSingleUrl(input)]
-  }
-  if (!Array.isArray(input)) {
-    throw new Error('urls must be a string or array of strings')
-  }
-  if (input.length > MAX_EXTRACT_URLS) {
-    throw new Error(`Too many URLs (max ${MAX_EXTRACT_URLS})`)
-  }
-  return input.map(validateSingleUrl).filter((u) => u.length > 0)
-}
+// (Constant lives in src/lib/validation/schemas.ts — single source of truth.)
 
 // POST /api/extract
 extractRoute.post('/', async (c) => {
   setMetricsEnv(c.env)
-  let body: Partial<ExtractRequest>
+  // Defensive validation gate — the zod schema (src/lib/validation/schemas.ts)
+  // validates the body shape, coerces types, and maps error codes to the
+  // historical contract (missing_urls / invalid_urls).
+  let body: unknown
   try {
     body = await c.req.json()
   } catch (_err) {
     return c.json<ErrorResponse>({ detail: 'Invalid JSON body', code: 'invalid_body' }, 400)
   }
 
-  if (!body.urls || (Array.isArray(body.urls) && body.urls.length === 0)) {
-    return c.json<ErrorResponse>({ detail: 'urls is required (string or array of strings)', code: 'missing_urls' }, 400)
+  const parsed = parseExtractRequest(body)
+  if (!parsed.ok) {
+    return c.json<ErrorResponse>({ detail: parsed.detail, code: parsed.code }, 400)
   }
-
-  let urls: string[]
-  try {
-    urls = coerceUrlList(body.urls)
-  } catch (err) {
-    return c.json<ErrorResponse>(
-      { detail: err instanceof Error ? err.message : 'Invalid urls', code: 'invalid_urls' },
-      400,
-    )
-  }
-  if (urls.length === 0) {
-    return c.json<ErrorResponse>({ detail: 'urls is required (string or array of strings)', code: 'missing_urls' }, 400)
-  }
-
-  const includeImages = body.include_images ?? false
-  const maxTokens = Math.min(body.max_tokens ?? 8000, 16000)
+  const { urls, include_images: includeImages, max_tokens: maxTokens } = parsed.data
   const extractStart = Date.now()
 
   try {
@@ -198,13 +163,12 @@ extractRoute.get('/', async (c) => {
   if (urls.length > MAX_EXTRACT_URLS) {
     return c.json<ErrorResponse>({ detail: `Too many URLs (max ${MAX_EXTRACT_URLS})`, code: 'invalid_urls' }, 400)
   }
-  // Per-URL length guard for GET path.
+  // Per-URL guard for the GET path — same rules as the POST schema
+  // (shared validateUrl keeps both endpoints enforcing identical limits).
   for (const u of urls) {
-    if (u.length > 2048) {
-      return c.json<ErrorResponse>(
-        { detail: `URL too long (max 2048 chars): ${u.slice(0, 80)}...`, code: 'invalid_urls' },
-        400,
-      )
+    const checked = validateUrl(u)
+    if (!checked.ok) {
+      return c.json<ErrorResponse>({ detail: checked.detail, code: 'invalid_urls' }, 400)
     }
   }
 

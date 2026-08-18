@@ -172,6 +172,7 @@
   },
   "kr-general-03": {
     "relevantDomains": [
+      "ko.wikipedia.org",
       "wikipedia.org",
       "mayoclinic.org",
       "nih.gov"
@@ -179,6 +180,7 @@
   },
   "kr-general-04": {
     "relevantDomains": [
+      "ko.wikipedia.org",
       "wikipedia.org",
       "kmdb.or.kr",
       "cine21.com"
@@ -186,6 +188,7 @@
   },
   "kr-general-05": {
     "relevantDomains": [
+      "ko.wikipedia.org",
       "wikipedia.org",
       "healthline.com",
       "blog.naver.com"
@@ -4412,6 +4415,840 @@
       "ja.wikipedia.org",
       "nikkei.com",
       "itmedia.co.jp"
+    ]
+  },
+  "en-health-06": {
+    "relevantDomains": [
+      "healthline.com",
+      "webmd.com",
+      "mayoclinic.org",
+      "heart.org"
+    ]
+  },
+  "en-health-07": {
+    "relevantDomains": [
+      "healthline.com",
+      "webmd.com",
+      "medicalnewstoday.com",
+      "nih.gov"
+    ]
+  },
+  "en-health-08": {
+    "relevantDomains": [
+      "healthline.com",
+      "webmd.com",
+      "mayoclinic.org",
+      "hopkinsmedicine.org"
+    ]
+  },
+  "en-health-09": {
+    "relevantDomains": [
+      "healthline.com",
+      "eatingwell.com",
+      "webmd.com",
+      "mayoclinic.org"
+    ]
+  },
+  "en-health-10": {
+    "relevantDomains": [
+      "sleepfoundation.org",
+      "cdc.gov",
+      "healthline.com",
+      "nih.gov"
+    ]
+  },
+  "en-health-11": {
+    "relevantDomains": [
+      "healthline.com",
+      "webmd.com",
+      "medicalnewstoday.com",
+      "cdc.gov"
+    ]
+  },
+  "en-health-12": {
+    "relevantDomains": [
+      "healthline.com",
+      "webmd.com",
+      "nih.gov",
+      "health.harvard.edu"
+    ]
+  },
+  "en-health-13": {
+    "relevantDomains": [
+      "apa.org",
+      "mayoclinic.org",
+      "healthline.com",
+      "nimh.nih.gov"
+    ]
+  },
+  "en-health-14": {
+    "relevantDomains": [
+      "healthline.com",
+      "webmd.com",
+      "mayoclinic.org",
+      "runnersworld.com"
+    ]
+  },
+  "en-health-15": {
+    "relevantDomains": [
+      "healthline.com",
+      "eatingwell.com",
+      "mayoclinic.org",
+      "health.harvard.edu"
+    ]
+  },
+  "en-health-16": {
+    "relevantDomains": [
+      "healthline.com",
+      "webmd.com",
+      "medicalnewstoday.com",
+      "hopkinsmedicine.org"
+    ]
+  },
+  "en-health-17": {
+    "relevantDomains": [
+      "apa.org",
+      "mayoclinic.org",
+      "nimh.nih.gov",
+      "healthline.com"
+    ]
+  },
+  "en-health-18": {
+    "relevantDomains": [
+      "healthline.com",
+      "webmd.com",
+      "medicalnewstoday.com",
+      "nih.gov"
+    ]
+  },
+  "en-health-19": {
+    "relevantDomains": [
+      "healthline.com",
+      "cdc.gov",
+      "health.harvard.edu",
+      "nih.gov"
+    ]
+  },
+  "en-health-20": {
+    "relevantDomains": [
+      "healthline.com",
+      "webmd.com",
+      "eatingwell.com",
+      "medicalnewstoday.com"
+    ]
+  },
+  "en-health-21": {
+    "relevantDomains": [
+      "cdc.gov",
+      "mayoclinic.org",
+      "healthline.com",
+      "nih.gov"
+    ]
+  },
+  "en-health-22": {
+    "relevantDomains": [
+      "healthline.com",
+      "webmd.com",
+      "mayoclinic.org",
+      "hopkinsmedicine.org"
+    ]
+  },
+  "en-health-23": {
+    "relevantDomains": [
+      "healthline.com",
+      "webmd.com",
+      "nih.gov",
+      "eatright.org"
+    ]
+  },
+  "en-health-24": {
+    "relevantDomains": [
+      "apa.org",
+      "healthline.com",
+      "mayoclinic.org",
+      "nimh.nih.gov"
+    ]
+  },
+  "en-health-25": {
+    "relevantDomains": [
+      "healthline.com",
+      "webmd.com",
+      "nih.gov",
+      "health.harvard.edu"
+    ]
+  },
+  "en-news-41": {
+    "relevantDomains": [
+      "reuters.com",
+      "bloomberg.com",
+      "cnbc.com",
+      "ft.com",
+      "marketwatch.com"
+    ]
+  },
+  "en-news-42": {
+    "relevantDomains": [
+      "reuters.com",
+      "bloomberg.com",
+      "ft.com",
+      "cnbc.com",
+      "nikkei.com"
+    ]
+  },
+  "en-news-43": {
+    "relevantDomains": [
+      "reuters.com",
+      "politico.eu",
+      "ft.com",
+      "theguardian.com",
+      "techcrunch.com"
+    ]
+  },
+  "en-news-44": {
+    "relevantDomains": [
+      "reuters.com",
+      "apnews.com",
+      "aljazeera.com",
+      "bbc.com",
+      "theguardian.com"
+    ]
+  },
+  "en-news-45": {
+    "relevantDomains": [
+      "reuters.com",
+      "apnews.com",
+      "bbc.com",
+      "theguardian.com",
+      "carbonbrief.org"
+    ]
+  },
+  "en-news-46": {
+    "relevantDomains": [
+      "reuters.com",
+      "bloomberg.com",
+      "ft.com",
+      "cnbc.com",
+      "economist.com"
+    ]
+  },
+  "en-news-47": {
+    "relevantDomains": [
+      "nasa.gov",
+      "space.com",
+      "reuters.com",
+      "apnews.com",
+      "bbc.com"
+    ]
+  },
+  "en-news-48": {
+    "relevantDomains": [
+      "politico.com",
+      "reuters.com",
+      "apnews.com",
+      "nytimes.com",
+      "washingtonpost.com"
+    ]
+  },
+  "en-news-49": {
+    "relevantDomains": [
+      "techcrunch.com",
+      "theverge.com",
+      "reuters.com",
+      "cnbc.com",
+      "bloomberg.com"
+    ]
+  },
+  "en-news-50": {
+    "relevantDomains": [
+      "nikkei.com",
+      "japantimes.co.jp",
+      "reuters.com",
+      "bloomberg.com",
+      "ft.com"
+    ]
+  },
+  "en-general-20": {
+    "relevantDomains": [
+      "indeed.com",
+      "glassdoor.com",
+      "hbr.org",
+      "thebalancemoney.com"
+    ]
+  },
+  "en-general-21": {
+    "relevantDomains": [
+      "goodreads.com",
+      "nytimes.com",
+      "theguardian.com",
+      "npr.org"
+    ]
+  },
+  "en-general-22": {
+    "relevantDomains": [
+      "almanac.com",
+      "wikihow.com",
+      "thespruce.com",
+      "gardeningknowhow.com"
+    ]
+  },
+  "en-general-23": {
+    "relevantDomains": [
+      "healthline.com",
+      "nerdfitness.com",
+      "menshealth.com",
+      "wikihow.com"
+    ]
+  },
+  "en-general-24": {
+    "relevantDomains": [
+      "lonelyplanet.com",
+      "ricksteves.com",
+      "tripadvisor.com",
+      "nomadicmatt.com"
+    ]
+  },
+  "en-general-25": {
+    "relevantDomains": [
+      "investopedia.com",
+      "nerdwallet.com",
+      "thebalancemoney.com",
+      "fool.com"
+    ]
+  },
+  "en-general-26": {
+    "relevantDomains": [
+      "budgetbytes.com",
+      "eatingwell.com",
+      "allrecipes.com",
+      "delish.com"
+    ]
+  },
+  "en-general-27": {
+    "relevantDomains": [
+      "indeed.com",
+      "glassdoor.com",
+      "thebalancemoney.com",
+      "hbr.org"
+    ]
+  },
+  "en-general-28": {
+    "relevantDomains": [
+      "lifehacker.com",
+      "apartmenttherapy.com",
+      "thespruce.com",
+      "wikihow.com"
+    ]
+  },
+  "en-general-29": {
+    "relevantDomains": [
+      "headspace.com",
+      "calm.com",
+      "healthline.com",
+      "mindful.org"
+    ]
+  },
+  "en-general-30": {
+    "relevantDomains": [
+      "npr.org",
+      "nytimes.com",
+      "theverge.com",
+      "wired.com"
+    ]
+  },
+  "en-general-31": {
+    "relevantDomains": [
+      "indeed.com",
+      "thebalancemoney.com",
+      "zety.com",
+      "hbr.org"
+    ]
+  },
+  "en-general-32": {
+    "relevantDomains": [
+      "wikihow.com",
+      "realsimple.com",
+      "artofmanliness.com",
+      "survivopedia.com"
+    ]
+  },
+  "en-general-33": {
+    "relevantDomains": [
+      "caranddriver.com",
+      "edmunds.com",
+      "cnet.com",
+      "theverge.com",
+      "consumerreports.org"
+    ]
+  },
+  "en-general-34": {
+    "relevantDomains": [
+      "fluentu.com",
+      "babbel.com",
+      "duolingo.com",
+      "wikihow.com"
+    ]
+  },
+  "en-fact-41": {
+    "relevantDomains": [
+      "britannica.com",
+      "en.wikipedia.org",
+      "worldhistory.org",
+      "nationalgeographic.com"
+    ]
+  },
+  "en-fact-42": {
+    "relevantDomains": [
+      "nasa.gov",
+      "space.com",
+      "en.wikipedia.org",
+      "britannica.com",
+      "scientificamerican.com"
+    ]
+  },
+  "en-fact-43": {
+    "relevantDomains": [
+      "britannica.com",
+      "history.com",
+      "en.wikipedia.org",
+      "nationalarchives.gov.uk"
+    ]
+  },
+  "en-fact-44": {
+    "relevantDomains": [
+      "britannica.com",
+      "en.wikipedia.org",
+      "nationalgeographic.com",
+      "worldatlas.com"
+    ]
+  },
+  "en-fact-45": {
+    "relevantDomains": [
+      "cdc.gov",
+      "who.int",
+      "nih.gov",
+      "en.wikipedia.org",
+      "britannica.com"
+    ]
+  },
+  "en-fact-46": {
+    "relevantDomains": [
+      "noaa.gov",
+      "nationalgeographic.com",
+      "scientificamerican.com",
+      "smithsonianmag.com"
+    ]
+  },
+  "en-fact-47": {
+    "relevantDomains": [
+      "britannica.com",
+      "en.wikipedia.org",
+      "history.com",
+      "smithsonianmag.com"
+    ]
+  },
+  "en-fact-48": {
+    "relevantDomains": [
+      "usgs.gov",
+      "britannica.com",
+      "en.wikipedia.org",
+      "scientificamerican.com"
+    ]
+  },
+  "en-fact-49": {
+    "relevantDomains": [
+      "nih.gov",
+      "genome.gov",
+      "en.wikipedia.org",
+      "nature.com"
+    ]
+  },
+  "en-fact-50": {
+    "relevantDomains": [
+      "space.com",
+      "nasa.gov",
+      "scientificamerican.com",
+      "britannica.com",
+      "nationalgeographic.com"
+    ]
+  },
+  "en-acad-18": {
+    "relevantDomains": [
+      "arxiv.org",
+      "paperswithcode.com",
+      "acm.org",
+      "semanticscholar.org"
+    ]
+  },
+  "en-acad-19": {
+    "relevantDomains": [
+      "arxiv.org",
+      "semanticscholar.org",
+      "nature.com",
+      "springer.com"
+    ]
+  },
+  "en-acad-20": {
+    "relevantDomains": [
+      "nature.com",
+      "pubmed.ncbi.nlm.nih.gov",
+      "science.org",
+      "nih.gov"
+    ]
+  },
+  "en-acad-21": {
+    "relevantDomains": [
+      "nature.com",
+      "science.org",
+      "agu.org",
+      "ipcc.ch"
+    ]
+  },
+  "en-acad-22": {
+    "relevantDomains": [
+      "arxiv.org",
+      "acm.org",
+      "ieee.org",
+      "semanticscholar.org"
+    ]
+  },
+  "en-acad-23": {
+    "relevantDomains": [
+      "arxiv.org",
+      "paperswithcode.com",
+      "acm.org",
+      "openreview.net"
+    ]
+  },
+  "en-acad-24": {
+    "relevantDomains": [
+      "nature.com",
+      "pubmed.ncbi.nlm.nih.gov",
+      "nih.gov",
+      "science.org"
+    ]
+  },
+  "en-acad-25": {
+    "relevantDomains": [
+      "nature.com",
+      "arxiv.org",
+      "science.org",
+      "acm.org"
+    ]
+  },
+  "en-travel-04": {
+    "relevantDomains": [
+      "japan-guide.com",
+      "lonelyplanet.com",
+      "timeout.com",
+      "cntraveler.com"
+    ]
+  },
+  "en-travel-05": {
+    "relevantDomains": [
+      "lonelyplanet.com",
+      "tripadvisor.com",
+      "nomadicmatt.com",
+      "theculturetrip.com"
+    ]
+  },
+  "en-travel-06": {
+    "relevantDomains": [
+      "lonelyplanet.com",
+      "tripadvisor.com",
+      "timeout.com",
+      "cntraveler.com"
+    ]
+  },
+  "en-travel-07": {
+    "relevantDomains": [
+      "ricksteves.com",
+      "lonelyplanet.com",
+      "seat61.com",
+      "trenitalia.com"
+    ]
+  },
+  "en-travel-08": {
+    "relevantDomains": [
+      "lonelyplanet.com",
+      "guidetoiceland.is",
+      "tripadvisor.com",
+      "cntraveler.com"
+    ]
+  },
+  "en-travel-09": {
+    "relevantDomains": [
+      "lonelyplanet.com",
+      "cntraveler.com",
+      "responsibletravel.com",
+      "theguardian.com"
+    ]
+  },
+  "en-travel-10": {
+    "relevantDomains": [
+      "lonelyplanet.com",
+      "tripadvisor.com",
+      "timeout.com",
+      "nycgo.com"
+    ]
+  },
+  "en-shopping-03": {
+    "relevantDomains": [
+      "pcmag.com",
+      "cnet.com",
+      "tomshardware.com",
+      "walmart.com"
+    ]
+  },
+  "en-shopping-04": {
+    "relevantDomains": [
+      "rtings.com",
+      "cnet.com",
+      "theverge.com",
+      "wired.com"
+    ]
+  },
+  "en-shopping-05": {
+    "relevantDomains": [
+      "ikea.com",
+      "wayfair.com",
+      "target.com",
+      "walmart.com"
+    ]
+  },
+  "en-shopping-06": {
+    "relevantDomains": [
+      "rtings.com",
+      "tomshardware.com",
+      "theverge.com",
+      "mechanicalkeyboards.com"
+    ]
+  },
+  "en-shopping-07": {
+    "relevantDomains": [
+      "cnet.com",
+      "wired.com",
+      "bonappetit.com",
+      "americastestkitchen.com"
+    ]
+  },
+  "en-shopping-08": {
+    "relevantDomains": [
+      "runnersworld.com",
+      "runrepeat.com",
+      "cnet.com",
+      "rtings.com"
+    ]
+  },
+  "en-stock-26": {
+    "relevantDomains": [
+      "investing.com",
+      "fool.com",
+      "seekingalpha.com",
+      "marketwatch.com",
+      "dividend.com"
+    ]
+  },
+  "en-stock-27": {
+    "relevantDomains": [
+      "investopedia.com",
+      "fool.com",
+      "morningstar.com",
+      "nerdwallet.com"
+    ]
+  },
+  "en-stock-28": {
+    "relevantDomains": [
+      "investopedia.com",
+      "corporatefinanceinstitute.com",
+      "fool.com",
+      "thebalancemoney.com"
+    ]
+  },
+  "en-stock-29": {
+    "relevantDomains": [
+      "investing.com",
+      "marketwatch.com",
+      "cnbc.com",
+      "reuters.com"
+    ]
+  },
+  "en-stock-30": {
+    "relevantDomains": [
+      "investing.com",
+      "kitco.com",
+      "marketwatch.com",
+      "reuters.com"
+    ]
+  },
+  "en-tech-49": {
+    "relevantDomains": [
+      "sqlite.org",
+      "postgresql.org",
+      "stackoverflow.com",
+      "digitalocean.com",
+      "medium.com"
+    ]
+  },
+  "en-tech-50": {
+    "relevantDomains": [
+      "oauth.net",
+      "auth0.com",
+      "stackoverflow.com",
+      "developer.mozilla.org",
+      "okta.com"
+    ]
+  },
+  "en-tech-51": {
+    "relevantDomains": [
+      "openai.com",
+      "anthropic.com",
+      "promptingguide.ai",
+      "github.com",
+      "medium.com"
+    ]
+  },
+  "en-tech-52": {
+    "relevantDomains": [
+      "aws.amazon.com",
+      "cloudflare.com",
+      "serverless.com",
+      "digitalocean.com",
+      "stackoverflow.com"
+    ]
+  },
+  "en-tech-53": {
+    "relevantDomains": [
+      "graphql.org",
+      "developer.mozilla.org",
+      "stackoverflow.com",
+      "digitalocean.com",
+      "medium.com"
+    ]
+  },
+  "kr-news-17": {
+    "relevantDomains": [
+      "n.news.naver.com",
+      "yna.co.kr",
+      "hankyung.com",
+      "sedaily.com",
+      "etnews.com"
+    ]
+  },
+  "kr-news-18": {
+    "relevantDomains": [
+      "n.news.naver.com",
+      "hankyung.com",
+      "sedaily.com",
+      "chosun.com",
+      "hani.co.kr"
+    ]
+  },
+  "kr-news-19": {
+    "relevantDomains": [
+      "n.news.naver.com",
+      "yna.co.kr",
+      "etnews.com",
+      "khan.co.kr",
+      "hani.co.kr"
+    ]
+  },
+  "kr-news-20": {
+    "relevantDomains": [
+      "n.news.naver.com",
+      "yna.co.kr",
+      "chosun.com",
+      "donga.com",
+      "koreaherald.com"
+    ]
+  },
+  "zh-news-16": {
+    "relevantDomains": [
+      "people.com.cn",
+      "xinhuanet.com",
+      "sina.com.cn",
+      "36kr.com",
+      "ithome.com"
+    ]
+  },
+  "zh-news-17": {
+    "relevantDomains": [
+      "people.com.cn",
+      "xinhuanet.com",
+      "guancha.cn",
+      "caixin.com",
+      "36kr.com"
+    ]
+  },
+  "zh-news-18": {
+    "relevantDomains": [
+      "36kr.com",
+      "ithome.com",
+      "jiqizhixin.com",
+      "sina.com.cn",
+      "caixin.com"
+    ]
+  },
+  "zh-news-19": {
+    "relevantDomains": [
+      "people.com.cn",
+      "xinhuanet.com",
+      "caixin.com",
+      "sina.com.cn",
+      "thepaper.cn"
+    ]
+  },
+  "zh-news-20": {
+    "relevantDomains": [
+      "ithome.com",
+      "36kr.com",
+      "cnbeta.com",
+      "sohu.com",
+      "163.com"
+    ]
+  },
+  "ja-news-13": {
+    "relevantDomains": [
+      "nikkei.com",
+      "itmedia.co.jp",
+      "japantimes.co.jp",
+      "asahi.com",
+      "mainichi.jp"
+    ]
+  },
+  "ja-news-14": {
+    "relevantDomains": [
+      "nikkei.com",
+      "asahi.com",
+      "yomiuri.co.jp",
+      "japantimes.co.jp",
+      "nhk.or.jp"
+    ]
+  },
+  "ja-news-15": {
+    "relevantDomains": [
+      "itmedia.co.jp",
+      "nikkei.com",
+      "watch.impress.co.jp",
+      "ascii.jp",
+      "zdnet.com"
+    ]
+  },
+  "ja-news-16": {
+    "relevantDomains": [
+      "nhk.or.jp",
+      "nikkei.com",
+      "asahi.com",
+      "mainichi.jp",
+      "yomiuri.co.jp"
+    ]
+  },
+  "ja-news-17": {
+    "relevantDomains": [
+      "itmedia.co.jp",
+      "nikkei.com",
+      "response.jp",
+      "car.watch.impress.co.jp",
+      "japantimes.co.jp"
     ]
   }
 }

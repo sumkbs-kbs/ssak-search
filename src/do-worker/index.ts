@@ -31,6 +31,8 @@ import { CrawlerDO } from '../lib/crawler-do'
 import { ClickLogDO } from '../lib/ltr/click-logger'
 import { ExperimentDO } from '../lib/experiments/ab-test'
 import { CanaryOrchestratorDO } from '../lib/canary/canary-orchestrator'
+import { AuditLogDO } from '../lib/durable/audit-log-do'
+import { TenancyDO } from '../lib/durable/tenancy-layer'
 import { NewsHubDO } from '../lib/news-hub-do'
 
 // Durable Object classes — discovered by wrangler from this entrypoint.
@@ -47,6 +49,8 @@ export { CrawlerDO }
 export { ClickLogDO }
 export { ExperimentDO }
 export { CanaryOrchestratorDO }
+export { AuditLogDO }
+export { TenancyDO }
 export { NewsHubDO }
 
 /**

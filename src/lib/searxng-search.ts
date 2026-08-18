@@ -19,7 +19,27 @@
 
 import type { SearchResult, Env } from '../types'
 import { logger, toError } from './logger'
-import { fetchWithTimeout, extractDomain, stripHtml, decodeEntities, computeScore } from './util'
+import { backendTimeoutMs } from './search/fanout'
+import { fetchWithTimeout, extractDomain, stripHtml, decodeEntities, computeScore, isCircuitOpenError } from './util'
+import { withRetry, splitRetryBudget } from './resilience/retry'
+
+/**
+ * Transient failure from the self-hosted SearXNG instance — the ONLY error
+ * class worth retrying (docs/16_FAILFAST_BACKEND_RETRY_ANALYSIS.md §3.2).
+ * Covers 5xx (instance overload) and network errors (fetch throw).
+ * Deliberately NOT wrapped: 4xx (config/permission problem — a retry can't
+ * fix it), 429 (upstream proxy/engine limit — a 150ms retry lands in the
+ * same window), and the rate limiter's circuit-open / capacity-race throws
+ * (retrying a closed circuit just hammers it).
+ */
+class TransientSearxngError extends Error {
+  readonly status: number | null
+  constructor(message: string, status: number | null) {
+    super(message)
+    this.status = status
+    this.name = 'TransientSearxngError'
+  }
+}
 
 export interface SearxngSearchOptions {
   maxResults?: number
@@ -37,7 +57,7 @@ export async function searxngSearch(query: string, opts: SearxngSearchOptions = 
   const searxngUrl = opts.env?.SEARXNG_URL
   if (!searxngUrl) return [] // Not configured
 
-  const { maxResults = 10, timeoutMs = 10000, category = 'general', language } = opts
+  const { maxResults = 10, timeoutMs = backendTimeoutMs('searxng', 10000), category = 'general', language } = opts
 
   try {
     const params = new URLSearchParams({
@@ -59,9 +79,41 @@ export async function searxngSearch(query: string, opts: SearxngSearchOptions = 
       headers['Authorization'] = `Bearer ${opts.env.SEARXNG_API_KEY}`
     }
 
-    const response = await fetchWithTimeout(opts.env, url, { headers }, timeoutMs)
-    if (!response.ok) {
-      logger.warn(`SearXNG returned ${response.status}`)
+    // docs/16 §3.2: 5xx/network gets ONE retry via the shared withRetry
+    // decorator. Budget: splitRetryBudget(3000, 2, 150, 800) = 1425 → worst
+    // 2×1425+150 = 3000 = the searxng fanout ceiling exactly. 429/4xx pass
+    // through as Responses and fail fast below; circuit-open throws excluded.
+    const perAttemptMs = splitRetryBudget(Math.min(timeoutMs, 3000), 2, 150, 800)
+    const response = await withRetry(
+      async () => {
+        let res: Response
+        try {
+          res = await fetchWithTimeout(opts.env, url, { headers }, perAttemptMs)
+        } catch (err) {
+          if (isCircuitOpenError(err)) throw err
+          // Network timeout / blip — transient, worth the single retry.
+          throw new TransientSearxngError(`SearXNG fetch failed: ${toError(err)}`, null)
+        }
+        if (res.ok) return res
+        // 4xx → config/permission problem; 429 → upstream limit — fail fast.
+        if (res.status === 429 || (res.status >= 400 && res.status < 500)) return res
+        // 5xx → instance overload — retry once.
+        res.body?.cancel().catch(() => {})
+        throw new TransientSearxngError(`SearXNG HTTP ${res.status}`, res.status)
+      },
+      {
+        maxRetries: 1,
+        delaysMs: [150],
+        jitter: false,
+        retryable: (err) => err instanceof TransientSearxngError && !isCircuitOpenError(err),
+      },
+    ).catch((err) => {
+      logger.warn('SearXNG search failed:', { error: toError(err) })
+      return null
+    })
+
+    if (!response?.ok) {
+      if (response) logger.warn(`SearXNG returned ${response.status}`)
       return []
     }
 

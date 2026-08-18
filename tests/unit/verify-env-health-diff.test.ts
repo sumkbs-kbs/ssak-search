@@ -39,7 +39,12 @@ function run(a: unknown, b: unknown): { status: number; stdout: string; stderr: 
   writeFileSync(fa, JSON.stringify(a))
   writeFileSync(fb, JSON.stringify(b))
   try {
-    const stdout = execFileSync('python3', [PY, fa, fb], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] })
+    const stdout = execFileSync('python3', [PY, fa, fb], {
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'pipe'],
+      // 수정 112: 병렬 부하 flaky 방지 — 셸 spawn 명시적 타임아웃
+      timeout: 60_000,
+    })
     return { status: 0, stdout: stdout.trim(), stderr: '' }
   } catch (err) {
     const e = err as { status?: number; stdout?: Buffer | string; stderr?: Buffer | string }
@@ -105,7 +110,12 @@ describe('verify-env-health-diff.py (방안 B 독립 서킷 헬스 동치 해석
     const fa = join(dir, 'bad.json')
     writeFileSync(fa, '{not json')
     try {
-      execFileSync('python3', [PY, fa, join(dir, 'a.json')], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] })
+      execFileSync('python3', [PY, fa, join(dir, 'a.json')], {
+        encoding: 'utf8',
+        stdio: ['ignore', 'pipe', 'pipe'],
+        // 수정 112: 병렬 부하 flaky 방지 — 셸 spawn 명시적 타임아웃
+        timeout: 60_000,
+      })
       expect.unreachable('should have thrown')
     } catch (err) {
       const e = err as { status?: number; stdout?: string }
@@ -116,7 +126,12 @@ describe('verify-env-health-diff.py (방안 B 독립 서킷 헬스 동치 해석
 
   it.skipIf(!PY_AVAILABLE)('usage — 인자 부족 시 exit 2', () => {
     try {
-      execFileSync('python3', [PY], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] })
+      execFileSync('python3', [PY], {
+        encoding: 'utf8',
+        stdio: ['ignore', 'pipe', 'pipe'],
+        // 수정 112: 병렬 부하 flaky 방지 — 셸 spawn 명시적 타임아웃
+        timeout: 60_000,
+      })
       expect.unreachable('should have thrown')
     } catch (err) {
       const e = err as { status?: number }

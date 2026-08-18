@@ -751,7 +751,16 @@ const QUERY_NOISE_WORDS = new Set([
  *   "Apple stock price" → "apple stock price"
  */
 export function simplifyQuery(query: string, maxTerms = 5): string {
-  const tokens = query
+  // en-fact-11 extension (2026-08-13): strip question auxiliaries FIRST so
+  // every simplifyQuery consumer (HN/reddit/github/dbpedia/arxiv/qiita/
+  // stack-exchange — keyword APIs) gets the same fix as bingSearch. Without
+  // this, 'how does GPS work' simplified to 'does gps work' and HN Algolia
+  // returned 45 hits vs 327 for 'gps work' (live-verified). naturalLanguage-
+  // ToKeywords only fires on question-word + does/do/did, so technical
+  // phrases like 'do while loop' are untouched. 'what is X' keeps is/are
+  // here (the dedicated noise filter below strips them as filler).
+  const normalized = naturalLanguageToKeywords(query)
+  const tokens = normalized
     .toLowerCase()
     .split(/\s+/)
     .map((t) => t.replace(/[^\p{L}\p{N}]/gu, '').trim())
@@ -785,6 +794,34 @@ export function simplifyQuery(query: string, maxTerms = 5): string {
   }
 
   return unique.slice(0, maxTerms).join(' ')
+}
+
+/**
+ * Natural-language question → keyword-centric query, for backends whose
+ * keyword matching misfires on question auxiliaries.
+ *
+ * Live-verified 2026-08-13 (en-fact-11 root cause): bing treats the
+ * auxiliary "does" in "how does GPS work" as a standalone keyword and
+ * returns English-grammar pages (do/does/did conjugation) instead of GPS
+ * content — the SAME query with the auxiliary stripped ("how GPS work")
+ * returns GPS pages. Deliberately conservative:
+ *   - strips ONLY does/do/did when they follow a question word
+ *   - KEEPS is/are/was/were — "what is blockchain" is handled correctly by
+ *     bing, while the stripped "what blockchain technology" DEGRADES to
+ *     qoo10/ja.wikipedia junk (probe 2026-08-13). Question-word + auxiliary
+ *     + verb is the only safe signal; bare keyword queries are untouched.
+ */
+export function naturalLanguageToKeywords(query: string): string {
+  // ^how does X → how X  ·  ^what do X → what X  ·  ^why did X → why X
+  // Question word + does/do/did + at least one more token. Case-insensitive
+  // ("How Does GPS Work" must convert too).
+  const matched = query.match(/^(how|what|why|when|where|who|which)\s+(does|do|did)\s+(.+)$/i)
+  if (!matched) return query
+  const [, questionWord, , rest] = matched
+  const converted = `${questionWord} ${rest}`.replace(/\s+/g, ' ').trim()
+  // Never return an empty/shortened-to-nothing query — fall back to original.
+  if (converted.length < 2 || converted === questionWord) return query
+  return converted
 }
 
 /** Parse a date string and return ISO 8601 if valid */

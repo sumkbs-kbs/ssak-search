@@ -1,4 +1,5 @@
 import { logger, toError } from './logger'
+import { httpErrorFromResponse } from './resilience/retry'
 /**
  * LLM Router — Multi-Model Routing & Cost Control
  *
@@ -632,7 +633,11 @@ async function* streamOpenAICompatible(
 
   if (!response.ok) {
     const errText = await response.text().catch(() => '')
-    throw new Error(`Ollama/OpenAI API error ${response.status}: ${errText || response.statusText}`)
+    // Retry-After 헤더를 오류(retryAfterMs)에 실어 — 재시도 파이프라인이 서버 지시 대기를 소비.
+    throw httpErrorFromResponse(
+      response,
+      `Ollama/OpenAI API error ${response.status}: ${errText || response.statusText}`,
+    )
   }
 
   const reader = response.body?.getReader()
@@ -808,7 +813,7 @@ export async function generateOllamaAnswer(
 
   if (!response.ok) {
     const errText = await response.text().catch(() => '')
-    throw new Error(`Ollama API error ${response.status}: ${errText || response.statusText}`)
+    throw httpErrorFromResponse(response, `Ollama API error ${response.status}: ${errText || response.statusText}`)
   }
 
   const data = (await response.json()) as { choices?: Array<{ message?: { content?: string } }> }
@@ -850,7 +855,10 @@ export async function generateOpenRouterAnswer(
 
   if (!response.ok) {
     const errText = await response.text().catch(() => '')
-    throw new Error(`OpenRouter API error ${response.status}: ${errText || response.statusText}`)
+    throw httpErrorFromResponse(
+      response,
+      `OpenRouter API error ${response.status}: ${errText || response.statusText}`,
+    )
   }
 
   const data = (await response.json()) as { choices?: Array<{ message?: { content?: string } }> }
@@ -897,7 +905,10 @@ export async function* streamAnthropic(
 
   if (!response.ok) {
     const errText = await response.text().catch(() => '')
-    throw new Error(`Anthropic API error ${response.status}: ${errText || response.statusText}`)
+    throw httpErrorFromResponse(
+      response,
+      `Anthropic API error ${response.status}: ${errText || response.statusText}`,
+    )
   }
 
   const reader = response.body?.getReader()

@@ -86,6 +86,21 @@ describe('extractEntities', () => {
     expect(r.entities).toEqual([])
     expect(r.primaryEntity).toBeUndefined()
   })
+
+  it('extracts Korean-unit numbers followed by Hangul (CJK \\b fix)', () => {
+    // The old trailing \\b after (?:…|만|억|조)? is ASCII-only, so the unit
+    // could never match when followed by Hangul/space — "1조원" degraded to
+    // "1" and "5,000억원" to "5,000" (unit silently dropped).
+    const r = extractEntities('삼성전자 시가총액 1조원')
+    expect(r.entities.some((e) => e.type === 'number' && e.text === '1조')).toBe(true)
+    const r2 = extractEntities('연매출 5,000억원 돌파')
+    expect(r2.entities.some((e) => e.type === 'number' && e.text === '5,000억')).toBe(true)
+    const r3 = extractEntities('수익 1.5조 달성')
+    expect(r3.entities.some((e) => e.type === 'number' && e.text === '1.5조')).toBe(true)
+    // ASCII percentage still strips the unit (existing contract: '10%' → '10')
+    const r4 = extractEntities('growth 10%')
+    expect(r4.entities.some((e) => e.type === 'number' && e.text === '10')).toBe(true)
+  })
 })
 
 // ============================================================

@@ -299,17 +299,6 @@ jobs:
             # last 10 (fall back to root on a younger repo).
             BASE="$(git rev-parse HEAD~10 2>/dev/null || git rev-list --max-parents=0 HEAD | head -1)"
           fi
-          if ! git merge-base --is-ancestor "$BASE" "$HEAD" 2>/dev/null; then
-            # Force-push/rewrite (수정 104, 2026-08-17 실측): github.event.before
-            # is the PRE-rewrite head — after a force-push it is NOT an ancestor
-            # of HEAD, so `git rev-list --count "before..HEAD"` dies with
-            # "fatal: Invalid revision range" and fails the whole job. Fall back
-            # to the same last-10 cap as the first-push path (the merged-tree
-            # gates above already validate HEAD; this job only pinpoints
-            # regressions in the NEW commits).
-            echo "::warning::before ($BASE) is not an ancestor of HEAD ($HEAD) — force-push/rewrite detected; replaying the last 10 commits instead of the invalid range."
-            BASE="$(git rev-parse HEAD~10 2>/dev/null || git rev-list --max-parents=0 HEAD | head -1)"
-          fi
           if [ "$BASE" = "$HEAD" ]; then
             # No-op push (before == sha): empty range would make the script
             # exit 2 and fail the job. Skip with a note instead.

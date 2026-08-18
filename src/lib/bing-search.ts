@@ -22,6 +22,7 @@
 
 import type { SearchResult, ImageResult, Env } from '../types'
 import { logger, toError } from './logger'
+import { backendTimeoutMs } from './search/fanout'
 import {
   fetchWithTimeout,
   extractDomain,
@@ -30,6 +31,7 @@ import {
   computeScore,
   truncateToTokens,
   parseFlexibleDate,
+  naturalLanguageToKeywords,
 } from './util'
 
 const BING_SEARCH_URL = 'https://www.bing.com/search'
@@ -50,7 +52,17 @@ export interface BingSearchOptions {
  * No API key required. Works for all languages including Korean.
  */
 export async function bingSearch(query: string, opts: BingSearchOptions = {}): Promise<SearchResult[]> {
-  const { maxResults = 10, timeoutMs = 15000, region, timeRange, env } = opts
+  const { maxResults = 10, timeoutMs = backendTimeoutMs('bing', 15000), region, timeRange, env } = opts
+
+  // en-fact-11 (2026-08-13): bing treats the question auxiliary "does" in
+  // "how does GPS work" as a standalone keyword and returns English-grammar
+  // pages (do/does/did) instead of GPS content. Strip does/do/did after a
+  // question word before querying (naturalLanguageToKeywords is
+  // conservative — is/are/was/were are deliberately KEPT; see util.ts).
+  // Applies to every bingSearch caller: the main fanout task, bing-cleaned,
+  // agentic search-tools, and the site:/suffix-modified variants (the latter
+  // start with site: or a keyword so the question-word pattern never fires).
+  query = naturalLanguageToKeywords(query)
 
   // Build URL parameters for a given page offset
   const buildParams = (first: number): URLSearchParams => {
@@ -316,7 +328,7 @@ export function parseBingNewsHtml(html: string, query: string, maxResults: numbe
  * Each card also contains <a class="title itemlink"> with the full headline.
  */
 export async function bingNewsSearch(query: string, opts: BingSearchOptions = {}): Promise<SearchResult[]> {
-  const { maxResults = 10, timeoutMs = 15000, env } = opts
+  const { maxResults = 10, timeoutMs = backendTimeoutMs('bing-news', 15000), env } = opts
 
   const params = new URLSearchParams()
   params.append('q', query)
@@ -451,7 +463,7 @@ export async function bingImageSearch(
   query: string,
   opts: { maxResults?: number; timeoutMs?: number; env?: Env } = {},
 ): Promise<ImageResult[]> {
-  const { maxResults = 8, timeoutMs = 8000, env } = opts
+  const { maxResults = 8, timeoutMs = backendTimeoutMs('bing-image', 8000), env } = opts
   const results: ImageResult[] = []
 
   // Try multiple Bing image search endpoints for better reliability

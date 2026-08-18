@@ -122,6 +122,8 @@ function runScript(opts: {
       maxBuffer: 10 * 1024 * 1024,
       env,
       input: opts.stdin,
+      // 수정 112: 병렬 부하 flaky 방지 — 셸 spawn 명시적 타임아웃
+      timeout: 60_000,
     })
     return { exit: 0, out: stdout, ghLog: readFileSync(ghLog, 'utf8') }
   } catch (err) {

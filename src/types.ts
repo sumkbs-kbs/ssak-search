@@ -681,6 +681,9 @@ export interface AppBindings {
   UPLOAD_BUCKET?: R2Bucket
   // Durable Object binding for library/collections (Phase 2.3)
   LIBRARY_DO?: DurableObjectNamespace
+  // R2 bucket for audit log backups (per-tenant JSONL + manifest)
+  AUDIT_LOG_R2?: R2Bucket
+  // (tenant usage rollups — optional D1; current counters kept in DO storage)
   // Durable Object binding for user profiles (Phase 3.2)
   USER_PROFILE_DO?: DurableObjectNamespace
   // Durable Object binding for spaces/projects (Phase 3.3)
@@ -693,6 +696,10 @@ export interface AppBindings {
   NEWS_HUB_DO?: DurableObjectNamespace
   // Durable Object for LTR click/impression events (Phase C.1)
   CLICK_LOG_DO?: DurableObjectNamespace
+  // Durable Object for tenant audit-trail events + R2 archival
+  TENANT_AUDIT_DO?: DurableObjectNamespace
+  // Durable Object for per-tenant quota / rate-tier / status management
+  TENANCY_DO?: DurableObjectNamespace
   // Durable Object for the self-hosted A/B testing framework (Phase C.2)
   EXPERIMENT_DO?: DurableObjectNamespace
   // Brave Search API key (Phase 0.1 — official API, ToS-safe, 50 req/s)

@@ -7,9 +7,11 @@
 
 import type { Env } from '../../types'
 import { logger, toError } from '../../lib/logger'
+import { generateSpanId } from '../../middleware/tracing'
 import type { Ai } from '@cloudflare/workers-types'
 import { fetchWithTimeout, stripHtml } from '../../lib/util'
 import { extractContent } from '../../lib/extractor'
+import { mergeAndDeduplicate } from '../search/dedup'
 import { sanitizeEvidenceContent, detectPromptInjection, PROMPT_INJECTION_DEFENSE } from '../../lib/prompt-guard'
 import { auditPromptInjection } from '../../lib/audit'
 
@@ -22,6 +24,8 @@ export interface SearchOptions {
   recencyDays?: number
   maxResults?: number
   language?: string
+  /** Per-backend fetch timeout override (ms). Unset → backend ceiling-aligned defaults. */
+  timeoutMs?: number
   topic?: 'general' | 'news' | 'finance'
 }
 
@@ -61,8 +65,13 @@ export interface ComputeOptions {
  * dedup, rerank). searchWeb is the "light" pipeline for agentic sub-queries:
  * fast, parallel, 3 backends, no agentic re-entry.
  */
-export async function searchWeb(options: SearchOptions, env?: Env, _ai?: Ai): Promise<SearchResult[]> {
-  const { query, recencyDays, maxResults = 8, topic = 'general' } = options
+export async function searchWeb(
+  options: SearchOptions,
+  env?: Env,
+  _ai?: Ai,
+  traceId?: string,
+): Promise<SearchResult[]> {
+  const { query, recencyDays, maxResults = 8, topic = 'general', language, timeoutMs } = options
 
   // Map recency to time_range
   let timeRange: 'day' | 'week' | 'month' | 'year' | undefined = undefined
@@ -74,7 +83,7 @@ export async function searchWeb(options: SearchOptions, env?: Env, _ai?: Ai): Pr
   }
 
   // Direct multi-backend search — NO orchestrator re-entry
-  return fallbackSearch(query, maxResults, env, timeRange, topic)
+  return fallbackSearch(query, maxResults, env, timeRange, topic, traceId, language, timeoutMs)
 }
 
 /** Direct multi-backend search using individual backends */
@@ -84,9 +93,21 @@ async function fallbackSearch(
   env?: Env,
   timeRange: 'day' | 'week' | 'month' | 'year' | undefined = undefined,
   topic: 'general' | 'news' | 'finance' = 'general',
+  traceId?: string,
+  language?: string,
+  timeoutMs?: number,
 ): Promise<SearchResult[]> {
+  // Trace-scoped logger — carries the request trace_id so search-tool errors
+  // are linkable to the originating search (Action Item 1.1).
+  const log = traceId ? logger.child({ traceId, spanId: generateSpanId(), span: 'search-tools' }) : logger
   const results: SearchResult[] = []
   const tasks: Promise<void>[] = []
+
+  // Single dynamic import of specialized — the wikipedia (all factual topics)
+  // AND hackernews (finance topic) tasks share it. A SECOND concurrent import
+  // of the same module raced the vitest mock registry in unit tests (the
+  // wikipedia mock was silently bypassed), so import ONCE here.
+  const { wikipediaSearch, hackerNewsSearch } = await import('../../lib/specialized')
 
   // Bing (always runs — covers general, news, finance breadth)
   tasks.push(
@@ -96,6 +117,7 @@ async function fallbackSearch(
         const bingResults = await bingSearch(query, {
           maxResults: Math.min(maxResults * 2, 20),
           timeRange,
+          timeoutMs,
           env,
         })
         for (const r of bingResults.slice(0, maxResults)) {
@@ -104,13 +126,13 @@ async function fallbackSearch(
 
         // For news queries, also hit Bing News endpoint
         if (topic === 'news') {
-          const newsResults = await bingNewsSearch(query, { maxResults: 5, env })
+          const newsResults = await bingNewsSearch(query, { maxResults: 5, timeoutMs, env })
           for (const r of newsResults.slice(0, 5)) {
             results.push({ ...r, score: r.score ?? 0.5 })
           }
         }
       } catch (e) {
-        logger.warn('[searchWeb] Bing failed:', { error: toError(e) })
+        log.warn('[searchWeb] Bing failed:', { error: toError(e) })
       }
     })(),
   )
@@ -122,12 +144,62 @@ async function fallbackSearch(
       (async () => {
         try {
           const { naverSearch } = await import('../../lib/naver-search')
-          const naverResults = await naverSearch(query, { maxResults, env })
+          const naverResults = await naverSearch(query, { maxResults, timeoutMs, env })
           for (const r of naverResults.slice(0, maxResults)) {
             results.push({ ...r, score: r.score ?? 0.6 })
           }
         } catch (e) {
-          logger.warn('[searchWeb] Naver failed:', { error: toError(e) })
+          log.warn('[searchWeb] Naver failed:', { error: toError(e) })
+        }
+      })(),
+    )
+  }
+
+  // Finance topic — the finance backends (Naver Finance for Korean, Yahoo
+  // Finance for all) so planner-generated financial queries actually reach
+  // the same sources the FinanceStrategy uses. Query strings pass through
+  // unchanged — the plan appends "실적 주가 재무" etc., which searchKoreanStock's
+  // extractCompanyName strips back off (see planner-backend-consistency tests).
+  if (topic === 'finance') {
+    tasks.push(
+      (async () => {
+        try {
+          const { yahooFinanceSearch } = await import('../../lib/yahoo-finance-search')
+          const yahooResults = await yahooFinanceSearch(query, { maxResults: Math.min(maxResults, 5), timeoutMs, env })
+          for (const r of yahooResults.slice(0, 5)) {
+            results.push({ ...r, score: r.score ?? 0.65 })
+          }
+        } catch (e) {
+          log.warn('[searchWeb] Yahoo Finance failed:', { error: toError(e) })
+        }
+      })(),
+    )
+    if (isKorean) {
+      tasks.push(
+        (async () => {
+          try {
+            const { searchKoreanStock } = await import('../../lib/stock-finance')
+            const stockResults = await searchKoreanStock(query, { maxResults: Math.min(maxResults, 5), timeoutMs, env })
+            for (const r of stockResults.slice(0, 5)) {
+              results.push({ ...r, score: r.score ?? 0.7 })
+            }
+          } catch (e) {
+            log.warn('[searchWeb] Naver Finance failed:', { error: toError(e) })
+          }
+        })(),
+      )
+    }
+    // HackerNews — company/discussion background, matching FinanceStrategy's
+    // composition (both Korean and global finance queries get it).
+    tasks.push(
+      (async () => {
+        try {
+          const hnResults = await hackerNewsSearch(query, { maxResults: 5, timeoutMs, env })
+          for (const r of hnResults.slice(0, 5)) {
+            results.push({ ...r, score: r.score ?? 0.55 })
+          }
+        } catch (e) {
+          log.warn('[searchWeb] HackerNews failed:', { error: toError(e) })
         }
       })(),
     )
@@ -139,17 +211,17 @@ async function fallbackSearch(
     tasks.push(
       (async () => {
         try {
-          const { wikipediaSearch } = await import('../../lib/specialized')
           const wikiResults = await wikipediaSearch(query, {
             maxResults: 5,
-            timeoutMs: 8000,
+            timeoutMs: timeoutMs ?? 8000,
+            language,
             env,
           })
           for (const r of wikiResults) {
             results.push({ ...r, score: r.score ?? 0.6 })
           }
         } catch (e) {
-          logger.warn('[searchWeb] Wikipedia failed:', { error: toError(e) })
+          log.warn('[searchWeb] Wikipedia failed:', { error: toError(e) })
         }
       })(),
     )
@@ -158,15 +230,13 @@ async function fallbackSearch(
   // Wait for all backends (parallel, fail-fast on individual errors)
   await Promise.all(tasks)
 
-  // Deduplicate by URL (case-insensitive) and sort by score
-  const seen = new Set<string>()
-  return results
-    .filter((r) => {
-      const key = r.url.toLowerCase()
-      if (seen.has(key)) return false
-      seen.add(key)
-      return true
-    })
+  // Unified dedup + score merging (single source: search/dedup.ts — the same
+  // rules the main orchestrator pipeline uses). URL normalization (tracking
+  // params/trailing slash/fragments), title-level dedup, and HIGHEST-score
+  // wins — the old first-wins on raw url.toLowerCase() was race-dependent: a
+  // low-score bing hit could beat a high-score naver-finance hit for the same
+  // finance.naver.com URL depending on task completion order.
+  return mergeAndDeduplicate([results])
     .sort((a, b) => (b.score ?? 0) - (a.score ?? 0))
     .slice(0, maxResults)
 }
@@ -179,8 +249,9 @@ async function fallbackSearch(
  * Fetch full content from a specific URL.
  * Uses Jina Reader first, then HTMLRewriter fallback.
  */
-export async function fetchUrl(options: FetchOptions, env?: Env): Promise<string> {
+export async function fetchUrl(options: FetchOptions, env?: Env, traceId?: string): Promise<string> {
   const { url, maxTokens = 8000, timeoutMs = 20000 } = options
+  const log = traceId ? logger.child({ traceId, spanId: generateSpanId(), span: 'fetch-url' }) : logger
 
   try {
     const extracted = await extractContent([url], {
@@ -198,7 +269,7 @@ export async function fetchUrl(options: FetchOptions, env?: Env): Promise<string
     throw new Error(result.error || 'No content extracted')
   } catch (err) {
     // Last resort: direct fetch with basic HTML stripping
-    logger.warn('[fetchUrl] Extraction failed, trying direct fetch:', { error: toError(err) })
+    log.warn('[fetchUrl] Extraction failed, trying direct fetch:', { error: toError(err) })
     return directFetchFallback(url, maxTokens, timeoutMs, env)
   }
 }

@@ -52,6 +52,7 @@ import { indexRoute } from './routes/index'
 import { blacklistRoute } from './routes/blacklist'
 import { queueRoute } from './routes/queue'
 import { createLoggingMiddleware } from './lib/logger'
+import { createTracingMiddleware } from './middleware/tracing'
 import { securityMiddleware } from './lib/security-middleware'
 import { wrapApp, sentryMiddleware } from './lib/sentry'
 import type { AppBindings, ErrorResponse } from './types'
@@ -77,6 +78,11 @@ const app = new Hono<{ Bindings: AppBindings }>()
 // Captures request-level spans with method, path, and status code
 app.use('*', sentryMiddleware)
 
+// Distributed tracing middleware — MUST run before the logging middleware so
+// every request-scoped log line carries the trace_id (cf-ray derived).
+app.use('*', createTracingMiddleware())
+
+// Structured logging middleware (must be first for full request coverage)
 // 수정 90: ddEnv 를 여기서 하드코딩하지 않는다 — 빌드 타임 DEPLOY_ENV
 // (vite define: DEPLOY_ENV=staging → "staging", production → "production") 이
 // logger.ts resolveDdEnv 의 ③에서 환경을 결정한다. 하드코딩을 두면 context

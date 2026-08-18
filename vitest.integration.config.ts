@@ -1,6 +1,6 @@
-import path from 'node:path'
 import { cloudflareTest } from '@cloudflare/vitest-pool-workers'
 import { defineConfig } from 'vitest/config'
+import { DO_MINIFLARE_FRAGMENT } from './tests/integration/do-bindings'
 
 export default defineConfig({
   plugins: [
@@ -16,6 +16,10 @@ export default defineConfig({
         // (verified 2026-08-05) — 2026-07-10 fails with ERR_RUNTIME_FAILURE
         // "newest date supported by this server binary is 2026-07-02".
         compatibilityDate: '2026-07-02',
+        // Self-referencing DO designators — overrides wrangler.jsonc's
+        // script_name bindings so the test runtime resolves the DO classes
+        // from the main worker's exports (see tests/integration/do-bindings.ts).
+        ...DO_MINIFLARE_FRAGMENT,
       },
     }),
   ],

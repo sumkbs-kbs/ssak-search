@@ -19,14 +19,69 @@
  * A mailto= contact can be appended for the polite pool (higher rate limits);
  * pass it via opts.mailto when one is available. Without it OpenAlex still
  * serves ~10 req/s from the shared pool, which is ample for eval pacing.
- */
-
-import type { Env, SearchResult } from '../types'
-
-import { logger } from './logger'
-import { computeScore, extractDomain, fetchWithTimeout } from './util'
+ */import type { Env, SearchResult } from '../types'
+import { logger, toError } from './logger'
+import { backendTimeoutMs } from './search/fanout'
+import { computeScore, extractDomain, fetchWithTimeout, isCircuitOpenError } from './util'
+import { withRetry, splitRetryBudget } from './resilience/retry'
+import { getSharedCooldown, setSharedCooldown } from './rate-limiter'
 
 const OPENALEX_BASE = 'https://api.openalex.org/works'
+
+// 2026-08-13: OpenAlex 429 cooldown guard (S76) — mirrors the wikipedia B1 /
+// arxiv S23 pattern. OpenAlex 429s carry a truthful Retry-After (live-verified:
+// a 43,186s window when the anonymous pool for an IP is exhausted), so the
+// window is honoured but clamped to 1h — beyond that we accept one probe per
+// hour instead of burning subrequests every 2 minutes under a long window.
+const OPENALEX_COOLDOWN_MS = 60_000
+const OPENALEX_COOLDOWN_MAX_MS = 3_600_000
+const OPENALEX_COOLDOWN_KEY = 'cooldown:openalex'
+
+let openalexRateLimitedUntil = 0
+
+/**
+ * Is the OpenAlex cooldown window currently active? Checks the local mirror
+ * first (fast path), then the shared DO store. EXPORTED FOR TESTS.
+ */
+export async function isOpenalexRateLimitedShared(
+  env: Env | undefined,
+  now: number = Date.now(),
+): Promise<boolean> {
+  if (openalexRateLimitedUntil > now) return true
+  const untilMs = await getSharedCooldown(env, OPENALEX_COOLDOWN_KEY, now)
+  if (untilMs > now) {
+    openalexRateLimitedUntil = Math.max(openalexRateLimitedUntil, untilMs)
+    return true
+  }
+  return false
+}
+
+/** Mirror the current OpenAlex cooldown deadline into shared DO storage. */
+export async function mirrorOpenalexCooldown(env: Env | undefined): Promise<void> {
+  await setSharedCooldown(env, OPENALEX_COOLDOWN_KEY, openalexRateLimitedUntil)
+}
+
+/**
+ * Record an OpenAlex 429 — arms a cooldown. Honours Retry-After when present
+ * (clamped to OPENALEX_COOLDOWN_MAX_MS = 1h); otherwise the 60s fallback.
+ * EXPORTED FOR TESTS.
+ */
+export function recordOpenalexRateLimit(
+  res?: { headers?: { get?: (key: string) => string | null } },
+  now: number = Date.now(),
+): void {
+  const retryAfterSec = Number(res?.headers?.get?.('retry-after'))
+  const cooldownMs =
+    Number.isFinite(retryAfterSec) && retryAfterSec > 0
+      ? Math.min(Math.max(retryAfterSec * 1000, 1000), OPENALEX_COOLDOWN_MAX_MS)
+      : OPENALEX_COOLDOWN_MS
+  openalexRateLimitedUntil = Math.max(openalexRateLimitedUntil, now + cooldownMs)
+}
+
+/** Reset the local OpenAlex cooldown state (test hook). */
+export function resetOpenalexRateState(): void {
+  openalexRateLimitedUntil = 0
+}
 
 /**
  * Minimal shape of the OpenAlex /works response we consume. OpenAlex returns
@@ -40,6 +95,16 @@ export interface OpenAlexWork {
   doi?: string | null
   primary_location?: { landing_page_url?: string | null; source?: { display_name?: string } | null } | null
   best_oa_location?: { landing_page_url?: string | null } | null
+  /**
+   * Every location OpenAlex knows for the work (publisher page, OA copies,
+   * repository mirrors — including arxiv.org/abs/<id> when the paper has an
+   * arxiv preprint). Added 2026-08-13: without it, arxiv-gold queries were
+   * landing on doi.org because primary/best_oa were publisher links even
+   * when an arxiv copy existed in `locations` (live-verified: Deep Residual
+   * Learning's locations carry http://arxiv.org/abs/1512.03385 while primary
+   * is the IEEE doi).
+   */
+  locations?: Array<{ landing_page_url?: string | null } | null> | null
   ids?: { openalex?: string; doi?: string; paperswithcode?: string; semantic_scholar?: string } | null
   authorships?: Array<{ author?: { display_name?: string } | null } | null> | null
 }
@@ -73,7 +138,12 @@ export const ACADEMIC_PREFERRED_DOMAINS = [
   'doi.org',
 ]
 
-/** Collect a work's candidate URLs (primary → best-oa → doi → pwc → s2). */
+/**
+ * Collect a work's candidate URLs (primary → best-oa → locations → doi → pwc → s2).
+ * `locations` (added 2026-08-13) carries every copy OpenAlex knows — including
+ * arxiv.org preprints that primary/best_oa skip — so arxiv-gold queries stop
+ * collapsing to doi.org when an arxiv copy exists.
+ */
 export function workUrlCandidates(work: OpenAlexWork): string[] {
   const out: string[] = []
   const push = (u?: string | null) => {
@@ -92,6 +162,9 @@ export function workUrlCandidates(work: OpenAlexWork): string[] {
   }
   push(work.primary_location?.landing_page_url)
   push(work.best_oa_location?.landing_page_url)
+  for (const loc of work.locations ?? []) {
+    push(loc?.landing_page_url)
+  }
   push(work.doi)
   push(work.ids?.paperswithcode)
   push(work.ids?.semantic_scholar)
@@ -152,25 +225,94 @@ export function openAlexWorkToResult(work: OpenAlexWork, query: string): SearchR
 }
 
 /**
+ * Transient failure from the OpenAlex /works endpoint — the ONLY error class
+ * worth retrying (docs/16_FAILFAST_BACKEND_RETRY_ANALYSIS.md §3.4). Covers
+ * 5xx and network errors (fetch throw). Deliberately NOT wrapped: 4xx
+ * (permanent refusal), 429 (shared-pool quota window — a 150ms retry lands in
+ * the same window), and the rate limiter's circuit-open / capacity-race
+ * throws (retrying a closed circuit just hammers it — docs/16 rule 4).
+ */
+class TransientOpenalexError extends Error {
+  readonly status: number | null
+  constructor(message: string, status: number | null) {
+    super(message)
+    this.status = status
+    this.name = 'TransientOpenalexError'
+  }
+}
+
+/**
  * Search OpenAlex for academic works. Keyless and ToS-safe (official REST
  * API). Returns [] on any failure so the fanout pool degrades gracefully.
  */
 export async function openalexSearch(query: string, opts: OpenAlexSearchOptions = {}): Promise<SearchResult[]> {
-  const { maxResults = 8, timeoutMs = 6000, env, mailto, signal } = opts
+  const { maxResults = 8, timeoutMs = backendTimeoutMs('openalex', 6000), env, mailto, signal } = opts
   const results: SearchResult[] = []
+
+  // 2026-08-13 (S76): OpenAlex 429 pacing guard — skip the network chain
+  // entirely while a recorded window is active. Live-verified: when the
+  // anonymous pool is exhausted the Retry-After can be hours, and every
+  // hammering call just re-429s and burns a subrequest.
+  if (await isOpenalexRateLimitedShared(env)) {
+    logger.warn('OpenAlex search skipped (429 cooldown window):', {
+      resumeAt: new Date(openalexRateLimitedUntil).toISOString(),
+      query,
+    })
+    return results
+  }
 
   try {
     const params = new URLSearchParams({
       search: query,
       'per-page': String(Math.min(maxResults, 25)),
-      select: 'display_name,publication_date,publication_year,doi,primary_location,best_oa_location,ids,authorships',
+      select: 'display_name,publication_date,publication_year,doi,primary_location,best_oa_location,locations,ids,authorships',
     })
     if (mailto) params.set('mailto', mailto)
     const url = `${OPENALEX_BASE}?${params.toString()}`
-    const response = await fetchWithTimeout(env, url, { headers: { Accept: 'application/json' }, signal }, timeoutMs)
+    // docs/16 §3.4: 5xx/network gets ONE retry via the shared withRetry
+    // decorator. Budget: splitRetryBudget(4500, 2, 150, 800) = 2175 → worst
+    // 2×2175+150 = 4500 = the openalex fanout ceiling exactly, so the
+    // per-backend timer never fires mid-chain. Circuit-open throws are
+    // excluded from retryable.
+    const perAttemptMs = splitRetryBudget(Math.min(timeoutMs, 4500), 2, 150, 800)
+    const response = await withRetry(
+      async () => {
+        let res: Response
+        try {
+          res = await fetchWithTimeout(env, url, { headers: { Accept: 'application/json' }, signal }, perAttemptMs)
+        } catch (err) {
+          // Circuit open / capacity race → fail fast (never retry a closed
+          // circuit); network timeout / blip → transient, retry once.
+          if (isCircuitOpenError(err)) throw err
+          throw new TransientOpenalexError(`OpenAlex fetch failed: ${toError(err)}`, null)
+        }
+        if (res.ok) return res
+        // 4xx → permanent refusal; 429 → quota window — fail fast (a 150ms
+        // retry would land in the same window and burn a subrequest) and arm
+        // the cooldown so later calls skip the chain entirely.
+        if (res.status === 429) {
+          recordOpenalexRateLimit(res)
+          await mirrorOpenalexCooldown(env)
+          return res
+        }
+        if (res.status >= 400 && res.status < 500) return res
+        // 5xx → server-side transient failure — retry once.
+        res.body?.cancel().catch(() => {})
+        throw new TransientOpenalexError(`OpenAlex HTTP ${res.status}`, res.status)
+      },
+      {
+        maxRetries: 1,
+        delaysMs: [150],
+        jitter: false,
+        retryable: (err) => err instanceof TransientOpenalexError && !isCircuitOpenError(err),
+      },
+    ).catch((err) => {
+      logger.warn('OpenAlex search failed:', { error: toError(err) })
+      return null
+    })
 
-    if (!response.ok) {
-      logger.warn(`OpenAlex search failed: HTTP ${response.status}`, { query })
+    if (!response?.ok) {
+      if (response) logger.warn(`OpenAlex search failed: HTTP ${response.status}`, { query })
       return results
     }
 

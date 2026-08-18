@@ -30,28 +30,28 @@ import {
   parseFlexibleDate,
   parseRelativeTime,
 } from './util'
+import { withRetry, splitRetryBudget } from './resilience/retry'
+import { BACKEND_TIMEOUT_MS } from './search/fanout'
 
 const NAVER_NEWS_SEARCH_URL = 'https://m.search.naver.com/search.naver'
 
 const MOBILE_UA =
   'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1'
 
-function sleep(ms: number): Promise<void> {
-  return new Promise((r) => setTimeout(r, ms))
-}
-
-/** Backoff delay for a retry attempt: short base + jitter to avoid thundering herds. */
-function backoffDelay(attempt: number): number {
-  const base = [150, 350, 700][attempt] ?? 700
-  return base + Math.floor(Math.random() * 100)
+/** Thrown for a transient Naver throttle/overload status (429/5xx) so withRetry retries it. */
+class NaverNewsThrottledError extends Error {
+  readonly status: number
+  constructor(status: number) {
+    super(`Naver news HTTP ${status}`)
+    this.status = status
+    this.name = 'NaverNewsThrottledError'
+  }
 }
 
 export interface NaverNewsSearchOptions {
   maxResults?: number
   timeoutMs?: number
   env?: Env
-  /** Internal: set when retrying after throttle/overload (prevents infinite retry loops) */
-  _retry?: boolean
   /**
    * Recency intent (최신순). When true the backend fetches the sort=1
    * (newest-first) page IN PARALLEL with the default relevance page and
@@ -133,6 +133,14 @@ async function fetchNaverNewsPage(
   const { maxResults = 15, timeoutMs = 12000, env } = opts
   const results: SearchResult[] = []
 
+  // Ceiling-safe per-attempt budget: fanout's naver-news ceiling is 4000ms;
+  // with the 1200ms beat reserved, (4000−1200)/2 = 1400ms per attempt makes
+  // the chain's worst case (2 timeouts + beat) land exactly on the ceiling.
+  // In recency dual-fetch the two pages run in PARALLEL, so wall time is
+  // max(page1, page2) = 4000ms — still inside the fanout window.
+  const naverNewsCeiling = BACKEND_TIMEOUT_MS['naver-news'] ?? 4000
+  const perAttempt = splitRetryBudget(Math.min(timeoutMs, naverNewsCeiling), 2, 1200, 500)
+
   try {
     const params = new URLSearchParams()
     params.append('query', query)
@@ -144,35 +152,55 @@ async function fetchNaverNewsPage(
     // eval gold domains (the Phase 6.2 finding).
     if (sortByRecency) params.append('sort', '1')
 
-    const response = await fetchWithTimeout(
-      env,
-      `${NAVER_NEWS_SEARCH_URL}?${params.toString()}`,
+    // Retry once on 429 (throttle) or 5xx (overload) with a beat, via the
+    // shared withRetry decorator. The old `_retry` recursion guard is replaced
+    // by maxRetries=1 — the second attempt never retries again. 403
+    // (Cloudflare challenge) and other 4xx fail fast (returned, handled
+    // below); network/timeout errors are NOT retried (matches the old catch).
+    const response = await withRetry(
+      async () => {
+        const res = await fetchWithTimeout(
+          env,
+          `${NAVER_NEWS_SEARCH_URL}?${params.toString()}`,
+          {
+            method: 'GET',
+            headers: {
+              'User-Agent': MOBILE_UA,
+              Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+              'Accept-Language': 'ko-KR,ko;q=0.9,en-US;q=0.8,en;q=0.7',
+              'Cache-Control': 'no-cache',
+            },
+          },
+          perAttempt,
+        )
+        if (res.ok) return res
+        if (res.status === 429 || res.status >= 500) {
+          throw new NaverNewsThrottledError(res.status)
+        }
+        return res // 403 / other 4xx — fail fast
+      },
       {
-        method: 'GET',
-        headers: {
-          'User-Agent': MOBILE_UA,
-          Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-          'Accept-Language': 'ko-KR,ko;q=0.9,en-US;q=0.8,en;q=0.7',
-          'Cache-Control': 'no-cache',
+        maxRetries: 1,
+        delaysMs: [1200], // ceiling-safe beat (see perAttempt above)
+        jitter: false,
+        retryable: (err) => err instanceof NaverNewsThrottledError,
+        onRetry: (_attempt, _delayMs, err) => {
+          const status = err instanceof NaverNewsThrottledError ? err.status : '?'
+          logger.info(`[ssak] Retrying Naver news (status=${status})`)
         },
       },
-      timeoutMs,
-    )
+    ).catch((err) => {
+      // Network error / timeout — not retryable, matches the old outer catch.
+      logger.warn('Naver news search failed:', { error: toError(err) })
+      return null
+    })
 
+    if (!response) return results
     if (!response.ok) {
-      // Retry once on 429 (throttle) or 5xx (overload) with jitter.
-      // 403 (Cloudflare challenge) is not retryable — just return empty.
-      const status = response.status
-      if ((status === 429 || status >= 500) && !opts._retry) {
-        const jitter = Math.random() * 1500 + 500 // 0.5–2s
-        await new Promise((r) => setTimeout(r, jitter))
-        logger.info('[ssak] Retrying Naver news (status=' + status + ')')
-        return fetchNaverNewsPage(query, { ...opts, _retry: true }, sortByRecency)
-      }
-      if (status === 403) {
+      if (response.status === 403) {
         logger.warn('[ssak] Naver news returned 403 — Cloudflare challenge detected; skipping this backend')
       } else {
-        logger.warn('[ssak] Naver news non-OK:', { status })
+        logger.warn('[ssak] Naver news non-OK:', { status: response.status })
       }
       return results
     }
@@ -445,13 +473,15 @@ export async function naverNewsExtract(
   // Only transient statuses (429, 5xx) and network/timeout errors are
   // retried; 4xx (genuinely missing) fail fast. The caller's total timeout
   // budget is split across attempts so the retry chain can't balloon past
-  // the extractor's ceiling.
+  // the extractor's ceiling. The retry policy is the shared withRetry
+  // decorator with the same hand-tuned 150/350ms beat as the old loop.
   const maxRetries = 2
-  const perAttempt = Math.max(Math.floor(timeoutMs / (maxRetries + 1)), 800)
-  let lastError: unknown
+  // Reserve the 150/350ms beats before dividing, so the chain's worst case
+  // (3 timeouts + beats) fits the caller's budget: 3×4833 + 500 = 15000.
+  const perAttempt = splitRetryBudget(timeoutMs, maxRetries + 1, 150 + 350, 800)
 
-  for (let attempt = 0; attempt <= maxRetries; attempt++) {
-    try {
+  return withRetry(
+    async () => {
       const response = await fetchWithTimeout(
         env,
         url,
@@ -467,16 +497,15 @@ export async function naverNewsExtract(
         perAttempt,
       )
 
-      // Transient under fan-out — back off and retry.
+      // Transient under fan-out — throw so withRetry backs off and retries.
       if (response.status === 429 || response.status >= 500) {
-        lastError = new Error(`Naver article HTTP ${response.status}`)
         // Free the subrequest slot: on Workers an unconsumed response body
         // holds the slot until GC, so every retry would otherwise leak one.
         response.body?.cancel().catch(() => {})
-        if (attempt < maxRetries) await sleep(backoffDelay(attempt))
-        continue
+        throw new Error(`Naver article HTTP ${response.status}`)
       }
 
+      // Non-transient HTTP failure — fail fast (returned, never retried).
       if (!response.ok) {
         return { url, raw_content: '', success: false, error: `HTTP ${response.status}` }
       }
@@ -497,14 +526,18 @@ export async function naverNewsExtract(
         raw_content: content,
         success: true,
       }
-    } catch (err) {
-      // Network error / abort / timeout — transient, retry.
-      lastError = err
-      if (attempt < maxRetries) await sleep(backoffDelay(attempt))
-    }
-  }
-
-  return { url, raw_content: '', success: false, error: toError(lastError) }
+    },
+    {
+      maxRetries,
+      delaysMs: [150, 350], // same hand-tuned beat as the old backoffDelay
+      jitter: false,
+      // Every thrown error is retryable: transient HTTP (429/5xx) above plus
+      // network/timeout errors (incl. response.text()) — exactly the old loop.
+    },
+  ).catch((err) => {
+    // Network error / abort / timeout — exhausted retries.
+    return { url, raw_content: '', success: false, error: toError(err) }
+  })
 }
 
 /** Skip titles that are navigation/boilerplate, not article headlines. */

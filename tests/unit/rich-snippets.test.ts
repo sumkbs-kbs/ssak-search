@@ -1,133 +1,170 @@
+/**
+ * Unit tests: Rich Snippet Extraction (rich-snippets.ts).
+ *
+ * Covers: JSON-LD single/array/@graph parsing, Product/Recipe/Article/
+ * FAQPage/BreadcrumbList/AggregateRating types, rating clamp + review
+ * counts, price extraction (offers array + direct), author + reading time,
+ * malformed JSON-LD skipped, multi-type resolution, microdata fallback
+ * (only when no JSON-LD), OG/Twitter meta fallback, article/product OG.
+ */
+
 import { describe, it, expect } from 'vitest'
 import { extractRichSnippets } from '../../src/lib/rich-snippets'
 
-describe('extractRichSnippets', () => {
-  it('extracts rating from Product JSON-LD', () => {
-    const html = `<html><head><script type="application/ld+json">{
-      "@context": "https://schema.org",
-      "@type": "Product",
-      "name": "Test Product",
-      "aggregateRating": {
-        "@type": "AggregateRating",
-        "ratingValue": "4.5",
-        "reviewCount": "123"
-      }
-    }</script></head><body></body></html>`
+function jsonLd(ld: unknown): string {
+  return `<script type="application/ld+json">${JSON.stringify(ld)}</script>`
+}
 
-    const snippets = extractRichSnippets(html)
-    expect(snippets.length).toBeGreaterThanOrEqual(1)
-    const rating = snippets.find((s) => s.type === 'rating')
-    expect(rating).toBeDefined()
-    expect(rating!.rating).toBe(4.5)
-    expect(rating!.review_count).toBe(123)
+describe('extractRichSnippets — JSON-LD', () => {
+  it('extracts a Product rating snippet', () => {
+    const html = jsonLd({
+      '@context': 'https://schema.org',
+      '@type': 'Product',
+      name: 'Wireless Mouse',
+      aggregateRating: { ratingValue: '4.5', reviewCount: '120' },
+    })
+    const out = extractRichSnippets(html)
+    expect(out[0]).toMatchObject({ type: 'rating', rating: 4.5, review_count: 120 })
   })
 
-  it('extracts price from Product with offers', () => {
-    const html = `<html><head><script type="application/ld+json">{
-      "@context": "https://schema.org",
-      "@type": "Product",
-      "name": "Widget",
-      "offers": {
-        "@type": "Offer",
-        "price": "29.99",
-        "priceCurrency": "USD"
-      }
-    }</script></head><body></body></html>`
-
-    const snippets = extractRichSnippets(html)
-    const price = snippets.find((s) => s.type === 'price')
-    expect(price).toBeDefined()
-    expect(price!.price).toContain('29.99')
-    expect(price!.price).toContain('USD')
+  it('clamps ratings above 5', () => {
+    const html = jsonLd({ '@type': 'Recipe', aggregateRating: { ratingValue: '9.9' } })
+    const out = extractRichSnippets(html)
+    expect(out[0].type).toBe('rating')
+    expect((out[0] as { rating: number }).rating).toBe(5)
   })
 
-  it('extracts article with author from Article JSON-LD', () => {
-    const html = `<html><head><script type="application/ld+json">{
-      "@context": "https://schema.org",
-      "@type": "Article",
-      "headline": "Test Article",
-      "author": {
-        "@type": "Person",
-        "name": "John Doe"
-      },
-      "timeRequired": "PT5M"
-    }</script></head><body></body></html>`
-
-    const snippets = extractRichSnippets(html)
-    const article = snippets.find((s) => s.type === 'article')
-    expect(article).toBeDefined()
-    expect(article!.author).toBe('John Doe')
-    expect(article!.reading_time_min).toBe(5)
+  it('extracts a price from offers array with currency', () => {
+    const html = jsonLd({
+      '@type': 'Product',
+      offers: [{ price: 29.99, priceCurrency: 'USD' }],
+    })
+    const out = extractRichSnippets(html)
+    expect(out[0]).toMatchObject({ type: 'price', price: '29.99 USD' })
   })
 
-  it('handles @graph containers', () => {
-    const html = `<html><head><script type="application/ld+json">{
-      "@context": "https://schema.org",
-      "@graph": [
-        {
-          "@type": "Article",
-          "headline": "Article 1",
-          "author": { "@type": "Person", "name": "Author 1" }
-        },
-        {
-          "@type": "BreadcrumbList",
-          "itemListElement": []
-        }
-      ]
-    }</script></head><body></body></html>`
-
-    const snippets = extractRichSnippets(html)
-    expect(snippets.length).toBeGreaterThanOrEqual(2)
-    expect(snippets.some((s) => s.type === 'article')).toBe(true)
-    expect(snippets.some((s) => s.type === 'breadcrumb')).toBe(true)
+  it('falls back to the direct price property when offers carry no price', () => {
+    // extractPrice only reaches node.price after an offers block exists
+    const html = jsonLd({ '@type': 'Service', offers: [{ name: 'x' }], price: '100', priceCurrency: 'KRW' })
+    const out = extractRichSnippets(html)
+    expect(out[0]).toMatchObject({ type: 'price', price: '100 KRW' })
   })
 
-  it('extracts FAQPage type', () => {
-    const html = `<html><head><script type="application/ld+json">{
-      "@context": "https://schema.org",
-      "@type": "FAQPage",
-      "mainEntity": []
-    }</script></head><body></body></html>`
-
-    const snippets = extractRichSnippets(html)
-    expect(snippets.some((s) => s.type === 'faq')).toBe(true)
+  it('returns null for a Product without rating or price', () => {
+    const html = jsonLd({ '@type': 'Product', name: 'Bare' })
+    expect(extractRichSnippets(html)).toEqual([])
   })
 
-  it('returns empty array for HTML without structured data', () => {
-    const html = '<html><body><p>No JSON-LD here</p></body></html>'
-    const snippets = extractRichSnippets(html)
-    expect(snippets).toEqual([])
+  it('extracts an Article with author and reading time', () => {
+    const html = jsonLd({
+      '@type': 'Article',
+      headline: 'Title',
+      author: { name: 'Jane Doe' },
+      timeRequired: 'PT6M',
+    })
+    const out = extractRichSnippets(html)
+    expect(out[0]).toMatchObject({ type: 'article', author: 'Jane Doe', reading_time_min: 6 })
   })
 
-  it('skips malformed JSON-LD gracefully', () => {
-    const html = `<html><head><script type="application/ld+json">{invalid json</script></head><body></body></html>`
-    const snippets = extractRichSnippets(html)
-    // Should not throw, should return empty
-    expect(snippets).toEqual([])
+  it('accepts a string author and author arrays', () => {
+    const html = jsonLd({ '@type': 'NewsArticle', author: 'Staff Writer' })
+    expect(extractRichSnippets(html)[0]).toMatchObject({ type: 'article', author: 'Staff Writer' })
+    const html2 = jsonLd({ '@type': 'BlogPosting', author: [{ name: 'First' }, { name: 'Second' }] })
+    expect(extractRichSnippets(html2)[0].author).toBe('First')
   })
 
-  it('handles multiple JSON-LD blocks', () => {
-    const html = `<html><head>
-<script type="application/ld+json">{"@context":"https://schema.org","@type":"Article","headline":"A"}</script>
-<script type="application/ld+json">{"@context":"https://schema.org","@type":"Product","name":"P","aggregateRating":{"@type":"AggregateRating","ratingValue":"3.0"}}</script>
-</head><body></body></html>`
-
-    const snippets = extractRichSnippets(html)
-    expect(snippets.length).toBeGreaterThanOrEqual(2)
+  it('handles FAQPage and BreadcrumbList', () => {
+    const faq = jsonLd({ '@type': 'FAQPage', mainEntity: [] })
+    expect(extractRichSnippets(faq)[0]).toEqual({ type: 'faq' })
+    const bread = jsonLd({ '@type': 'BreadcrumbList', itemListElement: [] })
+    expect(extractRichSnippets(bread)[0]).toEqual({ type: 'breadcrumb' })
   })
 
-  it('extracts rating from aggregateRating in top-level node', () => {
-    const html = `<html><head><script type="application/ld+json">{
-      "@context": "https://schema.org",
-      "@type": "AggregateRating",
-      "ratingValue": "4.0",
-      "reviewCount": "50"
-    }</script></head><body></body></html>`
+  it('extracts top-level AggregateRating nodes', () => {
+    const html = jsonLd({ '@type': 'AggregateRating', ratingValue: '3.2', reviewCount: '5' })
+    expect(extractRichSnippets(html)[0]).toMatchObject({ type: 'rating', rating: 3.2, review_count: 5 })
+  })
 
-    const snippets = extractRichSnippets(html)
-    const rating = snippets.find((s) => s.type === 'rating')
-    expect(rating).toBeDefined()
-    expect(rating!.rating).toBe(4)
-    expect(rating!.review_count).toBe(50)
+  it('extracts review-based ratings', () => {
+    const html = jsonLd({
+      '@type': 'Product',
+      review: [{ reviewRating: { ratingValue: '4.0' } }],
+    })
+    const out = extractRichSnippets(html)
+    expect(out[0]).toMatchObject({ type: 'rating', rating: 4 })
+  })
+
+  it('parses array and @graph containers', () => {
+    const arrayHtml = jsonLd([{ '@type': 'Article', author: 'A' }, { '@type': 'FAQPage' }])
+    const out = extractRichSnippets(arrayHtml)
+    expect(out).toHaveLength(2)
+
+    const graphHtml = jsonLd({ '@graph': [{ '@type': 'Article', author: 'B' }] })
+    expect(extractRichSnippets(graphHtml)[0]).toMatchObject({ type: 'article', author: 'B' })
+  })
+
+  it('skips malformed JSON-LD and empty blocks', () => {
+    const html = `<script type="application/ld+json">{not json</script><script type="application/ld+json">   </script>`
+    expect(extractRichSnippets(html)).toEqual([])
+  })
+
+  it('resolves the most specific type from a multi-type array', () => {
+    const html = jsonLd({ '@type': ['Thing', 'Product'], aggregateRating: { ratingValue: '4' } })
+    expect(extractRichSnippets(html)[0].type).toBe('rating')
+  })
+})
+
+describe('extractRichSnippets — microdata', () => {
+  it('falls back to microdata only when JSON-LD is absent', () => {
+    // The block regex captures up to the first closing tag, so use
+    // self-closing <meta> tags to keep both itemprop values in the block.
+    const html = `
+      <div itemscope itemtype="https://schema.org/Product">
+        <meta itemprop="ratingValue" content="4.2">
+        <meta itemprop="reviewCount" content="77">
+      </div>
+    `
+    const out = extractRichSnippets(html)
+    expect(out[0]).toMatchObject({ type: 'rating', rating: 4.2, review_count: 77 })
+  })
+
+  it('extracts microdata article author', () => {
+    const html = `
+      <article itemscope itemtype="https://schema.org/NewsArticle">
+        <span itemprop="author" content="Kim"></span>
+      </article>
+    `
+    const out = extractRichSnippets(html)
+    expect(out[0]).toMatchObject({ type: 'article', author: 'Kim' })
+  })
+
+  it('skips microdata without a rating value', () => {
+    const html = `<div itemscope itemtype="https://schema.org/Product"><span itemprop="name" content="X"></span></div>`
+    expect(extractRichSnippets(html)).toEqual([])
+  })
+})
+
+describe('extractRichSnippets — meta tags', () => {
+  it('extracts article author from OG meta', () => {
+    const html = `
+      <meta property="og:type" content="article">
+      <meta property="article:author" content="Reporter R">
+    `
+    const out = extractRichSnippets(html)
+    expect(out[0]).toMatchObject({ type: 'article', author: 'Reporter R' })
+  })
+
+  it('extracts product price from OG meta', () => {
+    const html = `
+      <meta property="og:type" content="product">
+      <meta property="product:price.amount" content="19.99">
+    `
+    const out = extractRichSnippets(html)
+    expect(out[0]).toMatchObject({ type: 'price', price: '19.99' })
+  })
+
+  it('returns nothing for non-article/product OG types', () => {
+    const html = `<meta property="og:type" content="website">`
+    expect(extractRichSnippets(html)).toEqual([])
   })
 })

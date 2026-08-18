@@ -313,6 +313,16 @@ describe('lookupStockCode (longest-match)', () => {
   it('returns null for an unknown company', () => {
     expect(lookupStockCode('존재하지않는회사')).toBeNull()
   })
+
+  it('strips Korean financial keywords attached to the name (CJK \\b fix)', () => {
+    // JS \\b is ASCII-only — the old /\\b(주가|…|실적)\\b/ never stripped
+    // Hangul keywords, so the step-3 extractCompanyName fallback was dead for
+    // Korean. Korean queries compound words without spaces ("삼성전자주가"),
+    // so step 2's syllable-boundary check misses and step 3 must strip.
+    expect(lookupStockCode('삼성전자주가')).toBe('005930')
+    expect(lookupStockCode('현대차실적')).toBe('005380')
+    expect(lookupStockCode('한화에어로스페이스목표주가')).toBe('012450')
+  })
 })
 
 // ============================================================

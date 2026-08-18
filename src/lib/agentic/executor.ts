@@ -7,7 +7,7 @@
  */
 
 import type { SubQueryPlan, SubQueryStep } from './planner'
-import { logger, toError } from '../../lib/logger'
+import { logger, toError, type Logger } from '../../lib/logger'
 import type { Ai } from '@cloudflare/workers-types'
 import { searchWeb, fetchUrl, compute } from './search-tools'
 
@@ -51,6 +51,8 @@ export interface ExecutorOptions {
   stepTimeoutMs?: number
   /** Max results per search step */
   maxSearchResults?: number
+  /** Trace-scoped logger (Action Item 1.1) — carries traceId/spanId */
+  logger?: Logger
 }
 
 // Internal options with required defaults but optional ai
@@ -59,6 +61,7 @@ interface InternalExecutorOptions {
   maxParallel: number
   stepTimeoutMs: number
   maxSearchResults: number
+  log: Logger
 }
 
 // ============================================================
@@ -78,7 +81,14 @@ async function executeStep(
 
     switch (step.tool) {
       case 'web_search': {
-        const params = step.params as { query: string; recency_days?: number; max_results?: number }
+        const params = step.params as {
+          query: string
+          recency_days?: number
+          max_results?: number
+          topic?: 'general' | 'news' | 'finance'
+          timeout_ms?: number
+          language?: string
+        }
         // Resolve query template with context from dependencies
         const resolvedQuery = resolveTemplate(params.query, context)
 
@@ -86,6 +96,13 @@ async function executeStep(
           query: resolvedQuery,
           recencyDays: params.recency_days,
           maxResults: params.max_results ?? opts.maxSearchResults ?? 8,
+          // Forward the planner's topic so searchWeb can route to the
+          // finance/news backends (planner financial steps set topic='finance').
+          topic: params.topic,
+          // Forward the remaining SearchOptions fields — per-step fetch timeout
+          // override and language (used by e.g. wikipediaSearch).
+          timeoutMs: params.timeout_ms,
+          language: params.language,
         })
 
         evidence = results
@@ -209,6 +226,7 @@ export class PlanExecutor {
       maxParallel: opts.maxParallel ?? 1,
       stepTimeoutMs: opts.stepTimeoutMs ?? 30000,
       maxSearchResults: opts.maxSearchResults ?? 8,
+      log: opts.logger ?? logger,
     }
   }
 
@@ -244,7 +262,7 @@ export class PlanExecutor {
       const ready = [...remaining].filter((step) => step.depends_on.every((depId) => context.completedSteps.has(depId)))
       if (ready.length === 0) {
         // Deadlock — remaining steps have unmet deps (circular or failed deps)
-        logger.warn(`[Executor] ${remaining.size} steps have unmet dependencies, running anyway`)
+        this.opts.log.warn(`[Executor] ${remaining.size} steps have unmet dependencies, running anyway`)
         ready.push(...remaining)
       }
 
@@ -302,7 +320,7 @@ export class PlanExecutor {
             context.completedSteps.add(result.stepId)
           } else {
             context.failedSteps.add(result.stepId)
-            logger.warn(`[Executor] Step ${result.stepId} failed: ${result.error}`)
+            this.opts.log.warn(`[Executor] Step ${result.stepId} failed: ${result.error}`)
           }
         }
       }

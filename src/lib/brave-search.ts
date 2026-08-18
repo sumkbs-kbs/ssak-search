@@ -23,6 +23,28 @@
 import type { SearchResult, Env } from '../types'
 import { logger, toError } from './logger'
 import { extractDomain, computeScore } from './util'
+import { withRetry, splitRetryBudget } from './resilience/retry'
+import { BACKEND_TIMEOUT_MS } from './search/fanout'
+
+/**
+ * Transient failure from the Brave web search endpoint — the ONLY error
+ * class worth retrying (docs/16_FAILFAST_BACKEND_RETRY_ANALYSIS.md §3.1).
+ * Covers 5xx and network errors (fetch throw). Deliberately NOT wrapped:
+ * 429 (quota — rare at 50 req/s but retrying in 150ms is pointless), 401/403
+ * (key problem — permanent), and other 4xx (permanent refusal).
+ *
+ * Brave is the ONLY backend using a direct fetch (no fetchWithTimeout), so it
+ * has no rate-limiter / circuit-breaker protection — a single network blip
+ * used to zero out the entire paid backend. The retry is the compensation.
+ */
+class TransientBraveError extends Error {
+  readonly status: number | null
+  constructor(message: string, status: number | null) {
+    super(message)
+    this.status = status
+    this.name = 'TransientBraveError'
+  }
+}
 
 const BRAVE_WEB_SEARCH_URL = 'https://api.search.brave.com/res/v1/web/search'
 const BRAVE_LLM_CONTEXT_URL = 'https://api.search.brave.com/res/v1/llm/context'
@@ -161,23 +183,60 @@ export async function braveSearch(query: string, opts: BraveSearchOptions): Prom
     if (resultFilter) url.searchParams.set('result_filter', resultFilter)
 
     // Request more results for better dedup pool
-    const controller = new AbortController()
-    const timer = setTimeout(() => controller.abort(), timeoutMs)
-
-    const response = await fetch(url.toString(), {
-      method: 'GET',
-      headers: {
-        Accept: 'application/json',
-        'Accept-Encoding': 'gzip',
-        'X-Subscription-Token': apiKey,
+    // docs/16 §3.1: 5xx/network gets ONE retry via the shared withRetry
+    // decorator. Budget: splitRetryBudget(2000, 2, 150, 800) = 925 → worst
+    // 2×925+150 = 2000 = the brave fanout ceiling exactly. 429/401/403/4xx
+    // pass through as Responses and fail fast below.
+    const braveCeiling = BACKEND_TIMEOUT_MS.brave ?? 2000
+    const perAttemptMs = splitRetryBudget(Math.min(timeoutMs, braveCeiling), 2, 150, 800)
+    const response = await withRetry(
+      async () => {
+        let res: Response
+        try {
+          const controller = new AbortController()
+          const timer = setTimeout(() => controller.abort(), perAttemptMs)
+          try {
+            res = await fetch(url.toString(), {
+              method: 'GET',
+              headers: {
+                Accept: 'application/json',
+                'Accept-Encoding': 'gzip',
+                'X-Subscription-Token': apiKey,
+              },
+              signal: controller.signal,
+              // Route through rate limiter via fetchWithTimeout — but Brave rate
+              // limit is very generous (50 req/s), so we use direct fetch with
+              // timeout (kept as direct fetch; docs/16 keeps the AbortController
+              // path and adds the marker retry on top).
+            })
+          } finally {
+            clearTimeout(timer)
+          }
+        } catch (err) {
+          // Network timeout / blip — transient, worth the single retry.
+          throw new TransientBraveError(`Brave web search fetch failed: ${toError(err)}`, null)
+        }
+        if (res.ok) return res
+        // 429/401/403/4xx → rate limit / auth / permanent refusal — fail fast.
+        if (res.status === 429 || res.status === 401 || res.status === 403 || (res.status >= 400 && res.status < 500)) {
+          return res
+        }
+        // 5xx → server-side transient failure — retry once.
+        res.body?.cancel().catch(() => {})
+        throw new TransientBraveError(`Brave web search HTTP ${res.status}`, res.status)
       },
-      signal: controller.signal,
-      // Route through rate limiter via fetchWithTimeout — but Brave rate limit is
-      // very generous (50 req/s), so we use direct fetch with timeout
+      {
+        maxRetries: 1,
+        delaysMs: [150],
+        jitter: false,
+        retryable: (err) => err instanceof TransientBraveError,
+      },
+    ).catch((err) => {
+      logger.warn('[BraveSearch] Search failed:', { error: toError(err) })
+      return null
     })
 
-    clearTimeout(timer)
-
+    if (!response) return []
     if (!response.ok) {
       if (response.status === 429) {
         logger.warn('[BraveSearch] Rate limited (HTTP 429)')

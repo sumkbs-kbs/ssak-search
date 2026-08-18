@@ -36,6 +36,9 @@ function runScript(args: string[], env: Record<string, string> = {}): { exit: nu
       maxBuffer: 10 * 1024 * 1024,
       stdio: ['ignore', 'pipe', 'pipe'],
       env: { ...process.env, ...env },
+      // 수정 112: 병렬 부하에서 bash 스크립트 실행이 execFileSync 기본 5s를
+      // 초과해 flaky 타임아웃 발생 (전체 스위트 실행 시 실측 재현). 명시적 상향.
+      timeout: 60_000,
     })
     return { exit: 0, out: stdout }
   } catch (err) {
@@ -55,7 +58,7 @@ describe.skipIf(!BASH_AVAILABLE)('verify-slack-alert-e2e.sh (웹훅 종단 검�
     // 시크릿 마스킹 — 전체 URL 이 출력에 노출되지 않아야 한다
     expect(r.out).not.toContain(VALID_URL)
     expect(r.out).toContain('T01***…***123456')
-  })
+  }, 60_000)
 
   it('--webhook-file 로 URL 을 주입해 드라이런을 실행한다 (파일 경로는 argv 에 남아도 URL 은 안 남음)', () => {
     const tmp = mkdtempSync(join(tmpdir(), 'ssak-e2e-'))
@@ -70,25 +73,25 @@ describe.skipIf(!BASH_AVAILABLE)('verify-slack-alert-e2e.sh (웹훅 종단 검�
     } finally {
       rmSync(tmp, { recursive: true, force: true })
     }
-  })
+  }, 60_000)
 
   it('잘못된 URL 형식은 드라이런이어도 거부한다 (exit 1)', () => {
     const r = runScript(['--dry-run'], { SLACK_WEBHOOK_URL: 'https://example.com/not-slack' })
     expect(r.exit).toBe(1)
     expect(r.out).toContain('웹훅 URL 형식이 아닙니다')
-  })
+  }, 60_000)
 
   it('--url argv 주입은 거부한다 — 셸 히스토리/ps 노출 방지 (수정 70)', () => {
     const r = runScript(['--url', VALID_URL, '--dry-run'])
     expect(r.exit).toBe(1)
     expect(r.out).toContain('--url 인자는 argv 에 웹훅 URL 이 남아 제거됐습니다')
-  })
+  }, 60_000)
 
   it('URL 누락 시 exit 1', () => {
     const r = runScript([])
     expect(r.exit).toBe(1)
     expect(r.out).toContain('웹훅 URL 필요')
-  })
+  }, 60_000)
 
   it('--self-test 오프라인 회귀 2/2 통과 (알림 전달 / 미발화 감지)', () => {
     const out = execFileSync('bash', [SCRIPT, '--self-test'], {
@@ -99,5 +102,5 @@ describe.skipIf(!BASH_AVAILABLE)('verify-slack-alert-e2e.sh (웹훅 종단 검�
     expect(out).toContain('all PASS (2/2)')
     expect(out).toContain('alert_delivered')
     expect(out).toContain('alert_missing')
-  })
+  }, 60_000)
 })

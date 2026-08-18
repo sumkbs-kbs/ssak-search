@@ -1,0 +1,106 @@
+{
+  "scale": 1.0500000000000005,
+  "overhead": {
+    "medianMs": 50,
+    "sigma": 1.8
+  },
+  "calibratedAt": "2026-08-13T00:28:54.029Z",
+  "backends": [
+    {
+      "name": "bing",
+      "medianMs": 315,
+      "sigma": 0.5,
+      "failProb": 0.05
+    },
+    {
+      "name": "brave",
+      "medianMs": 315,
+      "sigma": 0.5,
+      "failProb": 0.08
+    },
+    {
+      "name": "hackernews",
+      "medianMs": 263,
+      "sigma": 0.4,
+      "failProb": 0.05
+    },
+    {
+      "name": "reddit",
+      "medianMs": 368,
+      "sigma": 0.5,
+      "failProb": 0.15
+    },
+    {
+      "name": "wikipedia",
+      "medianMs": 420,
+      "sigma": 0.6,
+      "failProb": 0.31999999999999995
+    },
+    {
+      "name": "naver",
+      "medianMs": 368,
+      "sigma": 0.5,
+      "failProb": 0.1
+    },
+    {
+      "name": "naver-news",
+      "medianMs": 525,
+      "sigma": 0.6,
+      "failProb": 0.12
+    },
+    {
+      "name": "bing-news-rss",
+      "medianMs": 420,
+      "sigma": 0.5,
+      "failProb": 0.05
+    },
+    {
+      "name": "google-news-rss",
+      "medianMs": 420,
+      "sigma": 0.5,
+      "failProb": 0.05
+    },
+    {
+      "name": "yahoo-finance",
+      "medianMs": 525,
+      "sigma": 0.5,
+      "failProb": 0.15
+    },
+    {
+      "name": "arxiv",
+      "medianMs": 840,
+      "sigma": 0.7,
+      "failProb": 0.2
+    },
+    {
+      "name": "openalex",
+      "medianMs": 630,
+      "sigma": 0.6,
+      "failProb": 0.15
+    },
+    {
+      "name": "github",
+      "medianMs": 420,
+      "sigma": 0.5,
+      "failProb": 0.1
+    },
+    {
+      "name": "qiita",
+      "medianMs": 630,
+      "sigma": 0.5,
+      "failProb": 0.13
+    },
+    {
+      "name": "juejin",
+      "medianMs": 630,
+      "sigma": 0.5,
+      "failProb": 0.07
+    },
+    {
+      "name": "duckduckgo",
+      "medianMs": 420,
+      "sigma": 0.5,
+      "failProb": 0.1
+    }
+  ]
+}

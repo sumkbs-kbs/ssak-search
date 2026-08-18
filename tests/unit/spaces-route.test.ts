@@ -1,129 +1,159 @@
 /**
- * Unit tests for Spaces API route binding guards
- * (src/routes/spaces.ts)
+ * Unit tests: /api/spaces route (spaces.ts).
  *
- * P2 부수 발견 ① (2026-08-10): spaces.ts는 다른 DO 라우트(chat/pages/keys)와 달리
- * SPACE_DO 미바인딩 가드가 없어 `getSpaceStub`이 throw → Hono 500 (unexpected)으로
- * 표면화됐다. pages.ts 패턴(checkBinding 헬퍼 + code: 'binding_missing' 501)을
- * 7개 라우트 전부에 추가했다. 이 테스트는 미바인딩 시 501 + binding_missing을,
- * 바인딩 시 정상 동작(또는 DO stub에 도달)을 고정한다.
- *
- * NOTE: Hono sub-app 직접 테스트 — 라우트 경로는 등록 경로 그대로 사용.
- * spacesRoute.get('/') → fetch('http://localhost/')
- * spacesRoute.get('/:id') → fetch('http://localhost/space-1')
+ * Covers: 501 without SPACE_DO, list/create/get/update/delete/addFile/
+ * removeFile success paths, 404 on missing space, zod validation 400s.
  */
 
 import { describe, it, expect, vi } from 'vitest'
 
-// space-do.ts imports { DurableObject } from 'cloudflare:workers' — the
-// runtime module is unavailable in the vitest unit environment, so mock it
-// the same way crawler-do/rate-limiter-do/click-logger tests do.
 vi.mock('cloudflare:workers', () => ({
-  DurableObject: class {},
+  DurableObject: class MockDurableObject {
+    ctx: unknown
+    env: unknown
+    constructor(ctx: unknown, env: unknown) {
+      this.ctx = ctx
+      this.env = env
+    }
+  },
 }))
 
-const NO_DO_ENV = {} as any
+import { spacesRoute } from '../../src/routes/spaces'
 
-describe('Spaces API route — SPACE_DO binding guard', () => {
-  it('exports spacesRoute Hono app', async () => {
-    const mod = await import('../../src/routes/spaces')
-    expect(mod.spacesRoute).toBeDefined()
-    expect(typeof mod.spacesRoute.fetch).toBe('function')
+function makeStub() {
+  const space = {
+    id: 'sp-1',
+    user_id: 'user-1',
+    name: 'Research',
+    description: '',
+    instructions: '',
+    focus_mode: 'all',
+    files: [],
+    created_at: 1,
+    updated_at: 1,
+  }
+  return {
+    listSpaces: vi.fn().mockResolvedValue([space]),
+    getSpace: vi.fn().mockResolvedValue(space),
+    createSpace: vi.fn().mockResolvedValue(space),
+    updateSpace: vi.fn().mockResolvedValue(space),
+    deleteSpace: vi.fn().mockResolvedValue(true),
+    addFile: vi.fn().mockResolvedValue(space),
+    removeFile: vi.fn().mockResolvedValue(space),
+    missing: {
+      getSpace: vi.fn().mockResolvedValue(null),
+      updateSpace: vi.fn().mockResolvedValue(null),
+      deleteSpace: vi.fn().mockResolvedValue(false),
+      addFile: vi.fn().mockResolvedValue(null),
+      removeFile: vi.fn().mockResolvedValue(null),
+    },
+  }
+}
+
+async function call(app: typeof spacesRoute, method: string, path: string, env: unknown, body?: unknown): Promise<Response> {
+  const req = new Request(`http://localhost${path}`, {
+    method,
+    headers: { 'Content-Type': 'application/json', 'X-User-Id': 'user-1' },
+    body: body !== undefined ? JSON.stringify(body) : undefined,
   })
+  return app.fetch(req, env as never, {} as never)
+}
 
-  it('returns 501 binding_missing for GET / when SPACE_DO is missing', async () => {
-    const mod = await import('../../src/routes/spaces')
-    const res = await mod.spacesRoute.fetch(new Request('http://localhost/'), NO_DO_ENV, {} as any)
+describe('spacesRoute', () => {
+  const stub = makeStub()
+  const envWithStub = { SPACE_DO: { idFromName: () => 'id', get: () => stub } }
+
+  it('returns 501 when SPACE_DO binding is missing', async () => {
+    const res = await call(spacesRoute, 'GET', '/', {})
     expect(res.status).toBe(501)
-    const body: any = await res.json()
-    expect(body.code).toBe('binding_missing')
+    expect(await res.json()).toMatchObject({ code: 'binding_missing' })
   })
 
-  it('returns 501 binding_missing for POST / when SPACE_DO is missing', async () => {
-    const mod = await import('../../src/routes/spaces')
-    const req = new Request('http://localhost/', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name: 'test space' }),
-    })
-    const res = await mod.spacesRoute.fetch(req, NO_DO_ENV, {} as any)
-    expect(res.status).toBe(501)
-    const body: any = await res.json()
-    expect(body.code).toBe('binding_missing')
-  })
-
-  it('returns 501 binding_missing for GET /:id when SPACE_DO is missing', async () => {
-    const mod = await import('../../src/routes/spaces')
-    const res = await mod.spacesRoute.fetch(new Request('http://localhost/space-1'), NO_DO_ENV, {} as any)
-    expect(res.status).toBe(501)
-    const body: any = await res.json()
-    expect(body.code).toBe('binding_missing')
-  })
-
-  it('returns 501 binding_missing for PUT /:id when SPACE_DO is missing', async () => {
-    const mod = await import('../../src/routes/spaces')
-    const req = new Request('http://localhost/space-1', {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name: 'renamed' }),
-    })
-    const res = await mod.spacesRoute.fetch(req, NO_DO_ENV, {} as any)
-    expect(res.status).toBe(501)
-  })
-
-  it('returns 501 binding_missing for DELETE /:id when SPACE_DO is missing', async () => {
-    const mod = await import('../../src/routes/spaces')
-    const res = await mod.spacesRoute.fetch(
-      new Request('http://localhost/space-1', { method: 'DELETE' }),
-      NO_DO_ENV,
-      {} as any,
-    )
-    expect(res.status).toBe(501)
-  })
-
-  it('returns 501 binding_missing for POST /:id/files when SPACE_DO is missing', async () => {
-    const mod = await import('../../src/routes/spaces')
-    const req = new Request('http://localhost/space-1/files', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name: 'doc.pdf', file_key: 'k', mime_type: 'application/pdf', size: 10 }),
-    })
-    const res = await mod.spacesRoute.fetch(req, NO_DO_ENV, {} as any)
-    expect(res.status).toBe(501)
-    const body: any = await res.json()
-    expect(body.code).toBe('binding_missing')
-  })
-
-  it('returns 501 binding_missing for DELETE /:id/files/:key when SPACE_DO is missing', async () => {
-    const mod = await import('../../src/routes/spaces')
-    const res = await mod.spacesRoute.fetch(
-      new Request('http://localhost/space-1/files/k', { method: 'DELETE' }),
-      NO_DO_ENV,
-      {} as any,
-    )
-    expect(res.status).toBe(501)
-    const body: any = await res.json()
-    expect(body.code).toBe('binding_missing')
-  })
-
-  it('passes through to the DO stub when SPACE_DO is bound (GET / list)', async () => {
-    const mod = await import('../../src/routes/spaces')
-    const listSpaces = async () => [{ id: 's1', name: 'test' }]
-    const env = { SPACE_DO: { idFromName: () => 'stub', get: () => ({ listSpaces }) } }
-    const res = await mod.spacesRoute.fetch(new Request('http://localhost/'), env as any, {} as any)
+  it('GET / lists spaces for the user', async () => {
+    const res = await call(spacesRoute, 'GET', '/', envWithStub)
     expect(res.status).toBe(200)
-    const body: any = await res.json()
+    const body = (await res.json()) as { success: boolean; spaces: Array<{ id: string }> }
     expect(body.success).toBe(true)
-    expect(body.spaces).toHaveLength(1)
+    expect(body.spaces[0].id).toBe('sp-1')
+    expect(stub.listSpaces).toHaveBeenCalledWith('user-1')
   })
 
-  it('returns 404 for GET /:id when space does not exist (binding present)', async () => {
-    const mod = await import('../../src/routes/spaces')
-    const getSpace = async () => null
-    const env = { SPACE_DO: { idFromName: () => 'stub', get: () => ({ getSpace }) } }
-    const res = await mod.spacesRoute.fetch(new Request('http://localhost/missing'), env as any, {} as any)
-    expect(res.status).toBe(404)
-    const body: any = await res.json()
-    expect(body.code).toBe('not_found')
+  it('POST / creates a space', async () => {
+    const res = await call(spacesRoute, 'POST', '/', envWithStub, { name: 'Research', focus_mode: 'news' })
+    expect(res.status).toBe(201)
+    const body = (await res.json()) as { success: boolean; space: { name: string } }
+    expect(body.space.name).toBe('Research')
+  })
+
+  it('POST / returns 400 on invalid body', async () => {
+    const res = await call(spacesRoute, 'POST', '/', envWithStub, { name: '' })
+    expect(res.status).toBe(400)
+    expect(await res.json()).toMatchObject({ code: 'validation_error' })
+  })
+
+  it('GET /:id returns a space or 404', async () => {
+    const ok = await call(spacesRoute, 'GET', '/sp-1', envWithStub)
+    expect(ok.status).toBe(200)
+    const miss = await call(spacesRoute, 'GET', '/nope', {
+      SPACE_DO: { idFromName: () => 'id', get: () => stub.missing },
+    })
+    expect(miss.status).toBe(404)
+    expect(await miss.json()).toMatchObject({ code: 'not_found' })
+  })
+
+  it('PUT /:id updates a space', async () => {
+    const res = await call(spacesRoute, 'PUT', '/sp-1', envWithStub, { name: 'Renamed' })
+    expect(res.status).toBe(200)
+    expect((await res.json() as { space: { name: string } }).space.name).toBe('Research')
+    expect(stub.updateSpace).toHaveBeenCalledWith('sp-1', { name: 'Renamed' })
+  })
+
+  it('PUT /:id returns 400 for invalid update and 404 for missing', async () => {
+    const bad = await call(spacesRoute, 'PUT', '/sp-1', envWithStub, { name: 123 })
+    expect(bad.status).toBe(400)
+    const miss = await call(spacesRoute, 'PUT', '/nope', {
+      SPACE_DO: { idFromName: () => 'id', get: () => stub.missing },
+    }, { name: 'x' })
+    expect(miss.status).toBe(404)
+  })
+
+  it('DELETE /:id deletes a space', async () => {
+    const res = await call(spacesRoute, 'DELETE', '/sp-1', envWithStub)
+    expect(res.status).toBe(200)
+    const miss = await call(spacesRoute, 'DELETE', '/nope', {
+      SPACE_DO: { idFromName: () => 'id', get: () => stub.missing },
+    })
+    expect(miss.status).toBe(404)
+  })
+
+  it('POST /:id/files adds a file reference', async () => {
+    const res = await call(spacesRoute, 'POST', '/sp-1/files', envWithStub, {
+      name: 'notes.md',
+      file_key: 'k1',
+      mime_type: 'text/markdown',
+      size: 1024,
+    })
+    expect(res.status).toBe(200)
+    const body = (await res.json()) as { success: boolean }
+    expect(body.success).toBe(true)
+  })
+
+  it('POST /:id/files returns 400 for a missing field and 404 for missing space', async () => {
+    const bad = await call(spacesRoute, 'POST', '/sp-1/files', envWithStub, { name: 'x' })
+    expect(bad.status).toBe(400)
+    const miss = await call(spacesRoute, 'POST', '/nope/files', {
+      SPACE_DO: { idFromName: () => 'id', get: () => stub.missing },
+    }, { name: 'x', file_key: 'k', mime_type: 't', size: 1 })
+    expect(miss.status).toBe(404)
+  })
+
+  it('DELETE /:id/files/:key removes a file', async () => {
+    const res = await call(spacesRoute, 'DELETE', '/sp-1/files/k1', envWithStub)
+    expect(res.status).toBe(200)
+    expect(stub.removeFile).toHaveBeenCalledWith('sp-1', 'k1')
+    const miss = await call(spacesRoute, 'DELETE', '/nope/files/k1', {
+      SPACE_DO: { idFromName: () => 'id', get: () => stub.missing },
+    })
+    expect(miss.status).toBe(404)
   })
 })

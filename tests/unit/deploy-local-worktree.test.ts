@@ -70,6 +70,8 @@ function runDryRun(args: string[], extraEnv: Record<string, string> = {}): RunRe
         PATH: `${bin}:${process.env.PATH ?? ''}`,
         ...extraEnv,
       },
+      // 수정 112: 병렬 부하 flaky 방지 — 셸 spawn 명시적 타임아웃
+      timeout: 60_000,
     })
     return { exit: 0, out: stdout, log: readFileSync(log, 'utf8') }
   } catch (err) {

@@ -41,6 +41,7 @@
 
 import type { SearchResult, Env } from '../types'
 import { logger, toError } from './logger'
+import { backendTimeoutMs } from './search/fanout'
 import { fetchWithTimeout, extractDomain, decodeEntities, computeScore, truncateToTokens, simplifyQuery } from './util'
 
 const QIITA_ITEMS_URL = 'https://qiita.com/api/v2/items'
@@ -160,7 +161,7 @@ export function parseQiitaItems(data: unknown, query: string, maxResults: number
  * Returns qiita.com URLs — the qiita.com gold domain for ja-tech eval.
  */
 export async function qiitaSearch(query: string, opts: CommunitySearchOptions = {}): Promise<SearchResult[]> {
-  const { maxResults = 5, timeoutMs = 8000, env } = opts
+  const { maxResults = 5, timeoutMs = backendTimeoutMs('qiita', 8000), env } = opts
   if (!qiitaQuotaAvailable()) {
     logger.warn('Qiita API quota soft floor reached — skipping (fall back to bing/github)')
     return []
@@ -262,7 +263,7 @@ export function parseJuejinSearch(data: unknown, query: string, maxResults: numb
  * Returns juejin.cn/post URLs — the juejin.cn gold domain for zh-tech eval.
  */
 export async function juejinSearch(query: string, opts: CommunitySearchOptions = {}): Promise<SearchResult[]> {
-  const { maxResults = 5, timeoutMs = 8000, env } = opts
+  const { maxResults = 5, timeoutMs = backendTimeoutMs('juejin', 8000), env } = opts
   try {
     const params = new URLSearchParams({
       query,
@@ -390,7 +391,7 @@ export function parseCsdnSearch(data: unknown, query: string, maxResults: number
  * Chinese community articles for exactly these queries.
  */
 export async function csdnSearch(query: string, opts: CommunitySearchOptions = {}): Promise<SearchResult[]> {
-  const { maxResults = 5, timeoutMs = 8000, env } = opts
+  const { maxResults = 5, timeoutMs = backendTimeoutMs('csdn', 8000), env } = opts
   if (!csdnQuotaAvailable()) {
     logger.warn('CSDN API quota soft floor reached — skipping (fall back to bing/searxng)')
     return []

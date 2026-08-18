@@ -16,7 +16,12 @@
  *   --runs N    : 실행 횟수 (기본 1; 일일 SE 쿼터 300/IP 고려 — 39쿼리/run × N ≤ 300)
  *   --delay-ms  : 쿼리 간 간격 (기본 0 — 러너 기본 EVAL_QUERY_DELAY_MS 사용)
  *   --all       : kr/zh/ja SO gold 포함 (라우팅 게이트와 무관한 전체 expected 집계용)
+ *   --artifacts : 라이브 실행 대신 저장된 eval 아티팩트(chunk-*.json 등)에서 측정
+ *                 (P1-4b — egress IP SE 쿼터 리셋 대기 중에도 600쿼리 전체 재측정 가능).
+ *                 기본 로드: eval/results/chunk-*.json (glob).
  */
+import { globSync, readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
 import { runEval } from '../eval/runner'
 import { EVAL_QUERIES } from '../eval/queries'
 import { loadGoldStandards } from '../eval/metrics'
@@ -28,6 +33,7 @@ const runs = (() => {
   return Number.isInteger(n) && n >= 1 && n <= 9 ? n : 1
 })()
 const includeAll = argv.includes('--all')
+const fromArtifacts = argv.includes('--artifacts')
 const delayMsIdx = argv.indexOf('--delay-ms')
 const delayMs = delayMsIdx >= 0 ? Number(argv[delayMsIdx + 1]) : 0
 
@@ -47,10 +53,6 @@ if (routable.length === 0) {
   process.exit(1)
 }
 
-console.log(
-  `━━━ stack-exchange 사용량 측정 (SO gold ${soQueries.length}개 중 라우팅 가능 ${routable.length}개, runs=${runs}) ━━━`,
-)
-
 interface Agg {
   expected: number
   used: number
@@ -61,35 +63,65 @@ interface Agg {
 const agg: Agg = { expected: 0, used: 0, goldHit: 0, poolHasSO: 0 }
 const perQuery = new Map<string, { usedRuns: number; hitRuns: number; runs: number }>()
 
-for (let run = 1; run <= runs; run++) {
-  console.log(`\n--- run ${run}/${runs} (${routable.length}쿼리) ---`)
-  const report = await runEval(routable, {
-    env: delayMs > 0 ? { EVAL_QUERY_DELAY_MS: String(delayMs) } : undefined,
-  })
-  for (const r of report.results) {
-    const id = r.query.id
-    const used = (r.backends ?? []).includes('stack-exchange')
-    const poolSo = (r.response?.results ?? []).some((x) => (x.domain ?? '').toLowerCase().includes('stackoverflow.com'))
-    agg.expected++
-    if (used) agg.used++
-    if (poolSo) agg.poolHasSO++
-    // gold 회수 = 풀에 stackoverflow gold 존재 (응답 결과 도메인 기준)
-    const goldDomains = gold[id] ?? []
-    const goldHit = poolSo && goldDomains.some((d) => d.includes('stackoverflow.com'))
-    if (goldHit) agg.goldHit++
-    const p = perQuery.get(id) ?? { usedRuns: 0, hitRuns: 0, runs: 0 }
-    p.runs++
-    if (used) p.usedRuns++
-    if (goldHit) p.hitRuns++
-    perQuery.set(id, p)
-    if (used || poolSo) {
-      console.log(
-        `  ${id.padEnd(14)} '${r.query.query.slice(0, 40).padEnd(40)}' used=${used ? 'Y' : 'n'} poolSO=${poolSo ? 'Y' : 'n'}`,
+function record(id: string, used: boolean, poolSo: boolean): void {
+  agg.expected++
+  if (used) agg.used++
+  if (poolSo) agg.poolHasSO++
+  const goldDomains = gold[id] ?? []
+  const goldHit = poolSo && goldDomains.some((d) => d.includes('stackoverflow.com'))
+  if (goldHit) agg.goldHit++
+  const p = perQuery.get(id) ?? { usedRuns: 0, hitRuns: 0, runs: 0 }
+  p.runs++
+  if (used) p.usedRuns++
+  if (goldHit) p.hitRuns++
+  perQuery.set(id, p)
+  if (used || poolSo) {
+    console.log(`  ${id.padEnd(14)} used=${used ? 'Y' : 'n'} poolSO=${poolSo ? 'Y' : 'n'}`)
+  }
+}
+
+if (fromArtifacts) {
+  // P1-4b: 저장 아티팩트 기반 — 라이브 백엔드 없이 600쿼리 전체 평가
+  const files = globSync('eval/results/chunk-*.json')
+  if (files.length === 0) {
+    console.error('--artifacts: eval/results/chunk-*.json 없음')
+    process.exit(1)
+  }
+  console.log(
+    `━━━ stack-exchange 사용량 측정 (아티팩트 ${files.length}개: ${files.map((f) => f.replace('eval/results/', '')).join(', ')}) ━━━`,
+  )
+  for (const f of files) {
+    const raw = JSON.parse(readFileSync(resolve(process.cwd(), f), 'utf8'))
+    const r = (raw as { report?: { results?: unknown[] } }).report ?? raw
+    for (const row of (r as { results: Array<{ query: { id: string }; backends?: string[]; response?: { results?: Array<{ domain?: string }> } }> }).results) {
+      const id = row.query.id
+      if (!routable.some((q) => q.id === id)) continue
+      const used = (row.backends ?? []).includes('stack-exchange')
+      const poolSo = (row.response?.results ?? []).some((x) =>
+        (x.domain ?? '').toLowerCase().includes('stackoverflow.com'),
       )
+      record(id, used, poolSo)
     }
   }
-  // 러너 내부 페이싱과 별개로 run 간 여유
-  if (run < runs) await new Promise((res) => setTimeout(res, 3000))
+} else {
+  console.log(
+    `━━━ stack-exchange 사용량 측정 (SO gold ${soQueries.length}개 중 라우팅 가능 ${routable.length}개, runs=${runs}) ━━━`,
+  )
+  for (let run = 1; run <= runs; run++) {
+    console.log(`\n--- run ${run}/${runs} (${routable.length}쿼리) ---`)
+    const report = await runEval(routable, {
+      env: delayMs > 0 ? { EVAL_QUERY_DELAY_MS: String(delayMs) } : undefined,
+    })
+    for (const r of report.results) {
+      const used = (r.backends ?? []).includes('stack-exchange')
+      const poolSo = (r.response?.results ?? []).some((x) =>
+        (x.domain ?? '').toLowerCase().includes('stackoverflow.com'),
+      )
+      record(r.query.id, used, poolSo)
+    }
+    // 러너 내부 페이싱과 별개로 run 간 여유
+    if (run < runs) await new Promise((res) => setTimeout(res, 3000))
+  }
 }
 
 const pct = (n: number, d: number): string => (d === 0 ? '–' : `${((n / d) * 100).toFixed(1)}% (${n}/${d})`)

@@ -195,6 +195,8 @@ describe.skipIf(!BASH_AVAILABLE)('notify-pipeline-failure.sh (웹훅 불필요 �
     const out = execFileSync('bash', [SCRIPT, '--self-test'], {
       encoding: 'utf8',
       maxBuffer: 10 * 1024 * 1024,
+      // 수정 112: 병렬 부하 flaky 방지 — 12케이스 self-test가 5s 초과 가능
+      timeout: 60_000,
     })
     expect(out).toContain('all PASS (12/12)')
   })

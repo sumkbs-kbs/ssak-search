@@ -19,8 +19,11 @@ import {
 import { createPlan, type SubQueryPlan } from './planner'
 import { executePlan, type StepResult } from './executor'
 import { synthesizeAnswer, type SynthesizedAnswer } from './synthesizer'
-import { runQualityGate, type QualityGateResult } from './quality-gate'
+import { runQualityGate, DEFAULT_QUALITY_CONFIG, type QualityGateResult } from './quality-gate'
+import { withResultRetry } from '../../lib/resilience/retry'
+import { recordAgenticGapFillResearches } from '../metrics'
 import { logger, toError } from '../../lib/logger'
+import { generateSpanId } from '../../middleware/tracing'
 import type { Ai } from '@cloudflare/workers-types'
 
 // ============================================================
@@ -104,6 +107,11 @@ export interface AgenticPipelineContext {
   env?: Env
   /** Jina API key for content extraction */
   jinaApiKey?: string
+  /**
+   * Trace ID (Action Item 1.1) — propagated from the request (cf-ray) through
+   * every pipeline stage's logs so one search request is traceable end-to-end.
+   */
+  traceId?: string
 }
 
 // ============================================================
@@ -151,7 +159,12 @@ export async function executeAgenticSearch(
 
   const resolvedMode = searchDepth === 'advanced' ? 'pro' : classification.mode === 'pro' ? 'pro' : 'fast'
 
-  logger.info('[AgenticSearch] Classification complete', {
+  // Trace-scoped logger — when the orchestrator passes a traceId, every
+  // pipeline log line carries it (plus a per-pipeline span_id).
+  const traceId = ctx.traceId
+  const log = traceId ? logger.child({ traceId, spanId: generateSpanId(), span: 'agentic' }) : logger
+
+  log.info('[AgenticSearch] Classification complete', {
     query: query.slice(0, 80),
     mode: resolvedMode,
     confidence: classification.confidence,
@@ -173,6 +186,7 @@ export async function executeAgenticSearch(
       ctx,
       classification,
       startTime,
+      log,
     })
   }
 
@@ -188,6 +202,7 @@ export async function executeAgenticSearch(
     ctx,
     classification,
     startTime,
+    log,
   })
 }
 
@@ -210,15 +225,17 @@ async function executeProPipeline(
     ctx: AgenticPipelineContext
     classification: ClassificationResult
     startTime: number
+    log: typeof logger
   },
 ): Promise<AgenticSearchResult> {
-  const { ctx, startTime, classification } = opts
+  const { ctx, startTime, classification, log } = opts
+  const traceId = ctx.traceId
 
   try {
     // Step 2a: Create plan
-    const plan = await createPlan(query, ctx.ai as Ai | undefined)
+    const plan = await createPlan(query, ctx.ai as Ai | undefined, undefined, traceId)
 
-    logger.info('[AgenticSearch] Plan created', {
+    log.info('[AgenticSearch] Plan created', {
       steps: plan.steps.length,
       complexity: plan.complexity,
       confidence: plan.confidence,
@@ -228,58 +245,86 @@ async function executeProPipeline(
     const execution = await executePlan(plan, {
       ai: ctx.ai as Ai | undefined,
       maxParallel: 3,
+      logger: traceId ? logger.child({ traceId, spanId: generateSpanId(), span: 'executor' }) : undefined,
     })
 
-    logger.info('[AgenticSearch] Plan executed', {
+    log.info('[AgenticSearch] Plan executed', {
       stepsCompleted: execution.stepResults.length,
       success: execution.success,
       citations: execution.allCitations.length,
     })
 
-    // Step 2c: Quality gate
-    let quality = await runQualityGate(query, execution.stepResults, undefined, ctx.ai)
+    // Step 2c: Quality gate with the Phase 6 gap-fill re-query loop, unified
+    // under the shared result-gated retry (withResultRetry — the same
+    // retryable/onRetry vocabulary as withRetry). The gate's RESULT decides
+    // whether to keep re-querying: each non-final pass evaluates the current
+    // results and — when below threshold with a reformulation plan — executes
+    // that plan and merges its findings into the main context. The FINAL pass
+    // always accepts its evaluation (withResultRetry's last-attempt rule), so
+    // the re-query count is bounded by DEFAULT_QUALITY_CONFIG.maxRetries (= 1).
+    const maxReQueries = DEFAULT_QUALITY_CONFIG.maxRetries
+    const gateCycle = async (attempt: number): Promise<QualityGateResult> => {
+      const evaluation = await runQualityGate(query, execution.stepResults, undefined, ctx.ai, traceId)
+      if (
+        attempt < maxReQueries &&
+        !evaluation.passed &&
+        evaluation.reQueryPlan &&
+        evaluation.reQueryPlan.steps.length > 0
+      ) {
+        log.info('[AgenticSearch] Quality gate failed — running gap-fill re-query', {
+          originalScore: evaluation.avgScore,
+          reQuerySteps: evaluation.reQueryPlan.steps.length,
+        })
+        try {
+          const gapFill = await executePlan(evaluation.reQueryPlan, {
+            ai: ctx.ai as Ai | undefined,
+            maxParallel: 3,
+            logger: traceId ? logger.child({ traceId, spanId: generateSpanId(), span: 'executor' }) : undefined,
+          })
+          // Merge gap-fill results into the main execution context
+          for (const step of gapFill.stepResults) {
+            execution.stepResults.push(step)
+            execution.allCitations.push(...step.citations)
+            if (step.success) execution.context.completedSteps.add(step.stepId)
+          }
+        } catch (err) {
+          log.warn('[AgenticSearch] Gap-fill re-query failed (non-critical)', {
+            error: err instanceof Error ? err.message : String(err),
+          })
+        }
+      }
+      return evaluation
+    }
 
-    logger.info('[AgenticSearch] Quality gate', {
+    const quality = await withResultRetry(gateCycle, {
+      maxRetries: maxReQueries,
+      // Nothing to re-query (no plan) → accept the failure honestly, don't spin.
+      retryable: (q) => !q.passed && !!q.reQueryPlan && q.reQueryPlan.steps.length > 0,
+      // Structured failure reason (below-threshold score + quality warnings)
+      // surfaced through withResultRetry's onRetry third argument — same
+      // pattern as the synthesizer's regeneration loop.
+      reasonFor: (q) => ({ kind: 'gap-fill', score: q.avgScore, warnings: q.warnings }),
+      onRetry: (attempt, q, reason) => {
+        log.info('[AgenticSearch] Quality gate still below threshold — re-evaluating after gap-fill', {
+          attempt,
+          avgScore: q.avgScore,
+          warnings: q.warnings,
+        })
+        // gap-fill 재검색률 지표 — one re-search cycle per onRetry (bounded by
+        // DEFAULT_QUALITY_CONFIG.maxRetries).
+        recordAgenticGapFillResearches({ reason })
+      },
+    })
+
+    log.info('[AgenticSearch] Quality gate', {
       passed: quality.passed,
       avgScore: quality.avgScore,
     })
 
-    // Phase 6: Gap-filling loop — if quality gate suggests a re-query and the
-    // score is below threshold, execute the reformulated plan ONCE to fill gaps.
-    // Previously the quality gate result was discarded entirely.
-    if (!quality.passed && quality.reQueryPlan && quality.reQueryPlan.steps.length > 0) {
-      logger.info('[AgenticSearch] Quality gate failed — running gap-fill re-query', {
-        originalScore: quality.avgScore,
-        reQuerySteps: quality.reQueryPlan.steps.length,
-      })
-      try {
-        const gapFill = await executePlan(quality.reQueryPlan, {
-          ai: ctx.ai as Ai | undefined,
-          maxParallel: 3,
-        })
-        // Merge gap-fill results into the main execution context
-        for (const step of gapFill.stepResults) {
-          execution.stepResults.push(step)
-          execution.allCitations.push(...step.citations)
-          if (step.success) execution.context.completedSteps.add(step.stepId)
-        }
-        // Re-evaluate quality after gap-fill
-        quality = await runQualityGate(query, execution.stepResults, undefined, ctx.ai)
-        logger.info('[AgenticSearch] Gap-fill complete', {
-          newScore: quality.avgScore,
-          passed: quality.passed,
-        })
-      } catch (err) {
-        logger.warn('[AgenticSearch] Gap-fill re-query failed (non-critical)', {
-          error: err instanceof Error ? err.message : String(err),
-        })
-      }
-    }
-
     // Step 2d: Synthesize answer
     let synthesized: SynthesizedAnswer | undefined
     if (opts.includeAnswer) {
-      synthesized = await synthesizeAnswer(plan, execution.stepResults, ctx.ai as Ai | undefined)
+      synthesized = await synthesizeAnswer(plan, execution.stepResults, ctx.ai as Ai | undefined, undefined, traceId)
     }
 
     // Collect all results from step outputs
@@ -329,7 +374,7 @@ async function executeProPipeline(
       },
     }
   } catch (err) {
-    logger.warn('[AgenticSearch] Pro pipeline failed, falling back to fast:', { error: toError(err) })
+    log.warn('[AgenticSearch] Pro pipeline failed, falling back to fast:', { error: toError(err) })
     return executeFastPipeline(query, {
       maxResults: opts.maxResults,
       topic: opts.topic,
@@ -341,6 +386,7 @@ async function executeProPipeline(
       ctx,
       classification,
       startTime,
+      log,
     })
   }
 }
@@ -362,9 +408,11 @@ async function executeFastPipeline(
     ctx: AgenticPipelineContext
     classification: ClassificationResult
     startTime: number
+    log: typeof logger
   },
 ): Promise<AgenticSearchResult> {
-  const { ctx, startTime, classification } = opts
+  const { ctx, startTime, classification, log } = opts
+  const traceId = ctx.traceId
 
   try {
     // Single-pass search using searchWeb
@@ -377,6 +425,7 @@ async function executeFastPipeline(
       },
       ctx.env,
       ctx.ai,
+      traceId,
     )
 
     return {
@@ -401,7 +450,7 @@ async function executeFastPipeline(
       },
     }
   } catch (err) {
-    logger.warn('[AgenticSearch] Fast pipeline failed:', { error: toError(err) })
+    log.warn('[AgenticSearch] Fast pipeline failed:', { error: toError(err) })
     return {
       query,
       mode: 'fast',

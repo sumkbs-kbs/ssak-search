@@ -12,11 +12,39 @@
  * Without SLACK_WEBHOOK, all alert functions are no-ops (logged to stderr).
  */
 
+import type { KVNamespace } from '@cloudflare/workers-types'
 import { logger } from './logger'
 
 // ============================================================
 // Types
 // ============================================================
+
+/**
+ * Alerting rule for the synthesis regeneration rate (agentic pipeline).
+ *
+ * regenerationRatio = low-confidence regenerations ÷ synthesis attempts.
+ * When the rate rises, the trigger-confidence average distinguishes a
+ * threshold-tuning problem (trigger avg ≈ gate threshold) from synthesis
+ * quality degradation (trigger avg low).
+ */
+export interface AgenticAlertRule {
+  /** Regeneration-ratio threshold above which the alert fires (strict >). */
+  regenerationRateThreshold: number
+  /**
+   * Minimum synthesis attempts before the ratio is statistically meaningful.
+   * Guards against single-request noise: 1 attempt / 1 regeneration = ratio
+   * 1.0 but is NOT a signal.
+   */
+  minSynthesisAttempts: number
+  /** Min seconds between alerts for this rule (KV + in-memory dedup). */
+  cooldownSeconds: number
+}
+
+export const DEFAULT_AGENTIC_ALERT_RULE: AgenticAlertRule = {
+  regenerationRateThreshold: 0.3,
+  minSynthesisAttempts: 10,
+  cooldownSeconds: 3600,
+}
 
 /**
  * Resolve the Slack webhook URL from either env name.
@@ -202,5 +230,137 @@ export async function alertWarning(webhookUrl: string | undefined, title: string
     title: `⚠️ ${title}`,
     message,
     color: 'warning',
+  })
+}
+
+// ============================================================
+// Agentic regeneration-rate alert (rule + dedup + sender)
+// ============================================================
+
+/**
+ * Alert when the synthesis regeneration rate exceeds its threshold.
+ *
+ * The trigger-confidence field is the diagnostic: if it sits near the quality
+ * gate threshold, the rate rise is a threshold-tuning problem; if it is low,
+ * synthesis quality is degrading (LLM/prompt issue).
+ */
+export async function alertHighRegenerationRate(
+  webhookUrl: string | undefined,
+  params: {
+    regenerationRatio: number
+    synthesisAttempts: number
+    synthesisRegenerations: number
+    regenerationTriggerConfidenceAvg: number
+    threshold: number
+  },
+): Promise<boolean> {
+  const pct = (params.regenerationRatio * 100).toFixed(1)
+  return sendSlackAlert(webhookUrl, {
+    title: '🔁 High Synthesis Regeneration Rate',
+    message: `Synthesis regeneration rate is *${pct}%* — above the *${(params.threshold * 100).toFixed(0)}%* threshold`,
+    color: 'warning',
+    fields: [
+      { label: 'Regeneration Rate', value: `${pct}%`, short: true },
+      { label: 'Attempts', value: String(params.synthesisAttempts), short: true },
+      { label: 'Regenerations', value: String(params.synthesisRegenerations), short: true },
+      { label: 'Trigger Confidence (avg)', value: params.regenerationTriggerConfidenceAvg.toFixed(3), short: true },
+    ],
+    context: `Trigger avg ≈ gate threshold → threshold tuning; trigger avg low → quality degradation. Checked at ${new Date().toISOString()}`,
+  })
+}
+
+/**
+ * Pure rule evaluation — trigger only above the threshold AND with a
+ * statistically meaningful sample count (noise guard).
+ */
+export function evaluateRegenerationRateAlert(
+  metrics: {
+    synthesisAttempts: number
+    synthesisRegenerations: number
+    regenerationRatio: number
+    regenerationTriggerConfidenceAvg: number
+  },
+  rule: AgenticAlertRule = DEFAULT_AGENTIC_ALERT_RULE,
+): { triggered: boolean; reason?: string } {
+  if (metrics.synthesisAttempts < rule.minSynthesisAttempts) {
+    return {
+      triggered: false,
+      reason: `insufficient samples (${metrics.synthesisAttempts} < ${rule.minSynthesisAttempts})`,
+    }
+  }
+  if (metrics.regenerationRatio > rule.regenerationRateThreshold) {
+    return { triggered: true }
+  }
+  return { triggered: false, reason: 'within threshold' }
+}
+
+// Cross-isolate dedup: CACHE_KV (best-effort, first-writer wins — KV has no
+// CAS so a concurrent trigger may double-send once per cooldown, acceptable
+// for an operator alert) + an in-memory fast path for the same isolate.
+const AGENTIC_ALERT_KEY = 'alert:regeneration-rate'
+const inMemoryAlertTimestamps = new Map<string, number>()
+
+/** Reset the in-memory dedup state (tests / manual re-arm). */
+export function resetAgenticAlertCooldowns(): void {
+  inMemoryAlertTimestamps.clear()
+}
+
+/**
+ * Evaluate the regeneration-rate rule and send a Slack alert when it fires,
+ * deduped to one alert per cooldown window across isolates (KV) and within an
+ * isolate (in-memory). Fire-and-forget at the call site — never blocks the
+ * request path (the sender swallows its own failures).
+ */
+export async function maybeAlertHighRegenerationRate(
+  env: { SLACK_WEBHOOK?: string; ALERT_SLACK_WEBHOOK?: string; CACHE_KV?: Pick<KVNamespace, 'get' | 'put'> } | undefined,
+  metrics: {
+    synthesisAttempts: number
+    synthesisRegenerations: number
+    regenerationRatio: number
+    regenerationTriggerConfidenceAvg: number
+  },
+  rule: AgenticAlertRule = DEFAULT_AGENTIC_ALERT_RULE,
+): Promise<boolean> {
+  const { triggered } = evaluateRegenerationRateAlert(metrics, rule)
+  if (!triggered) return false
+
+  const webhook = env ? resolveWebhookUrl(env) : undefined
+  if (!webhook) return false
+
+  const now = Date.now()
+  const cooldownMs = rule.cooldownSeconds * 1000
+
+  // In-memory fast path (same isolate)
+  const lastInMem = inMemoryAlertTimestamps.get(AGENTIC_ALERT_KEY) ?? 0
+  if (now - lastInMem < cooldownMs) return false
+
+  // Cross-isolate dedup via KV claim (expires with the cooldown)
+  const cacheKv = env?.CACHE_KV
+  let lastKv = 0
+  if (cacheKv) {
+    try {
+      const raw = await cacheKv.get(AGENTIC_ALERT_KEY)
+      lastKv = raw ? Number(raw) : 0
+    } catch (err) {
+      logger.warn('[Slack] Regeneration-rate dedup KV read failed:', { error: String(err) })
+    }
+  }
+  if (now - lastKv < cooldownMs) return false
+
+  if (cacheKv) {
+    try {
+      await cacheKv.put(AGENTIC_ALERT_KEY, String(now), { expirationTtl: rule.cooldownSeconds })
+    } catch (err) {
+      logger.warn('[Slack] Regeneration-rate dedup KV write failed:', { error: String(err) })
+    }
+  }
+  inMemoryAlertTimestamps.set(AGENTIC_ALERT_KEY, now)
+
+  return alertHighRegenerationRate(webhook, {
+    regenerationRatio: metrics.regenerationRatio,
+    synthesisAttempts: metrics.synthesisAttempts,
+    synthesisRegenerations: metrics.synthesisRegenerations,
+    regenerationTriggerConfidenceAvg: metrics.regenerationTriggerConfidenceAvg,
+    threshold: rule.regenerationRateThreshold,
   })
 }

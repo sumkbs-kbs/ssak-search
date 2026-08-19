@@ -32,6 +32,51 @@ import {
 import { withRetry, splitRetryBudget } from './resilience/retry'
 import { BACKEND_TIMEOUT_MS } from './search/fanout'
 
+// ============================================================
+// Naver Result Cache (LRU + TTL)
+// ============================================================
+
+interface NaverCacheEntry {
+  results: SearchResult[]
+  createdAt: number
+  hitCount: number
+}
+
+const NAVER_CACHE = new Map<string, NaverCacheEntry>()
+const NAVER_CACHE_MAX = 200       // max cached queries
+const NAVER_CACHE_TTL_MS = 300_000 // 5 minutes
+
+function naverCacheKey(query: string, maxResults: number): string {
+  return `${query.trim().toLowerCase().replace(/\s+/g, ' ')}:${maxResults}`
+}
+
+function naverCacheGet(key: string): SearchResult[] | null {
+  const entry = NAVER_CACHE.get(key)
+  if (!entry) return null
+  if (Date.now() - entry.createdAt > NAVER_CACHE_TTL_MS) {
+    NAVER_CACHE.delete(key)
+    return null
+  }
+  entry.hitCount++
+  return entry.results
+}
+
+function naverCacheSet(key: string, results: SearchResult[]): void {
+  if (NAVER_CACHE.size >= NAVER_CACHE_MAX) {
+    // Evict least-used entry
+    let leastKey = ''
+    let leastHits = Infinity
+    for (const [k, v] of NAVER_CACHE) {
+      if (v.hitCount < leastHits) {
+        leastHits = v.hitCount
+        leastKey = k
+      }
+    }
+    if (leastKey) NAVER_CACHE.delete(leastKey)
+  }
+  NAVER_CACHE.set(key, { results, createdAt: Date.now(), hitCount: 0 })
+}
+
 const NAVER_SEARCH_URL = 'https://m.search.naver.com/search.naver'
 
 // Fanout's naver ceiling (2500ms) is the hard budget for the retry chain.
@@ -67,6 +112,15 @@ export interface NaverSearchOptions {
  */
 export async function naverSearch(query: string, opts: NaverSearchOptions = {}): Promise<SearchResult[]> {
   const { maxResults = 15, timeoutMs = 12000, env } = opts
+
+  // Check cache first
+  const cacheKey = naverCacheKey(query, maxResults)
+  const cached = naverCacheGet(cacheKey)
+  if (cached) {
+    logger.debug('[Naver] Cache hit', { query: query.slice(0, 50) })
+    return cached
+  }
+
   const results: SearchResult[] = []
   const seenUrls = new Set<string>()
 
@@ -162,7 +216,14 @@ export async function naverSearch(query: string, opts: NaverSearchOptions = {}):
     logger.warn('Naver search failed:', { error: toError(err) })
   }
 
-  return results.slice(0, maxResults)
+  const finalResults = results.slice(0, maxResults)
+
+  // Cache successful results
+  if (finalResults.length > 0) {
+    naverCacheSet(cacheKey, finalResults)
+  }
+
+  return finalResults
 }
 
 // ============================================================

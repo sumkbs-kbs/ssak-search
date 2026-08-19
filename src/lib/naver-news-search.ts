@@ -33,6 +33,50 @@ import {
 import { withRetry, splitRetryBudget } from './resilience/retry'
 import { BACKEND_TIMEOUT_MS } from './search/fanout'
 
+// ============================================================
+// Naver News Result Cache (LRU + TTL)
+// ============================================================
+
+interface NaverNewsCacheEntry {
+  results: SearchResult[]
+  createdAt: number
+  hitCount: number
+}
+
+const NAVER_NEWS_CACHE = new Map<string, NaverNewsCacheEntry>()
+const NAVER_NEWS_CACHE_MAX = 100       // max cached queries
+const NAVER_NEWS_CACHE_TTL_MS = 180_000 // 3 minutes (news is time-sensitive)
+
+function naverNewsCacheKey(query: string, maxResults: number, sortByRecency: boolean): string {
+  return `${query.trim().toLowerCase().replace(/\s+/g, ' ')}:${maxResults}:${sortByRecency ? 'r' : 'rel'}`
+}
+
+function naverNewsCacheGet(key: string): SearchResult[] | null {
+  const entry = NAVER_NEWS_CACHE.get(key)
+  if (!entry) return null
+  if (Date.now() - entry.createdAt > NAVER_NEWS_CACHE_TTL_MS) {
+    NAVER_NEWS_CACHE.delete(key)
+    return null
+  }
+  entry.hitCount++
+  return entry.results
+}
+
+function naverNewsCacheSet(key: string, results: SearchResult[]): void {
+  if (NAVER_NEWS_CACHE.size >= NAVER_NEWS_CACHE_MAX) {
+    let leastKey = ''
+    let leastHits = Infinity
+    for (const [k, v] of NAVER_NEWS_CACHE) {
+      if (v.hitCount < leastHits) {
+        leastHits = v.hitCount
+        leastKey = k
+      }
+    }
+    if (leastKey) NAVER_NEWS_CACHE.delete(leastKey)
+  }
+  NAVER_NEWS_CACHE.set(key, { results, createdAt: Date.now(), hitCount: 0 })
+}
+
 const NAVER_NEWS_SEARCH_URL = 'https://m.search.naver.com/search.naver'
 
 const MOBILE_UA =
@@ -104,7 +148,17 @@ export function isRecencyNewsQuery(query: string): boolean {
  * see NaverNewsSearchOptions.sortByRecency for the rationale.
  */
 export async function naverNewsSearch(query: string, opts: NaverNewsSearchOptions = {}): Promise<SearchResult[]> {
-  const { sortByRecency = false } = opts
+  const { sortByRecency = false, maxResults = 15 } = opts
+
+  // Check cache first
+  const cacheKey = naverNewsCacheKey(query, maxResults, sortByRecency)
+  const cached = naverNewsCacheGet(cacheKey)
+  if (cached) {
+    logger.debug('[NaverNews] Cache hit', { query: query.slice(0, 50) })
+    return cached
+  }
+
+  let finalResults: SearchResult[]
 
   // Recency intent: dual-fetch relevance + 최신순, then merge. Each page goes
   // through fetchNaverNewsPage (own retry/backoff). Both run concurrently so
@@ -114,10 +168,17 @@ export async function naverNewsSearch(query: string, opts: NaverNewsSearchOption
       fetchNaverNewsPage(query, opts, false),
       fetchNaverNewsPage(query, opts, true),
     ])
-    return mergeNaverNewsPages(relevance, recency, opts.maxResults ?? 15)
+    finalResults = mergeNaverNewsPages(relevance, recency, maxResults)
+  } else {
+    finalResults = await fetchNaverNewsPage(query, opts, false)
   }
 
-  return fetchNaverNewsPage(query, opts, false)
+  // Cache successful results
+  if (finalResults.length > 0) {
+    naverNewsCacheSet(cacheKey, finalResults)
+  }
+
+  return finalResults
 }
 
 /**

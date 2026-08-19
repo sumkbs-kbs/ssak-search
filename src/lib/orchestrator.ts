@@ -54,6 +54,8 @@ import { semanticCacheLookup, semanticCacheStore } from './semantic-cache'
 import type { SearchContext, BackendTask } from './search/context'
 import { buildBackendTasks } from './search/strategies'
 import { fanoutBackends } from './search/fanout'
+import { TieredFanout } from './search/tiered-fanout'
+import { TierManager } from './search/backend-tiers'
 import { CircuitBreaker, type CircuitState } from './resilience/circuit-breaker'
 import { getCircuitBreaker } from './resilience/circuit-breaker-registry'
 import { mergeAndDeduplicate, normalizeUrlForDedup, normalizeTitleForDedup } from './search/dedup'
@@ -612,26 +614,27 @@ export async function executeSearch(request: SearchRequest, config: Orchestrator
       breakerMap[name] = getCircuitBreaker(`${name}-fanout`, { failureThreshold: 3, resetTimeoutMs: 20_000 })
     }
 
-    const { resultSets, usedBackends } = await fanoutBackends(tasks, max_results, {
-      waitFor: [
-        'wikipedia',
-        'yahoo-finance',
-        'naver-news',
-        'bing-news-rss',
-        'google-news-rss',
-        'arxiv',
-        'qiita',
-        'juejin',
-        'github',
-        'github-issues',
-        'reddit',
-        'ddg-site-reddit',
-        'ddg-site-zh-travel',
-        'searxng-site-zh-travel',
-        'stack-exchange',
-      ],
+    // Use tiered fanout for progressive result collection
+    const tieredFanout = new TieredFanout()
+    const tieredResult = await tieredFanout.execute(tasks, {
+      targetLatencyMs: lightweightMode ? 1000 : 500, // Free plan: 1s, Paid: 500ms
+      minResults: max_results,
+      maxResults: max_results * 2,
       breakerMap,
       freePlan: lightweightMode,
+    })
+
+    // Convert tiered result to legacy format for compatibility
+    const resultSets: SearchResult[][] = []
+    const usedBackends: string[] = tieredResult.usedBackends
+    if (tieredResult.results.length > 0) {
+      resultSets.push(tieredResult.results)
+    }
+
+    logger.info('[Orchestrator] Tiered fanout completed', {
+      tier: tieredResult.tierUsed,
+      latencyMs: tieredResult.latencyMs,
+      resultCount: tieredResult.resultCount,
     })
 
     // ── 5b. Cross-infrastructure wikipedia mirror fallback (S35 EN / S36 non-EN / S38 ja) ──

@@ -42,3 +42,7 @@ searxng/
 
 # Freebuff desktop local DB (dev artifact, not project content)
 .freebuff/
+
+# Generated coverage reports
+coverage/
+coverage-final.json

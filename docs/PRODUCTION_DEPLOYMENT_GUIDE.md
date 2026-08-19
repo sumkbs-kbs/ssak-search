@@ -221,6 +221,20 @@ Cloudflare Dashboard → Pages → search-engine-api → Settings → Variables 
 | `SEARXNG_URL` | (없음) | SearXNG 자체 호스팅 URL | 아니오 |
 | `RATE_LIMIT_PER_MIN` | `30` | IP당 분당 요청 제한 | 아니오 |
 
+### 5.2.1 레이트 리밋 설정 가이드
+
+```bash
+# 스테이징: 60 req/min (벤치마크/테스트용)
+bash scripts/set-rate-limit.sh 60 staging
+
+# 프로덕션: 30 req/min (기본값)
+bash scripts/set-rate-limit.sh 30 production
+
+# 또는 Cloudflare Dashboard에서 수동 설정:
+# Pages → search-engine-api → Settings → Variables and Secrets
+# → Production/Staging 탭 → RATE_LIMIT_PER_MIN = 60
+```
+
 ### 5.3 CPU Budget 관련 환경 변수
 
 Cloudflare Workers free plan의 10ms CPU 제한을 관리합니다.
@@ -560,7 +574,7 @@ npx wrangler pages deploy dist/                  # Pages 재배포
 | `ENVIRONMENT` | `production` | 환경 이름 |
 | `CACHE_TTL_GENERAL` | `1800` | 일반 캐시 TTL |
 | `CACHE_TTL_NEWS` | `300` | 뉴스 캐시 TTL |
-| `RATE_LIMIT_PER_MIN` | `30` | IP당 분당 제한 |
+| `RATE_LIMIT_PER_MIN` | `30` | IP당 분당 제한 (스테이징: 60 권장) |
 | `FREE_PLAN_CPU_GUARD` | (없음) | 무료 플랜 CPU 가드 |
 | `SUBREQUEST_QUOTA_PER_REQUEST` | (없음) | 무료 플랜 감지 |
 | `AUTH_OPEN_MODE` | (없음) | 열린 모드 (⚠️ 개발 전용) |

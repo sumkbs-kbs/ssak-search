@@ -1,0 +1,8 @@
+{
+  // S104 egress probe (2026-08-14) — isolated Workers project, NOT Pages.
+  // 프로덕션(search-engine-api)과 무관. 검증 후 삭제:
+  //   npx wrangler delete s104-egress-probe
+  "name": "s104-egress-probe",
+  "compatibility_date": "2026-08-14",
+  "main": "scripts/probe-egress-worker.ts"
+}

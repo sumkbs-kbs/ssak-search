@@ -70,15 +70,11 @@
         "CanaryOrchestratorDO"
       ]
     },
-    // 수정: 테넌시/감사 DO 신규 등록 — v1 은 이미 적용된 tag 라 새 v2 로 추가한다.
-    {
-      "tag": "v2",
-      "new_sqlite_classes": ["AuditLogDO", "TenancyDO"]
-    },
-    // P2-2 (2026-08-18): 뉴스 RSS 허브 주기 수집 DO 신규 등록.
+    // v2: AuditLogDO, TenancyDO, NewsHubDO를 all-in-one으로 등록.
+    // 이전 v2 배포가 실패했으므로 v3 태그로 시도.
     {
       "tag": "v3",
-      "new_sqlite_classes": ["NewsHubDO"]
+      "new_sqlite_classes": ["AuditLogDO", "TenancyDO", "NewsHubDO"]
     }
   ],
   // ── Env bindings the DOs read from this.env (subset of Pages) ──────────

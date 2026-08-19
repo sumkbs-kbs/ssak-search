@@ -57,6 +57,7 @@ export class OptimizedLRUCache<T> {
   private hits: number = 0
   private misses: number = 0
   private cleanupTimer: ReturnType<typeof setInterval> | null = null
+  private accessCounter: number = 0
 
   constructor(name: string, config: Partial<CacheConfig> = {}) {
     this.name = name
@@ -92,7 +93,7 @@ export class OptimizedLRUCache<T> {
     }
 
     // Update access time and hit count
-    entry.lastAccessed = Date.now()
+    entry.lastAccessed = ++this.accessCounter
     entry.hitCount++
     this.hits++
 
@@ -117,10 +118,11 @@ export class OptimizedLRUCache<T> {
     }
 
     // Add new entry
+    const now = Date.now()
     this.cache.set(key, {
       value,
-      lastAccessed: Date.now(),
-      createdAt: Date.now(),
+      lastAccessed: ++this.accessCounter,
+      createdAt: now,
       hitCount: 0,
     })
   }

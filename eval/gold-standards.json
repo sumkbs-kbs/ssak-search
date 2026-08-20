@@ -45,7 +45,10 @@
       "investing.com",
       "krx.co.kr",
       "kr.investing.com",
-      "m.stock.naver.com"
+      "m.stock.naver.com",
+      "finance.yahoo.com",
+      "kr.tradingview.com",
+      "alphasquare.co.kr"
     ]
   },
   "kr-fin-06": {
@@ -111,7 +114,11 @@
       "n.news.naver.com",
       "yna.co.kr",
       "kcdc.go.kr",
-      "news.google.com"
+      "news.google.com",
+      "fnnews.com",
+      "biz.chosun.com",
+      "ytn.co.kr",
+      "asiae.co.kr"
     ]
   },
   "kr-news-06": {
@@ -119,7 +126,12 @@
       "n.news.naver.com",
       "koreabaseball.com",
       "sports.naver.com",
-      "news.google.com"
+      "news.google.com",
+      "fnnews.com",
+      "sports.donga.com",
+      "etnews.com",
+      "sports.khan.co.kr",
+      "mshale.com"
     ]
   },
   "kr-tech-01": {
@@ -167,7 +179,12 @@
     "relevantDomains": [
       "tanstack.com",
       "github.com",
-      "react.dev"
+      "react.dev",
+      "velog.io",
+      "taewok.github.io",
+      "2dowon.github.io",
+      "codingmax.net",
+      "ko.react.dev"
     ]
   },
   "kr-tech-07": {
@@ -352,7 +369,10 @@
     "relevantDomains": [
       "rust-lang.org",
       "go.dev",
-      "github.com"
+      "github.com",
+      "docs.qovery.com",
+      "news.ycombinator.com",
+      "benchmarksgame.alioth.debian.org"
     ]
   },
   "en-tech-04": {
@@ -367,7 +387,12 @@
     "relevantDomains": [
       "kubernetes.io",
       "github.com",
-      "stackoverflow.com"
+      "stackoverflow.com",
+      "learnk8s.io",
+      "evilmartians.com",
+      "glasskube.dev",
+      "kukulinski.com",
+      "blog.buoyant.io"
     ]
   },
   "en-tech-06": {
@@ -434,7 +459,9 @@
   "en-tech-14": {
     "relevantDomains": [
       "docker.com",
-      "github.com"
+      "stackoverflow.com",
+      "github.com",
+      "blog.docker.com"
     ]
   },
   "en-tech-15": {
@@ -547,7 +574,9 @@
       "reuters.com",
       "bloomberg.com",
       "semi.org",
-      "cnbc.com"
+      "cnbc.com",
+      "asiae.co.kr",
+      "inews.co.uk"
     ]
   },
   "en-news-09": {
@@ -729,7 +758,12 @@
     "relevantDomains": [
       "wikipedia.org",
       "genome.gov",
-      "nih.gov"
+      "nih.gov",
+      "nigms.nih.gov",
+      "en.wikipedia.org",
+      "nytimes.com",
+      "cnn.com",
+      "npr.org"
     ]
   },
   "en-fact-13": {
@@ -972,8 +1006,9 @@
   },
   "zh-tech-04": {
     "relevantDomains": [
-      "python.org",
+      "blog.csdn.net",
       "juejin.cn",
+      "zhuanlan.zhihu.com",
       "github.com"
     ]
   },
@@ -988,7 +1023,8 @@
     "relevantDomains": [
       "dianping.com",
       "mafengwo.cn",
-      "zh.wikipedia.org"
+      "zh.wikipedia.org",
+      "blog.csdn.net"
     ]
   },
   "zh-general-03": {
@@ -1269,7 +1305,10 @@
       "github.com",
       "en.wikipedia.org",
       "keel.so",
-      "dsifry.github.io"
+      "dsifry.github.io",
+      "classytip.tistory.com",
+      "m.blog.naver.com",
+      "blog.naver.com"
     ]
   },
   "lt-04": {
@@ -1378,7 +1417,12 @@
       "europa.eu",
       "theverge.com",
       "forbes.com",
-      "news.google.com"
+      "news.google.com",
+      "pubsonline.informs.org",
+      "dentons.com",
+      "lemonde.fr",
+      "rfi.fr",
+      "jdsupra.com"
     ]
   },
   "ca-02": {
@@ -1469,7 +1513,10 @@
       "wikipedia.org",
       "github.com",
       "m.blog.naver.com",
-      "blog.naver.com"
+      "blog.naver.com",
+      "cafe.naver.com",
+      "m.youtube.com",
+      "wenvidia.com"
     ]
   },
   "xl-02": {
@@ -1645,7 +1692,9 @@
       "finance.naver.com",
       "m.stock.naver.com",
       "investing.com",
-      "m.blog.naver.com"
+      "m.blog.naver.com",
+      "mayalibrarywiki.com",
+      "soyblog.co.kr"
     ]
   },
   "kr-stock-15": {
@@ -1814,7 +1863,9 @@
       "n.news.naver.com",
       "etnews.com",
       "autoview.co.kr",
-      "epnc.co.kr"
+      "epnc.co.kr",
+      "newsis.com",
+      "hangul.wiki"
     ]
   },
   "kr-tech-09": {
@@ -1925,7 +1976,10 @@
       "tistory.com",
       "medium.com",
       "developer.mozilla.org",
-      "web.dev"
+      "web.dev",
+      "m.blog.naver.com",
+      "ko.wikipedia.org",
+      "namu.wiki"
     ]
   },
   "kr-tech-18": {
@@ -1967,7 +2021,10 @@
       "medium.com",
       "developer.mozilla.org",
       "mongodb.com",
-      "mysql.com"
+      "mysql.com",
+      "m.blog.naver.com",
+      "soojle.gitbook.io",
+      "aws.amazon.com"
     ]
   },
   "kr-tech-21": {
@@ -1979,7 +2036,10 @@
       "tistory.com",
       "medium.com",
       "developer.mozilla.org",
-      "redis.io"
+      "redis.io",
+      "learn.microsoft.com",
+      "docs.aws.amazon.com",
+      "m.blog.naver.com"
     ]
   },
   "kr-tech-22": {
@@ -2009,7 +2069,9 @@
       "jestjs.io",
       "ko.wikipedia.org",
       "m.blog.naver.com",
-      "simritest.com"
+      "simritest.com",
+      "testbom.com",
+      "kr.vonvon.me"
     ]
   },
   "kr-general-08": {
@@ -2066,7 +2128,9 @@
       "namu.wiki",
       "blog.naver.com",
       "terms.naver.com",
-      "youtube.com"
+      "youtube.com",
+      "m.blog.naver.com",
+      "ko.wikipedia.org"
     ]
   },
   "kr-general-14": {
@@ -2294,7 +2358,11 @@
       "reuters.com",
       "treasurydirect.gov",
       "federalreserve.gov",
-      "news.google.com"
+      "news.google.com",
+      "yieldcurve.finance",
+      "eco3min.fr",
+      "docs.google.com",
+      "finance.biggo.com"
     ]
   },
   "en-stock-24": {
@@ -2422,16 +2490,12 @@
   },
   "en-tech-27": {
     "relevantDomains": [
-      "github.com",
-      "stackoverflow.com",
-      "developer.mozilla.org",
-      "dev.to",
-      "medium.com",
-      "freecodecamp.org",
-      "digitalocean.com",
-      "docker.com",
       "blog.docker.com",
-      "blog.sqreen.io"
+      "stackoverflow.com",
+      "anchore.com",
+      "blog.sqreen.io",
+      "docs.docker.com",
+      "github.com"
     ]
   },
   "en-tech-28": {
@@ -2480,7 +2544,9 @@
       "medium.com",
       "freecodecamp.org",
       "digitalocean.com",
-      "testing-library.com"
+      "testing-library.com",
+      "open.nytimes.com",
+      "reddit.com"
     ]
   },
   "en-tech-32": {
@@ -2518,7 +2584,10 @@
       "web.dev",
       "news.ycombinator.com",
       "berqwp.com",
-      "wordpress.org"
+      "wordpress.org",
+      "algolia.com",
+      "csswizardry.com",
+      "blog.naver.com"
     ]
   },
   "en-tech-35": {
@@ -2613,7 +2682,9 @@
       "promptingguide.ai",
       "docs.anthropic.com",
       "help.openai.com",
-      "aws.amazon.com"
+      "aws.amazon.com",
+      "studio.netdocuments.com",
+      "reddit.com"
     ]
   },
   "en-tech-42": {
@@ -2786,7 +2857,10 @@
       "theguardian.com",
       "nytimes.com",
       "wired.com",
-      "news.google.com"
+      "news.google.com",
+      "bloomberg.com",
+      "tesla.com",
+      "euronews.com"
     ]
   },
   "en-news-21": {
@@ -3117,7 +3191,10 @@
       "nasa.gov",
       "howstuffworks.com",
       "scientificamerican.com",
-      "nationalgeographic.com"
+      "nationalgeographic.com",
+      "bbc.com",
+      "knockout.chat",
+      "pi-hole.net"
     ]
   },
   "en-fact-17": {
@@ -3188,7 +3265,10 @@
       "howstuffworks.com",
       "scientificamerican.com",
       "nationalgeographic.com",
-      "noaa.gov"
+      "noaa.gov",
+      "bbc.com",
+      "npr.org",
+      "indiatoday.in"
     ]
   },
   "en-fact-23": {
@@ -3240,7 +3320,12 @@
       "scientificamerican.com",
       "nationalgeographic.com",
       "climate.gov",
-      "epa.gov"
+      "epa.gov",
+      "history.aip.org",
+      "metamute.org",
+      "youtube.com",
+      "easterbrook.ca",
+      "technologyreview.com"
     ]
   },
   "en-fact-27": {
@@ -3291,7 +3376,9 @@
       "howstuffworks.com",
       "scientificamerican.com",
       "nationalgeographic.com",
-      "rsc.org"
+      "rsc.org",
+      "economist.com",
+      "nytimes.com"
     ]
   },
   "en-fact-31": {
@@ -3316,7 +3403,9 @@
       "howstuffworks.com",
       "scientificamerican.com",
       "nationalgeographic.com",
-      "energy.gov"
+      "energy.gov",
+      "newscenter.lbl.gov",
+      "news.ucr.edu"
     ]
   },
   "en-fact-33": {
@@ -3389,7 +3478,10 @@
       "howstuffworks.com",
       "scientificamerican.com",
       "nationalgeographic.com",
-      "nih.gov"
+      "nih.gov",
+      "smithsonianmag.com",
+      "hub.docker.com",
+      "docker.com"
     ]
   },
   "en-fact-39": {
@@ -3400,7 +3492,9 @@
       "howstuffworks.com",
       "scientificamerican.com",
       "nationalgeographic.com",
-      "fnal.gov"
+      "fnal.gov",
+      "quantamagazine.org",
+      "nature.com"
     ]
   },
   "en-fact-40": {
@@ -3431,10 +3525,10 @@
   "en-acad-09": {
     "relevantDomains": [
       "arxiv.org",
-      "semanticscholar.org",
-      "paperswithcode.com",
-      "openreview.net",
-      "acm.org"
+      "stackoverflow.com",
+      "github.com",
+      "en.wikipedia.org",
+      "scholar.google.com"
     ]
   },
   "en-acad-10": {
@@ -3490,7 +3584,10 @@
       "semanticscholar.org",
       "paperswithcode.com",
       "openreview.net",
-      "acm.org"
+      "acm.org",
+      "en.wikipedia.org",
+      "stackoverflow.com",
+      "ibm.com"
     ]
   },
   "en-acad-16": {
@@ -3580,7 +3677,11 @@
       "lonelyplanet.com",
       "ricksteves.com",
       "en.wikipedia.org",
-      "news.ycombinator.com"
+      "news.ycombinator.com",
+      "skyscanner.co.kr",
+      "blog.naver.com",
+      "budget.com",
+      "budget.co.kr"
     ]
   },
   "en-general-10": {
@@ -3594,7 +3695,9 @@
       "spotify.com",
       "dev.to",
       "news.ycombinator.com",
-      "ko.wordow.com"
+      "ko.wordow.com",
+      "dictionary.cambridge.org",
+      "podcastdiscovery.net"
     ]
   },
   "en-general-11": {
@@ -3613,18 +3716,13 @@
   "en-general-12": {
     "relevantDomains": [
       "finance.yahoo.com",
-      "investopedia.com",
       "nerdwallet.com",
+      "britannica.com",
+      "bitcoinfoundation.org",
+      "investopedia.com",
       "fool.com",
       "etf.com",
-      "investing.com",
-      "nytimes.com",
-      "wikihow.com",
-      "reddit.com",
-      "quora.com",
-      "healthline.com",
-      "webmd.com",
-      "britannica.com"
+      "investing.com"
     ]
   },
   "en-general-13": {
@@ -3638,7 +3736,11 @@
       "lifehacker.com",
       "en.wikipedia.org",
       "medium.com",
-      "news.ycombinator.com"
+      "news.ycombinator.com",
+      "blog.doist.com",
+      "projectproductive.com",
+      "sujanpatel.com",
+      "kofiscrib.com"
     ]
   },
   "en-general-14": {
@@ -3820,7 +3922,9 @@
       "pcmag.com",
       "tomshardware.com",
       "news.ycombinator.com",
-      "en.wikipedia.org"
+      "en.wikipedia.org",
+      "xda-developers.com",
+      "ko.wordow.com"
     ]
   },
   "zh-fact-07": {
@@ -3894,7 +3998,9 @@
     "relevantDomains": [
       "zh.wikipedia.org",
       "baike.baidu.com",
-      "zhihu.com"
+      "zhihu.com",
+      "juejin.cn",
+      "blog.csdn.net"
     ]
   },
   "zh-tech-05": {
@@ -3949,7 +4055,10 @@
       "zhihu.com",
       "github.com",
       "cnblogs.com",
-      "microservices.io"
+      "microservices.io",
+      "blog.csdn.net",
+      "weibo.com",
+      "weixin.qq.com"
     ]
   },
   "zh-tech-10": {
@@ -4138,7 +4247,10 @@
       "zhihu.com",
       "trip.com",
       "blog.csdn.net",
-      "zh.wikipedia.org"
+      "zh.wikipedia.org",
+      "touch.go.qunar.com",
+      "touch.travel.qunar.com",
+      "travel.qunar.com"
     ]
   },
   "zh-general-07": {
@@ -4371,7 +4483,9 @@
       "weblio.jp",
       "dis-media.com",
       "wwf.or.jp",
-      "mri-jma.go.jp"
+      "mri-jma.go.jp",
+      "jccca.org",
+      "env.go.jp"
     ]
   },
   "ja-fact-11": {
@@ -4379,7 +4493,9 @@
       "ja.wikipedia.org",
       "kotobank.jp",
       "weblio.jp",
-      "starwalk.space"
+      "starwalk.space",
+      "spacethings.jp",
+      "worldspaceweekjapan.org"
     ]
   },
   "ja-fact-12": {
@@ -4451,7 +4567,10 @@
       "github.com",
       "dev.to",
       "itmedia.co.jp",
-      "tensorflow.org"
+      "tensorflow.org",
+      "aiskl.jp",
+      "mlnote.hontolab.org",
+      "school.data-learning.com"
     ]
   },
   "ja-tech-11": {
@@ -4577,15 +4696,15 @@
   },
   "ja-general-05": {
     "relevantDomains": [
-      "yahoo.co.jp",
-      "tripadvisor.jp",
-      "japan-guide.com",
-      "rakuten.co.jp",
-      "welcome2japan.jp",
-      "travel.rakuten.co.jp",
-      "rurubu.jp",
       "hokkaido.world",
-      "day-trip-sapporo.com"
+      "rurubu.jp",
+      "travel.rakuten.co.jp",
+      "day-trip-sapporo.com",
+      "jtb.co.jp",
+      "tabi-toku-lab.com",
+      "onsentravel.net",
+      "yahoo.co.jp",
+      "tripadvisor.jp"
     ]
   },
   "ja-general-06": {
@@ -4594,7 +4713,10 @@
       "tripadvisor.jp",
       "japan-guide.com",
       "rakuten.co.jp",
-      "ja.wikipedia.org"
+      "ja.wikipedia.org",
+      "mapple.net",
+      "tabelog.com",
+      "aumo.jp"
     ]
   },
   "ja-general-07": {
@@ -4618,7 +4740,11 @@
       "rakuten.co.jp",
       "travel.rakuten.co.jp",
       "ja.wikipedia.org",
-      "rurubu.jp"
+      "rurubu.jp",
+      "jtb.co.jp",
+      "tabi-toku-lab.com",
+      "onsentravel.net",
+      "nta.co.jp"
     ]
   },
   "ja-general-09": {
@@ -4671,7 +4797,9 @@
       "rakuten.co.jp",
       "voybird.com",
       "shizuoka-press.com",
-      "everydaybousai.com"
+      "everydaybousai.com",
+      "tsla.hatenablog.com",
+      "yamahack.com"
     ]
   },
   "ja-travel-07": {
@@ -4695,7 +4823,9 @@
       "rakuten.co.jp",
       "tabiiro.jp",
       "ranking.net",
-      "crexgroup.com"
+      "crexgroup.com",
+      "tsugitsugi.com",
+      "tobutoptours.jp"
     ]
   },
   "cmp-10": {
@@ -4710,7 +4840,9 @@
     "relevantDomains": [
       "redis.io",
       "memcached.org",
-      "stackoverflow.com"
+      "stackoverflow.com",
+      "dormando.livejournal.com",
+      "github.com"
     ]
   },
   "cmp-12": {
@@ -4723,9 +4855,10 @@
   },
   "cmp-13": {
     "relevantDomains": [
+      "github.com",
+      "stackoverflow.com",
       "fastapi.tiangolo.com",
-      "expressjs.com",
-      "github.com"
+      "expressjs.com"
     ]
   },
   "cmp-14": {
@@ -4814,7 +4947,11 @@
   "lt-11": {
     "relevantDomains": [
       "developers.cloudflare.com",
-      "github.com"
+      "github.com",
+      "youtube.com",
+      "flashblaze.xyz",
+      "arnavgosain.com",
+      "stackoverflow.com"
     ]
   },
   "lt-12": {
@@ -4896,17 +5033,18 @@
   "gk-11": {
     "relevantDomains": [
       "nasa.gov",
-      "en.wikipedia.org"
+      "en.wikipedia.org",
+      "blogs.scientificamerican.com",
+      "scitechdaily.com",
+      "blog.kilocode.ai"
     ]
   },
   "gk-12": {
     "relevantDomains": [
-      "investopedia.com",
-      "sec.gov",
-      "en.wikipedia.org",
-      "news.ycombinator.com",
       "finance.yahoo.com",
-      "nytimes.com"
+      "news.ycombinator.com",
+      "en.wikipedia.org",
+      "investopedia.com"
     ]
   },
   "gk-13": {
@@ -4920,7 +5058,12 @@
   "gk-14": {
     "relevantDomains": [
       "en.wikipedia.org",
-      "aclanthology.org"
+      "aclanthology.org",
+      "blog.mozilla.org",
+      "arxiv.org",
+      "code.facebook.com",
+      "research.googleblog.com",
+      "libretranslate.com"
     ]
   },
   "gk-15": {
@@ -4986,7 +5129,10 @@
       "arxiv.org",
       "en.wikipedia.org",
       "github.com",
-      "news.ycombinator.com"
+      "news.ycombinator.com",
+      "philosophybear.substack.com",
+      "apps.agi.com",
+      "lesswrong.com"
     ]
   },
   "adv-11": {
@@ -5175,12 +5321,12 @@
   },
   "xl-04": {
     "relevantDomains": [
-      "zhihu.com",
-      "36kr.com",
-      "openai.com",
-      "gemini-cnblog.com",
       "gemini.google",
-      "deepmind.google"
+      "gemini.google.com",
+      "deepmind.google",
+      "gemini-cnblog.com",
+      "openai.com",
+      "en.wikipedia.org"
     ]
   },
   "xl-05": {
@@ -5444,7 +5590,12 @@
       "theguardian.com",
       "techcrunch.com",
       "finance.yahoo.com",
-      "news.google.com"
+      "news.google.com",
+      "digital-strategy.ec.europa.eu",
+      "bruegel.org",
+      "egair.eu",
+      "en.protothema.gr",
+      "openaccessgovernment.org"
     ]
   },
   "en-news-44": {
@@ -5454,7 +5605,10 @@
       "aljazeera.com",
       "bbc.com",
       "theguardian.com",
-      "news.google.com"
+      "news.google.com",
+      "aa.com.tr",
+      "ibtimes.com",
+      "yahoo.com"
     ]
   },
   "en-news-45": {
@@ -5477,7 +5631,11 @@
       "cnbc.com",
       "economist.com",
       "nytimes.com",
-      "news.google.com"
+      "news.google.com",
+      "theshillongtimes.com",
+      "thehansindia.com",
+      "wsj.com",
+      "money.usnews.com"
     ]
   },
   "en-news-47": {
@@ -5487,7 +5645,11 @@
       "reuters.com",
       "apnews.com",
       "bbc.com",
-      "news.google.com"
+      "news.google.com",
+      "popsci.com",
+      "spacenews.com",
+      "indiatvnews.com",
+      "youtube.com"
     ]
   },
   "en-news-48": {
@@ -5499,7 +5661,9 @@
       "washingtonpost.com",
       "en.wikipedia.org",
       "arxiv.org",
-      "news.google.com"
+      "news.google.com",
+      "asiae.co.kr",
+      "doi.org"
     ]
   },
   "en-news-49": {
@@ -5535,15 +5699,15 @@
   },
   "en-general-21": {
     "relevantDomains": [
-      "goodreads.com",
-      "nytimes.com",
-      "theguardian.com",
-      "npr.org",
       "theverge.com",
       "ign.com",
       "cosmopolitan.com",
       "ocregister.com",
-      "awealthofcommonsense.com"
+      "awealthofcommonsense.com",
+      "goodreads.com",
+      "nytimes.com",
+      "theguardian.com",
+      "npr.org"
     ]
   },
   "en-general-22": {
@@ -5605,7 +5769,9 @@
       "nytimes.com",
       "instanceofjava.com",
       "30secondsofinterviews.org",
-      "github.com"
+      "github.com",
+      "blog.codegiant.io",
+      "twitter.com"
     ]
   },
   "en-general-28": {
@@ -5624,7 +5790,10 @@
       "calm.com",
       "healthline.com",
       "mindful.org",
-      "github.com"
+      "github.com",
+      "quietkit.com",
+      "wisdomblog.co",
+      "chetansurpur.com"
     ]
   },
   "en-general-30": {
@@ -5668,7 +5837,9 @@
       "theverge.com",
       "consumerreports.org",
       "en.wikipedia.org",
-      "nytimes.com"
+      "nytimes.com",
+      "theregister.com",
+      "thestack.com"
     ]
   },
   "en-general-34": {
@@ -5678,7 +5849,10 @@
       "duolingo.com",
       "wikihow.com",
       "stackoverflow.com",
-      "github.com"
+      "github.com",
+      "cyberscript.dev",
+      "rodrigoalvesvieira.com",
+      "developer.mozilla.org"
     ]
   },
   "en-fact-41": {
@@ -5764,7 +5938,10 @@
       "nih.gov",
       "genome.gov",
       "en.wikipedia.org",
-      "nature.com"
+      "nature.com",
+      "simple.wikipedia.org",
+      "merriam-webster.com",
+      "dictionary.cambridge.org"
     ]
   },
   "en-fact-50": {
@@ -5951,7 +6128,11 @@
       "wayfair.com",
       "target.com",
       "walmart.com",
-      "en.wikipedia.org"
+      "en.wikipedia.org",
+      "bestbuy.com",
+      "buykorea.org",
+      "blog.naver.com",
+      "redkiwiapp.com"
     ]
   },
   "en-shopping-06": {
@@ -6070,7 +6251,9 @@
       "medium.com",
       "docs.anthropic.com",
       "help.openai.com",
-      "aws.amazon.com"
+      "aws.amazon.com",
+      "studio.netdocuments.com",
+      "news.ycombinator.com"
     ]
   },
   "en-tech-52": {

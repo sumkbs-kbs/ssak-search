@@ -1,7 +1,7 @@
 {
-  "timestamp": "2026-08-20T21:37:42.213Z",
+  "timestamp": "2026-08-20T21:52:29.826Z",
   "report": {
-    "timestamp": "2026-08-20T21:37:42.213Z",
+    "timestamp": "2026-08-20T21:52:29.826Z",
     "totalQueries": 600,
     "passedQueries": 600,
     "failedQueries": 0,
@@ -59,9 +59,9 @@
     },
     "ranking": {
       "queriesWithGoldStandard": 600,
-      "avgNdcgAt10": 0.7376678445032412,
-      "avgMrr": 0.9236111111111108,
-      "avgPrecisionAt10": 0.7046249999999998
+      "avgNdcgAt10": 0.5602648586090576,
+      "avgMrr": 0.9591666666666666,
+      "avgPrecisionAt10": 0.7487916666666663
     },
     "results": [
       {
@@ -202,7 +202,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.9363792118010483,
+          "ndcgAt10": 0.5585075862632192,
           "mrr": 1,
           "precisionAt10": 0.9,
           "relevantHits": 9
@@ -416,7 +416,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.841492960259019,
+          "ndcgAt10": 0.6366824387328317,
           "mrr": 1,
           "precisionAt10": 0.8,
           "relevantHits": 8
@@ -630,7 +630,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.7630946912803436,
+          "ndcgAt10": 0.7598336331031966,
           "mrr": 1,
           "precisionAt10": 0.7,
           "relevantHits": 7
@@ -843,7 +843,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.7849818707050383,
+          "ndcgAt10": 0.6739577727076379,
           "mrr": 1,
           "precisionAt10": 0.7,
           "relevantHits": 7
@@ -987,10 +987,10 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.43808927588501717,
-          "mrr": 0.5,
-          "precisionAt10": 0.5,
-          "relevantHits": 5
+          "ndcgAt10": 0.9120345678990496,
+          "mrr": 1,
+          "precisionAt10": 0.8,
+          "relevantHits": 8
         }
       },
       {
@@ -1125,7 +1125,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.6851198693323691,
+          "ndcgAt10": 0.6492233278282461,
           "mrr": 0.5,
           "precisionAt10": 0.8,
           "relevantHits": 8
@@ -1260,7 +1260,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.866947989864271,
+          "ndcgAt10": 0.9047172294870751,
           "mrr": 1,
           "precisionAt10": 0.8,
           "relevantHits": 8
@@ -1396,7 +1396,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.7877736340270854,
+          "ndcgAt10": 0.7087212693585175,
           "mrr": 1,
           "precisionAt10": 0.8,
           "relevantHits": 8
@@ -1531,7 +1531,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.8701249883466593,
+          "ndcgAt10": 0.5855700749881525,
           "mrr": 1,
           "precisionAt10": 0.8,
           "relevantHits": 8
@@ -1654,7 +1654,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.5900490851534655,
+          "ndcgAt10": 0.628321632327559,
           "mrr": 1,
           "precisionAt10": 0.6,
           "relevantHits": 6
@@ -1777,7 +1777,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.7799082337019199,
+          "ndcgAt10": 0.5296347172140421,
           "mrr": 0.5,
           "precisionAt10": 0.9,
           "relevantHits": 9
@@ -1900,7 +1900,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.5053603444371989,
+          "ndcgAt10": 0.3065735963827292,
           "mrr": 0.3333333333333333,
           "precisionAt10": 0.6,
           "relevantHits": 6
@@ -2023,7 +2023,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 1,
+          "ndcgAt10": 0.6105858728157117,
           "mrr": 1,
           "precisionAt10": 1,
           "relevantHits": 10
@@ -2147,7 +2147,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.7125523635307982,
+          "ndcgAt10": 0.8503449055347546,
           "mrr": 1,
           "precisionAt10": 0.6,
           "relevantHits": 6
@@ -2270,7 +2270,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.7967610662472993,
+          "ndcgAt10": 0.8104616303452685,
           "mrr": 1,
           "precisionAt10": 0.7,
           "relevantHits": 7
@@ -2397,7 +2397,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.6489315753318465,
+          "ndcgAt10": 0.3903800499921017,
           "mrr": 1,
           "precisionAt10": 0.5,
           "relevantHits": 5
@@ -2514,7 +2514,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.6489315753318465,
+          "ndcgAt10": 0.6366824387328317,
           "mrr": 1,
           "precisionAt10": 0.5555555555555556,
           "relevantHits": 5
@@ -2651,7 +2651,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.5298982599625925,
+          "ndcgAt10": 0.4329261794091841,
           "mrr": 1,
           "precisionAt10": 0.5,
           "relevantHits": 5
@@ -2774,7 +2774,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.6402900881481708,
+          "ndcgAt10": 0.24630238874073,
           "mrr": 0.5,
           "precisionAt10": 0.7,
           "relevantHits": 7
@@ -2924,7 +2924,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.9363792118010483,
+          "ndcgAt10": 0.5531464700081437,
           "mrr": 1,
           "precisionAt10": 0.9,
           "relevantHits": 9
@@ -3072,7 +3072,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.8643145546088337,
+          "ndcgAt10": 0.6992148198508501,
           "mrr": 1,
           "precisionAt10": 0.8,
           "relevantHits": 8
@@ -3219,7 +3219,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.6203974344166848,
+          "ndcgAt10": 0.6366824387328317,
           "mrr": 1,
           "precisionAt10": 0.5,
           "relevantHits": 5
@@ -3366,7 +3366,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.624232247406789,
+          "ndcgAt10": 0.75369761125927,
           "mrr": 1,
           "precisionAt10": 0.6,
           "relevantHits": 6
@@ -3515,7 +3515,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.8701249883466593,
+          "ndcgAt10": 0.8318724637288826,
           "mrr": 1,
           "precisionAt10": 0.8,
           "relevantHits": 8
@@ -3663,7 +3663,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.7720617383222417,
+          "ndcgAt10": 0.7495275800817669,
           "mrr": 1,
           "precisionAt10": 0.7,
           "relevantHits": 7
@@ -3812,7 +3812,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.772837825180752,
+          "ndcgAt10": 0.7653606369886217,
           "mrr": 1,
           "precisionAt10": 0.7,
           "relevantHits": 7
@@ -3962,7 +3962,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.8415908474314976,
+          "ndcgAt10": 0.6366824387328317,
           "mrr": 1,
           "precisionAt10": 0.8,
           "relevantHits": 8
@@ -4088,7 +4088,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 1,
+          "ndcgAt10": 0.7809435871569447,
           "mrr": 1,
           "precisionAt10": 1,
           "relevantHits": 10
@@ -4218,7 +4218,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.9052116356304493,
+          "ndcgAt10": 0.4703652827859579,
           "mrr": 1,
           "precisionAt10": 0.9,
           "relevantHits": 9
@@ -4347,10 +4347,10 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.467122359745432,
+          "ndcgAt10": 0.8283813528274904,
           "mrr": 1,
-          "precisionAt10": 0.4,
-          "relevantHits": 4
+          "precisionAt10": 0.7,
+          "relevantHits": 7
         }
       },
       {
@@ -4476,7 +4476,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.8205228949141826,
+          "ndcgAt10": 0.5205067333228022,
           "mrr": 1,
           "precisionAt10": 0.8,
           "relevantHits": 8
@@ -4605,10 +4605,10 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.4288398090337664,
-          "mrr": 0.5,
-          "precisionAt10": 0.4,
-          "relevantHits": 4
+          "ndcgAt10": 0.7428839020806386,
+          "mrr": 1,
+          "precisionAt10": 0.9,
+          "relevantHits": 9
         }
       },
       {
@@ -4735,7 +4735,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.9305687780632227,
+          "ndcgAt10": 0.5855700749881525,
           "mrr": 1,
           "precisionAt10": 0.9,
           "relevantHits": 9
@@ -4867,7 +4867,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 1,
+          "ndcgAt10": 0.6105456988825855,
           "mrr": 1,
           "precisionAt10": 1,
           "relevantHits": 10
@@ -4998,7 +4998,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.9305687780632227,
+          "ndcgAt10": 0.7495275800817669,
           "mrr": 1,
           "precisionAt10": 0.9,
           "relevantHits": 9
@@ -5127,7 +5127,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 1,
+          "ndcgAt10": 0.664550862590272,
           "mrr": 1,
           "precisionAt10": 1,
           "relevantHits": 10
@@ -5258,7 +5258,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.7778721720600673,
+          "ndcgAt10": 0.7039180890341347,
           "mrr": 1,
           "precisionAt10": 0.7,
           "relevantHits": 7
@@ -5386,7 +5386,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.6083169141195838,
+          "ndcgAt10": 0.8772153153380493,
           "mrr": 1,
           "precisionAt10": 0.5,
           "relevantHits": 5
@@ -5510,7 +5510,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.6281460426238844,
+          "ndcgAt10": 0.41670506517877265,
           "mrr": 0.5,
           "precisionAt10": 0.7,
           "relevantHits": 7
@@ -5646,7 +5646,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.8205228949141826,
+          "ndcgAt10": 0.6238470455881188,
           "mrr": 1,
           "precisionAt10": 0.8,
           "relevantHits": 8
@@ -5779,7 +5779,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.8701249883466593,
+          "ndcgAt10": 0.6366824387328317,
           "mrr": 1,
           "precisionAt10": 0.8,
           "relevantHits": 8
@@ -5914,7 +5914,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.727329844310522,
+          "ndcgAt10": 0.601312434202259,
           "mrr": 1,
           "precisionAt10": 0.6,
           "relevantHits": 6
@@ -6047,7 +6047,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.6371523797895856,
+          "ndcgAt10": 0.6773676006644395,
           "mrr": 1,
           "precisionAt10": 0.5,
           "relevantHits": 5
@@ -6180,7 +6180,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.5289638450374726,
+          "ndcgAt10": 0.5585075862632192,
           "mrr": 1,
           "precisionAt10": 0.5,
           "relevantHits": 5
@@ -6316,7 +6316,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.5704044892860389,
+          "ndcgAt10": 0.6967728672917264,
           "mrr": 1,
           "precisionAt10": 0.5,
           "relevantHits": 5
@@ -6451,7 +6451,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.7885497208855957,
+          "ndcgAt10": 0.7222954974312066,
           "mrr": 1,
           "precisionAt10": 0.7,
           "relevantHits": 7
@@ -6582,10 +6582,10 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.4690000933206748,
+          "ndcgAt10": 0.7012899792965542,
           "mrr": 1,
-          "precisionAt10": 0.3,
-          "relevantHits": 3
+          "precisionAt10": 0.5,
+          "relevantHits": 5
         }
       },
       {
@@ -6719,7 +6719,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.8482378089219645,
+          "ndcgAt10": 0.644824486427155,
           "mrr": 1,
           "precisionAt10": 0.8,
           "relevantHits": 8
@@ -6853,7 +6853,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.7151857987862356,
+          "ndcgAt10": 0.48522855511632257,
           "mrr": 1,
           "precisionAt10": 0.6,
           "relevantHits": 6
@@ -6979,7 +6979,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.5884674004369673,
+          "ndcgAt10": 0.6131471927654584,
           "mrr": 1,
           "precisionAt10": 0.5,
           "relevantHits": 5
@@ -7110,7 +7110,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 1,
+          "ndcgAt10": 0.5135312443624667,
           "mrr": 1,
           "precisionAt10": 1,
           "relevantHits": 10
@@ -7235,7 +7235,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.7151857987862356,
+          "ndcgAt10": 0.8932076516505886,
           "mrr": 1,
           "precisionAt10": 0.6,
           "relevantHits": 6
@@ -7359,7 +7359,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.5077181160122074,
+          "ndcgAt10": 0.5809949937791563,
           "mrr": 1,
           "precisionAt10": 0.4,
           "relevantHits": 4
@@ -7479,7 +7479,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.9216017310213247,
+          "ndcgAt10": 0.8455193252797258,
           "mrr": 1,
           "precisionAt10": 0.9,
           "relevantHits": 9
@@ -7602,7 +7602,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.5637884576902256,
+          "ndcgAt10": 0.7227265726449519,
           "mrr": 1,
           "precisionAt10": 0.4,
           "relevantHits": 4
@@ -7728,7 +7728,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.7183627972686238,
+          "ndcgAt10": 0.46927872602275644,
           "mrr": 1,
           "precisionAt10": 0.6,
           "relevantHits": 6
@@ -7859,7 +7859,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.6758704024811183,
+          "ndcgAt10": 0.5585075862632192,
           "mrr": 1,
           "precisionAt10": 0.6,
           "relevantHits": 6
@@ -7984,7 +7984,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.7721596254947203,
+          "ndcgAt10": 0.8696762340896295,
           "mrr": 1,
           "precisionAt10": 0.7,
           "relevantHits": 7
@@ -8107,7 +8107,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.800693766409882,
+          "ndcgAt10": 0.8358912271816661,
           "mrr": 1,
           "precisionAt10": 0.7,
           "relevantHits": 7
@@ -8240,7 +8240,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.8572048559638628,
+          "ndcgAt10": 0.46927872602275644,
           "mrr": 1,
           "precisionAt10": 0.8,
           "relevantHits": 8
@@ -8372,7 +8372,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.7065836017263629,
+          "ndcgAt10": 0.46927872602275644,
           "mrr": 1,
           "precisionAt10": 0.6,
           "relevantHits": 6
@@ -8505,7 +8505,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.8200685179888283,
+          "ndcgAt10": 0.5855700749881525,
           "mrr": 1,
           "precisionAt10": 0.8,
           "relevantHits": 8
@@ -8639,7 +8639,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.8701249883466593,
+          "ndcgAt10": 0.46927872602275644,
           "mrr": 1,
           "precisionAt10": 0.8,
           "relevantHits": 8
@@ -8770,7 +8770,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.7846170207230129,
+          "ndcgAt10": 0.46927872602275644,
           "mrr": 1,
           "precisionAt10": 0.7,
           "relevantHits": 7
@@ -8892,7 +8892,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.6489315753318465,
+          "ndcgAt10": 0.8687949224876582,
           "mrr": 1,
           "precisionAt10": 0.5,
           "relevantHits": 5
@@ -9024,7 +9024,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.7788065869851872,
+          "ndcgAt10": 0.7923823825200124,
           "mrr": 1,
           "precisionAt10": 0.7,
           "relevantHits": 7
@@ -9153,7 +9153,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.7151857987862356,
+          "ndcgAt10": 0.7095272044910244,
           "mrr": 1,
           "precisionAt10": 0.6,
           "relevantHits": 6
@@ -9282,7 +9282,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 1,
+          "ndcgAt10": 0.8539316501572937,
           "mrr": 1,
           "precisionAt10": 1,
           "relevantHits": 10
@@ -9415,7 +9415,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 1,
+          "ndcgAt10": 0.8667163765466583,
           "mrr": 1,
           "precisionAt10": 1,
           "relevantHits": 10
@@ -9547,7 +9547,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 1,
+          "ndcgAt10": 0.3903800499921017,
           "mrr": 1,
           "precisionAt10": 1,
           "relevantHits": 10
@@ -9678,7 +9678,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.8899541168509599,
+          "ndcgAt10": 0.7190932595736889,
           "mrr": 1,
           "precisionAt10": 0.9,
           "relevantHits": 9
@@ -9813,7 +9813,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 1,
+          "ndcgAt10": 0.4599715079731103,
           "mrr": 1,
           "precisionAt10": 1,
           "relevantHits": 10
@@ -9944,7 +9944,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.7538142945344393,
+          "ndcgAt10": 0.7757386182436072,
           "mrr": 1,
           "precisionAt10": 0.7,
           "relevantHits": 7
@@ -10070,7 +10070,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.6332196796270029,
+          "ndcgAt10": 0.6713860725233041,
           "mrr": 1,
           "precisionAt10": 0.5,
           "relevantHits": 5
@@ -10199,10 +10199,10 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.45260163770064993,
-          "mrr": 0.25,
-          "precisionAt10": 0.6,
-          "relevantHits": 6
+          "ndcgAt10": 0.5585075862632192,
+          "mrr": 1,
+          "precisionAt10": 0.9,
+          "relevantHits": 9
         }
       },
       {
@@ -10331,7 +10331,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 1,
+          "ndcgAt10": 0.3903800499921017,
           "mrr": 1,
           "precisionAt10": 1,
           "relevantHits": 10
@@ -10417,7 +10417,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.6489315753318465,
+          "ndcgAt10": 0.892210845475489,
           "mrr": 1,
           "precisionAt10": 1,
           "relevantHits": 5
@@ -10539,7 +10539,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.7151857987862356,
+          "ndcgAt10": 0.8932076516505886,
           "mrr": 1,
           "precisionAt10": 0.6,
           "relevantHits": 6
@@ -10673,7 +10673,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.8643145546088337,
+          "ndcgAt10": 0.6366824387328317,
           "mrr": 1,
           "precisionAt10": 0.8,
           "relevantHits": 8
@@ -10805,7 +10805,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.6898286563534621,
+          "ndcgAt10": 0.5773584151532217,
           "mrr": 1,
           "precisionAt10": 0.6,
           "relevantHits": 6
@@ -10933,7 +10933,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 1,
+          "ndcgAt10": 0.6981697178527159,
           "mrr": 1,
           "precisionAt10": 1,
           "relevantHits": 10
@@ -11058,7 +11058,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.8415908474314976,
+          "ndcgAt10": 0.7039180890341347,
           "mrr": 1,
           "precisionAt10": 0.8,
           "relevantHits": 8
@@ -11180,7 +11180,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.5384313152574521,
+          "ndcgAt10": 0.7227265726449519,
           "mrr": 1,
           "precisionAt10": 0.4,
           "relevantHits": 4
@@ -11266,7 +11266,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.5637884576902256,
+          "ndcgAt10": 0.5842273861585908,
           "mrr": 1,
           "precisionAt10": 0.8,
           "relevantHits": 4
@@ -11399,7 +11399,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 1,
+          "ndcgAt10": 0.4703652827859579,
           "mrr": 1,
           "precisionAt10": 1,
           "relevantHits": 10
@@ -11527,7 +11527,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.624232247406789,
+          "ndcgAt10": 0.6174111208209189,
           "mrr": 1,
           "precisionAt10": 0.6,
           "relevantHits": 6
@@ -11650,7 +11650,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.5988751049740155,
+          "ndcgAt10": 0.6684881776649958,
           "mrr": 1,
           "precisionAt10": 0.5,
           "relevantHits": 5
@@ -11779,7 +11779,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.5215784827120726,
+          "ndcgAt10": 0.6871475159848289,
           "mrr": 0.5,
           "precisionAt10": 0.6,
           "relevantHits": 6
@@ -11905,7 +11905,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.696162268139923,
+          "ndcgAt10": 0.644824486427155,
           "mrr": 1,
           "precisionAt10": 0.6,
           "relevantHits": 6
@@ -12030,7 +12030,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.8611375561264454,
+          "ndcgAt10": 0.6131471927654584,
           "mrr": 1,
           "precisionAt10": 0.9,
           "relevantHits": 9
@@ -12163,7 +12163,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 1,
+          "ndcgAt10": 0.7972541056822071,
           "mrr": 1,
           "precisionAt10": 1,
           "relevantHits": 10
@@ -12290,10 +12290,10 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.48882922182497546,
+          "ndcgAt10": 0.8219345592466819,
           "mrr": 1,
-          "precisionAt10": 0.4,
-          "relevantHits": 4
+          "precisionAt10": 0.7,
+          "relevantHits": 7
         }
       },
       {
@@ -12415,7 +12415,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.6489315753318465,
+          "ndcgAt10": 0.6508205185601091,
           "mrr": 1,
           "precisionAt10": 0.5,
           "relevantHits": 5
@@ -12545,7 +12545,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.800693766409882,
+          "ndcgAt10": 0.7227265726449519,
           "mrr": 1,
           "precisionAt10": 0.7,
           "relevantHits": 7
@@ -12666,7 +12666,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.7007731679885374,
+          "ndcgAt10": 0.5032251913410369,
           "mrr": 1,
           "precisionAt10": 0.6,
           "relevantHits": 6
@@ -12790,7 +12790,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.7125523635307982,
+          "ndcgAt10": 0.8189080569732082,
           "mrr": 1,
           "precisionAt10": 0.6,
           "relevantHits": 6
@@ -12913,7 +12913,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.6489315753318465,
+          "ndcgAt10": 0.46927872602275644,
           "mrr": 1,
           "precisionAt10": 0.5,
           "relevantHits": 5
@@ -13036,7 +13036,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.5326208815196265,
+          "ndcgAt10": 0.7227265726449519,
           "mrr": 1,
           "precisionAt10": 0.4,
           "relevantHits": 4
@@ -13160,7 +13160,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.7222954974312066,
+          "ndcgAt10": 0.7457912185292983,
           "mrr": 1,
           "precisionAt10": 0.6,
           "relevantHits": 6
@@ -13296,10 +13296,10 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.42838543210841196,
+          "ndcgAt10": 0.7183627972686238,
           "mrr": 1,
-          "precisionAt10": 0.3,
-          "relevantHits": 3
+          "precisionAt10": 0.7,
+          "relevantHits": 7
         }
       },
       {
@@ -13428,7 +13428,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.6274092458891772,
+          "ndcgAt10": 0.7751482523375255,
           "mrr": 1,
           "precisionAt10": 0.5,
           "relevantHits": 5
@@ -13563,7 +13563,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.5551469705065496,
+          "ndcgAt10": 0.38356636737133565,
           "mrr": 0.5,
           "precisionAt10": 0.6,
           "relevantHits": 6
@@ -13700,7 +13700,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.933745776545611,
+          "ndcgAt10": 0.644824486427155,
           "mrr": 1,
           "precisionAt10": 0.9,
           "relevantHits": 9
@@ -13835,7 +13835,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.835780413693672,
+          "ndcgAt10": 0.6105858728157117,
           "mrr": 1,
           "precisionAt10": 0.8,
           "relevantHits": 8
@@ -13968,7 +13968,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 1,
+          "ndcgAt10": 0.617319681505689,
           "mrr": 1,
           "precisionAt10": 1,
           "relevantHits": 10
@@ -14092,7 +14092,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.5309999066793252,
+          "ndcgAt10": 0.4426472276742533,
           "mrr": 0.25,
           "precisionAt10": 0.7,
           "relevantHits": 7
@@ -14226,7 +14226,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.7315449642824575,
+          "ndcgAt10": 0.46927872602275644,
           "mrr": 1,
           "precisionAt10": 0.7,
           "relevantHits": 7
@@ -14353,7 +14353,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.9363792118010483,
+          "ndcgAt10": 0.5531464700081437,
           "mrr": 1,
           "precisionAt10": 0.9,
           "relevantHits": 9
@@ -14481,7 +14481,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 1,
+          "ndcgAt10": 0.7402849195166222,
           "mrr": 1,
           "precisionAt10": 1,
           "relevantHits": 10
@@ -14602,10 +14602,10 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.4959389204699464,
+          "ndcgAt10": 0.7457912185292983,
           "mrr": 1,
-          "precisionAt10": 0.4,
-          "relevantHits": 4
+          "precisionAt10": 0.8,
+          "relevantHits": 8
         }
       },
       {
@@ -14733,7 +14733,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 1,
+          "ndcgAt10": 0.4945622878885427,
           "mrr": 1,
           "precisionAt10": 1,
           "relevantHits": 10
@@ -14869,7 +14869,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 1,
+          "ndcgAt10": 0.8687949224876582,
           "mrr": 1,
           "precisionAt10": 1,
           "relevantHits": 10
@@ -15000,7 +15000,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.9305687780632227,
+          "ndcgAt10": 0.9217868789962071,
           "mrr": 1,
           "precisionAt10": 0.9,
           "relevantHits": 9
@@ -15123,7 +15123,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.5993294818993699,
+          "ndcgAt10": 0.6194790157221095,
           "mrr": 1,
           "precisionAt10": 0.6,
           "relevantHits": 6
@@ -15243,7 +15243,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.9305687780632227,
+          "ndcgAt10": 0.7751482523375255,
           "mrr": 1,
           "precisionAt10": 0.9,
           "relevantHits": 9
@@ -15369,7 +15369,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.6163668470816234,
+          "ndcgAt10": 0.4441228664487979,
           "mrr": 0.5,
           "precisionAt10": 0.7,
           "relevantHits": 7
@@ -15502,7 +15502,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.800693766409882,
+          "ndcgAt10": 0.75369761125927,
           "mrr": 1,
           "precisionAt10": 0.7,
           "relevantHits": 7
@@ -15638,7 +15638,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 1,
+          "ndcgAt10": 0.6739577727076379,
           "mrr": 1,
           "precisionAt10": 1,
           "relevantHits": 10
@@ -15768,7 +15768,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.5391870169376466,
+          "ndcgAt10": 0.5547710914144913,
           "mrr": 1,
           "precisionAt10": 0.5,
           "relevantHits": 5
@@ -15904,7 +15904,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 1,
+          "ndcgAt10": 0.5531464700081437,
           "mrr": 1,
           "precisionAt10": 1,
           "relevantHits": 10
@@ -16064,7 +16064,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.9363792118010483,
+          "ndcgAt10": 0.5078961547485289,
           "mrr": 1,
           "precisionAt10": 0.9,
           "relevantHits": 9
@@ -16296,7 +16296,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.716485063693381,
+          "ndcgAt10": 0.7087212693585175,
           "mrr": 1,
           "precisionAt10": 0.7,
           "relevantHits": 7
@@ -16421,7 +16421,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.7125523635307982,
+          "ndcgAt10": 0.7618870795651185,
           "mrr": 1,
           "precisionAt10": 0.6,
           "relevantHits": 6
@@ -16544,10 +16544,10 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.4198523768135526,
-          "mrr": 0.3333333333333333,
-          "precisionAt10": 0.5,
-          "relevantHits": 5
+          "ndcgAt10": 0.7067396740660973,
+          "mrr": 1,
+          "precisionAt10": 1,
+          "relevantHits": 10
         }
       },
       {
@@ -16666,7 +16666,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 1,
+          "ndcgAt10": 0.6105456988825855,
           "mrr": 1,
           "precisionAt10": 1,
           "relevantHits": 10
@@ -16791,7 +16791,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.6274092458891772,
+          "ndcgAt10": 0.732296200528563,
           "mrr": 1,
           "precisionAt10": 0.5,
           "relevantHits": 5
@@ -16913,7 +16913,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.6500332220485792,
+          "ndcgAt10": 0.2960819109658652,
           "mrr": 0.5,
           "precisionAt10": 0.7,
           "relevantHits": 7
@@ -17048,7 +17048,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.5352543167750639,
+          "ndcgAt10": 0.5087403079104241,
           "mrr": 1,
           "precisionAt10": 0.4,
           "relevantHits": 4
@@ -17185,10 +17185,10 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.48993086854170786,
-          "mrr": 0.5,
-          "precisionAt10": 0.6,
-          "relevantHits": 6
+          "ndcgAt10": 0.8358912271816661,
+          "mrr": 1,
+          "precisionAt10": 1,
+          "relevantHits": 10
         }
       },
       {
@@ -17317,10 +17317,10 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.41320541532308547,
-          "mrr": 0.3333333333333333,
-          "precisionAt10": 0.5,
-          "relevantHits": 5
+          "ndcgAt10": 0.7713707099946513,
+          "mrr": 1,
+          "precisionAt10": 0.8,
+          "relevantHits": 8
         }
       },
       {
@@ -17467,7 +17467,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 1,
+          "ndcgAt10": 0.7495275800817669,
           "mrr": 1,
           "precisionAt10": 1,
           "relevantHits": 10
@@ -17617,7 +17617,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.914856882358379,
+          "ndcgAt10": 0.7495275800817669,
           "mrr": 1,
           "precisionAt10": 0.9,
           "relevantHits": 9
@@ -17747,7 +17747,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.9216017310213247,
+          "ndcgAt10": 0.6713860725233041,
           "mrr": 1,
           "precisionAt10": 0.9,
           "relevantHits": 9
@@ -17877,10 +17877,10 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.43199642233783886,
-          "mrr": 0.3333333333333333,
-          "precisionAt10": 0.5,
-          "relevantHits": 5
+          "ndcgAt10": 0.5855700749881525,
+          "mrr": 1,
+          "precisionAt10": 1,
+          "relevantHits": 10
         }
       },
       {
@@ -18006,7 +18006,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 1,
+          "ndcgAt10": 0.5071367207381852,
           "mrr": 1,
           "precisionAt10": 1,
           "relevantHits": 10
@@ -18132,7 +18132,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.5637884576902256,
+          "ndcgAt10": 0.6366824387328317,
           "mrr": 1,
           "precisionAt10": 0.4,
           "relevantHits": 4
@@ -18259,7 +18259,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.6281460426238844,
+          "ndcgAt10": 0.2960819109658652,
           "mrr": 0.5,
           "precisionAt10": 0.7,
           "relevantHits": 7
@@ -18381,7 +18381,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.6253338941235216,
+          "ndcgAt10": 0.4856637624942473,
           "mrr": 0.5,
           "precisionAt10": 0.7,
           "relevantHits": 7
@@ -18517,7 +18517,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.9305687780632227,
+          "ndcgAt10": 0.7247145167543899,
           "mrr": 1,
           "precisionAt10": 0.9,
           "relevantHits": 9
@@ -18652,7 +18652,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.9216017310213247,
+          "ndcgAt10": 0.5809949937791563,
           "mrr": 1,
           "precisionAt10": 0.9,
           "relevantHits": 9
@@ -18788,7 +18788,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.7605591431973849,
+          "ndcgAt10": 0.644824486427155,
           "mrr": 1,
           "precisionAt10": 0.7,
           "relevantHits": 7
@@ -18924,7 +18924,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.933745776545611,
+          "ndcgAt10": 0.7227265726449519,
           "mrr": 1,
           "precisionAt10": 0.9,
           "relevantHits": 9
@@ -19058,7 +19058,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.6722390270733757,
+          "ndcgAt10": 0.6226754555126139,
           "mrr": 1,
           "precisionAt10": 0.6,
           "relevantHits": 6
@@ -19182,7 +19182,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.7151857987862356,
+          "ndcgAt10": 0.8219345592466819,
           "mrr": 1,
           "precisionAt10": 0.6,
           "relevantHits": 6
@@ -19304,10 +19304,10 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.42257499837058643,
+          "ndcgAt10": 0.8189080569732082,
           "mrr": 1,
-          "precisionAt10": 0.3,
-          "relevantHits": 3
+          "precisionAt10": 0.6,
+          "relevantHits": 6
         }
       },
       {
@@ -19424,7 +19424,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.7917267193679839,
+          "ndcgAt10": 0.8455193252797258,
           "mrr": 1,
           "precisionAt10": 0.7,
           "relevantHits": 7
@@ -19554,7 +19554,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 1,
+          "ndcgAt10": 0.6295516106099184,
           "mrr": 1,
           "precisionAt10": 1,
           "relevantHits": 10
@@ -19677,7 +19677,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.5072380780124418,
+          "ndcgAt10": 0.2960819109658652,
           "mrr": 0.5,
           "precisionAt10": 0.5,
           "relevantHits": 5
@@ -19807,7 +19807,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.7849818707050383,
+          "ndcgAt10": 0.46927872602275644,
           "mrr": 1,
           "precisionAt10": 0.7,
           "relevantHits": 7
@@ -19940,7 +19940,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.727329844310522,
+          "ndcgAt10": 0.46927872602275644,
           "mrr": 1,
           "precisionAt10": 0.6,
           "relevantHits": 6
@@ -20076,7 +20076,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.8454256604216017,
+          "ndcgAt10": 0.6753197893820488,
           "mrr": 1,
           "precisionAt10": 0.8,
           "relevantHits": 8
@@ -20175,7 +20175,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.727329844310522,
+          "ndcgAt10": 0.8358912271816661,
           "mrr": 1,
           "precisionAt10": 1,
           "relevantHits": 6
@@ -20299,7 +20299,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.5141863642577489,
+          "ndcgAt10": 0.44615333764087994,
           "mrr": 1,
           "precisionAt10": 0.5,
           "relevantHits": 5
@@ -20428,7 +20428,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.576669299949219,
+          "ndcgAt10": 0.36005461457723403,
           "mrr": 0.5,
           "precisionAt10": 0.6,
           "relevantHits": 6
@@ -20558,7 +20558,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.793584067764911,
+          "ndcgAt10": 0.7372449353281585,
           "mrr": 1,
           "precisionAt10": 0.7,
           "relevantHits": 7
@@ -20688,7 +20688,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.7151857987862356,
+          "ndcgAt10": 0.8318724637288826,
           "mrr": 1,
           "precisionAt10": 0.6,
           "relevantHits": 6
@@ -20821,7 +20821,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.9363792118010483,
+          "ndcgAt10": 0.5585075862632192,
           "mrr": 1,
           "precisionAt10": 0.9,
           "relevantHits": 9
@@ -20956,10 +20956,10 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.44821456061271264,
-          "mrr": 0.5,
-          "precisionAt10": 0.5,
-          "relevantHits": 5
+          "ndcgAt10": 0.7495275800817669,
+          "mrr": 1,
+          "precisionAt10": 1,
+          "relevantHits": 10
         }
       },
       {
@@ -21089,7 +21089,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 1,
+          "ndcgAt10": 0.5032251913410369,
           "mrr": 1,
           "precisionAt10": 1,
           "relevantHits": 10
@@ -21223,7 +21223,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 1,
+          "ndcgAt10": 0.5205067333228022,
           "mrr": 1,
           "precisionAt10": 1,
           "relevantHits": 10
@@ -21352,7 +21352,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.6840182226156365,
+          "ndcgAt10": 0.6552438651310554,
           "mrr": 1,
           "precisionAt10": 0.6,
           "relevantHits": 6
@@ -21485,7 +21485,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 1,
+          "ndcgAt10": 0.3903800499921017,
           "mrr": 1,
           "precisionAt10": 1,
           "relevantHits": 10
@@ -21571,7 +21571,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.6489315753318465,
+          "ndcgAt10": 0.7751482523375255,
           "mrr": 1,
           "precisionAt10": 1,
           "relevantHits": 5
@@ -21672,7 +21672,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.800693766409882,
+          "ndcgAt10": 0.8358912271816661,
           "mrr": 1,
           "precisionAt10": 1,
           "relevantHits": 7
@@ -21798,7 +21798,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.5672274908036508,
+          "ndcgAt10": 0.5078961547485289,
           "mrr": 1,
           "precisionAt10": 0.5,
           "relevantHits": 5
@@ -21920,7 +21920,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.800693766409882,
+          "ndcgAt10": 0.5709662133861837,
           "mrr": 1,
           "precisionAt10": 0.7,
           "relevantHits": 7
@@ -22055,7 +22055,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.7975167679274937,
+          "ndcgAt10": 0.75369761125927,
           "mrr": 1,
           "precisionAt10": 0.8,
           "relevantHits": 8
@@ -22189,7 +22189,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.7877736340270854,
+          "ndcgAt10": 0.5482507327637915,
           "mrr": 1,
           "precisionAt10": 0.8,
           "relevantHits": 8
@@ -22311,7 +22311,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.7264127302306637,
+          "ndcgAt10": 0.6238470455881188,
           "mrr": 1,
           "precisionAt10": 0.7,
           "relevantHits": 7
@@ -22433,7 +22433,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.8200685179888283,
+          "ndcgAt10": 0.7526136409516659,
           "mrr": 1,
           "precisionAt10": 0.8,
           "relevantHits": 8
@@ -22561,7 +22561,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.7125523635307982,
+          "ndcgAt10": 0.5087403079104241,
           "mrr": 1,
           "precisionAt10": 0.6,
           "relevantHits": 6
@@ -22694,7 +22694,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 1,
+          "ndcgAt10": 0.6661998717660157,
           "mrr": 1,
           "precisionAt10": 1,
           "relevantHits": 10
@@ -22819,7 +22819,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.5173633627401372,
+          "ndcgAt10": 0.46927872602275644,
           "mrr": 1,
           "precisionAt10": 0.4,
           "relevantHits": 4
@@ -22952,7 +22952,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 1,
+          "ndcgAt10": 0.44615333764087994,
           "mrr": 1,
           "precisionAt10": 1,
           "relevantHits": 10
@@ -23083,7 +23083,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 1,
+          "ndcgAt10": 0.6364391809889587,
           "mrr": 1,
           "precisionAt10": 1,
           "relevantHits": 10
@@ -23213,7 +23213,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.6901935063354876,
+          "ndcgAt10": 0.46927872602275644,
           "mrr": 1,
           "precisionAt10": 0.6,
           "relevantHits": 6
@@ -23340,7 +23340,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.7695261902392829,
+          "ndcgAt10": 0.46927872602275644,
           "mrr": 1,
           "precisionAt10": 0.7,
           "relevantHits": 7
@@ -23462,7 +23462,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 1,
+          "ndcgAt10": 0.5294362295028773,
           "mrr": 1,
           "precisionAt10": 1,
           "relevantHits": 10
@@ -23584,7 +23584,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.7151857987862356,
+          "ndcgAt10": 0.46927872602275644,
           "mrr": 1,
           "precisionAt10": 0.6,
           "relevantHits": 6
@@ -23720,7 +23720,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 1,
+          "ndcgAt10": 0.5274541611612878,
           "mrr": 1,
           "precisionAt10": 1,
           "relevantHits": 10
@@ -23933,7 +23933,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.7967610662472993,
+          "ndcgAt10": 0.7598336331031966,
           "mrr": 1,
           "precisionAt10": 0.7,
           "relevantHits": 7
@@ -24111,7 +24111,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.933745776545611,
+          "ndcgAt10": 0.7598336331031966,
           "mrr": 1,
           "precisionAt10": 0.9,
           "relevantHits": 9
@@ -24343,7 +24343,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.5795003533950692,
+          "ndcgAt10": 0.5855700749881525,
           "mrr": 1,
           "precisionAt10": 0.5,
           "relevantHits": 5
@@ -24538,7 +24538,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 1,
+          "ndcgAt10": 0.6422813708518126,
           "mrr": 1,
           "precisionAt10": 1,
           "relevantHits": 10
@@ -24733,7 +24733,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 1,
+          "ndcgAt10": 0.6542448095688422,
           "mrr": 1,
           "precisionAt10": 1,
           "relevantHits": 10
@@ -24910,7 +24910,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.9363792118010483,
+          "ndcgAt10": 0.6525874238732422,
           "mrr": 1,
           "precisionAt10": 0.9,
           "relevantHits": 9
@@ -25040,7 +25040,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.5360735436824436,
+          "ndcgAt10": 0.6060398578158167,
           "mrr": 1,
           "precisionAt10": 0.5,
           "relevantHits": 5
@@ -25182,7 +25182,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.7222954974312066,
+          "ndcgAt10": 0.6368547259115425,
           "mrr": 1,
           "precisionAt10": 0.6,
           "relevantHits": 6
@@ -25307,10 +25307,10 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.40112489502598436,
-          "mrr": 0.25,
-          "precisionAt10": 0.5,
-          "relevantHits": 5
+          "ndcgAt10": 0.8090791338210652,
+          "mrr": 1,
+          "precisionAt10": 0.8,
+          "relevantHits": 8
         }
       },
       {
@@ -25431,7 +25431,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.8200685179888283,
+          "ndcgAt10": 0.3903800499921017,
           "mrr": 1,
           "precisionAt10": 0.8,
           "relevantHits": 8
@@ -25567,7 +25567,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.9216017310213247,
+          "ndcgAt10": 0.37941405415148566,
           "mrr": 1,
           "precisionAt10": 0.9,
           "relevantHits": 9
@@ -25703,7 +25703,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.8318477135310893,
+          "ndcgAt10": 0.6004833831800817,
           "mrr": 1,
           "precisionAt10": 0.8,
           "relevantHits": 8
@@ -25836,7 +25836,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.7125523635307982,
+          "ndcgAt10": 0.5688089556101679,
           "mrr": 1,
           "precisionAt10": 0.6,
           "relevantHits": 6
@@ -25973,7 +25973,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.6320787427864673,
+          "ndcgAt10": 0.4349920144079827,
           "mrr": 0.5,
           "precisionAt10": 0.7,
           "relevantHits": 7
@@ -26109,7 +26109,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.933745776545611,
+          "ndcgAt10": 0.41253177989255346,
           "mrr": 1,
           "precisionAt10": 0.9,
           "relevantHits": 9
@@ -26244,10 +26244,10 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.576323354912681,
+          "ndcgAt10": 0.5100691314582919,
           "mrr": 1,
-          "precisionAt10": 0.5,
-          "relevantHits": 5
+          "precisionAt10": 0.6,
+          "relevantHits": 6
         }
       },
       {
@@ -26382,7 +26382,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 1,
+          "ndcgAt10": 0.38334277998463445,
           "mrr": 1,
           "precisionAt10": 1,
           "relevantHits": 10
@@ -26519,7 +26519,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.6243301345792677,
+          "ndcgAt10": 0.30523488393970116,
           "mrr": 1,
           "precisionAt10": 0.6,
           "relevantHits": 6
@@ -26656,7 +26656,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.8482378089219645,
+          "ndcgAt10": 0.40002324830925196,
           "mrr": 1,
           "precisionAt10": 0.8,
           "relevantHits": 8
@@ -26792,7 +26792,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.8899541168509599,
+          "ndcgAt10": 0.4272021882457644,
           "mrr": 1,
           "precisionAt10": 0.9,
           "relevantHits": 9
@@ -26914,7 +26914,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 1,
+          "ndcgAt10": 0.647939623894138,
           "mrr": 1,
           "precisionAt10": 1,
           "relevantHits": 10
@@ -27038,7 +27038,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.6994739030813919,
+          "ndcgAt10": 0.5817743491708761,
           "mrr": 1,
           "precisionAt10": 0.6,
           "relevantHits": 6
@@ -27163,7 +27163,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.715550648768261,
+          "ndcgAt10": 0.5321454488055233,
           "mrr": 1,
           "precisionAt10": 0.6,
           "relevantHits": 6
@@ -27287,7 +27287,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.5637884576902256,
+          "ndcgAt10": 0.38334277998463445,
           "mrr": 1,
           "precisionAt10": 0.4,
           "relevantHits": 4
@@ -27410,7 +27410,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.8200685179888283,
+          "ndcgAt10": 0.41253177989255346,
           "mrr": 1,
           "precisionAt10": 0.8,
           "relevantHits": 8
@@ -27533,7 +27533,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.5309999066793252,
+          "ndcgAt10": 0.10893649261775588,
           "mrr": 0.25,
           "precisionAt10": 0.7,
           "relevantHits": 7
@@ -27656,7 +27656,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.7510916729774053,
+          "ndcgAt10": 0.361879195385413,
           "mrr": 1,
           "precisionAt10": 0.8,
           "relevantHits": 8
@@ -27778,7 +27778,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.6780494608112012,
+          "ndcgAt10": 0.5423640154200349,
           "mrr": 1,
           "precisionAt10": 0.6,
           "relevantHits": 6
@@ -27904,10 +27904,10 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.40350157154648025,
+          "ndcgAt10": 0.6122496142821665,
           "mrr": 1,
-          "precisionAt10": 0.3,
-          "relevantHits": 3
+          "precisionAt10": 1,
+          "relevantHits": 10
         }
       },
       {
@@ -28027,7 +28027,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.5626475208496899,
+          "ndcgAt10": 0.2684550357175426,
           "mrr": 0.3333333333333333,
           "precisionAt10": 0.7,
           "relevantHits": 7
@@ -28150,7 +28150,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.866947989864271,
+          "ndcgAt10": 0.4537425745411855,
           "mrr": 1,
           "precisionAt10": 0.8,
           "relevantHits": 8
@@ -28272,10 +28272,10 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.42520843362602373,
+          "ndcgAt10": 0.576323354912681,
           "mrr": 1,
-          "precisionAt10": 0.3,
-          "relevantHits": 3
+          "precisionAt10": 0.7,
+          "relevantHits": 7
         }
       },
       {
@@ -28395,10 +28395,10 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.48964844873235525,
-          "mrr": 0.3333333333333333,
-          "precisionAt10": 0.6,
-          "relevantHits": 6
+          "ndcgAt10": 0.727329844310522,
+          "mrr": 1,
+          "precisionAt10": 0.9,
+          "relevantHits": 9
         }
       },
       {
@@ -28519,7 +28519,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.5621931439243354,
+          "ndcgAt10": 0.42520843362602373,
           "mrr": 1,
           "precisionAt10": 0.5,
           "relevantHits": 5
@@ -28641,10 +28641,10 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.4690000933206748,
+          "ndcgAt10": 0.6489315753318465,
           "mrr": 1,
-          "precisionAt10": 0.3,
-          "relevantHits": 3
+          "precisionAt10": 0.5,
+          "relevantHits": 5
         }
       },
       {
@@ -28764,7 +28764,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.727329844310522,
+          "ndcgAt10": 0.5390031312763821,
           "mrr": 1,
           "precisionAt10": 0.6,
           "relevantHits": 6
@@ -28881,7 +28881,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.6468562235661909,
+          "ndcgAt10": 0.40885093048316934,
           "mrr": 0.5,
           "precisionAt10": 0.7777777777777778,
           "relevantHits": 7
@@ -29004,7 +29004,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.6547216238913564,
+          "ndcgAt10": 0.5078961547485289,
           "mrr": 1,
           "precisionAt10": 0.6,
           "relevantHits": 6
@@ -29128,7 +29128,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.6500332220485792,
+          "ndcgAt10": 0.21398626473452756,
           "mrr": 0.5,
           "precisionAt10": 0.7,
           "relevantHits": 7
@@ -29252,7 +29252,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.933745776545611,
+          "ndcgAt10": 0.30260241349881345,
           "mrr": 1,
           "precisionAt10": 0.9,
           "relevantHits": 9
@@ -29377,10 +29377,10 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.4440973278132557,
+          "ndcgAt10": 0.7618870795651185,
           "mrr": 1,
-          "precisionAt10": 0.3,
-          "relevantHits": 3
+          "precisionAt10": 0.9,
+          "relevantHits": 9
         }
       },
       {
@@ -29505,7 +29505,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.576323354912681,
+          "ndcgAt10": 0.3391602052736161,
           "mrr": 1,
           "precisionAt10": 0.5,
           "relevantHits": 5
@@ -29628,7 +29628,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 1,
+          "ndcgAt10": 0.30260241349881345,
           "mrr": 1,
           "precisionAt10": 1,
           "relevantHits": 10
@@ -29751,7 +29751,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.5049059675118446,
+          "ndcgAt10": 0.3903800499921017,
           "mrr": 1,
           "precisionAt10": 0.5,
           "relevantHits": 5
@@ -29874,7 +29874,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.7564477297898766,
+          "ndcgAt10": 0.3903800499921017,
           "mrr": 1,
           "precisionAt10": 0.7,
           "relevantHits": 7
@@ -30000,7 +30000,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.6489315753318465,
+          "ndcgAt10": 0.3391602052736161,
           "mrr": 1,
           "precisionAt10": 0.5,
           "relevantHits": 5
@@ -30127,7 +30127,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.7630946912803436,
+          "ndcgAt10": 0.5135312443624667,
           "mrr": 1,
           "precisionAt10": 0.7,
           "relevantHits": 7
@@ -30251,7 +30251,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.6464018466408364,
+          "ndcgAt10": 0.562068903096022,
           "mrr": 1,
           "precisionAt10": 0.6,
           "relevantHits": 6
@@ -30375,7 +30375,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.8389574121760602,
+          "ndcgAt10": 0.6597369862291467,
           "mrr": 1,
           "precisionAt10": 0.8,
           "relevantHits": 8
@@ -30498,7 +30498,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.9363792118010483,
+          "ndcgAt10": 0.6489315753318465,
           "mrr": 1,
           "precisionAt10": 0.9,
           "relevantHits": 9
@@ -30648,7 +30648,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.9305687780632227,
+          "ndcgAt10": 0.41253177989255346,
           "mrr": 1,
           "precisionAt10": 0.9,
           "relevantHits": 9
@@ -30799,7 +30799,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 1,
+          "ndcgAt10": 0.647939623894138,
           "mrr": 1,
           "precisionAt10": 1,
           "relevantHits": 10
@@ -30943,7 +30943,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.7007731679885374,
+          "ndcgAt10": 0.46169129645612955,
           "mrr": 1,
           "precisionAt10": 0.6,
           "relevantHits": 6
@@ -31094,7 +31094,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 1,
+          "ndcgAt10": 0.41253177989255346,
           "mrr": 1,
           "precisionAt10": 1,
           "relevantHits": 10
@@ -31244,7 +31244,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.9363792118010483,
+          "ndcgAt10": 0.5026317885449211,
           "mrr": 1,
           "precisionAt10": 0.9,
           "relevantHits": 9
@@ -31396,7 +31396,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 1,
+          "ndcgAt10": 0.6121199697202919,
           "mrr": 1,
           "precisionAt10": 1,
           "relevantHits": 10
@@ -31547,7 +31547,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.9363792118010483,
+          "ndcgAt10": 0.5390031312763821,
           "mrr": 1,
           "precisionAt10": 0.9,
           "relevantHits": 9
@@ -31694,7 +31694,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.8701249883466593,
+          "ndcgAt10": 0.5845904686910707,
           "mrr": 1,
           "precisionAt10": 0.8,
           "relevantHits": 8
@@ -31845,7 +31845,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.7849818707050383,
+          "ndcgAt10": 0.38334277998463445,
           "mrr": 1,
           "precisionAt10": 0.7,
           "relevantHits": 7
@@ -31990,7 +31990,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.5423640154200349,
+          "ndcgAt10": 0.5792140711633723,
           "mrr": 1,
           "precisionAt10": 0.4,
           "relevantHits": 4
@@ -32137,7 +32137,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.5779050396291792,
+          "ndcgAt10": 0.42391113584672746,
           "mrr": 1,
           "precisionAt10": 0.6,
           "relevantHits": 6
@@ -32284,7 +32284,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.8454256604216017,
+          "ndcgAt10": 0.5220419416240059,
           "mrr": 1,
           "precisionAt10": 0.8,
           "relevantHits": 8
@@ -32412,10 +32412,10 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.40112489502598436,
-          "mrr": 0.25,
-          "precisionAt10": 0.5,
-          "relevantHits": 5
+          "ndcgAt10": 0.6489315753318465,
+          "mrr": 1,
+          "precisionAt10": 0.8,
+          "relevantHits": 8
         }
       },
       {
@@ -32560,7 +32560,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.6968404678259545,
+          "ndcgAt10": 0.6020941629041773,
           "mrr": 1,
           "precisionAt10": 0.6,
           "relevantHits": 6
@@ -32709,7 +32709,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.7917267193679839,
+          "ndcgAt10": 0.5008655546918772,
           "mrr": 1,
           "precisionAt10": 0.7,
           "relevantHits": 7
@@ -32838,7 +32838,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.9363792118010483,
+          "ndcgAt10": 0.43629323812092147,
           "mrr": 1,
           "precisionAt10": 0.9,
           "relevantHits": 9
@@ -32969,7 +32969,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.933745776545611,
+          "ndcgAt10": 0.41253177989255346,
           "mrr": 1,
           "precisionAt10": 0.9,
           "relevantHits": 9
@@ -33102,7 +33102,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 1,
+          "ndcgAt10": 0.32908604348504067,
           "mrr": 1,
           "precisionAt10": 1,
           "relevantHits": 10
@@ -33231,7 +33231,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.7151857987862356,
+          "ndcgAt10": 0.4269376381202011,
           "mrr": 1,
           "precisionAt10": 0.6,
           "relevantHits": 6
@@ -33359,7 +33359,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.5326208815196265,
+          "ndcgAt10": 0.32605954121156705,
           "mrr": 1,
           "precisionAt10": 0.4,
           "relevantHits": 4
@@ -33488,7 +33488,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.727329844310522,
+          "ndcgAt10": 0.5026317885449211,
           "mrr": 1,
           "precisionAt10": 0.6,
           "relevantHits": 6
@@ -33618,7 +33618,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.9052116356304493,
+          "ndcgAt10": 0.41037377546745274,
           "mrr": 1,
           "precisionAt10": 0.9,
           "relevantHits": 9
@@ -33752,7 +33752,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.9266360779006401,
+          "ndcgAt10": 0.3430427114200248,
           "mrr": 1,
           "precisionAt10": 0.9,
           "relevantHits": 9
@@ -33878,10 +33878,10 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.4690000933206748,
+          "ndcgAt10": 0.7751482523375255,
           "mrr": 1,
-          "precisionAt10": 0.3,
-          "relevantHits": 3
+          "precisionAt10": 0.5,
+          "relevantHits": 5
         }
       },
       {
@@ -34011,7 +34011,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 1,
+          "ndcgAt10": 0.32908604348504067,
           "mrr": 1,
           "precisionAt10": 1,
           "relevantHits": 10
@@ -34139,7 +34139,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.5965377185773229,
+          "ndcgAt10": 0.4845713881969346,
           "mrr": 1,
           "precisionAt10": 0.5,
           "relevantHits": 5
@@ -34267,7 +34267,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.5352543167750639,
+          "ndcgAt10": 0.32908604348504067,
           "mrr": 1,
           "precisionAt10": 0.4,
           "relevantHits": 4
@@ -34397,10 +34397,10 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.4576752747037683,
+          "ndcgAt10": 0.5637884576902256,
           "mrr": 1,
-          "precisionAt10": 0.4,
-          "relevantHits": 4
+          "precisionAt10": 0.7,
+          "relevantHits": 7
         }
       },
       {
@@ -34525,7 +34525,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.8572048559638628,
+          "ndcgAt10": 0.4555573948688692,
           "mrr": 1,
           "precisionAt10": 0.8,
           "relevantHits": 8
@@ -34652,7 +34652,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.6136525857537393,
+          "ndcgAt10": 0.3727892582642586,
           "mrr": 1,
           "precisionAt10": 0.5,
           "relevantHits": 5
@@ -34777,10 +34777,10 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.43735247915031,
+          "ndcgAt10": 0.727329844310522,
           "mrr": 1,
-          "precisionAt10": 0.3,
-          "relevantHits": 3
+          "precisionAt10": 0.6,
+          "relevantHits": 6
         }
       },
       {
@@ -35034,7 +35034,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.6563033086078546,
+          "ndcgAt10": 0.23504554941448536,
           "mrr": 1,
           "precisionAt10": 0.7,
           "relevantHits": 7
@@ -35167,7 +35167,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 1,
+          "ndcgAt10": 0.3327372413301053,
           "mrr": 1,
           "precisionAt10": 1,
           "relevantHits": 10
@@ -35298,7 +35298,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.715550648768261,
+          "ndcgAt10": 0.3187704634136788,
           "mrr": 1,
           "precisionAt10": 0.6,
           "relevantHits": 6
@@ -35427,7 +35427,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.8899541168509599,
+          "ndcgAt10": 0.3327372413301053,
           "mrr": 1,
           "precisionAt10": 0.9,
           "relevantHits": 9
@@ -35554,7 +35554,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.6812060741152737,
+          "ndcgAt10": 0.43629323812092147,
           "mrr": 1,
           "precisionAt10": 0.7,
           "relevantHits": 7
@@ -35677,10 +35677,10 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.4690000933206748,
+          "ndcgAt10": 0.6489315753318465,
           "mrr": 1,
-          "precisionAt10": 0.3,
-          "relevantHits": 3
+          "precisionAt10": 0.8,
+          "relevantHits": 8
         }
       },
       {
@@ -35800,7 +35800,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.6489315753318465,
+          "ndcgAt10": 0.5541432109622958,
           "mrr": 1,
           "precisionAt10": 0.5,
           "relevantHits": 5
@@ -35930,7 +35930,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.741670249010153,
+          "ndcgAt10": 0.4690000933206748,
           "mrr": 1,
           "precisionAt10": 0.7,
           "relevantHits": 7
@@ -36058,7 +36058,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.5801476231864474,
+          "ndcgAt10": 0.4923263184550016,
           "mrr": 1,
           "precisionAt10": 0.5,
           "relevantHits": 5
@@ -36183,7 +36183,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.727329844310522,
+          "ndcgAt10": 0.6489315753318465,
           "mrr": 1,
           "precisionAt10": 0.6,
           "relevantHits": 6
@@ -36312,7 +36312,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.6316243658611127,
+          "ndcgAt10": 0.4856486183364634,
           "mrr": 1,
           "precisionAt10": 0.6,
           "relevantHits": 6
@@ -36435,7 +36435,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.7670273914429264,
+          "ndcgAt10": 0.4537425745411855,
           "mrr": 1,
           "precisionAt10": 0.7,
           "relevantHits": 7
@@ -36564,7 +36564,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.5017100640839688,
+          "ndcgAt10": 0.22244584585522365,
           "mrr": 0.5,
           "precisionAt10": 0.6,
           "relevantHits": 6
@@ -36701,7 +36701,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.7670273914429264,
+          "ndcgAt10": 0.4690000933206748,
           "mrr": 1,
           "precisionAt10": 0.7,
           "relevantHits": 7
@@ -36849,7 +36849,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.9363792118010483,
+          "ndcgAt10": 0.6172839611614819,
           "mrr": 1,
           "precisionAt10": 0.9,
           "relevantHits": 9
@@ -36985,7 +36985,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.8200685179888283,
+          "ndcgAt10": 0.7564477297898766,
           "mrr": 1,
           "precisionAt10": 0.8,
           "relevantHits": 8
@@ -37118,7 +37118,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.5867945846769145,
+          "ndcgAt10": 0.31488013066763093,
           "mrr": 1,
           "precisionAt10": 0.5,
           "relevantHits": 5
@@ -37251,10 +37251,10 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.43199642233783886,
-          "mrr": 0.3333333333333333,
-          "precisionAt10": 0.5,
-          "relevantHits": 5
+          "ndcgAt10": 0.5100691314582919,
+          "mrr": 1,
+          "precisionAt10": 0.7,
+          "relevantHits": 7
         }
       },
       {
@@ -37386,7 +37386,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.8611375561264454,
+          "ndcgAt10": 0.3995688713838975,
           "mrr": 1,
           "precisionAt10": 0.9,
           "relevantHits": 9
@@ -37521,7 +37521,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.6429235234036081,
+          "ndcgAt10": 0.3187939258847263,
           "mrr": 0.5,
           "precisionAt10": 0.7,
           "relevantHits": 7
@@ -37655,7 +37655,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.5884674004369673,
+          "ndcgAt10": 0.30523488393970116,
           "mrr": 1,
           "precisionAt10": 0.5,
           "relevantHits": 5
@@ -37789,7 +37789,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.5111707781750245,
+          "ndcgAt10": 0.3633412872595719,
           "mrr": 0.3333333333333333,
           "precisionAt10": 0.6,
           "relevantHits": 6
@@ -37921,7 +37921,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 1,
+          "ndcgAt10": 0.5173633627401372,
           "mrr": 1,
           "precisionAt10": 1,
           "relevantHits": 10
@@ -38053,7 +38053,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.606241562353928,
+          "ndcgAt10": 0.37326895379685443,
           "mrr": 0.5,
           "precisionAt10": 0.7,
           "relevantHits": 7
@@ -38187,7 +38187,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.5014276442746162,
+          "ndcgAt10": 0.28997736516021183,
           "mrr": 0.3333333333333333,
           "precisionAt10": 0.6,
           "relevantHits": 6
@@ -38320,7 +38320,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.8572048559638628,
+          "ndcgAt10": 0.4690000933206748,
           "mrr": 1,
           "precisionAt10": 0.8,
           "relevantHits": 8
@@ -38454,7 +38454,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.696162268139923,
+          "ndcgAt10": 0.43735247915031,
           "mrr": 1,
           "precisionAt10": 0.6,
           "relevantHits": 6
@@ -38590,7 +38590,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.9266360779006401,
+          "ndcgAt10": 0.5637884576902256,
           "mrr": 1,
           "precisionAt10": 0.9,
           "relevantHits": 9
@@ -38724,7 +38724,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.7125523635307982,
+          "ndcgAt10": 0.3589542101716347,
           "mrr": 1,
           "precisionAt10": 0.6,
           "relevantHits": 6
@@ -38857,7 +38857,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.8512360941594274,
+          "ndcgAt10": 0.4690000933206748,
           "mrr": 1,
           "precisionAt10": 0.8,
           "relevantHits": 8
@@ -38992,7 +38992,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.611755947233009,
+          "ndcgAt10": 0.27454788926472085,
           "mrr": 0.5,
           "precisionAt10": 0.7,
           "relevantHits": 7
@@ -39130,7 +39130,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.933745776545611,
+          "ndcgAt10": 0.4690000933206748,
           "mrr": 1,
           "precisionAt10": 0.9,
           "relevantHits": 9
@@ -39264,7 +39264,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.7100226348397882,
+          "ndcgAt10": 0.43735247915031,
           "mrr": 1,
           "precisionAt10": 0.7,
           "relevantHits": 7
@@ -39412,7 +39412,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.9305687780632227,
+          "ndcgAt10": 0.5103515512676448,
           "mrr": 1,
           "precisionAt10": 0.9,
           "relevantHits": 9
@@ -39549,7 +39549,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 1,
+          "ndcgAt10": 0.4690000933206748,
           "mrr": 1,
           "precisionAt10": 1,
           "relevantHits": 10
@@ -39683,7 +39683,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 1,
+          "ndcgAt10": 0.6020521034564038,
           "mrr": 1,
           "precisionAt10": 1,
           "relevantHits": 10
@@ -39817,7 +39817,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 1,
+          "ndcgAt10": 0.5352543167750639,
           "mrr": 1,
           "precisionAt10": 1,
           "relevantHits": 10
@@ -39952,7 +39952,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.6464018466408364,
+          "ndcgAt10": 0.43231813227099475,
           "mrr": 1,
           "precisionAt10": 0.6,
           "relevantHits": 6
@@ -40075,10 +40075,10 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.40112489502598436,
-          "mrr": 0.25,
-          "precisionAt10": 0.5,
-          "relevantHits": 5
+          "ndcgAt10": 0.6020941629041773,
+          "mrr": 1,
+          "precisionAt10": 0.8,
+          "relevantHits": 8
         }
       },
       {
@@ -40198,7 +40198,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.7917267193679839,
+          "ndcgAt10": 0.6489315753318465,
           "mrr": 1,
           "precisionAt10": 0.7,
           "relevantHits": 7
@@ -40320,7 +40320,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.7183627972686238,
+          "ndcgAt10": 0.5388856921828065,
           "mrr": 1,
           "precisionAt10": 0.6,
           "relevantHits": 6
@@ -40442,7 +40442,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.6023277671368327,
+          "ndcgAt10": 0.4329261794091841,
           "mrr": 1,
           "precisionAt10": 0.6,
           "relevantHits": 6
@@ -40565,7 +40565,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.7312625444731047,
+          "ndcgAt10": 0.4539036202482202,
           "mrr": 1,
           "precisionAt10": 0.7,
           "relevantHits": 7
@@ -40688,7 +40688,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.6281649475693719,
+          "ndcgAt10": 0.4539036202482202,
           "mrr": 1,
           "precisionAt10": 0.6,
           "relevantHits": 6
@@ -40812,10 +40812,10 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.40112489502598436,
-          "mrr": 0.25,
-          "precisionAt10": 0.5,
-          "relevantHits": 5
+          "ndcgAt10": 0.5637884576902256,
+          "mrr": 1,
+          "precisionAt10": 0.8,
+          "relevantHits": 8
         }
       },
       {
@@ -40934,7 +40934,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.8200685179888283,
+          "ndcgAt10": 0.5845904686910707,
           "mrr": 1,
           "precisionAt10": 0.8,
           "relevantHits": 8
@@ -41054,7 +41054,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.6489315753318465,
+          "ndcgAt10": 0.5008655546918772,
           "mrr": 1,
           "precisionAt10": 0.5,
           "relevantHits": 5
@@ -41174,7 +41174,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.7859162856301584,
+          "ndcgAt10": 0.6489315753318465,
           "mrr": 1,
           "precisionAt10": 0.7,
           "relevantHits": 7
@@ -41296,10 +41296,10 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.4288398090337664,
-          "mrr": 0.5,
-          "precisionAt10": 0.4,
-          "relevantHits": 4
+          "ndcgAt10": 0.6464018466408364,
+          "mrr": 1,
+          "precisionAt10": 0.9,
+          "relevantHits": 9
         }
       },
       {
@@ -41419,7 +41419,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.6489315753318465,
+          "ndcgAt10": 0.5637884576902256,
           "mrr": 1,
           "precisionAt10": 0.5,
           "relevantHits": 5
@@ -41541,7 +41541,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.7819835854675755,
+          "ndcgAt10": 0.6489315753318465,
           "mrr": 1,
           "precisionAt10": 0.7,
           "relevantHits": 7
@@ -41665,7 +41665,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.7753366239771086,
+          "ndcgAt10": 0.591793585310856,
           "mrr": 1,
           "precisionAt10": 0.7,
           "relevantHits": 7
@@ -41785,10 +41785,10 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.4198523768135526,
-          "mrr": 0.3333333333333333,
-          "precisionAt10": 0.5,
-          "relevantHits": 5
+          "ndcgAt10": 0.5390031312763821,
+          "mrr": 1,
+          "precisionAt10": 0.7,
+          "relevantHits": 7
         }
       },
       {
@@ -42031,10 +42031,10 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.4690000933206748,
+          "ndcgAt10": 0.6193198671454698,
           "mrr": 1,
-          "precisionAt10": 0.3,
-          "relevantHits": 3
+          "precisionAt10": 0.5,
+          "relevantHits": 5
         }
       },
       {
@@ -42152,7 +42152,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.7788065869851872,
+          "ndcgAt10": 0.6489315753318465,
           "mrr": 1,
           "precisionAt10": 0.7,
           "relevantHits": 7
@@ -42278,7 +42278,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.5266128295913879,
+          "ndcgAt10": 0.3108658234453849,
           "mrr": 0.5,
           "precisionAt10": 0.6,
           "relevantHits": 6
@@ -42401,7 +42401,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.6851198693323691,
+          "ndcgAt10": 0.3108658234453849,
           "mrr": 0.5,
           "precisionAt10": 0.8,
           "relevantHits": 8
@@ -42524,7 +42524,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.6994739030813919,
+          "ndcgAt10": 0.41231449937143627,
           "mrr": 1,
           "precisionAt10": 0.6,
           "relevantHits": 6
@@ -42647,7 +42647,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.7846170207230129,
+          "ndcgAt10": 0.7183627972686238,
           "mrr": 1,
           "precisionAt10": 0.7,
           "relevantHits": 7
@@ -42769,10 +42769,10 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.44173955623824723,
-          "mrr": 0.3333333333333333,
-          "precisionAt10": 0.5,
-          "relevantHits": 5
+          "ndcgAt10": 0.49747270012788325,
+          "mrr": 1,
+          "precisionAt10": 1,
+          "relevantHits": 10
         }
       },
       {
@@ -42892,10 +42892,10 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.44173955623824723,
-          "mrr": 0.3333333333333333,
-          "precisionAt10": 0.5,
-          "relevantHits": 5
+          "ndcgAt10": 0.5008655546918772,
+          "mrr": 1,
+          "precisionAt10": 0.8,
+          "relevantHits": 8
         }
       },
       {
@@ -43149,7 +43149,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 1,
+          "ndcgAt10": 0.4034698846650846,
           "mrr": 1,
           "precisionAt10": 1,
           "relevantHits": 10
@@ -43283,10 +43283,10 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.4288398090337664,
-          "mrr": 0.5,
-          "precisionAt10": 0.4,
-          "relevantHits": 4
+          "ndcgAt10": 0.6511857558395008,
+          "mrr": 1,
+          "precisionAt10": 1,
+          "relevantHits": 10
         }
       },
       {
@@ -43421,7 +43421,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 1,
+          "ndcgAt10": 0.4329261794091841,
           "mrr": 1,
           "precisionAt10": 1,
           "relevantHits": 10
@@ -43552,7 +43552,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.727329844310522,
+          "ndcgAt10": 0.3391602052736161,
           "mrr": 1,
           "precisionAt10": 0.6,
           "relevantHits": 6
@@ -43680,7 +43680,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 1,
+          "ndcgAt10": 0.4034698846650846,
           "mrr": 1,
           "precisionAt10": 1,
           "relevantHits": 10
@@ -43813,7 +43813,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.6898286563534621,
+          "ndcgAt10": 0.3391602052736161,
           "mrr": 1,
           "precisionAt10": 0.6,
           "relevantHits": 6
@@ -43949,7 +43949,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.866947989864271,
+          "ndcgAt10": 0.3391602052736161,
           "mrr": 1,
           "precisionAt10": 0.8,
           "relevantHits": 8
@@ -44080,10 +44080,10 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.47842151728792726,
+          "ndcgAt10": 0.569962852592349,
           "mrr": 1,
-          "precisionAt10": 0.4,
-          "relevantHits": 4
+          "precisionAt10": 1,
+          "relevantHits": 10
         }
       },
       {
@@ -44212,7 +44212,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.727329844310522,
+          "ndcgAt10": 0.3391602052736161,
           "mrr": 1,
           "precisionAt10": 0.6,
           "relevantHits": 6
@@ -44346,7 +44346,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.7753366239771086,
+          "ndcgAt10": 0.3391602052736161,
           "mrr": 1,
           "precisionAt10": 0.7,
           "relevantHits": 7
@@ -44483,7 +44483,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.7125523635307982,
+          "ndcgAt10": 0.6274092458891772,
           "mrr": 1,
           "precisionAt10": 0.6,
           "relevantHits": 6
@@ -44606,7 +44606,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.7948833326720564,
+          "ndcgAt10": 0.3091941646995599,
           "mrr": 1,
           "precisionAt10": 0.8,
           "relevantHits": 8
@@ -44709,7 +44709,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.727329844310522,
+          "ndcgAt10": 0.5541432109622958,
           "mrr": 1,
           "precisionAt10": 0.8571428571428571,
           "relevantHits": 6
@@ -44833,7 +44833,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.5801476231864474,
+          "ndcgAt10": 0.2984900352767555,
           "mrr": 1,
           "precisionAt10": 0.5,
           "relevantHits": 5
@@ -44958,10 +44958,10 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.49276192198755814,
+          "ndcgAt10": 0.7222954974312066,
           "mrr": 1,
-          "precisionAt10": 0.5,
-          "relevantHits": 5
+          "precisionAt10": 1,
+          "relevantHits": 10
         }
       },
       {
@@ -45082,10 +45082,10 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.4690000933206748,
+          "ndcgAt10": 0.5388856921828065,
           "mrr": 1,
-          "precisionAt10": 0.3,
-          "relevantHits": 3
+          "precisionAt10": 0.5,
+          "relevantHits": 5
         }
       },
       {
@@ -45212,7 +45212,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.7799082337019199,
+          "ndcgAt10": 0.23922526118912793,
           "mrr": 0.5,
           "precisionAt10": 0.9,
           "relevantHits": 9
@@ -45357,10 +45357,10 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.4315420454124844,
+          "ndcgAt10": 0.8141829732638891,
           "mrr": 1,
-          "precisionAt10": 0.4,
-          "relevantHits": 4
+          "precisionAt10": 0.9,
+          "relevantHits": 9
         }
       },
       {
@@ -45480,10 +45480,10 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.4115325995630326,
-          "mrr": 0.5,
-          "precisionAt10": 0.5,
-          "relevantHits": 5
+          "ndcgAt10": 0.7917267193679839,
+          "mrr": 1,
+          "precisionAt10": 0.9,
+          "relevantHits": 9
         }
       },
       {
@@ -45603,7 +45603,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.7917267193679839,
+          "ndcgAt10": 0.6371523797895856,
           "mrr": 1,
           "precisionAt10": 0.7,
           "relevantHits": 7
@@ -45726,7 +45726,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.5964984284535195,
+          "ndcgAt10": 0.23365080824310533,
           "mrr": 0.5,
           "precisionAt10": 0.7,
           "relevantHits": 7
@@ -45849,7 +45849,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.5199967979955745,
+          "ndcgAt10": 0.27487633291429087,
           "mrr": 1,
           "precisionAt10": 0.4,
           "relevantHits": 4
@@ -45972,7 +45972,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.741670249010153,
+          "ndcgAt10": 0.38334277998463445,
           "mrr": 1,
           "precisionAt10": 0.7,
           "relevantHits": 7
@@ -46225,7 +46225,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.793584067764911,
+          "ndcgAt10": 0.6300426811446146,
           "mrr": 1,
           "precisionAt10": 0.7,
           "relevantHits": 7
@@ -46348,7 +46348,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.532877640254568,
+          "ndcgAt10": 0.37852427843772213,
           "mrr": 0.5,
           "precisionAt10": 0.6,
           "relevantHits": 6
@@ -46474,7 +46474,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.6500332220485792,
+          "ndcgAt10": 0.29178833734520576,
           "mrr": 0.5,
           "precisionAt10": 0.7,
           "relevantHits": 7
@@ -46596,7 +46596,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.6489315753318465,
+          "ndcgAt10": 0.3903800499921017,
           "mrr": 1,
           "precisionAt10": 0.5,
           "relevantHits": 5
@@ -46721,7 +46721,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.7059054020403313,
+          "ndcgAt10": 0.4599715079731103,
           "mrr": 1,
           "precisionAt10": 0.6,
           "relevantHits": 6
@@ -46845,7 +46845,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.727329844310522,
+          "ndcgAt10": 0.4703652827859579,
           "mrr": 1,
           "precisionAt10": 0.6,
           "relevantHits": 6
@@ -46968,7 +46968,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.800693766409882,
+          "ndcgAt10": 0.5087403079104241,
           "mrr": 1,
           "precisionAt10": 0.7,
           "relevantHits": 7
@@ -47092,7 +47092,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.6489315753318465,
+          "ndcgAt10": 0.3903800499921017,
           "mrr": 1,
           "precisionAt10": 0.5,
           "relevantHits": 5
@@ -47217,7 +47217,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.9216017310213247,
+          "ndcgAt10": 0.6661998717660157,
           "mrr": 1,
           "precisionAt10": 0.9,
           "relevantHits": 9
@@ -47340,7 +47340,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.772837825180752,
+          "ndcgAt10": 0.6855770453286433,
           "mrr": 1,
           "precisionAt10": 0.7,
           "relevantHits": 7
@@ -47464,10 +47464,10 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.4885468020156227,
+          "ndcgAt10": 0.6730234638881231,
           "mrr": 1,
-          "precisionAt10": 0.4,
-          "relevantHits": 4
+          "precisionAt10": 0.6,
+          "relevantHits": 6
         }
       },
       {
@@ -47594,7 +47594,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.5263304097820353,
+          "ndcgAt10": 0.6364391809889587,
           "mrr": 1,
           "precisionAt10": 0.5,
           "relevantHits": 5
@@ -47724,7 +47724,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.5337225282363589,
+          "ndcgAt10": 0.6871475159848289,
           "mrr": 0.5,
           "precisionAt10": 0.6,
           "relevantHits": 6
@@ -47854,7 +47854,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.5743371894486219,
+          "ndcgAt10": 0.7928654229965442,
           "mrr": 1,
           "precisionAt10": 0.5,
           "relevantHits": 5
@@ -47984,7 +47984,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.7967610662472993,
+          "ndcgAt10": 0.7653606369886217,
           "mrr": 1,
           "precisionAt10": 0.7,
           "relevantHits": 7
@@ -48114,7 +48114,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.5711601909662336,
+          "ndcgAt10": 0.7844801364718913,
           "mrr": 1,
           "precisionAt10": 0.6,
           "relevantHits": 6
@@ -48244,7 +48244,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.7702043899253147,
+          "ndcgAt10": 0.9010126104210695,
           "mrr": 1,
           "precisionAt10": 0.7,
           "relevantHits": 7
@@ -48374,7 +48374,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.5711601909662336,
+          "ndcgAt10": 0.7928654229965442,
           "mrr": 1,
           "precisionAt10": 0.6,
           "relevantHits": 6
@@ -48504,7 +48504,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.772837825180752,
+          "ndcgAt10": 0.6816587806335841,
           "mrr": 1,
           "precisionAt10": 0.7,
           "relevantHits": 7
@@ -48634,7 +48634,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.9305687780632227,
+          "ndcgAt10": 0.843706044175124,
           "mrr": 1,
           "precisionAt10": 0.9,
           "relevantHits": 9
@@ -48767,10 +48767,10 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.42520843362602373,
+          "ndcgAt10": 0.8687949224876582,
           "mrr": 1,
-          "precisionAt10": 0.3,
-          "relevantHits": 3
+          "precisionAt10": 0.7,
+          "relevantHits": 7
         }
       },
       {
@@ -48902,7 +48902,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 1,
+          "ndcgAt10": 0.5471607238743422,
           "mrr": 1,
           "precisionAt10": 1,
           "relevantHits": 10
@@ -49036,7 +49036,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 1,
+          "ndcgAt10": 0.4483039899025303,
           "mrr": 1,
           "precisionAt10": 1,
           "relevantHits": 10
@@ -49172,7 +49172,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 1,
+          "ndcgAt10": 0.45224633769702605,
           "mrr": 1,
           "precisionAt10": 1,
           "relevantHits": 10
@@ -49306,7 +49306,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.866947989864271,
+          "ndcgAt10": 0.5310500112078503,
           "mrr": 1,
           "precisionAt10": 0.8,
           "relevantHits": 8
@@ -49420,10 +49420,10 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.4690000933206748,
+          "ndcgAt10": 0.5388856921828065,
           "mrr": 1,
-          "precisionAt10": 0.375,
-          "relevantHits": 3
+          "precisionAt10": 0.625,
+          "relevantHits": 5
         }
       },
       {
@@ -49554,7 +49554,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 1,
+          "ndcgAt10": 0.38121301394452073,
           "mrr": 1,
           "precisionAt10": 1,
           "relevantHits": 10
@@ -49688,7 +49688,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.9363792118010483,
+          "ndcgAt10": 0.4483039899025303,
           "mrr": 1,
           "precisionAt10": 0.9,
           "relevantHits": 9
@@ -49822,7 +49822,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 1,
+          "ndcgAt10": 0.38121301394452073,
           "mrr": 1,
           "precisionAt10": 1,
           "relevantHits": 10
@@ -49951,7 +49951,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.7534494445524138,
+          "ndcgAt10": 0.38121301394452073,
           "mrr": 1,
           "precisionAt10": 0.7,
           "relevantHits": 7
@@ -50083,7 +50083,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.9363792118010483,
+          "ndcgAt10": 0.38121301394452073,
           "mrr": 1,
           "precisionAt10": 0.9,
           "relevantHits": 9
@@ -50216,7 +50216,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 1,
+          "ndcgAt10": 0.32908604348504067,
           "mrr": 1,
           "precisionAt10": 1,
           "relevantHits": 10
@@ -50349,7 +50349,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 1,
+          "ndcgAt10": 0.488675120609937,
           "mrr": 1,
           "precisionAt10": 1,
           "relevantHits": 10
@@ -50482,7 +50482,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 1,
+          "ndcgAt10": 0.49684601414843915,
           "mrr": 1,
           "precisionAt10": 1,
           "relevantHits": 10
@@ -50615,7 +50615,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 1,
+          "ndcgAt10": 0.5390031312763821,
           "mrr": 1,
           "precisionAt10": 1,
           "relevantHits": 10
@@ -50748,7 +50748,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 1,
+          "ndcgAt10": 0.41253177989255346,
           "mrr": 1,
           "precisionAt10": 1,
           "relevantHits": 10
@@ -50884,7 +50884,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 1,
+          "ndcgAt10": 0.6172839611614819,
           "mrr": 1,
           "precisionAt10": 1,
           "relevantHits": 10
@@ -51017,7 +51017,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 1,
+          "ndcgAt10": 0.3430427114200248,
           "mrr": 1,
           "precisionAt10": 1,
           "relevantHits": 10
@@ -51150,7 +51150,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 1,
+          "ndcgAt10": 0.41253177989255346,
           "mrr": 1,
           "precisionAt10": 1,
           "relevantHits": 10
@@ -51283,7 +51283,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 1,
+          "ndcgAt10": 0.32908604348504067,
           "mrr": 1,
           "precisionAt10": 1,
           "relevantHits": 10
@@ -51415,7 +51415,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 1,
+          "ndcgAt10": 0.5901779130901621,
           "mrr": 1,
           "precisionAt10": 1,
           "relevantHits": 10
@@ -51545,10 +51545,10 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.42836504693009625,
+          "ndcgAt10": 0.6300426811446146,
           "mrr": 1,
-          "precisionAt10": 0.4,
-          "relevantHits": 4
+          "precisionAt10": 0.9,
+          "relevantHits": 9
         }
       },
       {
@@ -51659,7 +51659,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.7967610662472993,
+          "ndcgAt10": 0.544724962953007,
           "mrr": 1,
           "precisionAt10": 0.875,
           "relevantHits": 7
@@ -51773,7 +51773,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.6325414799409712,
+          "ndcgAt10": 0.6105858728157117,
           "mrr": 1,
           "precisionAt10": 0.625,
           "relevantHits": 5
@@ -51887,7 +51887,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.6332196796270029,
+          "ndcgAt10": 0.4104227729118601,
           "mrr": 1,
           "precisionAt10": 0.625,
           "relevantHits": 5
@@ -52008,7 +52008,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.6601585067762746,
+          "ndcgAt10": 0.38334277998463445,
           "mrr": 1,
           "precisionAt10": 0.6,
           "relevantHits": 6
@@ -52138,7 +52138,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.6371523797895856,
+          "ndcgAt10": 0.41462267409828063,
           "mrr": 1,
           "precisionAt10": 0.5,
           "relevantHits": 5
@@ -52245,7 +52245,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.5637884576902256,
+          "ndcgAt10": 0.3932591258696538,
           "mrr": 1,
           "precisionAt10": 0.5714285714285714,
           "relevantHits": 4
@@ -52359,7 +52359,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.7222954974312066,
+          "ndcgAt10": 0.45973079002057343,
           "mrr": 1,
           "precisionAt10": 0.75,
           "relevantHits": 6
@@ -52492,7 +52492,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 1,
+          "ndcgAt10": 0.27487633291429087,
           "mrr": 1,
           "precisionAt10": 1,
           "relevantHits": 10
@@ -52614,7 +52614,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.6489315753318465,
+          "ndcgAt10": 0.30260241349881345,
           "mrr": 1,
           "precisionAt10": 0.5,
           "relevantHits": 5
@@ -52728,7 +52728,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.7917267193679839,
+          "ndcgAt10": 0.521844871212202,
           "mrr": 1,
           "precisionAt10": 0.875,
           "relevantHits": 7
@@ -52842,7 +52842,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.8701249883466593,
+          "ndcgAt10": 0.5146417545924166,
           "mrr": 1,
           "precisionAt10": 1,
           "relevantHits": 8
@@ -52971,7 +52971,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 1,
+          "ndcgAt10": 0.5836175861945262,
           "mrr": 1,
           "precisionAt10": 1,
           "relevantHits": 10
@@ -53100,7 +53100,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.8454256604216017,
+          "ndcgAt10": 0.3932591258696538,
           "mrr": 1,
           "precisionAt10": 0.8,
           "relevantHits": 8
@@ -53229,7 +53229,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 1,
+          "ndcgAt10": 0.545155778742082,
           "mrr": 1,
           "precisionAt10": 1,
           "relevantHits": 10
@@ -53315,7 +53315,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.6489315753318465,
+          "ndcgAt10": 0.8104616303452685,
           "mrr": 1,
           "precisionAt10": 1,
           "relevantHits": 5
@@ -53409,7 +53409,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.727329844310522,
+          "ndcgAt10": 0.8020378746650065,
           "mrr": 1,
           "precisionAt10": 1,
           "relevantHits": 6
@@ -53510,7 +53510,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.5637884576902256,
+          "ndcgAt10": 0.6366824387328317,
           "mrr": 1,
           "precisionAt10": 0.5714285714285714,
           "relevantHits": 4
@@ -53632,7 +53632,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.6489315753318465,
+          "ndcgAt10": 0.8104616303452685,
           "mrr": 1,
           "precisionAt10": 0.5,
           "relevantHits": 5
@@ -53754,7 +53754,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.727329844310522,
+          "ndcgAt10": 0.8020378746650065,
           "mrr": 1,
           "precisionAt10": 0.6,
           "relevantHits": 6
@@ -53840,10 +53840,10 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.4690000933206748,
+          "ndcgAt10": 0.7457912185292983,
           "mrr": 1,
-          "precisionAt10": 0.6,
-          "relevantHits": 3
+          "precisionAt10": 1,
+          "relevantHits": 5
         }
       },
       {
@@ -53926,10 +53926,10 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.4690000933206748,
+          "ndcgAt10": 0.7012899792965542,
           "mrr": 1,
-          "precisionAt10": 0.6,
-          "relevantHits": 3
+          "precisionAt10": 1,
+          "relevantHits": 5
         }
       },
       {
@@ -54012,7 +54012,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.6489315753318465,
+          "ndcgAt10": 0.8104616303452685,
           "mrr": 1,
           "precisionAt10": 1,
           "relevantHits": 5
@@ -54141,7 +54141,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.8572048559638628,
+          "ndcgAt10": 0.644824486427155,
           "mrr": 1,
           "precisionAt10": 0.8,
           "relevantHits": 8
@@ -54270,7 +54270,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 1,
+          "ndcgAt10": 0.5440450242764592,
           "mrr": 1,
           "precisionAt10": 1,
           "relevantHits": 10
@@ -54397,7 +54397,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 1,
+          "ndcgAt10": 0.3936948167222715,
           "mrr": 1,
           "precisionAt10": 1,
           "relevantHits": 10
@@ -54524,7 +54524,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.7909506325094737,
+          "ndcgAt10": 0.5087403079104241,
           "mrr": 1,
           "precisionAt10": 0.7,
           "relevantHits": 7
@@ -54658,7 +54658,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.800693766409882,
+          "ndcgAt10": 0.4539036202482202,
           "mrr": 1,
           "precisionAt10": 0.7,
           "relevantHits": 7
@@ -54782,10 +54782,10 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.48882922182497546,
+          "ndcgAt10": 0.6154807236740877,
           "mrr": 1,
-          "precisionAt10": 0.4,
-          "relevantHits": 4
+          "precisionAt10": 0.7,
+          "relevantHits": 7
         }
       },
       {
@@ -54904,7 +54904,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.7125523635307982,
+          "ndcgAt10": 0.6020941629041773,
           "mrr": 1,
           "precisionAt10": 0.6,
           "relevantHits": 6
@@ -55028,7 +55028,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.6489315753318465,
+          "ndcgAt10": 0.4935232796777481,
           "mrr": 1,
           "precisionAt10": 0.5,
           "relevantHits": 5
@@ -55162,7 +55162,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.9052116356304493,
+          "ndcgAt10": 0.41253177989255346,
           "mrr": 1,
           "precisionAt10": 0.9,
           "relevantHits": 9
@@ -55295,7 +55295,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 1,
+          "ndcgAt10": 0.5857421563596757,
           "mrr": 1,
           "precisionAt10": 1,
           "relevantHits": 10
@@ -55429,7 +55429,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.866947989864271,
+          "ndcgAt10": 0.5423640154200349,
           "mrr": 1,
           "precisionAt10": 0.8,
           "relevantHits": 8
@@ -55563,7 +55563,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.9052116356304493,
+          "ndcgAt10": 0.3372569370235428,
           "mrr": 1,
           "precisionAt10": 0.9,
           "relevantHits": 9
@@ -55697,7 +55697,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.8572048559638628,
+          "ndcgAt10": 0.7094198757978375,
           "mrr": 1,
           "precisionAt10": 0.8,
           "relevantHits": 8
@@ -55832,7 +55832,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 1,
+          "ndcgAt10": 0.5264282969545138,
           "mrr": 1,
           "precisionAt10": 1,
           "relevantHits": 10
@@ -55965,7 +55965,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.696162268139923,
+          "ndcgAt10": 0.6651992357924431,
           "mrr": 1,
           "precisionAt10": 0.6,
           "relevantHits": 6
@@ -56098,7 +56098,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.8521705090845474,
+          "ndcgAt10": 0.6457816194690372,
           "mrr": 1,
           "precisionAt10": 0.8,
           "relevantHits": 8
@@ -56184,10 +56184,10 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.3340514446642156,
-          "mrr": 0.5,
-          "precisionAt10": 0.6,
-          "relevantHits": 3
+          "ndcgAt10": 0.591793585310856,
+          "mrr": 1,
+          "precisionAt10": 1,
+          "relevantHits": 5
         }
       },
       {
@@ -56306,10 +56306,10 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.44821456061271264,
-          "mrr": 0.5,
-          "precisionAt10": 0.5,
-          "relevantHits": 5
+          "ndcgAt10": 0.6193198671454698,
+          "mrr": 1,
+          "precisionAt10": 0.8,
+          "relevantHits": 8
         }
       },
       {
@@ -56429,10 +56429,10 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.5388856921828065,
+          "ndcgAt10": 0.6930221935231562,
           "mrr": 1,
-          "precisionAt10": 0.4,
-          "relevantHits": 4
+          "precisionAt10": 0.5,
+          "relevantHits": 5
         }
       },
       {
@@ -56551,10 +56551,10 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.4458567890377042,
-          "mrr": 0.25,
-          "precisionAt10": 0.6,
-          "relevantHits": 6
+          "ndcgAt10": 0.8630152897016883,
+          "mrr": 1,
+          "precisionAt10": 1,
+          "relevantHits": 10
         }
       },
       {
@@ -56686,7 +56686,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 1,
+          "ndcgAt10": 0.37941405415148566,
           "mrr": 1,
           "precisionAt10": 1,
           "relevantHits": 10
@@ -56808,7 +56808,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.5072380780124418,
+          "ndcgAt10": 0.21398626473452756,
           "mrr": 0.5,
           "precisionAt10": 0.5,
           "relevantHits": 5
@@ -56930,7 +56930,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.8572048559638628,
+          "ndcgAt10": 0.546216915252498,
           "mrr": 1,
           "precisionAt10": 0.8,
           "relevantHits": 8
@@ -57052,7 +57052,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.5305455297539706,
+          "ndcgAt10": 0.3422220729283414,
           "mrr": 0.5,
           "precisionAt10": 0.6,
           "relevantHits": 6
@@ -57174,10 +57174,10 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.4690000933206748,
+          "ndcgAt10": 0.6930221935231562,
           "mrr": 1,
-          "precisionAt10": 0.3,
-          "relevantHits": 3
+          "precisionAt10": 0.5,
+          "relevantHits": 5
         }
       },
       {
@@ -57296,7 +57296,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.5988751049740155,
+          "ndcgAt10": 0.6395647163312485,
           "mrr": 1,
           "precisionAt10": 0.5,
           "relevantHits": 5
@@ -57382,10 +57382,10 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.4690000933206748,
+          "ndcgAt10": 0.6930221935231562,
           "mrr": 1,
-          "precisionAt10": 0.6,
-          "relevantHits": 3
+          "precisionAt10": 1,
+          "relevantHits": 5
         }
       },
       {
@@ -57511,7 +57511,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.7951657524814092,
+          "ndcgAt10": 0.5413996682199069,
           "mrr": 1,
           "precisionAt10": 0.8,
           "relevantHits": 8
@@ -57637,10 +57637,10 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.4537425745411855,
+          "ndcgAt10": 0.639945385422766,
           "mrr": 1,
-          "precisionAt10": 0.3,
-          "relevantHits": 3
+          "precisionAt10": 0.7,
+          "relevantHits": 7
         }
       },
       {
@@ -57771,7 +57771,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 1,
+          "ndcgAt10": 0.5135312443624667,
           "mrr": 1,
           "precisionAt10": 1,
           "relevantHits": 10
@@ -57904,10 +57904,10 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.42914113378860647,
+          "ndcgAt10": 0.6366824387328317,
           "mrr": 1,
-          "precisionAt10": 0.4,
-          "relevantHits": 4
+          "precisionAt10": 1,
+          "relevantHits": 10
         }
       },
       {
@@ -58026,7 +58026,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.5645252544249327,
+          "ndcgAt10": 0.5147714448836774,
           "mrr": 0.5,
           "precisionAt10": 0.6,
           "relevantHits": 6
@@ -58157,7 +58157,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 1,
+          "ndcgAt10": 0.7227265726449519,
           "mrr": 1,
           "precisionAt10": 1,
           "relevantHits": 10
@@ -58283,7 +58283,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.8899541168509599,
+          "ndcgAt10": 0.6105456988825855,
           "mrr": 1,
           "precisionAt10": 0.9,
           "relevantHits": 9
@@ -58415,7 +58415,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.9363792118010483,
+          "ndcgAt10": 0.6661998717660157,
           "mrr": 1,
           "precisionAt10": 0.9,
           "relevantHits": 9
@@ -58548,7 +58548,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 1,
+          "ndcgAt10": 0.5087403079104241,
           "mrr": 1,
           "precisionAt10": 1,
           "relevantHits": 10
@@ -58676,7 +58676,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.5384313152574521,
+          "ndcgAt10": 0.5531464700081437,
           "mrr": 1,
           "precisionAt10": 0.4,
           "relevantHits": 4
@@ -58806,7 +58806,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.7100226348397882,
+          "ndcgAt10": 0.4599715079731103,
           "mrr": 1,
           "precisionAt10": 0.7,
           "relevantHits": 7
@@ -58936,7 +58936,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.6851198693323691,
+          "ndcgAt10": 0.31608365985743925,
           "mrr": 0.5,
           "precisionAt10": 0.8,
           "relevantHits": 8
@@ -59062,7 +59062,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 1,
+          "ndcgAt10": 0.46927872602275644,
           "mrr": 1,
           "precisionAt10": 1,
           "relevantHits": 10
@@ -59187,7 +59187,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.7162874455029682,
+          "ndcgAt10": 0.38685280723454163,
           "mrr": 0.5,
           "precisionAt10": 0.8,
           "relevantHits": 8
@@ -59313,10 +59313,10 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.49276192198755814,
+          "ndcgAt10": 0.892210845475489,
           "mrr": 1,
-          "precisionAt10": 0.5,
-          "relevantHits": 5
+          "precisionAt10": 0.9,
+          "relevantHits": 9
         }
       },
       {
@@ -59438,7 +59438,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.7917267193679839,
+          "ndcgAt10": 0.46927872602275644,
           "mrr": 1,
           "precisionAt10": 0.7,
           "relevantHits": 7
@@ -59566,7 +59566,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 1,
+          "ndcgAt10": 0.7607566881222602,
           "mrr": 1,
           "precisionAt10": 1,
           "relevantHits": 10
@@ -59691,7 +59691,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 1,
+          "ndcgAt10": 0.46927872602275644,
           "mrr": 1,
           "precisionAt10": 1,
           "relevantHits": 10
@@ -59816,7 +59816,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.8482378089219645,
+          "ndcgAt10": 0.5773584151532217,
           "mrr": 1,
           "precisionAt10": 0.8,
           "relevantHits": 8
@@ -59939,7 +59939,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.6489315753318465,
+          "ndcgAt10": 0.46927872602275644,
           "mrr": 1,
           "precisionAt10": 0.5,
           "relevantHits": 5
@@ -60062,7 +60062,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.727329844310522,
+          "ndcgAt10": 0.6131471927654584,
           "mrr": 1,
           "precisionAt10": 0.6,
           "relevantHits": 6
@@ -60186,7 +60186,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.6015720654566381,
+          "ndcgAt10": 0.6131471927654584,
           "mrr": 1,
           "precisionAt10": 0.5,
           "relevantHits": 5
@@ -60309,7 +60309,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.8200685179888283,
+          "ndcgAt10": 0.7668091220635322,
           "mrr": 1,
           "precisionAt10": 0.8,
           "relevantHits": 8
@@ -60430,7 +60430,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.727329844310522,
+          "ndcgAt10": 0.8318724637288826,
           "mrr": 1,
           "precisionAt10": 0.6,
           "relevantHits": 6
@@ -60553,7 +60553,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.8318477135310893,
+          "ndcgAt10": 0.8539316501572937,
           "mrr": 1,
           "precisionAt10": 0.8,
           "relevantHits": 8
@@ -60676,10 +60676,10 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.40112489502598436,
-          "mrr": 0.25,
-          "precisionAt10": 0.5,
-          "relevantHits": 5
+          "ndcgAt10": 0.8687949224876582,
+          "mrr": 1,
+          "precisionAt10": 0.8,
+          "relevantHits": 8
         }
       },
       {
@@ -60819,10 +60819,10 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.4505655760587972,
+          "ndcgAt10": 0.5585075862632192,
           "mrr": 1,
-          "precisionAt10": 0.4,
-          "relevantHits": 4
+          "precisionAt10": 0.5,
+          "relevantHits": 5
         }
       },
       {
@@ -60942,7 +60942,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.5462574254588145,
+          "ndcgAt10": 0.312706129752478,
           "mrr": 0.3333333333333333,
           "precisionAt10": 0.7,
           "relevantHits": 7
@@ -61065,10 +61065,10 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.4288398090337664,
-          "mrr": 0.5,
-          "precisionAt10": 0.4,
-          "relevantHits": 4
+          "ndcgAt10": 0.8073022093567015,
+          "mrr": 1,
+          "precisionAt10": 0.9,
+          "relevantHits": 9
         }
       },
       {
@@ -61187,7 +61187,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.8200685179888283,
+          "ndcgAt10": 0.843537875344446,
           "mrr": 1,
           "precisionAt10": 0.8,
           "relevantHits": 8
@@ -61315,7 +61315,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.8611375561264454,
+          "ndcgAt10": 0.7087212693585175,
           "mrr": 1,
           "precisionAt10": 0.9,
           "relevantHits": 9
@@ -61438,7 +61438,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.6117952373568122,
+          "ndcgAt10": 0.46927872602275644,
           "mrr": 1,
           "precisionAt10": 0.5,
           "relevantHits": 5
@@ -61561,7 +61561,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.6489315753318465,
+          "ndcgAt10": 0.8318724637288826,
           "mrr": 1,
           "precisionAt10": 0.5,
           "relevantHits": 5
@@ -61685,7 +61685,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.7788065869851872,
+          "ndcgAt10": 0.8219345592466819,
           "mrr": 1,
           "precisionAt10": 0.7,
           "relevantHits": 7
@@ -61812,7 +61812,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.6086182388744239,
+          "ndcgAt10": 0.7977228895450266,
           "mrr": 1,
           "precisionAt10": 0.5,
           "relevantHits": 5
@@ -61942,7 +61942,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.5022037311331264,
+          "ndcgAt10": 0.38685280723454163,
           "mrr": 0.5,
           "precisionAt10": 0.5,
           "relevantHits": 5
@@ -62067,10 +62067,10 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.46001266110046096,
+          "ndcgAt10": 0.7637779542442368,
           "mrr": 1,
-          "precisionAt10": 0.4,
-          "relevantHits": 4
+          "precisionAt10": 0.7,
+          "relevantHits": 7
         }
       },
       {
@@ -62193,7 +62193,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.7917267193679839,
+          "ndcgAt10": 0.892210845475489,
           "mrr": 1,
           "precisionAt10": 0.7,
           "relevantHits": 7
@@ -62316,7 +62316,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.9266360779006401,
+          "ndcgAt10": 0.8508957228074242,
           "mrr": 1,
           "precisionAt10": 0.9,
           "relevantHits": 9
@@ -62445,7 +62445,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.7948833326720564,
+          "ndcgAt10": 0.6508205185601091,
           "mrr": 1,
           "precisionAt10": 0.8,
           "relevantHits": 8
@@ -62580,7 +62580,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 1,
+          "ndcgAt10": 0.5173633627401372,
           "mrr": 1,
           "precisionAt10": 1,
           "relevantHits": 10
@@ -62714,7 +62714,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.727329844310522,
+          "ndcgAt10": 0.5473983622993502,
           "mrr": 1,
           "precisionAt10": 0.6,
           "relevantHits": 6
@@ -62979,7 +62979,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 1,
+          "ndcgAt10": 0.42257499837058643,
           "mrr": 1,
           "precisionAt10": 1,
           "relevantHits": 10
@@ -63115,7 +63115,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.8899541168509599,
+          "ndcgAt10": 0.4537425745411855,
           "mrr": 1,
           "precisionAt10": 0.9,
           "relevantHits": 9
@@ -63249,7 +63249,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 1,
+          "ndcgAt10": 0.6105456988825855,
           "mrr": 1,
           "precisionAt10": 1,
           "relevantHits": 10
@@ -63381,7 +63381,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.5352543167750639,
+          "ndcgAt10": 0.46927872602275644,
           "mrr": 1,
           "precisionAt10": 0.4,
           "relevantHits": 4
@@ -63511,7 +63511,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.7059054020403313,
+          "ndcgAt10": 0.46927872602275644,
           "mrr": 1,
           "precisionAt10": 0.6,
           "relevantHits": 6
@@ -63644,7 +63644,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.9266360779006401,
+          "ndcgAt10": 0.5413996682199069,
           "mrr": 1,
           "precisionAt10": 0.9,
           "relevantHits": 9
@@ -63782,7 +63782,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.7670273914429264,
+          "ndcgAt10": 0.6131471927654584,
           "mrr": 1,
           "precisionAt10": 0.7,
           "relevantHits": 7
@@ -63920,7 +63920,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.6780494608112012,
+          "ndcgAt10": 0.6131471927654584,
           "mrr": 1,
           "precisionAt10": 0.6,
           "relevantHits": 6
@@ -64047,7 +64047,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.5884674004369673,
+          "ndcgAt10": 0.46927872602275644,
           "mrr": 1,
           "precisionAt10": 0.5,
           "relevantHits": 5
@@ -64180,7 +64180,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.8701249883466593,
+          "ndcgAt10": 0.6131471927654584,
           "mrr": 1,
           "precisionAt10": 0.8,
           "relevantHits": 8
@@ -64310,10 +64310,10 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.5352543167750639,
+          "ndcgAt10": 0.7868709706203587,
           "mrr": 1,
-          "precisionAt10": 0.4,
-          "relevantHits": 4
+          "precisionAt10": 0.6,
+          "relevantHits": 6
         }
       },
       {
@@ -64450,7 +64450,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.6530488081313035,
+          "ndcgAt10": 0.6131471927654584,
           "mrr": 1,
           "precisionAt10": 0.6,
           "relevantHits": 6
@@ -64530,10 +64530,10 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.4690000933206748,
+          "ndcgAt10": 0.7751482523375255,
           "mrr": 1,
-          "precisionAt10": 0.75,
-          "relevantHits": 3
+          "precisionAt10": 1,
+          "relevantHits": 4
         }
       },
       {
@@ -64662,7 +64662,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.5541432109622958,
+          "ndcgAt10": 0.46927872602275644,
           "mrr": 1,
           "precisionAt10": 0.4,
           "relevantHits": 4
@@ -64797,10 +64797,10 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.3589542101716347,
+          "ndcgAt10": 0.7012899792965542,
           "mrr": 1,
-          "precisionAt10": 0.2,
-          "relevantHits": 2
+          "precisionAt10": 0.5,
+          "relevantHits": 5
         }
       },
       {
@@ -64932,7 +64932,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.9216017310213247,
+          "ndcgAt10": 0.715696758318853,
           "mrr": 1,
           "precisionAt10": 0.9,
           "relevantHits": 9
@@ -65054,7 +65054,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.8389574121760602,
+          "ndcgAt10": 0.7618870795651185,
           "mrr": 1,
           "precisionAt10": 0.8,
           "relevantHits": 8
@@ -65178,7 +65178,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 1,
+          "ndcgAt10": 0.4103915680233244,
           "mrr": 1,
           "precisionAt10": 1,
           "relevantHits": 10
@@ -65303,7 +65303,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 1,
+          "ndcgAt10": 0.3936948167222715,
           "mrr": 1,
           "precisionAt10": 1,
           "relevantHits": 10
@@ -65427,7 +65427,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.9216017310213247,
+          "ndcgAt10": 0.4034698846650846,
           "mrr": 1,
           "precisionAt10": 0.9,
           "relevantHits": 9
@@ -65549,7 +65549,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.5075394027672818,
+          "ndcgAt10": 0.3391602052736161,
           "mrr": 1,
           "precisionAt10": 0.5,
           "relevantHits": 5
@@ -65671,7 +65671,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.7600791051976192,
+          "ndcgAt10": 0.4329261794091841,
           "mrr": 1,
           "precisionAt10": 0.7,
           "relevantHits": 7
@@ -65795,7 +65795,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.7222954974312066,
+          "ndcgAt10": 0.3391602052736161,
           "mrr": 1,
           "precisionAt10": 0.6,
           "relevantHits": 6
@@ -65918,7 +65918,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.6489315753318465,
+          "ndcgAt10": 0.3391602052736161,
           "mrr": 1,
           "precisionAt10": 0.5,
           "relevantHits": 5
@@ -66038,7 +66038,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.6489315753318465,
+          "ndcgAt10": 0.6930221935231562,
           "mrr": 1,
           "precisionAt10": 0.5,
           "relevantHits": 5
@@ -66162,7 +66162,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.727329844310522,
+          "ndcgAt10": 0.3391602052736161,
           "mrr": 1,
           "precisionAt10": 0.6,
           "relevantHits": 6
@@ -66286,7 +66286,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.5626475208496899,
+          "ndcgAt10": 0.2816249726597774,
           "mrr": 0.3333333333333333,
           "precisionAt10": 0.7,
           "relevantHits": 7
@@ -66411,7 +66411,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.7967610662472993,
+          "ndcgAt10": 0.3391602052736161,
           "mrr": 1,
           "precisionAt10": 0.7,
           "relevantHits": 7
@@ -66533,7 +66533,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.6489315753318465,
+          "ndcgAt10": 0.3391602052736161,
           "mrr": 1,
           "precisionAt10": 0.5,
           "relevantHits": 5
@@ -66656,7 +66656,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.5582604437617528,
+          "ndcgAt10": 0.4923263184550016,
           "mrr": 1,
           "precisionAt10": 0.5,
           "relevantHits": 5
@@ -66782,7 +66782,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.914856882358379,
+          "ndcgAt10": 0.4034698846650846,
           "mrr": 1,
           "precisionAt10": 0.9,
           "relevantHits": 9
@@ -66906,7 +66906,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.5653701424067237,
+          "ndcgAt10": 0.5399294342072939,
           "mrr": 1,
           "precisionAt10": 0.5,
           "relevantHits": 5
@@ -67029,7 +67029,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 1,
+          "ndcgAt10": 0.4103915680233244,
           "mrr": 1,
           "precisionAt10": 1,
           "relevantHits": 10
@@ -67156,7 +67156,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.727329844310522,
+          "ndcgAt10": 0.4329261794091841,
           "mrr": 1,
           "precisionAt10": 0.6,
           "relevantHits": 6
@@ -67282,7 +67282,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.9216017310213247,
+          "ndcgAt10": 0.693761356516045,
           "mrr": 1,
           "precisionAt10": 0.9,
           "relevantHits": 9
@@ -67407,7 +67407,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.8701249883466593,
+          "ndcgAt10": 0.4103915680233244,
           "mrr": 1,
           "precisionAt10": 0.8,
           "relevantHits": 8
@@ -67533,7 +67533,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.9305687780632227,
+          "ndcgAt10": 0.503500286393294,
           "mrr": 1,
           "precisionAt10": 0.9,
           "relevantHits": 9
@@ -67666,7 +67666,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.7564477297898766,
+          "ndcgAt10": 0.5435228269698195,
           "mrr": 1,
           "precisionAt10": 0.7,
           "relevantHits": 7
@@ -67796,7 +67796,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.5964984284535195,
+          "ndcgAt10": 0.3212446320893053,
           "mrr": 0.5,
           "precisionAt10": 0.7,
           "relevantHits": 7
@@ -67929,10 +67929,10 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.4115325995630326,
-          "mrr": 0.5,
-          "precisionAt10": 0.5,
-          "relevantHits": 5
+          "ndcgAt10": 0.7788065869851872,
+          "mrr": 1,
+          "precisionAt10": 0.9,
+          "relevantHits": 9
         }
       },
       {
@@ -68061,10 +68061,10 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.41388361500911724,
-          "mrr": 0.3333333333333333,
-          "precisionAt10": 0.5,
-          "relevantHits": 5
+          "ndcgAt10": 0.8455193252797258,
+          "mrr": 1,
+          "precisionAt10": 0.8,
+          "relevantHits": 8
         }
       },
       {
@@ -68196,7 +68196,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.7538142945344393,
+          "ndcgAt10": 0.6233173655322678,
           "mrr": 1,
           "precisionAt10": 0.7,
           "relevantHits": 7
@@ -68331,10 +68331,10 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.4800032020044255,
-          "mrr": 0.3333333333333333,
-          "precisionAt10": 0.6,
-          "relevantHits": 6
+          "ndcgAt10": 0.7859162856301584,
+          "mrr": 1,
+          "precisionAt10": 0.9,
+          "relevantHits": 9
         }
       },
       {
@@ -68461,10 +68461,10 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.44773452261294694,
-          "mrr": 0.5,
-          "precisionAt10": 0.5,
-          "relevantHits": 5
+          "ndcgAt10": 0.793584067764911,
+          "mrr": 1,
+          "precisionAt10": 0.8,
+          "relevantHits": 8
         }
       },
       {
@@ -68600,10 +68600,10 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.491526182307598,
-          "mrr": 0.5,
-          "precisionAt10": 0.5,
-          "relevantHits": 5
+          "ndcgAt10": 0.5919268187287083,
+          "mrr": 1,
+          "precisionAt10": 0.8,
+          "relevantHits": 8
         }
       },
       {
@@ -68732,7 +68732,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.6835381846158709,
+          "ndcgAt10": 0.4935232796777481,
           "mrr": 1,
           "precisionAt10": 0.6,
           "relevantHits": 6
@@ -68867,7 +68867,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 1,
+          "ndcgAt10": 0.4811665308236797,
           "mrr": 1,
           "precisionAt10": 1,
           "relevantHits": 10
@@ -68994,7 +68994,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.7967610662472993,
+          "ndcgAt10": 0.5306972923267992,
           "mrr": 1,
           "precisionAt10": 0.7,
           "relevantHits": 7
@@ -69129,10 +69129,10 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.33013764944712026,
+          "ndcgAt10": 0.8393141109129421,
           "mrr": 1,
-          "precisionAt10": 0.2,
-          "relevantHits": 2
+          "precisionAt10": 0.7,
+          "relevantHits": 7
         }
       },
       {
@@ -69256,7 +69256,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.5933607200949346,
+          "ndcgAt10": 0.4034698846650846,
           "mrr": 1,
           "precisionAt10": 0.5,
           "relevantHits": 5
@@ -69380,7 +69380,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.8701249883466593,
+          "ndcgAt10": 0.4791259392944885,
           "mrr": 1,
           "precisionAt10": 0.8,
           "relevantHits": 8
@@ -69506,7 +69506,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.727329844310522,
+          "ndcgAt10": 0.4935232796777481,
           "mrr": 1,
           "precisionAt10": 0.6,
           "relevantHits": 6
@@ -69632,7 +69632,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.8630152897016883,
+          "ndcgAt10": 0.3391602052736161,
           "mrr": 1,
           "precisionAt10": 0.8,
           "relevantHits": 8
@@ -69758,7 +69758,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.7859162856301584,
+          "ndcgAt10": 0.4034698846650846,
           "mrr": 1,
           "precisionAt10": 0.7,
           "relevantHits": 7
@@ -69883,10 +69883,10 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.4440973278132557,
+          "ndcgAt10": 0.6489315753318465,
           "mrr": 1,
-          "precisionAt10": 0.3,
-          "relevantHits": 3
+          "precisionAt10": 0.5,
+          "relevantHits": 5
         }
       },
       {
@@ -70008,7 +70008,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 1,
+          "ndcgAt10": 0.4034698846650846,
           "mrr": 1,
           "precisionAt10": 1,
           "relevantHits": 10
@@ -70134,10 +70134,10 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.44202197604759985,
-          "mrr": 0.5,
-          "precisionAt10": 0.5,
-          "relevantHits": 5
+          "ndcgAt10": 0.7457912185292983,
+          "mrr": 1,
+          "precisionAt10": 0.8,
+          "relevantHits": 8
         }
       },
       {
@@ -70258,7 +70258,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.6489315753318465,
+          "ndcgAt10": 0.647939623894138,
           "mrr": 1,
           "precisionAt10": 0.5,
           "relevantHits": 5
@@ -70384,7 +70384,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.7827392871477702,
+          "ndcgAt10": 0.43707943365237834,
           "mrr": 1,
           "precisionAt10": 0.8,
           "relevantHits": 8
@@ -70507,7 +70507,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.8611375561264454,
+          "ndcgAt10": 0.4539036202482202,
           "mrr": 1,
           "precisionAt10": 0.9,
           "relevantHits": 9
@@ -70628,10 +70628,10 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.4990267326507382,
-          "mrr": 0.3333333333333333,
-          "precisionAt10": 0.6,
-          "relevantHits": 6
+          "ndcgAt10": 0.6020941629041773,
+          "mrr": 1,
+          "precisionAt10": 0.8,
+          "relevantHits": 8
         }
       },
       {
@@ -70758,10 +70758,10 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.46474568322493615,
-          "mrr": 0.25,
-          "precisionAt10": 0.6,
-          "relevantHits": 6
+          "ndcgAt10": 0.6930221935231562,
+          "mrr": 1,
+          "precisionAt10": 0.9,
+          "relevantHits": 9
         }
       },
       {
@@ -70881,7 +70881,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.5779050396291792,
+          "ndcgAt10": 0.5205067333228022,
           "mrr": 1,
           "precisionAt10": 0.6,
           "relevantHits": 6
@@ -71004,7 +71004,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.5326208815196265,
+          "ndcgAt10": 0.5857421563596757,
           "mrr": 1,
           "precisionAt10": 0.4,
           "relevantHits": 4
@@ -71126,7 +71126,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.6489315753318465,
+          "ndcgAt10": 0.3903800499921017,
           "mrr": 1,
           "precisionAt10": 0.5,
           "relevantHits": 5
@@ -71249,7 +71249,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.8553475075669357,
+          "ndcgAt10": 0.7713707099946513,
           "mrr": 1,
           "precisionAt10": 0.8,
           "relevantHits": 8
@@ -71374,7 +71374,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.8415908474314976,
+          "ndcgAt10": 0.6368547259115425,
           "mrr": 1,
           "precisionAt10": 0.8,
           "relevantHits": 8
@@ -71497,7 +71497,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 1,
+          "ndcgAt10": 0.4103915680233244,
           "mrr": 1,
           "precisionAt10": 1,
           "relevantHits": 10
@@ -71623,7 +71623,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.6489315753318465,
+          "ndcgAt10": 0.3903800499921017,
           "mrr": 1,
           "precisionAt10": 0.5,
           "relevantHits": 5
@@ -71746,7 +71746,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.6489315753318465,
+          "ndcgAt10": 0.3903800499921017,
           "mrr": 1,
           "precisionAt10": 0.5,
           "relevantHits": 5
@@ -71868,10 +71868,10 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.48993086854170786,
-          "mrr": 0.5,
-          "precisionAt10": 0.6,
-          "relevantHits": 6
+          "ndcgAt10": 0.7041249493150387,
+          "mrr": 1,
+          "precisionAt10": 1,
+          "relevantHits": 10
         }
       },
       {
@@ -72001,7 +72001,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.6004311286161025,
+          "ndcgAt10": 0.2797643380184693,
           "mrr": 0.5,
           "precisionAt10": 0.7,
           "relevantHits": 7
@@ -72136,7 +72136,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.6489315753318465,
+          "ndcgAt10": 0.3903800499921017,
           "mrr": 1,
           "precisionAt10": 0.5,
           "relevantHits": 5
@@ -72272,7 +72272,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.5388856921828065,
+          "ndcgAt10": 0.3903800499921017,
           "mrr": 1,
           "precisionAt10": 0.4,
           "relevantHits": 4
@@ -72398,7 +72398,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.793584067764911,
+          "ndcgAt10": 0.49959580689988364,
           "mrr": 1,
           "precisionAt10": 0.7,
           "relevantHits": 7
@@ -72529,7 +72529,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 1,
+          "ndcgAt10": 0.41966500663677697,
           "mrr": 1,
           "precisionAt10": 1,
           "relevantHits": 10
@@ -72661,7 +72661,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.8701249883466593,
+          "ndcgAt10": 0.3903800499921017,
           "mrr": 1,
           "precisionAt10": 0.8,
           "relevantHits": 8
@@ -72794,7 +72794,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.866947989864271,
+          "ndcgAt10": 0.3903800499921017,
           "mrr": 1,
           "precisionAt10": 0.8,
           "relevantHits": 8
@@ -72926,7 +72926,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 1,
+          "ndcgAt10": 0.3980628465882808,
           "mrr": 1,
           "precisionAt10": 1,
           "relevantHits": 10
@@ -73049,7 +73049,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.6505132600483449,
+          "ndcgAt10": 0.5946976087835997,
           "mrr": 1,
           "precisionAt10": 0.6,
           "relevantHits": 6
@@ -73172,7 +73172,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.6489315753318465,
+          "ndcgAt10": 0.3391602052736161,
           "mrr": 1,
           "precisionAt10": 0.5,
           "relevantHits": 5
@@ -73295,7 +73295,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.9363792118010483,
+          "ndcgAt10": 0.49898059069985645,
           "mrr": 1,
           "precisionAt10": 0.9,
           "relevantHits": 9
@@ -73418,7 +73418,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.6581810421830975,
+          "ndcgAt10": 0.41966500663677697,
           "mrr": 1,
           "precisionAt10": 0.6,
           "relevantHits": 6
@@ -73533,7 +73533,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.6618313225363274,
+          "ndcgAt10": 0.4539036202482202,
           "mrr": 1,
           "precisionAt10": 0.6666666666666666,
           "relevantHits": 6
@@ -73657,7 +73657,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.727329844310522,
+          "ndcgAt10": 0.591176585485452,
           "mrr": 1,
           "precisionAt10": 0.6,
           "relevantHits": 6
@@ -73792,7 +73792,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.800693766409882,
+          "ndcgAt10": 0.41966500663677697,
           "mrr": 1,
           "precisionAt10": 0.7,
           "relevantHits": 7
@@ -73915,7 +73915,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.727329844310522,
+          "ndcgAt10": 0.4103915680233244,
           "mrr": 1,
           "precisionAt10": 0.6,
           "relevantHits": 6
@@ -74038,7 +74038,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.8200685179888283,
+          "ndcgAt10": 0.6291031399287498,
           "mrr": 1,
           "precisionAt10": 0.8,
           "relevantHits": 8
@@ -74162,7 +74162,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.5056427642465515,
+          "ndcgAt10": 0.40885093048316934,
           "mrr": 0.5,
           "precisionAt10": 0.6,
           "relevantHits": 6
@@ -74285,10 +74285,10 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.4115325995630326,
-          "mrr": 0.5,
-          "precisionAt10": 0.5,
-          "relevantHits": 5
+          "ndcgAt10": 0.6930221935231562,
+          "mrr": 1,
+          "precisionAt10": 0.9,
+          "relevantHits": 9
         }
       },
       {
@@ -74408,7 +74408,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.6489315753318465,
+          "ndcgAt10": 0.7457912185292983,
           "mrr": 1,
           "precisionAt10": 0.5,
           "relevantHits": 5
@@ -74531,7 +74531,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.9363792118010483,
+          "ndcgAt10": 0.3980628465882808,
           "mrr": 1,
           "precisionAt10": 0.9,
           "relevantHits": 9
@@ -74654,7 +74654,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.7222954974312066,
+          "ndcgAt10": 0.45221360703148816,
           "mrr": 1,
           "precisionAt10": 0.6,
           "relevantHits": 6
@@ -74804,7 +74804,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 1,
+          "ndcgAt10": 0.5546406709327603,
           "mrr": 1,
           "precisionAt10": 1,
           "relevantHits": 10
@@ -74934,7 +74934,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 1,
+          "ndcgAt10": 0.7192794512585614,
           "mrr": 1,
           "precisionAt10": 1,
           "relevantHits": 10
@@ -75083,7 +75083,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.9052116356304493,
+          "ndcgAt10": 0.6553462294121513,
           "mrr": 1,
           "precisionAt10": 0.9,
           "relevantHits": 9
@@ -75228,10 +75228,10 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.8512360941594274,
+          "ndcgAt10": 0.546216915252498,
           "mrr": 1,
-          "precisionAt10": 0.8,
-          "relevantHits": 8
+          "precisionAt10": 0.9,
+          "relevantHits": 9
         }
       },
       {
@@ -75375,7 +75375,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.5658245193320782,
+          "ndcgAt10": 0.3120255505658846,
           "mrr": 0.5,
           "precisionAt10": 0.6,
           "relevantHits": 6
@@ -75503,7 +75503,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.800693766409882,
+          "ndcgAt10": 0.6930221935231562,
           "mrr": 1,
           "precisionAt10": 0.7,
           "relevantHits": 7
@@ -75634,7 +75634,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.7721596254947203,
+          "ndcgAt10": 0.3391602052736161,
           "mrr": 1,
           "precisionAt10": 0.7,
           "relevantHits": 7
@@ -75758,10 +75758,10 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.4690000933206748,
+          "ndcgAt10": 0.6489315753318465,
           "mrr": 1,
-          "precisionAt10": 0.3,
-          "relevantHits": 3
+          "precisionAt10": 0.5,
+          "relevantHits": 5
         }
       },
       {
@@ -75887,7 +75887,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.5552448576790283,
+          "ndcgAt10": 0.21398626473452756,
           "mrr": 0.5,
           "precisionAt10": 0.6,
           "relevantHits": 6
@@ -76014,7 +76014,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.8318477135310893,
+          "ndcgAt10": 0.5857421563596757,
           "mrr": 1,
           "precisionAt10": 0.8,
           "relevantHits": 8
@@ -76148,7 +76148,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.5861163849908828,
+          "ndcgAt10": 0.5274541611612878,
           "mrr": 1,
           "precisionAt10": 0.5,
           "relevantHits": 5
@@ -76284,7 +76284,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.7529694065526482,
+          "ndcgAt10": 0.6410811757706056,
           "mrr": 1,
           "precisionAt10": 0.7,
           "relevantHits": 7
@@ -76420,7 +76420,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.5541432109622958,
+          "ndcgAt10": 0.4703652827859579,
           "mrr": 1,
           "precisionAt10": 0.4,
           "relevantHits": 4
@@ -76557,7 +76557,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.5847192329112588,
+          "ndcgAt10": 0.42903378661381625,
           "mrr": 0.5,
           "precisionAt10": 0.7,
           "relevantHits": 7
@@ -76688,7 +76688,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.8899541168509599,
+          "ndcgAt10": 0.5827974955243852,
           "mrr": 1,
           "precisionAt10": 0.9,
           "relevantHits": 9
@@ -76821,7 +76821,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 1,
+          "ndcgAt10": 0.3936948167222715,
           "mrr": 1,
           "precisionAt10": 1,
           "relevantHits": 10
@@ -76959,7 +76959,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 1,
+          "ndcgAt10": 0.4772656487866461,
           "mrr": 1,
           "precisionAt10": 1,
           "relevantHits": 10
@@ -77091,7 +77091,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 1,
+          "ndcgAt10": 0.644824486427155,
           "mrr": 1,
           "precisionAt10": 1,
           "relevantHits": 10
@@ -77224,7 +77224,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 1,
+          "ndcgAt10": 0.4103915680233244,
           "mrr": 1,
           "precisionAt10": 1,
           "relevantHits": 10
@@ -77359,7 +77359,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 1,
+          "ndcgAt10": 0.6238470455881188,
           "mrr": 1,
           "precisionAt10": 1,
           "relevantHits": 10
@@ -77492,7 +77492,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.8643145546088337,
+          "ndcgAt10": 0.8626199664389336,
           "mrr": 1,
           "precisionAt10": 0.8,
           "relevantHits": 8
@@ -77622,7 +77622,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.9305687780632227,
+          "ndcgAt10": 0.49684601414843915,
           "mrr": 1,
           "precisionAt10": 0.9,
           "relevantHits": 9
@@ -77757,7 +77757,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 1,
+          "ndcgAt10": 0.7183750273402227,
           "mrr": 1,
           "precisionAt10": 1,
           "relevantHits": 10
@@ -77892,7 +77892,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.7759944384848244,
+          "ndcgAt10": 0.5842273861585908,
           "mrr": 1,
           "precisionAt10": 0.8,
           "relevantHits": 8

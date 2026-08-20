@@ -12,6 +12,7 @@
 import * as fs from 'node:fs'
 import * as path from 'node:path'
 import type { EvalReport, EvalResult, AggregateRankingMetrics, LatencyPercentiles, QPSMetrics } from './types'
+import { computeNdcg } from './metrics'
 
 const EVAL_DIR = import.meta.dirname!
 const RESULTS_DIR = path.join(EVAL_DIR, 'results')
@@ -81,32 +82,32 @@ function aggregate(chunks: ChunkReport[]): EvalReport {
   const gs = JSON.parse(fs.readFileSync(path.join(EVAL_DIR, 'gold-standards.json'), 'utf-8'))
   let ndcgSum = 0, mrrSum = 0, precSum = 0, goldCount = 0
 
-  function dcg(relevances: number[]): number {
-    let s = 0
-    for (let i = 0; i < Math.min(relevances.length, 10); i++) s += relevances[i] / Math.log2(i + 2)
-    return s
-  }
-  const idealDcg10 = dcg(Array(10).fill(1))
-
   for (const r of allResults) {
     const gold = gs[r.query.id]
     if (!gold?.relevantDomains || gold.relevantDomains.length === 0) continue
 
-    const resultDomains = (r.response?.results || []).map((res: any) => {
-      try { return new URL(res.url).hostname.replace(/^www\./, '') } catch { return '' }
-    }).filter(Boolean)
-
-    const relevances = resultDomains.slice(0, 10).map((d: string) => {
-      for (const gd of gold.relevantDomains) {
-        if (d === gd || d.endsWith('.' + gd) || gd.endsWith('.' + gd)) return 1
+    // Use canonical NDCG from metrics.ts (S50 per-gold cap, dual-domain matching)
+    const poolResults = (r.response?.results || []) as any[]
+    const ndcg = computeNdcg(poolResults, gold.relevantDomains, 10)
+    const relevantHits = poolResults.slice(0, 10).filter((res: any) => {
+      const candidates: string[] = []
+      try { candidates.push(new URL(res.url).hostname.replace(/^www\./, '').toLowerCase()) } catch {}
+      if (res.domain) candidates.push(res.domain.toLowerCase().replace(/^www\./, ''))
+      return gold.relevantDomains.some((g: string) => candidates.some((d) => d === g || d.endsWith('.' + g)))
+    }).length
+    const mrr = (() => {
+      for (let i = 0; i < poolResults.length; i++) {
+        const res = poolResults[i]
+        const candidates: string[] = []
+        try { candidates.push(new URL(res.url).hostname.replace(/^www\./, '').toLowerCase()) } catch {}
+        if (res.domain) candidates.push(res.domain.toLowerCase().replace(/^www\./, ''))
+        if (gold.relevantDomains.some((g: string) => candidates.some((d) => d === g || d.endsWith('.' + g)))) {
+          return 1 / (i + 1)
+        }
       }
       return 0
-    })
-
-    const ndcg = idealDcg10 > 0 ? dcg(relevances) / idealDcg10 : 0
-    const relevantHits = relevances.filter((r: number) => r > 0).length
-    const mrr = relevances.findIndex((r: number) => r > 0) >= 0 ? 1 / (relevances.findIndex((r: number) => r > 0) + 1) : 0
-    const precision = relevantHits / Math.min(relevances.length, 10)
+    })()
+    const precision = relevantHits / Math.min(poolResults.length, 10)
 
     ndcgSum += ndcg
     mrrSum += mrr

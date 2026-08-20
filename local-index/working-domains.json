@@ -1,0 +1,77 @@
+{
+  "github.com": [
+    "https://github.com/facebook/react",
+    "https://github.com/vuejs/vue",
+    "https://github.com/angular/angular",
+    "https://github.com/sveltejs/svelte",
+    "https://github.com/vercel/next.js",
+    "https://github.com/nuxt/nuxt",
+    "https://github.com/lodash/lodash",
+    "https://github.com/axios/axios",
+    "https://github.com/colinhacks/zod",
+    "https://github.com/prisma/prisma",
+    "https://github.com/pmndrs/zustand",
+    "https://github.com/reduxjs/redux",
+    "https://github.com/vitejs/vite",
+    "https://github.com/webpack/webpack",
+    "https://github.com/evanw/esbuild",
+    "https://github.com/tensorflow/tensorflow",
+    "https://github.com/pytorch/pytorch",
+    "https://github.com/scikit-learn/scikit-learn",
+    "https://github.com/huggingface/transformers",
+    "https://github.com/langchain-ai/langchain",
+    "https://github.com/docker/compose",
+    "https://github.com/kubernetes/kubernetes",
+    "https://github.com/prometheus/prometheus",
+    "https://github.com/grafana/grafana",
+    "https://github.com/facebook/react-native",
+    "https://github.com/flutter/flutter",
+    "https://github.com/hashicorp/terraform",
+    "https://github.com/ansible/ansible",
+    "https://github.com/expressjs/express",
+    "https://github.com/fastify/fastify"
+  ],
+  "docs.python.org": [
+    "https://docs.python.org/3/tutorial/",
+    "https://docs.python.org/3/library/"
+  ],
+  "pypi.org": [
+    "https://pypi.org/project/requests/",
+    "https://pypi.org/project/numpy/",
+    "https://pypi.org/project/pandas/",
+    "https://pypi.org/project/django/",
+    "https://pypi.org/project/flask/",
+    "https://pypi.org/project/fastapi/"
+  ],
+  "techcrunch.com": [
+    "https://techcrunch.com/"
+  ],
+  "arstechnica.com": [
+    "https://arstechnica.com/"
+  ],
+  "www.theverge.com": [
+    "https://www.theverge.com/"
+  ],
+  "developers.cloudflare.com": [
+    "https://developers.cloudflare.com/workers/",
+    "https://developers.cloudflare.com/pages/"
+  ],
+  "aws.amazon.com": [
+    "https://aws.amazon.com/ec2/"
+  ],
+  "cloud.google.com": [
+    "https://cloud.google.com/docs"
+  ],
+  "cs50.harvard.edu": [
+    "https://cs50.harvard.edu/"
+  ],
+  "www.geeksforgeeks.org": [
+    "https://www.geeksforgeeks.org/"
+  ],
+  "www.w3schools.com": [
+    "https://www.w3schools.com/"
+  ],
+  "developer.mozilla.org": [
+    "https://developer.mozilla.org/en-US/docs/Web/JavaScript"
+  ]
+}

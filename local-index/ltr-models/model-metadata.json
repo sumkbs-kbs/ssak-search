@@ -1,0 +1,51 @@
+{
+  "version": "v2.0",
+  "trained_at": "2026-08-20 12:41:46",
+  "num_features": 32,
+  "feature_names": [
+    "q_len",
+    "q_terms",
+    "q_has_question",
+    "q_has_number",
+    "q_has_cjk",
+    "title_len",
+    "content_len",
+    "snippet_len",
+    "has_date",
+    "date_recency",
+    "has_images",
+    "title_overlap",
+    "content_overlap",
+    "snippet_overlap",
+    "title_exact_match",
+    "bm25_title",
+    "bm25_content",
+    "tfidf_avg",
+    "domain_authority",
+    "domain_age_proxy",
+    "is_major_domain",
+    "result_source",
+    "result_position",
+    "is_news_source",
+    "is_academic_source",
+    "query_type_num",
+    "is_news",
+    "is_finance",
+    "korean",
+    "chinese",
+    "user_visited",
+    "user_visits_norm"
+  ],
+  "training_stats": {
+    "total_samples": 2000,
+    "total_groups": 200,
+    "estimated_ndcg": 1.0
+  },
+  "lightgbm_params": {
+    "objective": "lambdarank",
+    "metric": "ndcg",
+    "learning_rate": 0.05,
+    "num_leaves": 31,
+    "num_boost_round": 150
+  }
+}

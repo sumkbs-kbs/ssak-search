@@ -1,7 +1,7 @@
 {
   "name": "ssak-search",
   "version": "2.0.0",
-  "description": "ssak-search — Tavily-compatible search engine API, no API keys required",
+  "description": "ssak-search \u2014 Tavily-compatible search engine API, no API keys required",
   "license": "MIT",
   "author": "Byungseok Kang <sumkbs@gmail.com>",
   "repository": {
@@ -43,6 +43,24 @@
     "verify:bindings": "npx tsx scripts/verify-do-binding.ts",
     "verify:index": "npx tsx scripts/verify-index.ts",
     "seed:index": "npx tsx scripts/seed-index.ts",
+    "local:setup": "bash scripts/setup-local-indexing.sh",
+    "local:index": "/Users/mr.k/miniforge3/envs/local-index/bin/python scripts/local-index.py",
+    "local:search": "/Users/mr.k/miniforge3/envs/local-index/bin/python scripts/local-search.py",
+    "local:stats": "/Users/mr.k/miniforge3/envs/local-index/bin/python scripts/local-index.py --stats",
+    "local:sync": "/Users/mr.k/miniforge3/envs/local-index/bin/python scripts/sync-to-cloudflare.py",
+    "local:index:all": "/Users/mr.k/miniforge3/envs/local-index/bin/python scripts/local-index.py --category=all --limit=200",
+    "local:v2:index": "/Users/mr.k/miniforge3/envs/local-index/bin/python scripts/local-index-v2.py",
+    "local:v2:search": "/Users/mr.k/miniforge3/envs/local-index/bin/python scripts/local-search-v2.py",
+    "local:v2:stats": "/Users/mr.k/miniforge3/envs/local-index/bin/python scripts/local-search-v2.py --stats",
+    "local:v2:index:all": "/Users/mr.k/miniforge3/envs/local-index/bin/python scripts/local-index-v2.py --category=all --limit=200",
+    "news:index": "/Users/mr.k/miniforge3/envs/local-index/bin/python scripts/news-rss-scheduler.py",
+    "news:index:dry": "/Users/mr.k/miniforge3/envs/local-index/bin/python scripts/news-rss-scheduler.py --dry-run",
+    "news:index:tech": "/Users/mr.k/miniforge3/envs/local-index/bin/python scripts/news-rss-scheduler.py --category tech --limit=15",
+    "news:index:kr": "/Users/mr.k/miniforge3/envs/local-index/bin/python scripts/news-rss-scheduler.py --category kr --limit=15",
+    "news:stats": "/Users/mr.k/miniforge3/envs/local-index/bin/python scripts/news-rss-scheduler.py --stats",
+    "news:cleanup": "/Users/mr.k/miniforge3/envs/local-index/bin/python scripts/news-rss-scheduler.py --cleanup 7",
+    "hybrid:search": "/Users/mr.k/miniforge3/envs/local-index/bin/python scripts/hybrid-search.py",
+    "hybrid:benchmark": "/Users/mr.k/miniforge3/envs/local-index/bin/python scripts/benchmark-hybrid.py",
     "eval": "npx tsx eval/index.ts",
     "eval:json": "npx tsx eval/index.ts --json",
     "eval:ci": "npx tsx eval/index.ts --ci --summary",
@@ -83,7 +101,8 @@
     "eval:self:json": "npx tsx eval/index-self.ts --json",
     "eval:self:save": "npx tsx eval/index-self.ts --save",
     "eval:self:ci": "npx tsx eval/index-self.ts --ci --summary",
-    "eval:self:tag": "npx tsx eval/index-self.ts --tag"
+    "eval:self:tag": "npx tsx eval/index-self.ts --tag",
+    "test:e2e": "vitest run --config vitest.e2e.config.ts"
   },
   "dependencies": {
     "@sentry/cloudflare": "^10.67.0",
@@ -108,7 +127,7 @@
     "typescript-eslint": "^8.65.0",
     "vite": "^8.1.4",
     "vitest": "^4.1.0",
-    "wrangler": "^4.110.0",
+    "wrangler": "^4.124.0",
     "yaml": "^2.9.0",
     "zod": "^4.4.3"
   }

@@ -26,7 +26,7 @@ import {
   logExperimentError,
 } from '../lib/experiments/ab-test'
 
-import { validateApiKeyWithTenant, checkClientRateLimit, getClientIp } from '../lib/auth'
+import { validateApiKeyAsync, checkClientRateLimit, getClientIp } from '../lib/auth'
 import { recordSearchRequest, recordSearchSubrequests, setMetricsEnv } from '../lib/metrics'
 import { auditAuthFailure, auditRateLimit, audit } from '../lib/audit'
 import { createAnswerTokenStream, generateAnswer, type AnswerStreamResult } from '../lib/answer'
@@ -111,8 +111,8 @@ searchRoute.use('/*', async (c, next) => {
     return c.json<ErrorResponse>({ detail: 'Request body too large (max 64KB)', code: 'payload_too_large' }, 413)
   }
 
-  // Multi-tenant API key validation
-  const authResult = validateApiKeyWithTenant(c.req.raw.headers, c.env.TENANTS_CONFIG, c.env.SEARCH_API_KEY, c.env)
+  // Multi-tenant API key validation (uses ApiKeyDO when available)
+  const authResult = await validateApiKeyAsync(c.req.raw.headers, c.env)
   if (!authResult.valid) {
     auditAuthFailure({
       reason: authResult.reason || 'Invalid or missing API key',
@@ -364,7 +364,7 @@ searchRoute.get('/', async (c) => {
   }
 
   const maxResultsParam = c.req.query('max_results') || c.req.query('limit')
-  const maxResults = maxResultsParam ? Math.min(Math.max(parseInt(maxResultsParam, 10) || 10, 1), 20) : 10
+  const maxResults = maxResultsParam ? Math.min(Math.max(parseInt(maxResultsParam, 10) || 15, 1), 20) : 15
 
   // Default to false — users want answers, not just link lists
   const includeAnswerParam = c.req.query('include_answer')
@@ -545,7 +545,7 @@ searchRoute.get('/stream', async (c) => {
   }
 
   const maxResultsParam = c.req.query('max_results') || c.req.query('limit')
-  const maxResults = maxResultsParam ? Math.min(Math.max(parseInt(maxResultsParam, 10) || 10, 1), 20) : 10
+  const maxResults = maxResultsParam ? Math.min(Math.max(parseInt(maxResultsParam, 10) || 15, 1), 20) : 15
 
   const { depth: streamDepth } = resolveSearchDepth(query, c.req.query('search_depth'), c.env)
 

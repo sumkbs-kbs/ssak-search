@@ -73,71 +73,73 @@ export class AllStrategy implements SearchStrategy {
     // Full plan: use overFetch (3x) for better ranking diversity
     const effectiveOverFetch = freePlan ? Math.max(Math.round(ctx.maxResults * 1.5), 15) : ctx.overFetch
 
-    // 0. Brave Search API (PRIMARY for non-Korean, official API, ToS-safe)
-    const braveTask = buildBraveTask(ctx)
-    if (braveTask) tasks.push(braveTask)
-
+    // ── Bing 4종 병렬 사용 (무료, 안정적) ──
+    // Bing은 가장 안정적인 무료 백엔드 (0% 에러율, 17K+ 요청)
+    // 4종 병렬로 검색 결과 다양성 + 커버리지 극대화
+    
+    // 1. Bing 메인 검색 (항상 실행)
+    tasks.push(buildBingTask(ctx))
+    
+    // 2. Bing-News (뉴스 쿼리 시)
+    if (ctx.isNews) {
+      tasks.push(buildBingNewsTask(ctx))
+    }
+    
+    // 3. Bing-Finance (금융 쿼리 시)
+    if (ctx.isFinance && !ctx.korean) {
+      tasks.push(buildBingFinanceTask(ctx))
+    }
+    
+    // 4. Bing-Cleaned (중국어 쿼리 시)
+    if (ctx.chinese) {
+      const cleanedQuery = cleanChineseQuery(ctx.query)
+      if (cleanedQuery !== ctx.query && cleanedQuery.length > 0) {
+        tasks.push({
+          name: 'bing-cleaned',
+          run: () =>
+            bingSearch(cleanedQuery, {
+              maxResults: effectiveOverFetch,
+              timeRange: ctx.bingTimeRange,
+              region: ctx.bingRegion,
+              env: ctx.env,
+            }),
+        })
+      }
+    }
+    
     // 0b. Naver search (PRIMARY for Korean queries)
     if (ctx.korean) {
       tasks.push(buildNaverTask(ctx))
     }
-
+    
     // 1. Stock Finance (Korean stocks) — Naver Finance API
     if (ctx.isFinance && ctx.korean) {
       tasks.push(buildKoreanStockTask(ctx, 5))
     }
-
-    // 1b. Bing / finance / news routing cascade
+    
+    // 1b. Yahoo Finance (금융 쿼리 시, 모든 플랜에서 활성화)
     if (ctx.isFinance && !ctx.korean) {
-      tasks.push(buildBingFinanceTask(ctx))
-      // Free plan: skip Yahoo Finance (saves 1 subrequest + CPU for JSON parse)
-      if (!freePlan) tasks.push(buildYahooFinanceTask(ctx, 5))
+      tasks.push(buildYahooFinanceTask(ctx, 5))
       tasks.push(buildGoogleNewsRssTask(ctx, 9))
     } else if (ctx.isFinance && ctx.korean) {
-      // Free plan: skip Yahoo Finance for korean finance (naver finance is primary)
-      if (!freePlan) tasks.push(buildYahooFinanceTask(ctx, 5))
-      tasks.push(buildBingTask(ctx))
+      tasks.push(buildYahooFinanceTask(ctx, 5))
     } else if (ctx.isNews) {
-      tasks.push(buildBingNewsTask(ctx))
-      tasks.push(buildBingTask(ctx))
       // Korean news queries: Naver NEWS backend guarantees real n.news.naver.com
       if (ctx.korean) tasks.push(buildNaverNewsTask(ctx))
-      // News RSS feeds — keep essential ones for all plans
+      // News RSS feeds — 모든 플랜에서 활성화 (무료)
       tasks.push(buildBingNewsRssTask(ctx))
       tasks.push(buildGoogleNewsRssTask(ctx))
-      // Free plan: skip news outlet augmentation (saves subrequest + CPU)
-      if (!freePlan) {
-        tasks.push(buildNewsOutletTask(ctx))
-        tasks.push(buildNewsHubTask(ctx))
-      }
-    } else {
-      tasks.push(buildBingTask(ctx))
-
-      // Chinese query cleaning — second Bing call with cleaned query
-      if (ctx.chinese) {
-        const cleanedQuery = cleanChineseQuery(ctx.query)
-        if (cleanedQuery !== ctx.query && cleanedQuery.length > 0) {
-          tasks.push({
-            name: 'bing-cleaned',
-            run: () =>
-              bingSearch(cleanedQuery, {
-                maxResults: effectiveOverFetch,
-                timeRange: ctx.bingTimeRange,
-                region: ctx.bingRegion,
-                env: ctx.env,
-              }),
-          })
-        }
-
-        // Free plan: skip CSDN for zh general (saves 1 subrequest)
-        if (!freePlan) {
-          tasks.push(buildCsdnTask(ctx, 3))
-        }
-
-        // S104: zh旅行·커뮤니티 gold site:-라우팅 — keep for all plans (high value)
-        if (isZhTravelCommunityIntent(ctx.query)) {
-          tasks.push(buildZhTravelCommunityTask(ctx))
-        }
+      // News outlet augmentation — 무료 플랜에서도 활성화
+      tasks.push(buildNewsOutletTask(ctx))
+      tasks.push(buildNewsHubTask(ctx))
+    }
+    
+    // Chinese query: CSDN 추가 (무료 플랜에서도 활성화)
+    if (ctx.chinese) {
+      tasks.push(buildCsdnTask(ctx, 3))
+      // S104: zh旅行·커뮤니티 gold site:-라우팅
+      if (isZhTravelCommunityIntent(ctx.query)) {
+        tasks.push(buildZhTravelCommunityTask(ctx))
       }
     }
 
@@ -148,33 +150,27 @@ export class AllStrategy implements SearchStrategy {
       tasks.push(buildWikipediaTask(ctx, wikiMax, wikiTimeout))
     }
 
-    // 3. GitHub (technical) — Free plan: reduce maxResults from 8→5
+    // ── GitHub (기술 쿼리) ──
     if (ctx.sources.useGitHub) {
-      const githubMax = freePlan ? 5 : 8
+      const githubMax = 5
       tasks.push(buildGithubTask(ctx, githubMax))
 
-      // S19: GitHub Issues — keep for all plans (high value for technical)
+      // S19: GitHub Issues
       if (ctx.queryType === 'technical' && !ctx.chinese && !ctx.japanese && isGithubIssuesIntent(ctx.query)) {
         tasks.push(buildGithubIssuesTask(ctx, 5))
       }
 
-      // Tuned (2026-08-18): StackExchange re-enabled on free plan — production
-      // data shows 0.2% error rate (826 req) which is excellent reliability.
-      // DDG-site-MDN still skipped on free plan (saves 1 subrequest + CPU).
+      // StackExchange — 모든 플랜에서 활성화 (에러율 0.2%로 안정적)
       if (
         (ctx.queryType === 'technical' || ctx.queryType === 'academic') &&
         !ctx.korean &&
         !ctx.chinese &&
         !ctx.japanese
       ) {
-        tasks.push(buildStackExchangeTask(ctx, freePlan ? 5 : 8))
+        tasks.push(buildStackExchangeTask(ctx, 5))
 
-        if (
-          !freePlan &&
-          /\b(docs?|documentation|reference|guide|tutorial|example|examples|api|how\s+to|explain(ed)?|what\s+is)\b/i.test(
-            ctx.query,
-          )
-        ) {
+        // DDG site:MDN — 모든 플랜에서 활성화
+        if (/\b(docs?|documentation|reference|guide|tutorial|example|examples|api|how\s+to|explain(ed)?|what\s+is)\b/i.test(ctx.query)) {
           tasks.push({
             name: 'ddg-site-mdn',
             run: () =>
@@ -187,38 +183,33 @@ export class AllStrategy implements SearchStrategy {
         }
       }
 
-      // Free plan: skip zh/ja community backends (saves 2-3 subrequests)
-      if (!freePlan) {
-        if (ctx.queryType === 'technical' && ctx.japanese) {
-          tasks.push(buildQiitaTask(ctx, 5))
-        }
-        if (ctx.queryType === 'technical' && ctx.chinese) {
-          tasks.push(buildJuejinTask(ctx, 5))
-          tasks.push(buildCsdnTask(ctx, 5))
-        }
+      // 중국/일본 기술 커뮤니티 — 모든 플랜에서 활성화
+      if (ctx.queryType === 'technical' && ctx.japanese) {
+        tasks.push(buildQiitaTask(ctx, 5))
+      }
+      if (ctx.queryType === 'technical' && ctx.chinese) {
+        tasks.push(buildJuejinTask(ctx, 5))
+        tasks.push(buildCsdnTask(ctx, 5))
       }
     }
 
-    // 4. HackerNews — Free plan: reduce from 8→5
+    // ── HackerNews ──
     if (ctx.sources.useHackerNews) {
-      const hnMax = freePlan ? 5 : 8
-      tasks.push(buildHackerNewsTask(ctx, hnMax))
+      tasks.push(buildHackerNewsTask(ctx, 5))
     }
 
-    // 5. Reddit — Free plan: skip entirely (saves 1 subrequest)
-    // Production data: 524 req, 1.3% error — reliable but low priority on free plan
-    if (ctx.sources.useReddit && !freePlan) {
+    // ── Reddit — 모든 플랜에서 활성화 (에러율 1.3%로 안정적) ──
+    if (ctx.sources.useReddit) {
       tasks.push(buildRedditTask(ctx, 5))
     }
 
-    // 5a. DDG site:reddit.com — Free plan: skip (saves 1 subrequest)
+    // ── DDG site:reddit.com — 모든 플랜에서 활성화 ──
     if (
       isCommunityAdviceIntent(ctx.query) &&
       !ctx.korean &&
       !ctx.chinese &&
       !ctx.japanese &&
-      !searxngConfigured &&
-      !freePlan
+      !searxngConfigured
     ) {
       tasks.push({
         name: 'ddg-site-reddit',
@@ -231,44 +222,33 @@ export class AllStrategy implements SearchStrategy {
       })
     }
 
-    // 5a2. Stack Exchange for programming-intent
-    // Tuned (2026-08-18): Re-enabled on free plan — production data shows
-    // 0.2% error rate (826 req, 2 failures) which is excellent reliability.
-    // StackExchange provides high-value programming Q&A that Bing/DDG don't
-    // cover as well, and the 1-subrequest cost is justified by the quality gain.
+    // ── Stack Exchange for programming-intent ──
     if (
       !ctx.korean &&
       !ctx.chinese &&
       !ctx.japanese &&
       isProgrammingIntent(ctx.query)
     ) {
-      tasks.push(buildStackExchangeTask(ctx, freePlan ? 5 : 8))
+      tasks.push(buildStackExchangeTask(ctx, 5))
     }
 
-    // 5b. arXiv — Free plan: reduce from 8→5
+    // ── arXiv ──
     if (ctx.sources.useArxiv) {
-      const arxivMax = freePlan ? 5 : 8
-      tasks.push(buildArxivTask(ctx, arxivMax))
+      tasks.push(buildArxivTask(ctx, 5))
     }
 
-    // 5c. OpenAlex — Free plan: skip entirely (saves 1 subrequest)
-    // Production data: 165 req, 19.4% error — unreliable, low ROI on free plan
-    if (ctx.sources.useOpenAlex && !freePlan) {
+    // ── OpenAlex — 모든 플랜에서 활성화 (학술 검색) ──
+    if (ctx.sources.useOpenAlex) {
       tasks.push(buildOpenAlexTask(ctx, 8))
     }
 
-    // 5d. SearXNG — PRIMARY general backend when configured
+    // ── SearXNG (설정된 경우) ──
     if (searxngConfigured && !ctx.isNews && !ctx.isFinance) {
       tasks.push(buildSearXNGTask(ctx))
     }
 
-    // 6. DuckDuckGo (fallback: only when SearXNG is NOT configured)
-    // Tuned (2026-08-18): Skip on free plan — production data shows 2.5% error
-    // rate (2,955 req) with DDG HTML at 19.7% error (1,984 req). Bing is the
-    // primary backend with 0% error and 17,101 req; DDG adds redundancy but
-    // costs 1 subrequest + CPU for scoring. On free plan, the subrequest budget
-    // (50) is better spent on higher-value backends (StackExchange, GitHub, HN).
-    if (!searxngConfigured && !ctx.korean && !ctx.isNews && !freePlan) {
+    // ── DuckDuckGo — 모든 플랜에서 활성화 (백엔드 다양성 확보) ──
+    if (!searxngConfigured && !ctx.korean && !ctx.isNews) {
       tasks.push(buildDuckDuckGoTask(ctx))
     }
 

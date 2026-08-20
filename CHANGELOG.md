@@ -5,6 +5,68 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.1.0] — 하이브리드 검색 + 로컬 인덱싱 + 뉴스 RSS + BGE-Reranker v2.0 (2026-08-20)
+
+### Added
+- **하이브리드 검색 파이프라인** (`scripts/hybrid-search.py`):
+  - 로컬 인덱스(ChromaDB + Ollama) + Cloudflare 통합 검색
+  - 로컬 우선, 부족하면 클라우드 폴백
+  - 결과 통합 + 리랭킹 (가중치: 로컬 1.2x, 클라우드 1.0x)
+  - 벤치마크: 하이브리드가 100% 승리 (평균 점수 0.964)
+- **로컬 인덱싱 파이프라인** (`scripts/local-index-v2.py`):
+  - Jina Reader API로 실제 콘텐츠 추출 (무료, API 키 불필요)
+  - 스마트 청킹 (헤더/문단 기반, 400 단어/chunk)
+  - Ollama nomic-embed-text 임베딩 (768차원)
+  - 인덱싱 속도: URL당 0.55초
+  - 검색 속도: ~70ms
+- **뉴스 RSS 스케줄러** (`scripts/news-rss-scheduler.py`):
+  - 39개 RSS 피드 (7개 카테고리)
+  - 자동 중복 방지 (SQLite)
+  - cron 스케줄링 지원
+  - 283개 기사 인덱싱 완료
+- **한국 뉴스 RSS 피드 12개 추가**:
+  - 매일경제 (자체 RSS)
+  - Google News 기반 11개 (경제, 정치, 기술, 스포츠, AI, 반도체, K-POP, 코스피)
+  - anti-bot 회피 로직 강화 (User-Agent 로테이션, 헤더, 지연 시간)
+- **BGE-Reranker v2.0 Workers AI 통합** (`src/lib/retrieval/reranker.ts`):
+  - 모델 업그레이드: `bge-reranker-base` → `bge-reranker-v2-m3`
+  - 다중 언어 지원 (한국어, 중국어, 일본어)
+  - heuristic fallback 강화 (9가지 피처)
+- **Cloudflare 동기화** (`scripts/sync-to-cloudflare-v2.py`):
+  - 로컬 인덱스 → Cloudflare 동기화
+  - 71개 URL, 148개 청크 동기화 완료
+- **뉴스 → Cloudflare 동기화** (`scripts/sync-news-to-cloudflare.py`):
+  - 283개 뉴스 기사 → 318개 청크 동기화
+
+### Changed
+- `src/lib/search/fanout.ts` — HackerNews 타임아웃 1800→2500ms
+- `src/lib/search/strategies/all.ts` — Bing 4종 병렬 사용 + 백엔드 전체 활성화
+- `src/lib/retrieval/reranker.ts` — heuristic 리랭커 강화 (BM25 + 도메인 권위 + 언어 가중치 + 신선도 + 콘텐츠 품질 + URL 구조 + 의미적 유사도)
+- `src/routes/search.ts` — API_KEY_DO 인증 버그 수정 (validateApiKeyAsync 사용)
+
+### Tests
+- ranking-authority.test.ts: ✅ 32개 테스트 통과
+- ranking-bm25.test.ts: ✅ 38개 테스트 통과
+- 하이브리드 검색 벤치마크: ✅ 15개 쿼리 테스트
+
+---
+
+## [Unreleased] — E2E 골든 패스 검증 완료 + workerd 테스트 런타임 DO·auth 수정
+
+### Added (tests)
+- `tests/integration/e2e-golden-path.test.ts` (신규, 6건) — 검색→추출→답변 전체 HTTP 스택 E2E: Tavily 호환 계약 고정, 캐시 round-trip(2차 요청 zero backend fetch), 캐시 키 격리, include_answer 파이프라인, /api/extract, search→top result→extract 풀 체인. `globalThis.fetch` mock으로 실외 네트워크 0 (flaky 불가).
+- `vitest.e2e.config.ts` (신규) — `remoteBindings: false` 로컬 workerd 세션 (CLOUDFLARE_API_TOKEN 불필요).
+- `package.json` — `test:e2e` 스크립트.
+
+### Fixed (test runtime)
+- `tests/integration/do-bindings.ts`: 신규 DO 3개(`TENANT_AUDIT_DO`/AuditLogDO, `TENANCY_DO`/TenancyDO, `NEWS_HUB_DO`/NewsHubDO) self-referencing 오버라이드 누락 → workerd 기동 실패(`ERR_RUNTIME_FAILURE: no such service is defined`) 해결. wrangler.jsonc 14개 DO와 동기화.
+- `src/index.tsx`: `AuditLogDO`·`TenancyDO` 리-에クス포트 추가 (pool이 self designator를 메인 worker exports에서 해석 — prod Pages에서는 비활성 export).
+- `vitest.e2e.config.ts`: fail-closed auth(auth.ts) 대응 — 테스트 워커에 `SEARCH_API_KEY: 'test-key'` 부여 + 테스트 `fetchJson` 헬퍼가 `X-API-Key` 헤더 전송.
+  - ⚠️ **이 pool 버전의 `miniflare.vars`는 workerd env로 전파되지 않음** (core 플러그인 zod 스키마에 `vars` 필드 없음 — silently dropped). `bindings`(object form)이 실제로 env로 병합되는 경로 — config에 주석으로 고정.
+
+### Verified
+- `npm run test:e2e` — **6/6 PASS 3회 연속 그린** (2026-08-19). `docs/20_CEO_MASTER_PLAN.md` 5.4 QA E2E 항목 [~] 갱신 (골든 패스 6건 완료, 10시나리오 확장 잔여).
+
 ## [Unreleased] — synthesizer Retry-After [1s, 120s] 안전 범위 클램프 (retryAfterRangeMs 옵션)
 
 ### Changed

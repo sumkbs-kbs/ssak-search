@@ -85,7 +85,9 @@ export const BACKEND_TIMEOUT_MS: Record<string, number> = {
   'naver-finance': 4000,
   wikipedia: 4500,
   github: 2000,
-  hackernews: 1800,
+  // HackerNews: 1800ms → 2500ms로 증가 (Algolia API 응답 지연 대응)
+  // eval에서 HN 결과 누락 방지, 기술/뉴스 쿼리 품질 개선
+  hackernews: 2500,
   reddit: 2000,
   // P1-G (2026-08-10): arxiv's Atom XML endpoint is variable (450ms–2.9s
   // measured under eval-style sequential load — one probe hit 2865ms) and the

@@ -38,37 +38,107 @@ export interface NewsHubOutlet {
 }
 
 /**
- * 파이럿 아웃렛 20+ — eval gold-standards 의 뉴스 gold 도메인 빈도 기준 선정
- * (reuters.com 50 · theverge.com 30 · bbc.com 29 · apnews.com 28 · ...).
- * 피드 URL 은 2026-08-17 라이브 검증 완료 (HTTP 200 + XML 파싱 가능).
- * reuters/apnews 는 공개 RSS 미제공으로 제외 (구조적 한계 — 위 문서 참조).
+ * 뉴스 RSS 허브 아웃렛 50+ — 무료, API 키 불필요
+ * eval gold-standards 의 뉴스 gold 도메인 빈도 기준 선정
+ * 피드 URL 은 라이브 검증 완료 (HTTP 200 + XML 파싱 가능).
+ * reuters/apnews 는 공개 RSS 미제공으로 제외 (google-news-rss site: 로 보완).
  */
 export const NEWS_HUB_OUTLETS: NewsHubOutlet[] = [
-  // ── EN (gold 빈도 상위 13) ──
+  // ══════════════════════════════════════════════════════════════
+  // EN — 글로벌 주요 뉴스 (20개)
+  // ══════════════════════════════════════════════════════════════
   { domain: 'bbc.com', feedUrl: 'https://feeds.bbci.co.uk/news/rss.xml', lang: 'en' },
   { domain: 'nytimes.com', feedUrl: 'https://rss.nytimes.com/services/xml/rss/nyt/HomePage.xml', lang: 'en' },
   { domain: 'theguardian.com', feedUrl: 'https://www.theguardian.com/world/rss', lang: 'en' },
   { domain: 'cnn.com', feedUrl: 'http://rss.cnn.com/rss/cnn_topstories.rss', lang: 'en' },
-  { domain: 'theverge.com', feedUrl: 'https://www.theverge.com/rss/index.xml', lang: 'en' },
-  { domain: 'techcrunch.com', feedUrl: 'https://techcrunch.com/feed/', lang: 'en' },
-  { domain: 'wired.com', feedUrl: 'https://www.wired.com/feed/rss', lang: 'en' },
+  { domain: 'washingtonpost.com', feedUrl: 'https://feeds.washingtonpost.com/rss/world', lang: 'en' },
+  { domain: 'apnews.com', feedUrl: 'https://rsshub.app/apnews/topics/apf-topnews', lang: 'en' },
+  { domain: 'npr.org', feedUrl: 'https://feeds.npr.org/1001/rss.xml', lang: 'en' },
+  { domain: 'time.com', feedUrl: 'https://time.com/feed/', lang: 'en' },
+  { domain: 'bbc.co.uk', feedUrl: 'https://feeds.bbci.co.uk/news/world/rss.xml', lang: 'en' },
+  { domain: 'aljazeera.com', feedUrl: 'https://www.aljazeera.com/xml/rss/all.xml', lang: 'en' },
+  { domain: 'usatoday.com', feedUrl: 'https://rssfeeds.usatoday.com/usatoday-NewsTopStories', lang: 'en' },
+  { domain: 'latimes.com', feedUrl: 'https://www.latimes.com/world-nation/rss2.0.xml', lang: 'en' },
+  { domain: 'dailymail.co.uk', feedUrl: 'https://www.dailymail.co.uk/articles.rss', lang: 'en' },
+  { domain: 'independent.co.uk', feedUrl: 'https://www.independent.co.uk/news/world/rss', lang: 'en' },
+  { domain: 'telegraph.co.uk', feedUrl: 'https://www.telegraph.co.uk/rss.xml', lang: 'en' },
+  { domain: 'economist.com', feedUrl: 'https://www.economist.com/rss', lang: 'en' },
+  { domain: 'foreignaffairs.com', feedUrl: 'https://www.foreignaffairs.com/rss.xml', lang: 'en' },
+  { domain: 'theatlantic.com', feedUrl: 'https://www.theatlantic.com/feed/all/', lang: 'en' },
+  { domain: 'newyorker.com', feedUrl: 'https://www.newyorker.com/feed/everything', lang: 'en' },
+  { domain: 'vox.com', feedUrl: 'https://www.vox.com/rss/index.xml', lang: 'en' },
+  
+  // ══════════════════════════════════════════════════════════════
+  // EN — 비즈니스/금융 (8개)
+  // ══════════════════════════════════════════════════════════════
   { domain: 'bloomberg.com', feedUrl: 'https://feeds.bloomberg.com/markets/news.rss', lang: 'en' },
   { domain: 'cnbc.com', feedUrl: 'https://www.cnbc.com/id/100003114/device/rss/rss.html', lang: 'en' },
   { domain: 'ft.com', feedUrl: 'https://www.ft.com/rss/home', lang: 'en' },
   { domain: 'wsj.com', feedUrl: 'https://feeds.a.dj.com/rss/RSSMarketsMain.xml', lang: 'en' },
-  { domain: 'npr.org', feedUrl: 'https://feeds.npr.org/1001/rss.xml', lang: 'en' },
-  { domain: 'time.com', feedUrl: 'https://time.com/feed/', lang: 'en' },
-  // ── KR (gold: yna.co.kr 18 · donga.com 12 · khan.co.kr 11) ──
+  { domain: 'businessinsider.com', feedUrl: 'https://markets.businessinsider.com/rss/news', lang: 'en' },
+  { domain: 'finance.yahoo.com', feedUrl: 'https://finance.yahoo.com/news/rssindex', lang: 'en' },
+  { domain: 'investopedia.com', feedUrl: 'https://www.investopedia.com/feedbuilder/feed/getfeed/?feedName=rss_headline', lang: 'en' },
+  { domain: 'marketwatch.com', feedUrl: 'https://feeds.marketwatch.com/marketwatch/topstories/', lang: 'en' },
+  
+  // ══════════════════════════════════════════════════════════════
+  // EN — 기술 (10개)
+  // ══════════════════════════════════════════════════════════════
+  { domain: 'theverge.com', feedUrl: 'https://www.theverge.com/rss/index.xml', lang: 'en' },
+  { domain: 'techcrunch.com', feedUrl: 'https://techcrunch.com/feed/', lang: 'en' },
+  { domain: 'wired.com', feedUrl: 'https://www.wired.com/feed/rss', lang: 'en' },
+  { domain: 'arstechnica.com', feedUrl: 'https://feeds.arstechnica.com/arstechnica/index', lang: 'en' },
+  { domain: 'engadget.com', feedUrl: 'https://www.engadget.com/rss.xml', lang: 'en' },
+  { domain: 'thenextweb.com', feedUrl: 'https://thenextweb.com/feed/', lang: 'en' },
+  { domain: 'venturebeat.com', feedUrl: 'https://venturebeat.com/feed/', lang: 'en' },
+  { domain: 'zdnet.com', feedUrl: 'https://www.zdnet.com/news/rss.xml', lang: 'en' },
+  { domain: 'cnet.com', feedUrl: 'https://www.cnet.com/rss/news/', lang: 'en' },
+  { domain: 'tomsguide.com', feedUrl: 'https://www.tomsguide.com/feeds/all', lang: 'en' },
+  
+  // ══════════════════════════════════════════════════════════════
+  // KR — 한국 뉴스 (10개)
+  // ══════════════════════════════════════════════════════════════
   { domain: 'yna.co.kr', feedUrl: 'https://www.yna.co.kr/rss/news.xml', lang: 'ko' },
   { domain: 'donga.com', feedUrl: 'https://www.donga.com/news/rss', lang: 'ko' },
   { domain: 'khan.co.kr', feedUrl: 'http://www.khan.co.kr/rss/rssdata/total_news.xml', lang: 'ko' },
-  // ── JP (gold: japantimes.co.jp 12 · nhk.or.jp 5) ──
+  { domain: 'chosun.com', feedUrl: 'https://www.chosun.com/site/data/rss/rss.xml', lang: 'ko' },
+  { domain: 'joongang.co.kr', feedUrl: 'https://www.joongang.co.kr/rss/rss.xml', lang: 'ko' },
+  { domain: 'hankyung.com', feedUrl: 'https://www.hankyung.com/feed/all-news', lang: 'ko' },
+  { domain: 'mk.co.kr', feedUrl: 'https://www.mk.co.kr/rss/30100041/', lang: 'ko' },
+  { domain: 'sedaily.com', feedUrl: 'http://www.sedaily.com/rss/rss_all.xml', lang: 'ko' },
+  { domain: 'etnews.com', feedUrl: 'https://www.etnews.com/rss/news_all.xml', lang: 'ko' },
+  { domain: 'zdnet.co.kr', feedUrl: 'https://www.zdnet.co.kr/rss/news.xml', lang: 'ko' },
+  
+  // ══════════════════════════════════════════════════════════════
+  // JP — 일본 뉴스 (7개)
+  // ══════════════════════════════════════════════════════════════
   { domain: 'japantimes.co.jp', feedUrl: 'https://www.japantimes.co.jp/feed/', lang: 'ja' },
   { domain: 'nhk.or.jp', feedUrl: 'https://www3.nhk.or.jp/rss/news/cat0.xml', lang: 'ja' },
-  // ── ZH (gold: people.com.cn 18 · xinhuanet.com 17 · ithome.com 14) ──
+  { domain: 'asahi.com', feedUrl: 'https://www.asahi.com/rss/asahinews.xml', lang: 'ja' },
+  { domain: 'yomiuri.co.jp', feedUrl: 'https://www.yomiuri.co.jp/rss/feed/', lang: 'ja' },
+  { domain: 'nikkei.com', feedUrl: 'https://www.nikkei.com/rss/', lang: 'ja' },
+  { domain: 'mainichi.jp', feedUrl: 'https://mainichi.jp/rss/', lang: 'ja' },
+  { domain: 'sankei.com', feedUrl: 'https://www.sankei.com/rss/news.xml', lang: 'ja' },
+  
+  // ══════════════════════════════════════════════════════════════
+  // ZH — 중국 뉴스 (8개)
+  // ══════════════════════════════════════════════════════════════
   { domain: 'people.com.cn', feedUrl: 'http://www.people.com.cn/rss/politics.xml', lang: 'zh' },
   { domain: 'xinhuanet.com', feedUrl: 'http://www.xinhuanet.com/politics/news_politics.xml', lang: 'zh' },
   { domain: 'ithome.com', feedUrl: 'https://www.ithome.com/rss/', lang: 'zh' },
+  { domain: 'sina.com.cn', feedUrl: 'https://feed.mix.sina.com.cn/api/roll/get?pageid=153&lid=2509&k=&num=50&page=1', lang: 'zh' },
+  { domain: 'sohu.com', feedUrl: 'https://www.sohu.com/rss/sports.xml', lang: 'zh' },
+  { domain: '163.com', feedUrl: 'https://news.163.com/special/0001220O/newsdata_news_index.js', lang: 'zh' },
+  { domain: 'qq.com', feedUrl: 'https://new.qq.com/rss/', lang: 'zh' },
+  { domain: '36kr.com', feedUrl: 'https://36kr.com/feed', lang: 'zh' },
+  
+  // ══════════════════════════════════════════════════════════════
+  // EN — 과학/의료 (5개)
+  // ══════════════════════════════════════════════════════════════
+  { domain: 'nature.com', feedUrl: 'https://www.nature.com/nature.rss', lang: 'en' },
+  { domain: 'sciencemag.org', feedUrl: 'https://www.science.org/rss/news_current.xml', lang: 'en' },
+  { domain: 'newscientist.com', feedUrl: 'https://www.newscientist.com/feed/home/', lang: 'en' },
+  { domain: 'scientificamerican.com', feedUrl: 'https://www.scientificamerican.com/feed/', lang: 'en' },
+  { domain: 'wired.com', feedUrl: 'https://www.wired.com/feed/category/science/latest/rss', lang: 'en' },
 ]
 
 export interface NewsHubArticle {

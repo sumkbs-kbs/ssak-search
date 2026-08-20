@@ -1,0 +1,68 @@
+{
+  "feeds": {
+    "intl": [
+      {"name": "NYT Top Stories", "url": "https://rss.nytimes.com/services/xml/rss/nyt/HomePage.xml", "lang": "en", "category": "general"},
+      {"name": "BBC World", "url": "https://feeds.bbci.co.uk/news/rss.xml", "lang": "en", "category": "general"},
+      {"name": "Guardian World", "url": "https://www.theguardian.com/world/rss", "lang": "en", "category": "general"},
+      {"name": "Washington Post", "url": "https://feeds.washingtonpost.com/rss/world", "lang": "en", "category": "general"},
+      {"name": "Al Jazeera", "url": "https://www.aljazeera.com/xml/rss/all.xml", "lang": "en", "category": "general"},
+      {"name": "Sky News", "url": "https://feeds.skynews.com/feeds/rss/world.xml", "lang": "en", "category": "general"},
+      {"name": "France24", "url": "https://www.france24.com/en/rss", "lang": "en", "category": "general"},
+      {"name": "DW News", "url": "https://www.dw.com/en/rss/s-30978029", "lang": "en", "category": "general"}
+    ],
+    "kr": [
+      {"name": "매일경제", "url": "https://www.mk.co.kr/rss/30100041/", "lang": "ko", "category": "business"},
+      {"name": "한국 경제 뉴스 (Google)", "url": "https://news.google.com/rss/search?q=%ED%95%9C%EA%B5%AD+%EA%B2%BD%EC%A0%9C&hl=ko&gl=KR&ceid=KR:ko", "lang": "ko", "category": "general"},
+      {"name": "한국 정치 뉴스 (Google)", "url": "https://news.google.com/rss/search?q=%ED%95%9C%EA%B5%AD+%EC%A0%95%EC%B9%98&hl=ko&gl=KR&ceid=KR:ko", "lang": "ko", "category": "general"},
+      {"name": "한국 기술 뉴스 (Google)", "url": "https://news.google.com/rss/search?q=%ED%95%9C%EA%B5%AD+%EA%B8%B0%EC%88%A0&hl=ko&gl=KR&ceid=KR:ko", "lang": "ko", "category": "tech"},
+      {"name": "한국 스포츠 뉴스 (Google)", "url": "https://news.google.com/rss/search?q=%ED%95%9C%EA%B5%AD+%EC%8A%A4%ED%8F%AC%EC%B8%A0&hl=ko&gl=KR&ceid=KR:ko", "lang": "ko", "category": "general"},
+      {"name": "대한민국 뉴스 (Google)", "url": "https://news.google.com/rss/search?q=%EB%8C%80%ED%95%9C%EB%AF%BC%EA%B5%AD&hl=ko&gl=KR&ceid=KR:ko", "lang": "ko", "category": "general"},
+      {"name": "서울 뉴스 (Google)", "url": "https://news.google.com/rss/search?q=%EC%84%9C%EC%9A%B8&hl=ko&gl=KR&ceid=KR:ko", "lang": "ko", "category": "general"},
+      {"name": "부산 뉴스 (Google)", "url": "https://news.google.com/rss/search?q=%EB%B6%80%EC%82%B0&hl=ko&gl=KR&ceid=KR:ko", "lang": "ko", "category": "general"},
+      {"name": "인공지능 한국 (Google)", "url": "https://news.google.com/rss/search?q=%EC%9D%B8%EA%B3%B5%EC%A7%80%EB%8A%A5+%ED%95%9C%EA%B5%AD&hl=ko&gl=KR&ceid=KR:ko", "lang": "ko", "category": "tech"},
+      {"name": "반도체 삼성 SK (Google)", "url": "https://news.google.com/rss/search?q=%EB%B0%98%EB%8F%84%EC%B2%B4+%EC%82%BC%EC%84%B1+SK&hl=ko&gl=KR&ceid=KR:ko", "lang": "ko", "category": "tech"},
+      {"name": "K-POP 아이돌 (Google)", "url": "https://news.google.com/rss/search?q=K-POP+%EC%95%84%EC%9D%B4%EB%8F%88&hl=ko&gl=KR&ceid=KR:ko", "lang": "ko", "category": "general"},
+      {"name": "코스피 주식시장 (Google)", "url": "https://news.google.com/rss/search?q=%EC%BD%94%EC%8A%A4%ED%94%BC+%EC%A3%BC%EC%8B%9D&hl=ko&gl=KR&ceid=KR:ko", "lang": "ko", "category": "business"}
+    ],
+    "jp": [
+      {"name": "朝日新聞", "url": "https://www.asahi.com/rss/", "lang": "ja", "category": "general"},
+      {"name": "読売新聞", "url": "https://www.yomiuri.co.jp/rss/", "lang": "ja", "category": "general"},
+      {"name": "日経新聞", "url": "https://www.nikkei.com/rss/", "lang": "ja", "category": "business"},
+      {"name": "毎日新聞", "url": "https://mainichi.jp/rss/", "lang": "ja", "category": "general"},
+      {"name": "産経新聞", "url": "https://www.sankei.com/rss/", "lang": "ja", "category": "general"}
+    ],
+    "cn": [
+      {"name": "新浪新聞", "url": "https://www.sina.com.cn/rss/", "lang": "zh", "category": "general"},
+      {"name": "腾讯新聞", "url": "https://news.qq.com/rss/", "lang": "zh", "category": "general"},
+      {"name": "36氪", "url": "https://www.36kr.com/feed", "lang": "zh", "category": "tech"},
+      {"name": "少数派", "url": "https://sspai.com/feed", "lang": "zh", "category": "tech"},
+      {"name": "中新网", "url": "https://www.chinanews.com.cn/rss/", "lang": "zh", "category": "general"}
+    ],
+    "tech": [
+      {"name": "Hacker News", "url": "https://hnrss.org/frontpage", "lang": "en", "category": "tech"},
+      {"name": "TechCrunch", "url": "https://techcrunch.com/feed/", "lang": "en", "category": "tech"},
+      {"name": "Ars Technica", "url": "https://feeds.arstechnica.com/arstechnica/index", "lang": "en", "category": "tech"},
+      {"name": "The Verge", "url": "https://www.theverge.com/rss/index.xml", "lang": "en", "category": "tech"},
+      {"name": "MIT Tech Review", "url": "https://www.technologyreview.com/feed/", "lang": "en", "category": "tech"}
+    ],
+    "science": [
+      {"name": "Nature News", "url": "https://www.nature.com/nature.rss", "lang": "en", "category": "science"},
+      {"name": "Science Daily", "url": "https://www.sciencedaily.com/rss/all.xml", "lang": "en", "category": "science"},
+      {"name": "Phys.org", "url": "https://phys.org/rss-feed/", "lang": "en", "category": "science"},
+      {"name": "Space.com", "url": "https://www.space.com/feeds/all", "lang": "en", "category": "science"}
+    ],
+    "business": [
+      {"name": "Reuters Business", "url": "https://www.reutersagency.com/feed/?best-sectors=business-finance&post_type=best", "lang": "en", "category": "business"},
+      {"name": "Bloomberg", "url": "https://feeds.bloomberg.com/markets/news.rss", "lang": "en", "category": "business"},
+      {"name": "CNBC", "url": "https://search.cnbc.com/rs/search/combinedcms/view.xml?partnerId=wrss01&id=10001147", "lang": "en", "category": "business"}
+    ]
+  },
+  "settings": {
+    "max_articles_per_feed": 20,
+    "chunk_max_words": 300,
+    "dedup_window_days": 7,
+    "cloudflare_sync": true,
+    "cloudflare_batch_size": 5,
+    "cloudflare_delay_seconds": 3
+  }
+}

@@ -53,6 +53,14 @@ interface HealthData {
     triggered_by_exhaustion: number
     subrequests_saved: number
   }
+  /** D.3 Multi-Region: which Cloudflare data center served this request */
+  region?: {
+    id: string
+    city: string
+    country: string
+    region: string
+    timezone: string
+  }
 }
 
 /** Index layer observability — surfaces Vectorize/D1 binding + corpus status. */
@@ -544,7 +552,19 @@ export async function probeIndexHealth(env: AppBindings): Promise<IndexHealthInf
 healthRoute.get('/', async (c) => {
   const depth = c.req.query('depth') ?? (c.req.query('full') === '1' ? 'full' : 'light')
   if (depth !== 'full') {
-    return c.json(await buildLightHealthData(c.env))
+    const data = await buildLightHealthData(c.env)
+    // D.3: attach region info from Cloudflare request metadata
+    const cf = (c.req as any).raw?.cf ?? (c.req as any).cf ?? undefined
+    if (cf) {
+      data.region = {
+        id: cf.colo ?? 'unknown',
+        city: cf.city ?? 'unknown',
+        country: cf.country ?? 'unknown',
+        region: cf.region ?? 'unknown',
+        timezone: cf.timezone ?? 'unknown',
+      }
+    }
+    return c.json(data)
   }
 
   // --- Full (deep) mode: live probes, cached 30s ---

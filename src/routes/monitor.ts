@@ -347,6 +347,38 @@ monitorRoute.get('/', async (c) => {
   // D.4 — LTR model quality (ClickLogDO) + A/B test results (ExperimentDO)
   const quality = await collectQualityMetrics(c)
 
+  // ── Region identification (D.3 Multi-Region) ──
+  // Cloudflare Workers expose request.cf with geo data.
+  // In multi-region setup, this identifies which region served the request.
+  const cf = (c.req as any).raw?.cf ?? (c.req as any).cf ?? undefined
+  const region = {
+    id: cf?.colo ?? 'unknown',         // CF data center ID (e.g. 'SFO', 'NRT', 'LHR')
+    city: cf?.city ?? 'unknown',
+    country: cf?.country ?? 'unknown',
+    region: cf?.region ?? 'unknown',    // Geographic region code
+    timezone: cf?.timezone ?? 'unknown',
+    httpProtocol: cf?.httpProtocol ?? 'unknown',
+    tlsVersion: cf?.tlsVersion ?? 'unknown',
+  }
+
+  // ── Failover detection (D.3) ──
+  // If the primary region is US (SFO/IAD/ORD) and this is APAC (NRT/HKG/SIN),
+  // or vice versa, it indicates a failover event.
+  const PRIMARY_REGIONS = ['SFO', 'IAD', 'ORD', 'ATL', 'DFW', 'LAX'] // US Cloudflare colos
+  const APAC_REGIONS = ['NRT', 'HKG', 'SIN', 'SYD', 'ICN', 'TPE']   // APAC Cloudflare colos
+  const isPrimaryRegion = PRIMARY_REGIONS.includes(region.id)
+  const isFailover = !isPrimaryRegion && APAC_REGIONS.includes(region.id)
+
+  if (isFailover) {
+    alerts.push({
+      severity: 'warning',
+      rule: 'RegionFailover',
+      message: `Request served from non-primary region ${region.id} (${region.city}, ${region.country})`,
+      current: region.id,
+      threshold: `Primary: ${PRIMARY_REGIONS.join('/')}`,
+    })
+  }
+
   // Build response
   const response = {
     // Service identity
@@ -354,6 +386,10 @@ monitorRoute.get('/', async (c) => {
     version: '2.0.0',
     timestamp: new Date(now).toISOString(),
     monitored_since: usage.trackedSince,
+
+    // Region identification (D.3 Multi-Region)
+    region,
+    isFailover,
 
     // Overall status
     status: overallStatus,

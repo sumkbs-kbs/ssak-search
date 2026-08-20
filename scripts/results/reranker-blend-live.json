@@ -1,0 +1,34 @@
+{
+  "timestamp": "2026-08-20T21:59:22.452Z",
+  "queryCount": 50,
+  "mode": "heuristic-fallback (offline)",
+  "weights": [
+    0.6,
+    0.7,
+    0.8,
+    0.9
+  ],
+  "results": [
+    {
+      "weight": 0.6,
+      "ndcgAt10": 0.5501086629114996,
+      "queryCount": 50
+    },
+    {
+      "weight": 0.7,
+      "ndcgAt10": 0.5501086629114996,
+      "queryCount": 50
+    },
+    {
+      "weight": 0.8,
+      "ndcgAt10": 0.5501086629114996,
+      "queryCount": 50
+    },
+    {
+      "weight": 0.9,
+      "ndcgAt10": 0.5501086629114996,
+      "queryCount": 50
+    }
+  ],
+  "optimalWeight": 0.6
+}

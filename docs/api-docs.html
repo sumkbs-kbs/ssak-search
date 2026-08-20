@@ -1,0 +1,274 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SSAK Search Engine API 문서</title>
+    <link rel="stylesheet" href="https://unpkg.com/swagger-ui-dist@5.10.5/swagger-ui.css">
+    <style>
+        :root {
+            --primary: #3b82f6;
+            --bg: #f8fafc;
+            --card-bg: #ffffff;
+        }
+        
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: var(--bg);
+            color: #1e293b;
+        }
+        
+        .header {
+            background: linear-gradient(135deg, #1e40af 0%, #3b82f6 100%);
+            color: white;
+            padding: 2rem;
+            text-align: center;
+        }
+        
+        .header h1 {
+            font-size: 2rem;
+            margin-bottom: 0.5rem;
+        }
+        
+        .header p {
+            opacity: 0.9;
+            font-size: 1.1rem;
+        }
+        
+        .stats {
+            display: flex;
+            justify-content: center;
+            gap: 2rem;
+            margin-top: 1.5rem;
+        }
+        
+        .stat {
+            background: rgba(255,255,255,0.2);
+            padding: 0.75rem 1.5rem;
+            border-radius: 8px;
+        }
+        
+        .stat-value {
+            font-size: 1.5rem;
+            font-weight: bold;
+        }
+        
+        .stat-label {
+            font-size: 0.875rem;
+            opacity: 0.9;
+        }
+        
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 2rem;
+        }
+        
+        .features {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 1.5rem;
+            margin-bottom: 2rem;
+        }
+        
+        .feature {
+            background: var(--card-bg);
+            padding: 1.5rem;
+            border-radius: 12px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+        
+        .feature-icon {
+            font-size: 2rem;
+            margin-bottom: 0.5rem;
+        }
+        
+        .feature h3 {
+            margin-bottom: 0.5rem;
+            color: #1e293b;
+        }
+        
+        .feature p {
+            color: #64748b;
+            font-size: 0.9rem;
+        }
+        
+        .swagger-section {
+            background: var(--card-bg);
+            border-radius: 12px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            padding: 1rem;
+        }
+        
+        #swagger-ui {
+            max-width: 100%;
+        }
+        
+        .topbar {
+            display: none;
+        }
+        
+        .info {
+            background: var(--card-bg);
+            border-radius: 12px;
+            padding: 1.5rem;
+            margin-bottom: 2rem;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+        
+        .info h2 {
+            margin-bottom: 1rem;
+            color: #1e293b;
+        }
+        
+        .info-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1rem;
+        }
+        
+        .info-item {
+            padding: 1rem;
+            background: #f1f5f9;
+            border-radius: 8px;
+        }
+        
+        .info-item h4 {
+            color: #64748b;
+            font-size: 0.875rem;
+            margin-bottom: 0.25rem;
+        }
+        
+        .info-item p {
+            font-weight: 500;
+            color: #1e293b;
+        }
+        
+        .footer {
+            text-align: center;
+            padding: 2rem;
+            color: #64748b;
+            font-size: 0.875rem;
+        }
+        
+        .method-badge {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 0.75rem;
+            font-weight: bold;
+            text-transform: uppercase;
+        }
+        
+        .method-get { background: #22c55e; color: white; }
+        .method-post { background: #3b82f6; color: white; }
+        .method-put { background: #f59e0b; color: white; }
+        .method-delete { background: #ef4444; color: white; }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>🔍 SSAK Search Engine API</h1>
+        <p>지능형 하이브리드 검색 엔진 API 문서</p>
+        <div class="stats">
+            <div class="stat">
+                <div class="stat-value">29</div>
+                <div class="stat-label">엔드포인트</div>
+            </div>
+            <div class="stat">
+                <div class="stat-value">31</div>
+                <div class="stat-label">스키마</div>
+            </div>
+            <div class="stat">
+                <div class="stat-value">26</div>
+                <div class="stat-label">태그</div>
+            </div>
+            <div class="stat">
+                <div class="stat-value">v2.0.0</div>
+                <div class="stat-label">버전</div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="container">
+        <div class="features">
+            <div class="feature">
+                <div class="feature-icon">🔍</div>
+                <h3>하이브리드 검색</h3>
+                <p>로컬 인덱스 + 외부 백엔드를 통합한 지능형 검색</p>
+            </div>
+            <div class="feature">
+                <div class="feature-icon">🤖</div>
+                <h3>지능형 라우터</h3>
+                <p>쿼리 분석 기반 최적 백엔드 자동 선택</p>
+            </div>
+            <div class="feature">
+                <div class="feature-icon">📰</div>
+                <h3>뉴스 RSS</h3>
+                <p>39개 피드 자동 수집 및 인덱싱</p>
+            </div>
+            <div class="feature">
+                <div class="feature-icon">🎯</div>
+                <h3>BGE-Reranker v2.0</h3>
+                <p>다중 언어 리랭킹 (한/중/일/영)</p>
+            </div>
+        </div>
+        
+        <div class="info">
+            <h2>📋 API 정보</h2>
+            <div class="info-grid">
+                <div class="info-item">
+                    <h4>프로덕션 서버</h4>
+                    <p>https://search-engine-api.pages.dev</p>
+                </div>
+                <div class="info-item">
+                    <h4>인증 방식</h4>
+                    <p>X-API-Key 헤더 또는 Bearer 토큰</p>
+                </div>
+                <div class="info-item">
+                    <h4>Rate Limit</h4>
+                    <p>무료: 30요청/분, 유료: 설정 가능</p>
+                </div>
+                <div class="info-item">
+                    <h4>라이선스</h4>
+                    <p>MIT License</p>
+                </div>
+            </div>
+        </div>
+        
+        <div class="swagger-section">
+            <div id="swagger-ui"></div>
+        </div>
+    </div>
+    
+    <div class="footer">
+        <p>SSAK Search Engine API v2.0.0 | Built with ❤️ by SSAK Team</p>
+    </div>
+    
+    <script src="https://unpkg.com/swagger-ui-dist@5.10.5/swagger-ui-bundle.js"></script>
+    <script>
+        SwaggerUIBundle({
+            url: './openapi.json',
+            dom_id: '#swagger-ui',
+            deepLinking: true,
+            presets: [
+                SwaggerUIBundle.presets.apis,
+                SwaggerUIBundle.SwaggerUIStandalonePreset
+            ],
+            layout: "BaseLayout",
+            defaultModelsExpandDepth: -1,
+            defaultModelExpandDepth: 1,
+            docExpansion: 'list',
+            filter: true,
+            showRequestHeaders: true,
+            tryItOutEnabled: true
+        });
+    </script>
+</body>
+</html>

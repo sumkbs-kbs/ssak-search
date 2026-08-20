@@ -1,0 +1,2483 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "SSAK Search Engine API",
+    "description": "지능형 검색 엔진 API — 로컬 인덱스 + Cloudflare 하이브리드 검색\n\n## 주요 기능\n- 🔍 **하이브리드 검색** — 로컬 인덱스 + 외부 백엔드 통합\n- 🤖 **지능형 라우터** — 쿼리 분석 기반 백엔드 선택\n- 📰 **뉴스 RSS** — 39개 피드 자동 수집\n- 🎯 **BGE-Reranker v2.0** — 다중 언어 리랭킹\n- 📊 **LTR v2** — Learning-to-Rank 모델\n\n## 인증\n- `X-API-Key` 헤더로 API 키 전달\n- `Authorization: Bearer <key>` 형식도 지원\n\n##-rate Limit\n- 무료 플랜: 30 요청/분\n- 유료 플랜: 설정 가능\n",
+    "version": "2.0.0",
+    "contact": {
+      "name": "SSAK Search Team",
+      "email": "support@ssak-search.com"
+    },
+    "license": {
+      "name": "MIT",
+      "url": "https://opensource.org/licenses/MIT"
+    }
+  },
+  "servers": [
+    {
+      "url": "https://search-engine-api.pages.dev",
+      "description": "프로덕션 서버"
+    },
+    {
+      "url": "http://localhost:8787",
+      "description": "로컬 개발 서버"
+    }
+  ],
+  "tags": [
+    {
+      "name": "search",
+      "description": "검색 관련 API"
+    },
+    {
+      "name": "index",
+      "description": "인덱스 관리 API"
+    },
+    {
+      "name": "news",
+      "description": "뉴스 RSS API"
+    },
+    {
+      "name": "crawl",
+      "description": "크롤링 API"
+    },
+    {
+      "name": "health",
+      "description": "헬스 체크 API"
+    },
+    {
+      "name": "auth",
+      "description": "인증 API"
+    },
+    {
+      "name": "extract",
+      "description": "콘텐츠 추출 API"
+    },
+    {
+      "name": "images",
+      "description": "이미지 검색 API"
+    },
+    {
+      "name": "video",
+      "description": "비디오 검색 API"
+    },
+    {
+      "name": "suggest",
+      "description": "검색어 제안 API"
+    },
+    {
+      "name": "research",
+      "description": "리서치 API"
+    },
+    {
+      "name": "chat",
+      "description": "채팅 API"
+    },
+    {
+      "name": "pages",
+      "description": "페이지 관리 API"
+    },
+    {
+      "name": "upload",
+      "description": "파일 업로드 API"
+    },
+    {
+      "name": "library",
+      "description": "라이브러리 API"
+    },
+    {
+      "name": "council",
+      "description": "어드바이저 API"
+    },
+    {
+      "name": "profile",
+      "description": "프로필 API"
+    },
+    {
+      "name": "products",
+      "description": "상품 검색 API"
+    },
+    {
+      "name": "spaces",
+      "description": "스페이스 API"
+    },
+    {
+      "name": "keys",
+      "description": "API 키 관리 API"
+    },
+    {
+      "name": "monitor",
+      "description": "모니터링 API"
+    },
+    {
+      "name": "analytics",
+      "description": "분석 API"
+    },
+    {
+      "name": "ltr",
+      "description": "Learning-to-Rank API"
+    },
+    {
+      "name": "experiments",
+      "description": "A/B 테스트 API"
+    },
+    {
+      "name": "blacklist",
+      "description": "블랙리스트 API"
+    },
+    {
+      "name": "queue",
+      "description": "큐 관리 API"
+    }
+  ],
+  "paths": {
+    "/api/search": {
+      "post": {
+        "tags": [
+          "search"
+        ],
+        "summary": "검색 실행 (POST)",
+        "description": "검색 쿼리를 받아 여러 백엔드에서 결과를 수집하고 통합합니다.\n\n**지능형 라우터**: 쿼리를 분석하여 최적의 백엔드를 자동 선택합니다.\n",
+        "operationId": "searchPost",
+        "security": [
+          {
+            "apiKey": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SearchRequest"
+              },
+              "example": {
+                "query": "react hooks tutorial",
+                "max_results": 10,
+                "search_depth": "basic",
+                "topic": "general",
+                "sort_by": "relevance"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "검색 성공",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SearchResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          }
+        }
+      },
+      "get": {
+        "tags": [
+          "search"
+        ],
+        "summary": "검색 실행 (GET)",
+        "description": "쿼리 파라미터로 검색을 실행합니다.",
+        "operationId": "searchGet",
+        "security": [
+          {
+            "apiKey": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "query",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "example": "react hooks tutorial"
+          },
+          {
+            "name": "max_results",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "default": 10
+            }
+          },
+          {
+            "name": "search_depth",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "basic",
+                "advanced"
+              ],
+              "default": "basic"
+            }
+          },
+          {
+            "name": "topic",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "general",
+                "news",
+                "finance"
+              ]
+            }
+          },
+          {
+            "name": "sort_by",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "relevance",
+                "date",
+                "blend"
+              ]
+            }
+          },
+          {
+            "name": "time_range",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "day",
+                "week",
+                "month",
+                "year"
+              ]
+            }
+          },
+          {
+            "name": "country",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "example": "KR"
+          },
+          {
+            "name": "language",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "example": "ko"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "검색 성공",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SearchResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          }
+        }
+      }
+    },
+    "/api/search/stream": {
+      "get": {
+        "tags": [
+          "search"
+        ],
+        "summary": "스트리밍 검색",
+        "description": "검색 결과를 스트리밍으로 반환합니다.",
+        "operationId": "searchStream",
+        "security": [
+          {
+            "apiKey": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "query",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "스트리밍 응답",
+            "content": {
+              "text/event-stream": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/index": {
+      "post": {
+        "tags": [
+          "index"
+        ],
+        "summary": "문서 인덱싱",
+        "description": "문서를 Vectorize 인덱스에 추가합니다.",
+        "operationId": "indexDocument",
+        "security": [
+          {
+            "apiKey": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/IndexRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "인덱싱 성공",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "document_id": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          }
+        }
+      },
+      "get": {
+        "tags": [
+          "index"
+        ],
+        "summary": "인덱스 검색",
+        "description": "인덱스된 문서를 검색합니다.",
+        "operationId": "indexSearch",
+        "security": [
+          {
+            "apiKey": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "q",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "default": 10
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "검색 성공",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IndexSearchResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "index"
+        ],
+        "summary": "인덱스 삭제",
+        "description": "인덱스된 문서를 삭제합니다.",
+        "operationId": "deleteIndex",
+        "security": [
+          {
+            "apiKey": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "삭제 성공"
+          }
+        }
+      }
+    },
+    "/api/index/init": {
+      "post": {
+        "tags": [
+          "index"
+        ],
+        "summary": "인덱스 초기화",
+        "description": "Vectorize 인덱스를 초기화합니다.",
+        "operationId": "initIndex",
+        "security": [
+          {
+            "apiKey": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "초기화 성공"
+          }
+        }
+      }
+    },
+    "/api/index/stats": {
+      "get": {
+        "tags": [
+          "index"
+        ],
+        "summary": "인덱스 통계",
+        "description": "인덱스 상태와 통계를 조회합니다.",
+        "operationId": "indexStats",
+        "responses": {
+          "200": {
+            "description": "통계 조회 성공",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IndexStats"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/index/documents": {
+      "get": {
+        "tags": [
+          "index"
+        ],
+        "summary": "문서 목록",
+        "description": "인덱스된 문서 목록을 조회합니다.",
+        "operationId": "listDocuments",
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "default": 100
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "문서 목록 조회 성공",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DocumentList"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/index/search": {
+      "get": {
+        "tags": [
+          "index"
+        ],
+        "summary": "인덱스 검색 (GET)",
+        "description": "인덱스된 문서를 검색합니다.",
+        "operationId": "indexSearchGet",
+        "parameters": [
+          {
+            "name": "q",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "default": 10
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "검색 성공",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IndexSearchResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/news": {
+      "get": {
+        "tags": [
+          "news"
+        ],
+        "summary": "뉴스 목록",
+        "description": "뉴스 기사 목록을 조회합니다.",
+        "operationId": "listNews",
+        "parameters": [
+          {
+            "name": "category",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "tech",
+                "science",
+                "business",
+                "general"
+              ]
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "default": 20
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "뉴스 목록 조회 성공",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NewsList"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "news"
+        ],
+        "summary": "뉴스 수집",
+        "description": "RSS 피드에서 뉴스를 수집합니다.",
+        "operationId": "collectNews",
+        "security": [
+          {
+            "apiKey": []
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "feeds": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "수집 성공"
+          }
+        }
+      }
+    },
+    "/api/news/trending": {
+      "get": {
+        "tags": [
+          "news"
+        ],
+        "summary": "트렌딩 뉴스",
+        "description": "트렌딩 뉴스를 조회합니다.",
+        "operationId": "trendingNews",
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "default": 10
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "트렌딩 뉴스 조회 성공",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NewsList"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/health": {
+      "get": {
+        "tags": [
+          "health"
+        ],
+        "summary": "헬스 체크",
+        "description": "시스템 상태를 확인합니다.",
+        "operationId": "healthCheck",
+        "responses": {
+          "200": {
+            "description": "시스템 정상",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HealthResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/metrics": {
+      "get": {
+        "tags": [
+          "health"
+        ],
+        "summary": "메트릭 조회",
+        "description": "시스템 메트릭을 조회합니다.",
+        "operationId": "getMetrics",
+        "responses": {
+          "200": {
+            "description": "메트릭 조회 성공",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MetricsResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/extract": {
+      "post": {
+        "tags": [
+          "extract"
+        ],
+        "summary": "URL 콘텐츠 추출",
+        "description": "URL에서 콘텐츠를 추출합니다.",
+        "operationId": "extractContent",
+        "security": [
+          {
+            "apiKey": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "urls"
+                ],
+                "properties": {
+                  "urls": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    },
+                    "example": [
+                      "https://example.com/article"
+                    ]
+                  },
+                  "max_tokens": {
+                    "type": "integer",
+                    "default": 800
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "추출 성공",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExtractResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/images": {
+      "get": {
+        "tags": [
+          "images"
+        ],
+        "summary": "이미지 검색",
+        "description": "이미지를 검색합니다.",
+        "operationId": "searchImages",
+        "parameters": [
+          {
+            "name": "query",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "num",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "default": 8
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "이미지 검색 성공",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImageSearchResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/suggest": {
+      "get": {
+        "tags": [
+          "suggest"
+        ],
+        "summary": "검색어 제안",
+        "description": "부분 입력에 대한 검색어를 제안합니다.",
+        "operationId": "suggestQuery",
+        "parameters": [
+          {
+            "name": "q",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "default": 5
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "제안 성공",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SuggestResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/keys": {
+      "post": {
+        "tags": [
+          "keys"
+        ],
+        "summary": "API 키 생성",
+        "description": "새로운 API 키를 생성합니다.",
+        "operationId": "createApiKey",
+        "security": [
+          {
+            "apiKey": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateKeyRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "키 생성 성공",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiKeyResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          }
+        }
+      },
+      "get": {
+        "tags": [
+          "keys"
+        ],
+        "summary": "API 키 목록",
+        "description": "API 키 목록을 조회합니다.",
+        "operationId": "listApiKeys",
+        "security": [
+          {
+            "apiKey": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "키 목록 조회 성공",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ApiKeyInfo"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/keys/{keyId}": {
+      "get": {
+        "tags": [
+          "keys"
+        ],
+        "summary": "API 키 상세",
+        "description": "API 키 상세 정보를 조회합니다.",
+        "operationId": "getApiKey",
+        "security": [
+          {
+            "apiKey": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "keyId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "키 조회 성공",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiKeyInfo"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "키를 찾을 수 없음"
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "keys"
+        ],
+        "summary": "API 키 삭제",
+        "description": "API 키를 삭제합니다.",
+        "operationId": "deleteApiKey",
+        "security": [
+          {
+            "apiKey": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "keyId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "키 삭제 성공"
+          },
+          "404": {
+            "description": "키를 찾을 수 없음"
+          }
+        }
+      }
+    },
+    "/api/crawl": {
+      "post": {
+        "tags": [
+          "crawl"
+        ],
+        "summary": "크롤링 시작",
+        "description": "URL 크롤링을 시작합니다.",
+        "operationId": "startCrawl",
+        "security": [
+          {
+            "apiKey": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CrawlRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "크롤링 시작 성공",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CrawlResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "tags": [
+          "crawl"
+        ],
+        "summary": "크롤링 상태",
+        "description": "크롤링 작업 상태를 조회합니다.",
+        "operationId": "getCrawlStatus",
+        "security": [
+          {
+            "apiKey": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "크롤링 상태 조회 성공",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CrawlStatus"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/crawl/{id}": {
+      "get": {
+        "tags": [
+          "crawl"
+        ],
+        "summary": "크롤링 상세",
+        "description": "크롤링 작업 상세 정보를 조회합니다.",
+        "operationId": "getCrawlDetail",
+        "security": [
+          {
+            "apiKey": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "크롤링 상세 조회 성공",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CrawlDetail"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "crawl"
+        ],
+        "summary": "크롤링 취소",
+        "description": "크롤링 작업을 취소합니다.",
+        "operationId": "cancelCrawl",
+        "security": [
+          {
+            "apiKey": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "크롤링 취소 성공"
+          }
+        }
+      }
+    },
+    "/api/ltr/impression": {
+      "post": {
+        "tags": [
+          "ltr"
+        ],
+        "summary": "인상록 기록",
+        "description": "검색 결과 노출을 기록합니다.",
+        "operationId": "logImpression",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ImpressionRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "기록 성공"
+          }
+        }
+      }
+    },
+    "/api/ltr/click": {
+      "post": {
+        "tags": [
+          "ltr"
+        ],
+        "summary": "클릭 기록",
+        "description": "검색 결과 클릭을 기록합니다.",
+        "operationId": "logClick",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ClickRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "기록 성공"
+          }
+        }
+      }
+    },
+    "/api/ltr/status": {
+      "get": {
+        "tags": [
+          "ltr"
+        ],
+        "summary": "LTR 상태",
+        "description": "LTR 모델 상태를 조회합니다.",
+        "operationId": "ltrStatus",
+        "responses": {
+          "200": {
+            "description": "LTR 상태 조회 성공",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LtrStatus"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/experiments": {
+      "post": {
+        "tags": [
+          "experiments"
+        ],
+        "summary": "실험 생성",
+        "description": "A/B 테스트 실험을 생성합니다.",
+        "operationId": "createExperiment",
+        "security": [
+          {
+            "apiKey": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ExperimentRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "실험 생성 성공"
+          }
+        }
+      },
+      "get": {
+        "tags": [
+          "experiments"
+        ],
+        "summary": "실험 목록",
+        "description": "실험 목록을 조회합니다.",
+        "operationId": "listExperiments",
+        "security": [
+          {
+            "apiKey": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "실험 목록 조회 성공"
+          }
+        }
+      }
+    },
+    "/api/experiments/{name}/click": {
+      "post": {
+        "tags": [
+          "experiments"
+        ],
+        "summary": "실험 클릭 기록",
+        "description": "실험 결과 클릭을 기록합니다.",
+        "operationId": "logExperimentClick",
+        "parameters": [
+          {
+            "name": "name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "variant": {
+                    "type": "string"
+                  },
+                  "result_url": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "기록 성공"
+          }
+        }
+      }
+    },
+    "/api/blacklist": {
+      "get": {
+        "tags": [
+          "blacklist"
+        ],
+        "summary": "블랙리스트 조회",
+        "description": "블랙리스트 도메인을 조회합니다.",
+        "operationId": "getBlacklist",
+        "security": [
+          {
+            "apiKey": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "블랙리스트 조회 성공",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "blacklist"
+        ],
+        "summary": "블랙리스트 추가",
+        "description": "도메인을 블랙리스트에 추가합니다.",
+        "operationId": "addBlacklist",
+        "security": [
+          {
+            "apiKey": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "domain"
+                ],
+                "properties": {
+                  "domain": {
+                    "type": "string"
+                  },
+                  "reason": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "추가 성공"
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "blacklist"
+        ],
+        "summary": "블랙리스트 삭제",
+        "description": "도메인을 블랙리스트에서 삭제합니다.",
+        "operationId": "removeBlacklist",
+        "security": [
+          {
+            "apiKey": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "domain",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "삭제 성공"
+          }
+        }
+      }
+    },
+    "/api/queue/stats": {
+      "get": {
+        "tags": [
+          "queue"
+        ],
+        "summary": "큐 통계",
+        "description": "큐 상태 통계를 조회합니다.",
+        "operationId": "queueStats",
+        "responses": {
+          "200": {
+            "description": "큐 통계 조회 성공",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/QueueStats"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/queue/pending": {
+      "get": {
+        "tags": [
+          "queue"
+        ],
+        "summary": "대기 중인 작업",
+        "description": "대기 중인 큐 작업을 조회합니다.",
+        "operationId": "pendingJobs",
+        "responses": {
+          "200": {
+            "description": "대기 작업 조회 성공",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "object"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/monitor": {
+      "get": {
+        "tags": [
+          "monitor"
+        ],
+        "summary": "모니터링 대시보드",
+        "description": "시스템 모니터링 데이터를 조회합니다.",
+        "operationId": "getMonitor",
+        "responses": {
+          "200": {
+            "description": "모니터링 데이터 조회 성공",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MonitorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/chat/completions": {
+      "post": {
+        "tags": [
+          "chat"
+        ],
+        "summary": "OpenAI 호환 채팅",
+        "description": "OpenAI API와 호환되는 채팅 완성 엔드포인트입니다.",
+        "operationId": "chatCompletions",
+        "security": [
+          {
+            "apiKey": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChatCompletionRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "채팅 완성 성공",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChatCompletionResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/models": {
+      "get": {
+        "tags": [
+          "chat"
+        ],
+        "summary": "사용 가능한 모델",
+        "description": "사용 가능한 모델 목록을 조회합니다.",
+        "operationId": "listModels",
+        "responses": {
+          "200": {
+            "description": "모델 목록 조회 성공",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "object": {
+                      "type": "string",
+                      "enum": [
+                        "list"
+                      ]
+                    },
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "object": {
+                            "type": "string"
+                          },
+                          "owned_by": {
+                            "type": "string"
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "apiKey": {
+        "type": "apiKey",
+        "in": "header",
+        "name": "X-API-Key",
+        "description": "API 키 (X-API-Key 헤더 또는 Authorization: Bearer 토큰)"
+      }
+    },
+    "schemas": {
+      "SearchRequest": {
+        "type": "object",
+        "required": [
+          "query"
+        ],
+        "properties": {
+          "query": {
+            "type": "string",
+            "description": "검색 쿼리",
+            "example": "react hooks tutorial"
+          },
+          "max_results": {
+            "type": "integer",
+            "default": 10,
+            "description": "최대 결과 수"
+          },
+          "search_depth": {
+            "type": "string",
+            "enum": [
+              "basic",
+              "advanced"
+            ],
+            "default": "basic",
+            "description": "검색 깊이"
+          },
+          "topic": {
+            "type": "string",
+            "enum": [
+              "general",
+              "news",
+              "finance"
+            ],
+            "description": "쿼리 토픽"
+          },
+          "sort_by": {
+            "type": "string",
+            "enum": [
+              "relevance",
+              "date",
+              "blend"
+            ],
+            "default": "relevance",
+            "description": "정렬 기준"
+          },
+          "time_range": {
+            "type": "string",
+            "enum": [
+              "day",
+              "week",
+              "month",
+              "year"
+            ],
+            "description": "시간 범위"
+          },
+          "country": {
+            "type": "string",
+            "description": "국가 코드",
+            "example": "KR"
+          },
+          "language": {
+            "type": "string",
+            "description": "언어 코드",
+            "example": "ko"
+          },
+          "include_answer": {
+            "type": "boolean",
+            "default": false,
+            "description": "AI 답변 포함 여부"
+          },
+          "include_raw_content": {
+            "type": "boolean",
+            "default": false,
+            "description": "원본 콘텐츠 포함 여부"
+          },
+          "include_domains": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "포함할 도메인"
+          },
+          "exclude_domains": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "제외할 도메인"
+          }
+        }
+      },
+      "SearchResponse": {
+        "type": "object",
+        "properties": {
+          "query": {
+            "type": "string"
+          },
+          "answer": {
+            "$ref": "#/components/schemas/SearchAnswer"
+          },
+          "results": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SearchResult"
+            }
+          },
+          "response_time_ms": {
+            "type": "integer"
+          },
+          "backend": {
+            "type": "string"
+          },
+          "fallback_used": {
+            "type": "boolean"
+          },
+          "related_queries": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "page": {
+            "type": "integer"
+          },
+          "page_size": {
+            "type": "integer"
+          },
+          "total_results": {
+            "type": "integer"
+          },
+          "total_pages": {
+            "type": "integer"
+          },
+          "images": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ImageResult"
+            }
+          },
+          "knowledge_graph": {
+            "type": "object"
+          },
+          "no_results": {
+            "type": "boolean"
+          }
+        }
+      },
+      "SearchResult": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string"
+          },
+          "url": {
+            "type": "string",
+            "format": "uri"
+          },
+          "content": {
+            "type": "string"
+          },
+          "score": {
+            "type": "number",
+            "format": "float"
+          },
+          "domain": {
+            "type": "string"
+          },
+          "published_date": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "raw_content": {
+            "type": "string"
+          }
+        }
+      },
+      "SearchAnswer": {
+        "type": "object",
+        "properties": {
+          "text": {
+            "type": "string"
+          },
+          "confidence": {
+            "type": "number",
+            "format": "float"
+          },
+          "sources": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            }
+          }
+        }
+      },
+      "IndexRequest": {
+        "type": "object",
+        "required": [
+          "content",
+          "url"
+        ],
+        "properties": {
+          "content": {
+            "type": "string",
+            "description": "인덱싱할 콘텐츠"
+          },
+          "url": {
+            "type": "string",
+            "format": "uri",
+            "description": "문서 URL"
+          },
+          "title": {
+            "type": "string",
+            "description": "문서 제목"
+          },
+          "category": {
+            "type": "string",
+            "description": "카테고리"
+          }
+        }
+      },
+      "IndexSearchResponse": {
+        "type": "object",
+        "properties": {
+          "query": {
+            "type": "string"
+          },
+          "results_count": {
+            "type": "integer"
+          },
+          "latency_ms": {
+            "type": "integer"
+          },
+          "results": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "score": {
+                  "type": "number"
+                },
+                "title": {
+                  "type": "string"
+                },
+                "url": {
+                  "type": "string"
+                },
+                "content": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      },
+      "IndexStats": {
+        "type": "object",
+        "properties": {
+          "total_documents": {
+            "type": "integer"
+          },
+          "total_vectors": {
+            "type": "integer"
+          },
+          "index_health": {
+            "type": "string",
+            "enum": [
+              "healthy",
+              "degraded",
+              "critical"
+            ]
+          },
+          "last_updated": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "DocumentList": {
+        "type": "object",
+        "properties": {
+          "documents": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "title": {
+                  "type": "string"
+                },
+                "url": {
+                  "type": "string"
+                },
+                "category": {
+                  "type": "string"
+                },
+                "indexed_at": {
+                  "type": "string",
+                  "format": "date-time"
+                }
+              }
+            }
+          },
+          "next_cursor": {
+            "type": "string"
+          }
+        }
+      },
+      "NewsList": {
+        "type": "object",
+        "properties": {
+          "articles": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/NewsArticle"
+            }
+          },
+          "total": {
+            "type": "integer"
+          }
+        }
+      },
+      "NewsArticle": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string"
+          },
+          "url": {
+            "type": "string",
+            "format": "uri"
+          },
+          "source": {
+            "type": "string"
+          },
+          "category": {
+            "type": "string"
+          },
+          "published_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "summary": {
+            "type": "string"
+          }
+        }
+      },
+      "HealthResponse": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "healthy",
+              "degraded",
+              "critical"
+            ]
+          },
+          "version": {
+            "type": "string"
+          },
+          "timestamp": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "backends": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "object",
+              "properties": {
+                "status": {
+                  "type": "string"
+                },
+                "latency_ms": {
+                  "type": "integer"
+                }
+              }
+            }
+          }
+        }
+      },
+      "MetricsResponse": {
+        "type": "object",
+        "properties": {
+          "requests_total": {
+            "type": "integer"
+          },
+          "requests_per_minute": {
+            "type": "number"
+          },
+          "avg_latency_ms": {
+            "type": "number"
+          },
+          "error_rate": {
+            "type": "number"
+          },
+          "active_clients": {
+            "type": "integer"
+          }
+        }
+      },
+      "ExtractResponse": {
+        "type": "object",
+        "properties": {
+          "results": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "url": {
+                  "type": "string"
+                },
+                "title": {
+                  "type": "string"
+                },
+                "content": {
+                  "type": "string"
+                },
+                "success": {
+                  "type": "boolean"
+                },
+                "latency_ms": {
+                  "type": "integer"
+                }
+              }
+            }
+          }
+        }
+      },
+      "ImageSearchResponse": {
+        "type": "object",
+        "properties": {
+          "images": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ImageResult"
+            }
+          }
+        }
+      },
+      "ImageResult": {
+        "type": "object",
+        "properties": {
+          "url": {
+            "type": "string",
+            "format": "uri"
+          },
+          "title": {
+            "type": "string"
+          },
+          "source": {
+            "type": "string"
+          },
+          "width": {
+            "type": "integer"
+          },
+          "height": {
+            "type": "integer"
+          }
+        }
+      },
+      "SuggestResponse": {
+        "type": "object",
+        "properties": {
+          "suggestions": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "CreateKeyRequest": {
+        "type": "object",
+        "required": [
+          "name"
+        ],
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "키 이름"
+          },
+          "scope": {
+            "type": "string",
+            "enum": [
+              "read",
+              "write",
+              "admin"
+            ],
+            "default": "read",
+            "description": "키 권한"
+          },
+          "expires_in_days": {
+            "type": "integer",
+            "description": "만료 기간 (일)"
+          }
+        }
+      },
+      "ApiKeyResponse": {
+        "type": "object",
+        "properties": {
+          "key_id": {
+            "type": "string"
+          },
+          "api_key": {
+            "type": "string",
+            "description": "생성된 API 키 (한 번만 표시)"
+          },
+          "name": {
+            "type": "string"
+          },
+          "scope": {
+            "type": "string"
+          },
+          "expires_at": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "created_at": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      },
+      "ApiKeyInfo": {
+        "type": "object",
+        "properties": {
+          "key_id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "scope": {
+            "type": "string"
+          },
+          "created_at": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "last_used_at": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      },
+      "CrawlRequest": {
+        "type": "object",
+        "required": [
+          "urls"
+        ],
+        "properties": {
+          "urls": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "크롤링할 URL 목록"
+          },
+          "depth": {
+            "type": "integer",
+            "default": 1,
+            "description": "크롤링 깊이"
+          },
+          "max_pages": {
+            "type": "integer",
+            "default": 100,
+            "description": "최대 페이지 수"
+          }
+        }
+      },
+      "CrawlResponse": {
+        "type": "object",
+        "properties": {
+          "crawl_id": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "urls_queued": {
+            "type": "integer"
+          }
+        }
+      },
+      "CrawlStatus": {
+        "type": "object",
+        "properties": {
+          "total": {
+            "type": "integer"
+          },
+          "completed": {
+            "type": "integer"
+          },
+          "failed": {
+            "type": "integer"
+          },
+          "in_progress": {
+            "type": "integer"
+          }
+        }
+      },
+      "CrawlDetail": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "urls": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "started_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "completed_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "results": {
+            "type": "object"
+          }
+        }
+      },
+      "ImpressionRequest": {
+        "type": "object",
+        "required": [
+          "query",
+          "results"
+        ],
+        "properties": {
+          "query": {
+            "type": "string"
+          },
+          "results": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            }
+          },
+          "session_id": {
+            "type": "string"
+          }
+        }
+      },
+      "ClickRequest": {
+        "type": "object",
+        "required": [
+          "query",
+          "url",
+          "position"
+        ],
+        "properties": {
+          "query": {
+            "type": "string"
+          },
+          "url": {
+            "type": "string"
+          },
+          "position": {
+            "type": "integer"
+          },
+          "session_id": {
+            "type": "string"
+          }
+        }
+      },
+      "LtrStatus": {
+        "type": "object",
+        "properties": {
+          "model_version": {
+            "type": "string"
+          },
+          "total_impressions": {
+            "type": "integer"
+          },
+          "total_clicks": {
+            "type": "integer"
+          },
+          "click_rate": {
+            "type": "number"
+          },
+          "last_trained": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "ExperimentRequest": {
+        "type": "object",
+        "required": [
+          "name",
+          "variants"
+        ],
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "variants": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "name": {
+                  "type": "string"
+                },
+                "weight": {
+                  "type": "integer"
+                }
+              }
+            }
+          }
+        }
+      },
+      "QueueStats": {
+        "type": "object",
+        "properties": {
+          "pending": {
+            "type": "integer"
+          },
+          "processing": {
+            "type": "integer"
+          },
+          "completed": {
+            "type": "integer"
+          },
+          "failed": {
+            "type": "integer"
+          },
+          "avg_wait_time_ms": {
+            "type": "integer"
+          }
+        }
+      },
+      "MonitorResponse": {
+        "type": "object",
+        "properties": {
+          "uptime": {
+            "type": "string"
+          },
+          "requests_per_second": {
+            "type": "number"
+          },
+          "avg_latency_ms": {
+            "type": "number"
+          },
+          "p95_latency_ms": {
+            "type": "number"
+          },
+          "p99_latency_ms": {
+            "type": "number"
+          },
+          "error_rate": {
+            "type": "number"
+          },
+          "active_connections": {
+            "type": "integer"
+          }
+        }
+      },
+      "ChatCompletionRequest": {
+        "type": "object",
+        "required": [
+          "model",
+          "messages"
+        ],
+        "properties": {
+          "model": {
+            "type": "string",
+            "example": "gpt-3.5-turbo"
+          },
+          "messages": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": [
+                "role",
+                "content"
+              ],
+              "properties": {
+                "role": {
+                  "type": "string",
+                  "enum": [
+                    "system",
+                    "user",
+                    "assistant"
+                  ]
+                },
+                "content": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "temperature": {
+            "type": "number",
+            "default": 0.7
+          },
+          "max_tokens": {
+            "type": "integer"
+          },
+          "stream": {
+            "type": "boolean",
+            "default": false
+          }
+        }
+      },
+      "ChatCompletionResponse": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "object": {
+            "type": "string",
+            "enum": [
+              "chat.completion"
+            ]
+          },
+          "created": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "model": {
+            "type": "string"
+          },
+          "choices": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "index": {
+                  "type": "integer"
+                },
+                "message": {
+                  "type": "object",
+                  "properties": {
+                    "role": {
+                      "type": "string"
+                    },
+                    "content": {
+                      "type": "string"
+                    }
+                  }
+                },
+                "finish_reason": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "usage": {
+            "type": "object",
+            "properties": {
+              "prompt_tokens": {
+                "type": "integer"
+              },
+              "completion_tokens": {
+                "type": "integer"
+              },
+              "total_tokens": {
+                "type": "integer"
+              }
+            }
+          }
+        }
+      }
+    },
+    "responses": {
+      "Unauthorized": {
+        "description": "인증 실패",
+        "content": {
+          "application/json": {
+            "schema": {
+              "type": "object",
+              "properties": {
+                "detail": {
+                  "type": "string"
+                },
+                "code": {
+                  "type": "string",
+                  "enum": [
+                    "unauthorized",
+                    "invalid_key",
+                    "missing_key"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      },
+      "RateLimited": {
+        "description": "Rate Limit 초과",
+        "content": {
+          "application/json": {
+            "schema": {
+              "type": "object",
+              "properties": {
+                "detail": {
+                  "type": "string"
+                },
+                "code": {
+                  "type": "string",
+                  "enum": [
+                    "rate_limited"
+                  ]
+                },
+                "retry_after": {
+                  "type": "integer",
+                  "description": "재시도 대기 시간 (초)"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

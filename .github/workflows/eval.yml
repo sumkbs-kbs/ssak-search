@@ -287,7 +287,7 @@ jobs:
       - name: NDCG@10 quality gate
         id: ndcg_gate
         if: always() && steps.eval.outcome != 'skipped'
-        run: npx tsx scripts/verify-ndcg-gate.ts --threshold 0.45
+        run: npx tsx scripts/verify-ndcg-gate.ts --threshold 0.55
 
       - name: Check results
         id: check

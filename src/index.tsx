@@ -42,6 +42,8 @@ import { monitorRoute } from './routes/monitor'
 import { openaiRoute } from './routes/openai'
 import { analyticsProxyRoute } from './routes/analytics-proxy'
 import { CrawlerDO } from './lib/crawler-do'
+import { AuditLogDO } from './lib/durable/audit-log-do'
+import { TenancyDO } from './lib/durable/tenancy-layer'
 import { crawlRoute } from './routes/crawl'
 import { NewsHubDO } from './lib/news-hub-do'
 import { ClickLogDO } from './lib/ltr/click-logger'
@@ -71,6 +73,8 @@ export { ClickLogDO }
 export { ExperimentDO }
 export { CanaryOrchestratorDO }
 export { NewsHubDO }
+export { AuditLogDO }
+export { TenancyDO }
 
 const app = new Hono<{ Bindings: AppBindings }>()
 

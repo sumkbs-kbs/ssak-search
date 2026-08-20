@@ -684,7 +684,7 @@ describe('sortResults', () => {
       makeResult({ score: 0.6, published_date: new Date().toISOString() }), // fresh
     ]
     const sorted = sortResults(results, ctx)
-    // Bounded blend (w=NEWS_FRESHNESS_WEIGHT): fresh 0.6 + w·1.0·0.4 = 0.72 > old 0.7 + ~0
+    // Bounded blend (w=NEWS_FRESHNESS_WEIGHT=0.40): fresh 0.6 + 0.4·1.0·0.4 = 0.76 > 0.7 + ~0
     expect(sorted[0].published_date).toBeDefined()
     expect(sorted[0].score).toBe(0.6)
   })
@@ -699,7 +699,7 @@ describe('sortResults', () => {
       makeResult({ score: 0.73, published_date: new Date().toISOString() }), // fresh, weaker
     ]
     const sorted = sortResults(results, ctx)
-    // score 1.0 → key 1.0 + w·recency·0 = 1.0 > 0.73 + w·1.0·0.27 = 0.811 (w=NEWS_FRESHNESS_WEIGHT)
+    // score 1.0 → key 1.0 + 0.40·recency·0 = 1.0 > 0.73 + 0.40·1.0·0.27 = 0.838
     expect(sorted[0].score).toBe(1.0)
   })
 

@@ -4,16 +4,85 @@
  * These tests exercise the full Hono middleware stack (auth, rate-limit, logging)
  * against a real in-memory Miniflare worker, so no external deployment needed.
  *
+ * Deterministic by design: globalThis.fetch is mocked (same pattern as
+ * e2e-golden-path.test.ts), so NO external network is touched — the search
+ * tests can never flake on upstream rate limits, and the depth=full health
+ * probe runs against the mock instead of burning real backend quota.
+ *
  * Run: npx vitest run --config vitest.integration.config.ts
  */
 
 import { exports } from 'cloudflare:workers'
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, vi } from 'vitest'
 
 interface WorkerModule {
   fetch: (url: string, init?: RequestInit) => Promise<Response>
 }
 const worker = (exports as unknown as { default: WorkerModule }).default
+
+// ---------------------------------------------------------------------------
+// Deterministic backend fixtures (no external network)
+// ---------------------------------------------------------------------------
+
+const BING_HTML = `
+<!DOCTYPE html>
+<html><body>
+  <ol id="b_results">
+    <li class="b_algo">
+      <div class="b_algoheader">
+        <a href="https://example.com/api-test-1">API Test Result 1</a>
+      </div>
+      <div class="b_caption"><p class="b_lineclamp3">A deterministic snippet for integration tests.</p></div>
+    </li>
+    <li class="b_algo">
+      <div class="b_algoheader">
+        <a href="https://example.com/api-test-2">API Test Result 2</a>
+      </div>
+      <div class="b_caption"><p class="b_lineclamp3">Another deterministic snippet for integration tests.</p></div>
+    </li>
+  </ol>
+</body></html>
+`
+
+// Jina Reader — /api/extract's Strategy 1 (raw content extraction).
+const JINA_CONTENT =
+  'Deterministic article body served by the mocked Jina reader for /api/extract.'
+
+const mockFetch = vi.fn(async (input: string | URL | Request, _init?: RequestInit): Promise<Response> => {
+  const url = typeof input === 'string' ? input : input instanceof URL ? input.toString() : input.url
+
+  if (url.includes('bing.com')) {
+    return new Response(BING_HTML, { status: 200, headers: { 'content-type': 'text/html; charset=utf-8' } })
+  }
+  if (url.startsWith('https://r.jina.ai/')) {
+    return new Response(
+      JSON.stringify({
+        data: { title: 'API Test Article', content: JINA_CONTENT, images: [] },
+        url,
+      }),
+      { status: 200, headers: { 'content-type': 'application/json' } },
+    )
+  }
+  // DDG abstract — answer-generation fallback (Workers AI is remote-only in
+  // the test runtime, so the chain degrades to extractive/abstract answers).
+  if (url.startsWith('https://api.duckduckgo.com/')) {
+    return new Response(
+      JSON.stringify({
+        AbstractText: 'Deterministic abstract for answer generation.',
+        AbstractSource: 'Wikipedia',
+        AbstractURL: 'https://en.wikipedia.org/wiki/Example',
+      }),
+      { status: 200, headers: { 'content-type': 'application/json' } },
+    )
+  }
+  // Every other backend fails gracefully — the orchestrator serves partial
+  // results when individual backends 404.
+  return new Response('Not Found', { status: 404, headers: { 'content-type': 'text/plain' } })
+})
+
+// Module-scope install: this test file runs in its own workerd isolate
+// (vitest-pool-workers), so the mock cannot leak into other test files.
+globalThis.fetch = mockFetch
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -41,7 +110,13 @@ async function fetchJson(
   body: unknown
 }> {
   const url = `https://ssak-search.pages.dev${path}`
-  const res = await worker.fetch(url, withUniqueIp(init))
+  // The test worker declares SEARCH_API_KEY (vitest.integration.config.ts)
+  // and auth.ts is fail-closed — every request carries the test tenant key.
+  const initWithAuth = withUniqueIp(init)
+  const headers = new Headers(initWithAuth.headers)
+  if (!headers.has('X-API-Key')) headers.set('X-API-Key', 'test-key')
+  initWithAuth.headers = headers
+  const res = await worker.fetch(url, initWithAuth)
   const text = await res.text()
   let body: unknown
   try {
@@ -61,7 +136,11 @@ async function fetchText(
   body: string
 }> {
   const url = `https://ssak-search.pages.dev${path}`
-  const res = await worker.fetch(url, withUniqueIp(init))
+  const initWithAuth = withUniqueIp(init)
+  const headers = new Headers(initWithAuth.headers)
+  if (!headers.has('X-API-Key')) headers.set('X-API-Key', 'test-key')
+  initWithAuth.headers = headers
+  const res = await worker.fetch(url, initWithAuth)
   return { status: res.status, headers: res.headers, body: await res.text() }
 }
 
@@ -148,8 +227,9 @@ describe('GET /api/metrics', () => {
 
 describe('POST /api/search', () => {
   it('returns 429 when the per-IP client rate limit is exceeded', async () => {
-    // Open mode (no TENANTS_CONFIG/SEARCH_API_KEY in the worker) applies
-    // DEFAULT_RATE_LIMIT=30/min per client IP (auth.ts). Fire 31 requests
+    // The test worker declares SEARCH_API_KEY (vitest.integration.config.ts)
+    // → DEFAULT_TENANT rateLimitPerMinute=30/min per client IP (auth.ts).
+    // Fire 31 requests
     // from ONE fixed IP — the 31st must be rejected with 429. This keeps the
     // client rate limiter exercised by integration tests (the unique-IP
     // helper used elsewhere deliberately bypasses it so tests don't poison
@@ -164,6 +244,7 @@ describe('POST /api/search', () => {
         headers: {
           'Content-Type': 'application/json',
           'X-Forwarded-For': '198.51.100.200',
+          'X-API-Key': 'test-key',
         },
         body: JSON.stringify({ query: 'rate limit probe', max_results: 1 }),
       })

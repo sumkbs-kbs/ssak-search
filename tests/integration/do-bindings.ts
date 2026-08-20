@@ -16,7 +16,7 @@
  * Resolution: override EVERY script_name designator with a self-referencing
  * designator ({ className }, no scriptName). The pool resolves self
  * designators from the MAIN worker's exports, and src/index.tsx still
- * re-exports all 11 DO classes (inert in production Pages, but the test
+ * re-exports all 14 DO classes (inert in production Pages, but the test
  * runtime uses them directly). Keep this list in sync with wrangler.jsonc /
  * wrangler.do.jsonc.
  */
@@ -32,6 +32,9 @@ export const DO_BINDINGS = {
   CLICK_LOG_DO: 'ClickLogDO',
   EXPERIMENT_DO: 'ExperimentDO',
   CANARY_DO: 'CanaryOrchestratorDO',
+  TENANT_AUDIT_DO: 'AuditLogDO',
+  TENANCY_DO: 'TenancyDO',
+  NEWS_HUB_DO: 'NewsHubDO',
 } as const
 
 /** Class names for the SQLite-backed DO migration declaration. */

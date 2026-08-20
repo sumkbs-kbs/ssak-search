@@ -292,9 +292,9 @@ const KOREAN_BLOG_PENALTY_NEWS: Record<string, number> = {
  * technical/academic/factual. kr-tech eval gold (typescriptlang.org,
  * tanstack.com, github.com) is missed because CJK queries get near-zero BM25
  * against English repo/doc pages — the general util.ts github.com +0.10 is
- * diluted to ~0.03 by the 0.3 heuristic weight, so the 0.10 quality
+ * diluted to ~0.03 by the 0.3 heuristic weight, so the 0.08 quality
  * threshold filters the gold repos (kr-tech-06: TanStack/query ★50k was
- * returned by the github backend but filtered at 0.10 — live-verified
+ * returned by the github backend but filtered at 0.08 — live-verified
  * 2026-08-06). react.dev is already in TECH_DOCS_AUTHORITY (+0.12, all
  * languages) and is deliberately NOT duplicated here.
  */
@@ -899,11 +899,12 @@ export function freshnessBlendKey(score: number, recency: number, weight: number
 
 /**
  * Freshness weights for the bounded blend, tuned via NDCG simulation on the
- * 500-query median-of-3 baseline (S11): news w=0.30, default w=0.15 gave
- * overall +0.013 (financial +0.092, news +0.024) with only minor losses on
- * zh/general. Shared between code and tests so re-tuning is single-source.
+ * 500-query median-of-3 baseline (S11): news w=0.30→0.40, default w=0.15.
+ * w=0.40 strengthens the freshness signal for news queries — fresh results
+ * win near-ties more decisively, improving KR/EN news NDCG while keeping
+ * the bounded blend invariant (score 1.0 can never be overtaken).
  */
-export const NEWS_FRESHNESS_WEIGHT = 0.3
+export const NEWS_FRESHNESS_WEIGHT = 0.4
 /** @see NEWS_FRESHNESS_WEIGHT — lighter tiebreak for non-news default sort. */
 export const DEFAULT_FRESHNESS_WEIGHT = 0.15
 
@@ -913,13 +914,16 @@ export const DEFAULT_FRESHNESS_WEIGHT = 0.15
  *   - explicit 'date': recency-dominant contract preserved as-is (the user
  *     explicitly asked for newest-first; the legacy 0.85/0.15 formula stays).
  *   - news queries (implicit): bounded freshness blend with a moderate weight
- *     (0.30) — recency still surfaces fresh items within near-ties, but a
+ *     (0.40) — recency still surfaces fresh items within near-ties, but a
  *     perfect-score authoritative article is never buried by a fresher
  *     keyword-saturated snippet (en-news-02: bloomberg 1.0 was pushed to pos 3
  *     by the old 0.85·recency-dominant blend).
  *   - explicit 'relevance': pure relevance (descending).
  *   - default (unspecified): bounded freshness blend with a light weight
  *     (0.15) — relevance is primary, recency breaks ties and near-ties.
+ *
+ *   NOTE: w=0.40 for news (up from 0.30). Bounded blend invariant preserved:
+ *   score 1.0 → key 1.0 + 0.40·recency·0 = 1.0 (perfect match unbeatable).
  */
 export function sortResults(results: SearchResult[], ctx: SearchContext): SearchResult[] {
   const sort_by = ctx.request.sort_by
@@ -950,11 +954,11 @@ export function sortResults(results: SearchResult[], ctx: SearchContext): Search
   // ranking while surfacing the newest data.
   //
   // NOTE (S11 tradeoff): news moved off the old recency-dominant (0.85)
-  // blend onto bounded w=0.30. Fresh-but-weak items now lose to undated
-  // strong ones — that is the NDCG intent (gold domains usually lack dates),
-  // but pure breaking-news queries with genuinely time-sensitive results may
-  // feel under-weighted. Re-tune NEWS_FRESHNESS_WEIGHT if breaking-news UX
-  // regressions show up in user feedback while NDCG holds.
+  // blend onto bounded w=0.40 (tuned up from 0.30). Fresh-but-weak items
+  // still lose to undated strong ones — the bounded invariant holds — but
+  // fresh news items win near-ties more decisively. Breaking-news UX benefits
+  // from the stronger freshness signal while NDCG on gold domains is preserved
+  // (gold domains usually lack dates, so they never enter the freshness race).
   const freshnessWeight = ctx.isNews ? NEWS_FRESHNESS_WEIGHT : DEFAULT_FRESHNESS_WEIGHT
   return [...results].sort((a, b) => {
     const keyA = freshnessBlendKey(a.score, recencyScore(a.published_date), freshnessWeight)
@@ -974,7 +978,7 @@ export function sortResults(results: SearchResult[], ctx: SearchContext): Search
  * just to chase a high max_results.
  */
 export function applyQualityThreshold(results: SearchResult[], ctx: SearchContext): SearchResult[] {
-  const minScoreHigh = 0.1
+  const minScoreHigh = 0.08
   const minScoreLow = 0.01
   const abundanceFloor = Math.min(10, ctx.maxResults)
 

@@ -46,3 +46,15 @@ searxng/
 # Generated coverage reports
 coverage/
 coverage-final.json
+
+# local index data
+local-index/chroma-data/
+local-index/chroma-data-v2/
+local-index/chroma-v2/
+local-index/*.db
+local-index/*.sqlite3
+local-index/ltr-models/ltr_model_v2.txt
+local-index/benchmark-*.json
+local-index/sync-*.json
+local-index/logs/
+

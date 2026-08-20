@@ -10,7 +10,18 @@ export default defineConfig({
       },
       // Pages wrangler config doesn't have a `main` field, so set it explicitly
       main: './src/index.tsx',
+      // Keep the whole session local — no Cloudflare credentials needed.
+      // (Same rationale as vitest.e2e.config.ts: remote Vectorize/D1 bindings
+      // are not dialed; the worker treats missing index bindings as
+      // "self-index not seeded yet", a legitimate production state.)
+      remoteBindings: false,
       miniflare: {
+        // Fail-closed auth (auth.ts): the test worker declares a key so the
+        // HTTP-stack tests (api.test.ts) authenticate like a real tenant.
+        // NOTE: use `bindings`, not `vars` — this pool version's core miniflare
+        // plugin schema has no `vars` field (silently dropped), while
+        // `bindings` (object form) is merged into the worker env.
+        bindings: { SEARCH_API_KEY: 'test-key' },
         compatibilityFlags: ['nodejs_compat'],
         // Installed workerd binary supports compat dates only up to 2026-07-02
         // (verified 2026-08-05) — 2026-07-10 fails with ERR_RUNTIME_FAILURE

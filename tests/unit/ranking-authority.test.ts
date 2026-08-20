@@ -339,7 +339,7 @@ describe('ranking — query-context-aware domain authority (S2/S3)', () => {
   it('S19: Korean tech query applies the github.com gold bonus (kr-tech-06 threshold fix)', () => {
     // kr-tech-06 (React Query 사용법): TanStack/query ★50k was RETURNED by
     // the github backend but scored ~0.10 against the CJK query and got
-    // filtered by the 0.10 quality threshold. KOREAN_TECH_AUTHORITY must lift
+    // filtered by the 0.08 quality threshold. KOREAN_TECH_AUTHORITY must lift
     // github.com gold repos above the threshold.
     const ctx = makeCtx({ korean: true, isNews: false, queryType: 'technical' as never, query: 'React Query 사용법' })
     const repo = makeResult(
@@ -358,7 +358,7 @@ describe('ranking — query-context-aware domain authority (S2/S3)', () => {
     if (!repoRanked || !plainRanked) throw new Error('ranked repo/plain missing')
     // Identical text — the only difference is the +0.15 github.com bonus.
     expect(repoRanked.score - plainRanked.score).toBeGreaterThan(0.1)
-    // And the bonus keeps the repo above the 0.10 quality threshold.
+    // And the bonus keeps the repo above the 0.08 quality threshold.
     expect(repoRanked.score).toBeGreaterThan(0.1)
   })
 

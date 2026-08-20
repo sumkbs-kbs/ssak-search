@@ -1,0 +1,385 @@
+{
+  "total_urls": 86,
+  "urls": [
+    {
+      "url": "https://raw.githubusercontent.com/bun-sh/bun/main/README.md",
+      "source": "seed"
+    },
+    {
+      "url": "https://raw.githubusercontent.com/nrwl/nx/master/README.md",
+      "source": "seed"
+    },
+    {
+      "url": "https://docs.docker.com/registry/",
+      "source": "seed"
+    },
+    {
+      "url": "https://docs.docker.com/css/style.513ac5245bf373beb42302e1dc4bc5e9fe221cf733b839e56c769114ff8ef16d.css",
+      "source": "expanded",
+      "parent": "https://docs.docker.com/registry/"
+    },
+    {
+      "url": "https://github.com/docker/docs/issues/new?template=doc_issue.yml&location=https%3a%2f%2fdocs.docker.com%2fretired%2f&labels=status%2Ftriage",
+      "source": "expanded",
+      "parent": "https://docs.docker.com/registry/"
+    },
+    {
+      "url": "https://docs.docker.com/docker-for-null/",
+      "source": "seed"
+    },
+    {
+      "url": "https://en.wikipedia.org/wiki/C%2B%2B",
+      "source": "seed"
+    },
+    {
+      "url": "https://en.wikipedia.org/w/load.php?lang=en&amp;modules=ext.cite.parsoid.styles%7Cext.cite.styles%7Cext.pygments%7Cext.uls.interlanguage%7Cext.visualEditor.desktopArticleTarget.noscript%7Cext.wikimediamessages.styles%7Cjquery.makeCollapsible.styles%7Cmediawiki.skinning.content.parsoid%7Cmediawiki.skins.legacy%7Cskins.vector.icons%2Cstyles%7Cskins.vector.search.codex.styles%7Cwikibase.client.init&amp;only=styles&amp;skin=vector-2022",
+      "source": "expanded",
+      "parent": "https://en.wikipedia.org/wiki/C%2B%2B"
+    },
+    {
+      "url": "https://en.wikipedia.org/w/load.php?lang=en&amp;modules=site.styles&amp;only=styles&amp;skin=vector-2022",
+      "source": "expanded",
+      "parent": "https://en.wikipedia.org/wiki/C%2B%2B"
+    },
+    {
+      "url": "https://en.wikipedia.org/w/index.php?title=C%2B%2B&amp;action=edit",
+      "source": "expanded",
+      "parent": "https://en.wikipedia.org/wiki/C%2B%2B"
+    },
+    {
+      "url": "https://docs.aws.amazon.com/",
+      "source": "seed"
+    },
+    {
+      "url": "https://docs.aws.amazon.com/assets/r/images/favicon.ico",
+      "source": "expanded",
+      "parent": "https://docs.aws.amazon.com/"
+    },
+    {
+      "url": "https://docs.saltstack.com/en/latest/",
+      "source": "seed"
+    },
+    {
+      "url": "https://docs.docker.com/docker-for-patch/",
+      "source": "seed"
+    },
+    {
+      "url": "https://docs.docker.com/docker-for-uninstall/",
+      "source": "seed"
+    },
+    {
+      "url": "https://expressjs.com/",
+      "source": "seed"
+    },
+    {
+      "url": "https://expressjs.com/favicon.svg",
+      "source": "expanded",
+      "parent": "https://expressjs.com/"
+    },
+    {
+      "url": "https://expressjs.com/favicon.ico",
+      "source": "expanded",
+      "parent": "https://expressjs.com/"
+    },
+    {
+      "url": "https://expressjs.com/apple-touch-icon.png",
+      "source": "expanded",
+      "parent": "https://expressjs.com/"
+    },
+    {
+      "url": "https://docs.docker.com/docker-for-TrustZone/",
+      "source": "seed"
+    },
+    {
+      "url": "https://vuejs.org/api/",
+      "source": "seed"
+    },
+    {
+      "url": "https://vuejs.org/assets/style.ColQyr9k.css",
+      "source": "expanded",
+      "parent": "https://vuejs.org/api/"
+    },
+    {
+      "url": "https://vuejs.org/vp-icons.css",
+      "source": "expanded",
+      "parent": "https://vuejs.org/api/"
+    },
+    {
+      "url": "https://vuejs.org/assets/inter-roman-latin.Cy4MYw_J.woff2",
+      "source": "expanded",
+      "parent": "https://vuejs.org/api/"
+    },
+    {
+      "url": "https://nestjs.com/",
+      "source": "seed"
+    },
+    {
+      "url": "https://nestjs.com/logo.svg",
+      "source": "expanded",
+      "parent": "https://nestjs.com/"
+    },
+    {
+      "url": "https://nestjs.com/assets/ibm-B88ZD4Cq.png",
+      "source": "expanded",
+      "parent": "https://nestjs.com/"
+    },
+    {
+      "url": "https://nestjs.com/assets/adidas-D5Rq07Rs.png",
+      "source": "expanded",
+      "parent": "https://nestjs.com/"
+    },
+    {
+      "url": "https://docs.docker.com/docker-for-sev/",
+      "source": "seed"
+    },
+    {
+      "url": "https://developers.cloudflare.com/workers/runtime-apis/web-crypto/",
+      "source": "seed"
+    },
+    {
+      "url": "https://developers.cloudflare.com/favicon.png",
+      "source": "expanded",
+      "parent": "https://developers.cloudflare.com/workers/runtime-apis/web-crypto/"
+    },
+    {
+      "url": "https://developers.cloudflare.com/_nimbus/shiki.css",
+      "source": "expanded",
+      "parent": "https://developers.cloudflare.com/workers/runtime-apis/web-crypto/"
+    },
+    {
+      "url": "https://docs.docker.com/docker-for-community/",
+      "source": "seed"
+    },
+    {
+      "url": "https://en.wikipedia.org/wiki/Ethereum",
+      "source": "seed"
+    },
+    {
+      "url": "https://en.wikipedia.org/w/load.php?lang=en&amp;modules=ext.cite.parsoid.styles%7Cext.cite.styles%7Cext.uls.interlanguage%7Cext.visualEditor.desktopArticleTarget.noscript%7Cext.wikimediamessages.styles%7Cjquery.makeCollapsible.styles%7Cmediawiki.skinning.content.parsoid%7Cskins.vector.icons%2Cstyles%7Cskins.vector.search.codex.styles%7Cwikibase.client.init&amp;only=styles&amp;skin=vector-2022",
+      "source": "expanded",
+      "parent": "https://en.wikipedia.org/wiki/Ethereum"
+    },
+    {
+      "url": "https://en.wikipedia.org/static/apple-touch/wikipedia.png",
+      "source": "expanded",
+      "parent": "https://en.wikipedia.org/wiki/Ethereum"
+    },
+    {
+      "url": "https://en.wikipedia.org/wiki/Computer_science",
+      "source": "seed"
+    },
+    {
+      "url": "https://en.wikipedia.org/w/load.php?lang=en&amp;modules=ext.cite.parsoid.styles%7Cext.cite.styles%7Cext.math.styles%7Cext.uls.interlanguage%7Cext.visualEditor.desktopArticleTarget.noscript%7Cext.wikimediaBadges%7Cext.wikimediaBadges.ulsV2%7Cext.wikimediamessages.styles%7Cjquery.makeCollapsible.styles%7Cmediawiki.skinning.content.parsoid%7Cmediawiki.skins.legacy%7Cskins.vector.icons%2Cstyles%7Cskins.vector.search.codex.styles%7Cwikibase.client.init&amp;only=styles&amp;skin=vector-2022",
+      "source": "expanded",
+      "parent": "https://en.wikipedia.org/wiki/Computer_science"
+    },
+    {
+      "url": "https://docs.docker.com/docker-for-collect/",
+      "source": "seed"
+    },
+    {
+      "url": "https://docs.docker.com/distribution/",
+      "source": "seed"
+    },
+    {
+      "url": "https://docs.docker.com/docker-for-iot/",
+      "source": "seed"
+    },
+    {
+      "url": "https://docs.docker.com/docker-for-guixsd/",
+      "source": "seed"
+    },
+    {
+      "url": "https://en.wikipedia.org/wiki/TypeScript",
+      "source": "seed"
+    },
+    {
+      "url": "https://en.wikipedia.org/w/load.php?lang=en&amp;modules=ext.cite.parsoid.styles%7Cext.cite.styles%7Cext.uls.interlanguage%7Cext.visualEditor.desktopArticleTarget.noscript%7Cext.wikimediamessages.styles%7Cjquery.makeCollapsible.styles%7Cjquery.tablesorter.styles%7Cmediawiki.skinning.content.parsoid%7Cskins.vector.icons%2Cstyles%7Cskins.vector.search.codex.styles%7Cwikibase.client.init&amp;only=styles&amp;skin=vector-2022",
+      "source": "expanded",
+      "parent": "https://en.wikipedia.org/wiki/TypeScript"
+    },
+    {
+      "url": "https://en.wikipedia.org/w/index.php?title=TypeScript&amp;action=edit",
+      "source": "expanded",
+      "parent": "https://en.wikipedia.org/wiki/TypeScript"
+    },
+    {
+      "url": "https://docs.docker.com/docker-for-toaruos/",
+      "source": "seed"
+    },
+    {
+      "url": "https://raw.githubusercontent.com/redis/redis/unstable/README.md",
+      "source": "seed"
+    },
+    {
+      "url": "https://raw.githubusercontent.com/rollup/rollup/master/README.md",
+      "source": "seed"
+    },
+    {
+      "url": "https://docs.docker.com/docker-for-encryption/",
+      "source": "seed"
+    },
+    {
+      "url": "https://docs.docker.com/docker-for-configure/",
+      "source": "seed"
+    },
+    {
+      "url": "https://docs.docker.com/docker-for-metaverse/",
+      "source": "seed"
+    },
+    {
+      "url": "https://en.wikipedia.org/wiki/Cloud_computing",
+      "source": "seed"
+    },
+    {
+      "url": "https://www.scaleway.com/en/docs/",
+      "source": "seed"
+    },
+    {
+      "url": "https://www.scaleway.com/en/docs/_next/static/css/134d8b6b898d1cf7.css",
+      "source": "expanded",
+      "parent": "https://www.scaleway.com/en/docs/"
+    },
+    {
+      "url": "https://www.scaleway.com/en/docs/_next/static/css/fc94ca4ed44b45d0.css",
+      "source": "expanded",
+      "parent": "https://www.scaleway.com/en/docs/"
+    },
+    {
+      "url": "https://www.scaleway.com/en/docs/_next/static/css/bf7d1365ab57d354.css",
+      "source": "expanded",
+      "parent": "https://www.scaleway.com/en/docs/"
+    },
+    {
+      "url": "https://docs.docker.com/docker-for-damnsmalllinux/",
+      "source": "seed"
+    },
+    {
+      "url": "https://docs.docker.com/docker-for-illumos/",
+      "source": "seed"
+    },
+    {
+      "url": "https://docs.docker.com/docker-for-prune/",
+      "source": "seed"
+    },
+    {
+      "url": "https://docs.docker.com/docker-for-zero/",
+      "source": "seed"
+    },
+    {
+      "url": "https://docs.docker.com/docker-for-win11/",
+      "source": "seed"
+    },
+    {
+      "url": "https://en.wikipedia.org/wiki/Agile_software_development",
+      "source": "seed"
+    },
+    {
+      "url": "https://en.wikipedia.org/w/index.php?title=Agile_software_development&amp;action=edit",
+      "source": "expanded",
+      "parent": "https://en.wikipedia.org/wiki/Agile_software_development"
+    },
+    {
+      "url": "https://raw.githubusercontent.com/kubernetes/kubernetes/master/README.md",
+      "source": "seed"
+    },
+    {
+      "url": "https://vercel.com/docs",
+      "source": "seed"
+    },
+    {
+      "url": "https://vercel.com/vc-ap-vercel-docs/_next/static/immutable/chunks/1cztmt46l0aa-.css",
+      "source": "expanded",
+      "parent": "https://vercel.com/docs"
+    },
+    {
+      "url": "https://vercel.com/vc-ap-vercel-docs/_next/static/immutable/chunks/2ueszeaxzy5n3.css",
+      "source": "expanded",
+      "parent": "https://vercel.com/docs"
+    },
+    {
+      "url": "https://vercel.com/vc-ap-vercel-docs/_next/static/immutable/chunks/30cdekfv_-o6g.css",
+      "source": "expanded",
+      "parent": "https://vercel.com/docs"
+    },
+    {
+      "url": "https://docs.docker.com/docker-for-sre/",
+      "source": "seed"
+    },
+    {
+      "url": "https://ko.wikipedia.org/wiki/블록체인",
+      "source": "seed"
+    },
+    {
+      "url": "https://ko.wikipedia.org/w/load.php?lang=ko&amp;modules=ext.cite.parsoid.styles%7Cext.cite.styles%7Cext.uls.interlanguage%7Cext.visualEditor.desktopArticleTarget.noscript%7Cext.wikimediaBadges%7Cext.wikimediaBadges.ulsV2%7Cext.wikimediamessages.styles%7Cjquery.makeCollapsible.styles%7Cmediawiki.skinning.content.parsoid%7Cskins.vector.icons%2Cstyles%7Cskins.vector.search.codex.styles%7Cwikibase.client.init&amp;only=styles&amp;skin=vector-2022",
+      "source": "expanded",
+      "parent": "https://ko.wikipedia.org/wiki/블록체인"
+    },
+    {
+      "url": "https://ko.wikipedia.org/w/load.php?lang=ko&amp;modules=ext.gadget.SectionFont&amp;only=styles&amp;skin=vector-2022",
+      "source": "expanded",
+      "parent": "https://ko.wikipedia.org/wiki/블록체인"
+    },
+    {
+      "url": "https://ko.wikipedia.org/w/load.php?lang=ko&amp;modules=site.styles&amp;only=styles&amp;skin=vector-2022",
+      "source": "expanded",
+      "parent": "https://ko.wikipedia.org/wiki/블록체인"
+    },
+    {
+      "url": "https://en.wikipedia.org/wiki/SQL",
+      "source": "seed"
+    },
+    {
+      "url": "https://en.wikipedia.org/w/load.php?lang=en&amp;modules=ext.cite.parsoid.styles%7Cext.cite.styles%7Cext.math.styles%7Cext.phonos.icons%2Cstyles%7Cext.uls.interlanguage%7Cext.visualEditor.desktopArticleTarget.noscript%7Cext.wikimediamessages.styles%7Cjquery.makeCollapsible.styles%7Cmediawiki.skinning.content.parsoid%7Cmediawiki.skins.legacy%7Cskins.vector.icons%2Cstyles%7Cskins.vector.search.codex.styles%7Cwikibase.client.init&amp;only=styles&amp;skin=vector-2022",
+      "source": "expanded",
+      "parent": "https://en.wikipedia.org/wiki/SQL"
+    },
+    {
+      "url": "https://en.wikipedia.org/w/index.php?title=SQL&amp;action=edit",
+      "source": "expanded",
+      "parent": "https://en.wikipedia.org/wiki/SQL"
+    },
+    {
+      "url": "https://raw.githubusercontent.com/tokio-rs/tokio/master/README.md",
+      "source": "seed"
+    },
+    {
+      "url": "https://docs.docker.com/docker-for-nlp/",
+      "source": "seed"
+    },
+    {
+      "url": "https://en.wikipedia.org/wiki/Linear_algebra",
+      "source": "seed"
+    },
+    {
+      "url": "https://en.wikipedia.org/w/load.php?lang=en&amp;modules=ext.cite.parsoid.styles%7Cext.cite.styles%7Cext.math.styles%7Cext.uls.interlanguage%7Cext.visualEditor.desktopArticleTarget.noscript%7Cext.wikimediamessages.styles%7Cjquery.makeCollapsible.styles%7Cmediawiki.skinning.content.parsoid%7Cskins.vector.icons%2Cstyles%7Cskins.vector.search.codex.styles%7Cwikibase.client.init&amp;only=styles&amp;skin=vector-2022",
+      "source": "expanded",
+      "parent": "https://en.wikipedia.org/wiki/Linear_algebra"
+    },
+    {
+      "url": "https://en.wikipedia.org/w/index.php?title=Linear_algebra&amp;action=edit",
+      "source": "expanded",
+      "parent": "https://en.wikipedia.org/wiki/Linear_algebra"
+    },
+    {
+      "url": "https://docs.docker.com/docker-for-hotfix/",
+      "source": "seed"
+    },
+    {
+      "url": "https://docs.docker.com/docker-for-tails/",
+      "source": "seed"
+    },
+    {
+      "url": "https://docs.docker.com/docker-for-microos/",
+      "source": "seed"
+    },
+    {
+      "url": "https://docs.docker.com/docker-for-hive/",
+      "source": "seed"
+    },
+    {
+      "url": "https://docs.docker.com/docker-for-golos/",
+      "source": "seed"
+    }
+  ]
+}

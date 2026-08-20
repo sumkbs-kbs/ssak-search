@@ -100,6 +100,7 @@ vi.mock('../../src/lib/rate-limiter', () => ({
 
 vi.mock('../../src/lib/auth', () => ({
   validateApiKeyWithTenant: vi.fn().mockReturnValue({ valid: true, tenant: { id: 'test', config: { plan: 'pro' } } }),
+  validateApiKeyAsync: vi.fn().mockResolvedValue({ valid: true, tenant: { id: 'test', config: { plan: 'pro' } } }),
   checkClientRateLimit: vi.fn().mockReturnValue({ allowed: true, remaining: 100 }),
   getClientIp: vi.fn().mockReturnValue('127.0.0.1'),
   getActiveClientCount: vi.fn().mockReturnValue(0),

@@ -29,7 +29,7 @@ interface CheckResult {
 function main() {
   const configPath = resolve(process.cwd(), 'wrangler.jsonc')
 
-  let config: WranglerConfig
+  let config: WranglerConfig | undefined
   try {
     const content = readFileSync(configPath, 'utf-8')
     // S82: comment-json's parse returns CommentJSONValue — structurally
@@ -41,11 +41,12 @@ function main() {
     console.error(err instanceof Error ? err.message : err)
     process.exit(2)
   }
+  if (!config) { process.exit(2) }
 
   const result: CheckResult = { ok: true, warnings: [], errors: [] }
 
   // ── Check 1: Vectorize binding ──────────────────────────
-  const vectorizeBindings = config.vectorize ?? []
+  const vectorizeBindings = config!.vectorize ?? []
   const vectorize = vectorizeBindings.find((b) => b.binding === 'VECTORIZE_INDEX')
 
   if (!vectorize) {
@@ -59,7 +60,7 @@ function main() {
   }
 
   // ── Check 2: D1 binding ─────────────────────────────────
-  const d1Bindings = config.d1_databases ?? []
+  const d1Bindings = config!.d1_databases ?? []
   const d1 = d1Bindings.find((b) => b.binding === 'SEARCH_INDEX_DB')
 
   if (!d1) {

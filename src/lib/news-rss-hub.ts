@@ -138,7 +138,7 @@ export const NEWS_HUB_OUTLETS: NewsHubOutlet[] = [
   { domain: 'sciencemag.org', feedUrl: 'https://www.science.org/rss/news_current.xml', lang: 'en' },
   { domain: 'newscientist.com', feedUrl: 'https://www.newscientist.com/feed/home/', lang: 'en' },
   { domain: 'scientificamerican.com', feedUrl: 'https://www.scientificamerican.com/feed/', lang: 'en' },
-  { domain: 'wired.com', feedUrl: 'https://www.wired.com/feed/category/science/latest/rss', lang: 'en' },
+  { domain: 'space.com', feedUrl: 'https://www.space.com/feeds/all', lang: 'en' },
 ]
 
 export interface NewsHubArticle {

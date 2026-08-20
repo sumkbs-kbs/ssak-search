@@ -55,7 +55,7 @@ const REQUIRED_QUEUE_BINDINGS = ['INDEX_QUEUE']
 
 function main() {
   const args = process.argv.slice(2)
-  const configArg = args.find((a) => a.startsWith('--config='))
+  const configArg = args.find((a: string) => a.startsWith('--config='))
   // --do-only: skip the R2/queue checks (production wrangler.jsonc declares
   // the 11 DO bindings via script_name but R2/queue are still Dashboard-only;
   // ci.yml uses this to gate the production config on DOs alone).
@@ -72,17 +72,18 @@ function main() {
   console.log(`📋 Checking: ${configPath}`)
   console.log('')
 
-  let config: WranglerConfig
+  let config: WranglerConfig | undefined
   try {
     config = parse(readFileSync(configPath, 'utf-8')) as WranglerConfig
   } catch (err) {
     console.error(`❌ FAIL: Could not parse ${configPath}:`, err)
     process.exit(2)
   }
+  if (!config) { process.exit(2) }
 
-  const doBindings = config.durable_objects?.bindings || []
-  const r2Bindings = (config.r2_buckets || []).map((b) => b.binding)
-  const queueBindings = (config.queues?.producers || []).map((q) => q.binding)
+  const doBindings = config!.durable_objects?.bindings || []
+  const r2Bindings = (config!.r2_buckets || []).map((b) => b.binding)
+  const queueBindings = (config!.queues?.producers || []).map((q) => q.binding)
 
   let failCount = 0
 

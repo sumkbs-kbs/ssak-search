@@ -108,7 +108,7 @@ function main(): void {
   const nextHeadingAt =
     sectionEnd === -1 ? readme.length : sectionStart + '## 검색 품질 테스트 결과'.length + sectionEnd
 
-  const updated = readme.slice(0, sectionStart) + buildMetricsSection(parsed.report) + readme.slice(nextHeadingAt)
+  const updated = readme.slice(0, sectionStart) + buildMetricsSection(parsed.report!) + readme.slice(nextHeadingAt)
   writeFileSync(README_PATH, updated, 'utf-8')
   console.log('README.md metrics section updated.')
 }

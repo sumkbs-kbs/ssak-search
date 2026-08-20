@@ -462,7 +462,7 @@ async function workersAIRerank(
         query,
         contexts: docTexts.map((text) => ({ text })),
         top_k: documents.length,
-      } as unknown as Ai_Cf_Baai_Bge_Reranker_Base_Input,
+      } as Record<string, unknown>,
       { signal: controller.signal },
     )) as WorkersAIRerankOutput
 

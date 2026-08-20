@@ -251,7 +251,7 @@ export function validateFile(f: string, isEval?: boolean): { ok: boolean; messag
 function main(): void {
   const args = process.argv.slice(2)
   const checkEval = args.includes('--eval')
-  const explicit = args.filter((a) => a !== '--eval')
+  const explicit = args.filter((a: string) => a !== '--eval')
   const evalFiles = checkEval ? evalArtifactFiles() : []
   if (checkEval && evalFiles.length === 0) {
     console.log('[SKIP] no eval artifacts found under eval/results or eval/baselines')

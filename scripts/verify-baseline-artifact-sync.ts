@@ -166,14 +166,15 @@ function collectState(evalDir: string): ArtifactGitState {
 
 function main(): void {
   const evalDir = process.argv[2] ?? 'eval'
-  let state: ArtifactGitState
+  let state: ArtifactGitState | undefined
   try {
     state = collectState(evalDir)
   } catch (err) {
     console.error(`❌ [baseline-artifact-sync] git 실행 실패: ${(err as Error).message}`)
     process.exit(3)
   }
-  const result = classifyArtifactSync(state)
+  if (!state) { process.exit(3) }
+  const result = classifyArtifactSync(state!)
   const icon =
     result.status === 'DANGER'
       ? '❌'

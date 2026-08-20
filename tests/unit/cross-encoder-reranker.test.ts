@@ -66,7 +66,13 @@ describe('CrossEncoderReranker', () => {
       expect(results).toHaveLength(3)
       const doc0Rank = results.findIndex((r) => r.id === 'doc_0')
       const doc1Rank = results.findIndex((r) => r.id === 'doc_1')
-      expect(doc0Rank).toBeLessThan(doc1Rank)
+      // doc_0 (relevant) should rank higher than doc_1 (irrelevant)
+      // doc_1 may be excluded entirely from top-3 if its score is too low
+      if (doc1Rank >= 0) {
+        expect(doc0Rank).toBeLessThan(doc1Rank)
+      } else {
+        expect(doc0Rank).toBeGreaterThanOrEqual(0)
+      }
     })
 
     it('boosts high-authority domains', async () => {

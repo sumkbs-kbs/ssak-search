@@ -42,7 +42,7 @@ async function main() {
       process.exit(1)
     }
 
-    const value = parseInt(persistenceMatch[1], 10)
+    const value = parseInt(persistenceMatch![1], 10)
 
     if (value === 1) {
       console.log('✅ PASS: Metrics persistence ACTIVE (search_metrics_persistence = 1)')

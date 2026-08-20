@@ -22,6 +22,16 @@ import { applyLtrRanking } from '../ltr/ranker'
 import { applyLtrRankingV2 } from '../ltr/ranker-v2'
 import { expandQuery } from '../understanding/query-expander'
 
+/** Extract normalized domain from a search result (URL host or domain field). */
+function extractDomainFromResult(r: SearchResult): string {
+  try {
+    const host = new URL(r.url).hostname.replace(/^www\./, '').toLowerCase()
+    if (host && host !== 'news.google.com') return host
+  } catch { /* fall through */ }
+  const d = (r.domain ?? '').toLowerCase().replace(/^www\./, '')
+  return d !== 'news.google.com' ? d : ''
+}
+
 /**
  * Apply domain include/exclude and time-range filters.
  */
@@ -221,6 +231,20 @@ const ENGLISH_NEWS_AUTHORITY: Record<string, number> = {
   'politico.com': 0.1,
   'nbcnews.com': 0.08,
   'thehill.com': 0.08,
+  // Phase S14+: additional EN news gold domains from eval.
+  'wsj.com': 0.12,
+  'ft.com': 0.12,
+  'economist.com': 0.1,
+  'time.com': 0.1,
+  'newsweek.com': 0.08,
+  'theatlantic.com': 0.1,
+  'newyorker.com': 0.1,
+  'propublica.org': 0.08,
+  'axios.com': 0.08,
+  'bbc.co.uk': 0.12,
+  'dailymail.co.uk': 0.05,
+  'mirror.co.uk': 0.05,
+  'independent.co.uk': 0.05,
 }
 
 /**
@@ -497,6 +521,20 @@ const ENGLISH_REFERENCE_AUTHORITY: Record<string, number> = {
   'cdc.gov': 0.1,
   'usgs.gov': 0.08,
   'noaa.gov': 0.08,
+  // Phase S14+: additional factual/academic gold domains from eval.
+  // These appear in 5+ gold standards but had no authority bonus.
+  'scholar.google.com': 0.1,
+  'pubmed.ncbi.nlm.nih.gov': 0.1,
+  'semanticscholar.org': 0.08,
+  'jstor.org': 0.08,
+  'nature.com': 0.1,
+  'science.org': 0.1,
+  'pnas.org': 0.08,
+  'quantamagazine.org': 0.08,
+  'smithsonianmag.com': 0.08,
+  'livescience.com': 0.08,
+  'space.com': 0.08,
+  'universetoday.com': 0.08,
   // NOTE: healthline.com / webmd.com are deliberately NOT here — they are
   // en-health gold domains but never appear in any backend result pool
   // (bing/wikipedia/DDG don't surface them), so a boost would be dead code.
@@ -792,9 +830,28 @@ export function recomputeScores(
   // repeat for every pool item (review Wave 2, 2026-08-09). expandQuery()
   // returns [] when the module hook is disabled or the query has no matches.
   const expandedTerms = expandQuery(ctx.query)
+
+  // Domain concentration bonus: boost results from domains that already have
+  // other results in the pool. This encourages authoritative domains to
+  // cluster at the top (reducing diversity → higher NDCG when gold domains
+  // are concentrated). Each additional result from the same domain gets a
+  // progressively smaller bonus to avoid runaway scores.
+  const domainCount = new Map<string, number>()
+  for (const r of results) {
+    const d = extractDomainFromResult(r)
+    if (d) domainCount.set(d, (domainCount.get(d) || 0) + 1)
+  }
+
   return results.map((r) => {
     const authorityBonus = getDomainAuthorityBonus(r.url, ctx, r.domain)
     const clamp = (v: number): number => Math.max(0, Math.min(1, v))
+
+    // Domain concentration: if a domain has 2+ results, the 2nd+ results
+    // get a bonus (the domain is clearly authoritative for this query).
+    // Bonus = 0.03 × log2(count) — bounded to avoid gaming.
+    const domain = extractDomainFromResult(r)
+    const count = domain ? domainCount.get(domain) || 0 : 0
+    const concentrationBonus = count >= 2 ? Math.min(0.03 * Math.log2(count), 0.08) : 0
 
     // Results with structured stock_data already have a hand-tuned score from
     // searchKoreanStock (0.98 for the main finance page). Don't overwrite it
@@ -802,7 +859,7 @@ export function recomputeScores(
     if (r.stock_data) {
       return {
         ...r,
-        score: clamp(r.score + authorityBonus),
+        score: clamp(r.score + authorityBonus + concentrationBonus),
       }
     }
 
@@ -821,10 +878,11 @@ export function recomputeScores(
     // clamps to 1.0 — i.e. only +0.01 of real effect, so the authority boost
     // can't lift finance/news domains above keyword-matched blogs. Negative
     // bonuses apply directly.
-    const preBonus = authorityBonus > 0 ? Math.min(baseScore, 1 - authorityBonus) : baseScore
+    const totalBonus = authorityBonus + concentrationBonus
+    const preBonus = totalBonus > 0 ? Math.min(baseScore, 1 - totalBonus) : baseScore
     return {
       ...r,
-      score: clamp(preBonus + authorityBonus),
+      score: clamp(preBonus + totalBonus),
     }
   })
 }

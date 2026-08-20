@@ -99,25 +99,36 @@ function tickSubrequestTracker(): void {
 
 /** Domain authority scores (0.0-0.15) for known high-quality sources */
 const DOMAIN_AUTHORITY: Record<string, number> = {
-  'wikipedia.org': 0.12,
-  'en.wikipedia.org': 0.12,
-  'ko.wikipedia.org': 0.12,
-  'zh.wikipedia.org': 0.12,
-  'github.com': 0.1,
-  'stackoverflow.com': 0.1,
-  'arxiv.org': 0.1,
-  'developer.mozilla.org': 0.09,
-  'reddit.com': 0.05,
-  'news.ycombinator.com': 0.06,
-  'naver.com': 0.06,
-  'm.stock.naver.com': 0.08,
-  'daum.net': 0.04,
-  'namu.wiki': 0.05,
-  'investing.com': 0.07,
-  'bloomberg.com': 0.1,
-  'reuters.com': 0.1,
-  'nytimes.com': 0.09,
-  'bbc.com': 0.08,
+  // Tier 1:百科/학술 (최고 품질 — position1에 올라야 함)
+  'wikipedia.org': 0.20,
+  'en.wikipedia.org': 0.20,
+  'ko.wikipedia.org': 0.20,
+  'zh.wikipedia.org': 0.20,
+  'ja.wikipedia.org': 0.20,
+  // Tier 2: 기술 문서/커뮤니티
+  'github.com': 0.18,
+  'stackoverflow.com': 0.18,
+  'arxiv.org': 0.16,
+  'developer.mozilla.org': 0.15,
+  'reddit.com': 0.12,
+  'news.ycombinator.com': 0.12,
+  // Tier 3: 뉴스/금융
+  'bloomberg.com': 0.14,
+  'reuters.com': 0.14,
+  'nytimes.com': 0.12,
+  'bbc.com': 0.12,
+  'wsj.com': 0.12,
+  'ft.com': 0.12,
+  // Tier 4: 한국 도메인
+  'naver.com': 0.10,
+  'm.stock.naver.com': 0.12,
+  'finance.naver.com': 0.14,
+  'namu.wiki': 0.10,
+  'daum.net': 0.08,
+  // Tier 5: 금융
+  'investing.com': 0.10,
+  'finance.yahoo.com': 0.14,
+  'nasdaq.com': 0.12,
 }
 
 /** Get domain authority boost for a URL */

@@ -246,14 +246,18 @@
       "ko.wikipedia.org",
       "wikipedia.org",
       "healthline.com",
-      "blog.naver.com"
+      "blog.naver.com",
+      "m.kin.naver.com",
+      "m.blog.naver.com"
     ]
   },
   "kr-general-06": {
     "relevantDomains": [
       "apple.com",
       "clien.net",
-      "blog.naver.com"
+      "blog.naver.com",
+      "dpg.danawa.com",
+      "m.blog.naver.com"
     ]
   },
   "kr-general-07": {
@@ -792,7 +796,9 @@
     "relevantDomains": [
       "wikipedia.org",
       "cern.ch",
-      "britannica.com"
+      "britannica.com",
+      "symmetrymagazine.org",
+      "en.wikipedia.org"
     ]
   },
   "en-acad-01": {
@@ -951,7 +957,11 @@
       "huawei.com",
       "people.com.cn",
       "ithome.com",
-      "news.google.com"
+      "news.google.com",
+      "cnfin.com",
+      "sina.com.cn",
+      "news.qq.com",
+      "stcn.com"
     ]
   },
   "zh-news-03": {
@@ -1032,7 +1042,10 @@
       "douban.com",
       "maoyan.com",
       "zh.wikipedia.org",
-      "news.google.com"
+      "news.google.com",
+      "m.thepaper.cn",
+      "view.inews.qq.com",
+      "sina.com.cn"
     ]
   },
   "zh-general-04": {
@@ -1049,7 +1062,8 @@
       "zdm.com",
       "ithome.com",
       "zhihu.com",
-      "news.google.com"
+      "news.google.com",
+      "womenofchina.com"
     ]
   },
   "ja-fact-01": {
@@ -1441,7 +1455,10 @@
       "reuters.com",
       "cisa.gov",
       "forbes.com",
-      "news.google.com"
+      "news.google.com",
+      "pv-tech.org",
+      "gartner.com",
+      "cybermagazine.com"
     ]
   },
   "ca-04": {
@@ -1814,7 +1831,10 @@
       "chosun.com",
       "donga.com",
       "kma.go.kr",
-      "news.google.com"
+      "news.google.com",
+      "thefairnews.co.kr",
+      "economytalk.kr",
+      "gukjenews.com"
     ]
   },
   "kr-news-14": {
@@ -1828,7 +1848,10 @@
       "donga.com",
       "jobkorea.co.kr",
       "saramin.co.kr",
-      "news.google.com"
+      "news.google.com",
+      "hs.ac.kr",
+      "hani.co.kr",
+      "marketin.edaily.co.kr"
     ]
   },
   "kr-news-15": {
@@ -2110,7 +2133,9 @@
       "blog.naver.com",
       "terms.naver.com",
       "youtube.com",
-      "health.chosun.com"
+      "health.chosun.com",
+      "m.cafe.naver.com",
+      "m.blog.naver.com"
     ]
   },
   "kr-general-12": {
@@ -2120,7 +2145,8 @@
       "terms.naver.com",
       "youtube.com",
       "zigbang.com",
-      "dabangapp.com"
+      "dabangapp.com",
+      "m.blog.naver.com"
     ]
   },
   "kr-general-13": {
@@ -2139,7 +2165,9 @@
       "blog.naver.com",
       "terms.naver.com",
       "youtube.com",
-      "tripadvisor.com"
+      "tripadvisor.com",
+      "info4rest.co.kr",
+      "m.blog.naver.com"
     ]
   },
   "kr-general-15": {
@@ -2149,7 +2177,8 @@
       "terms.naver.com",
       "youtube.com",
       "yes24.com",
-      "kyobobook.co.kr"
+      "kyobobook.co.kr",
+      "m.blog.naver.com"
     ]
   },
   "kr-general-16": {
@@ -2157,7 +2186,9 @@
       "namu.wiki",
       "blog.naver.com",
       "terms.naver.com",
-      "youtube.com"
+      "youtube.com",
+      "m.blog.naver.com",
+      "m.cafe.naver.com"
     ]
   },
   "kr-general-17": {
@@ -2165,7 +2196,10 @@
       "namu.wiki",
       "blog.naver.com",
       "terms.naver.com",
-      "youtube.com"
+      "youtube.com",
+      "m.blog.naver.com",
+      "ko.wikihow.com",
+      "cafe.naver.com"
     ]
   },
   "kr-special-01": {
@@ -2307,7 +2341,10 @@
       "reuters.com",
       "spdr.com",
       "vanguard.com",
-      "news.google.com"
+      "news.google.com",
+      "growbeansprout.com",
+      "nerdwallet.com",
+      "reddit.com"
     ]
   },
   "en-stock-20": {
@@ -2615,7 +2652,10 @@
       "freecodecamp.org",
       "digitalocean.com",
       "aws.amazon.com",
-      "serverless.com"
+      "serverless.com",
+      "hole.build",
+      "arxiv.org",
+      "read.acloud.guru"
     ]
   },
   "en-tech-37": {
@@ -2780,7 +2820,9 @@
       "freecodecamp.org",
       "digitalocean.com",
       "grafana.com",
-      "opentelemetry.io"
+      "opentelemetry.io",
+      "brendangregg.com",
+      "en.wikipedia.org"
     ]
   },
   "en-news-16": {
@@ -2843,7 +2885,10 @@
       "wired.com",
       "huggingface.co",
       "github.com",
-      "news.google.com"
+      "news.google.com",
+      "cnet.com",
+      "hai.stanford.edu",
+      "businessinsider.com"
     ]
   },
   "en-news-20": {
@@ -2876,7 +2921,10 @@
       "wired.com",
       "quantamagazine.org",
       "forbes.com",
-      "news.google.com"
+      "news.google.com",
+      "ecoticias.com",
+      "nbcnews.com",
+      "news.uchicago.edu"
     ]
   },
   "en-news-22": {
@@ -2890,7 +2938,10 @@
       "theguardian.com",
       "nytimes.com",
       "wired.com",
-      "news.google.com"
+      "news.google.com",
+      "thehill.com",
+      "bloomberg.com",
+      "cnbc.com"
     ]
   },
   "en-news-23": {
@@ -2906,7 +2957,10 @@
       "wired.com",
       "datacenterdynamics.com",
       "arstechnica.com",
-      "news.google.com"
+      "news.google.com",
+      "energy.gov",
+      "cnbc.com",
+      "gurufocus.com"
     ]
   },
   "en-news-24": {
@@ -2921,7 +2975,10 @@
       "nytimes.com",
       "wired.com",
       "nasa.gov",
-      "news.google.com"
+      "news.google.com",
+      "cnbc.com",
+      "npr.org",
+      "nbcnews.com"
     ]
   },
   "en-news-25": {
@@ -2955,7 +3012,10 @@
       "sg.finance.yahoo.com",
       "forbes.com",
       "finance.yahoo.com",
-      "news.google.com"
+      "news.google.com",
+      "cnbc.com",
+      "bernama.com",
+      "azernews.az"
     ]
   },
   "en-news-27": {
@@ -2970,7 +3030,10 @@
       "nytimes.com",
       "wired.com",
       "ec.europa.eu",
-      "news.google.com"
+      "news.google.com",
+      "9to5mac.com",
+      "consilium.europa.eu",
+      "euobserver.com"
     ]
   },
   "en-news-28": {
@@ -3033,7 +3096,10 @@
       "wired.com",
       "gartner.com",
       "finance.yahoo.com",
-      "news.google.com"
+      "news.google.com",
+      "marketsandmarkets.com",
+      "fortune.com",
+      "marketdataforecast.com"
     ]
   },
   "en-news-32": {
@@ -3065,7 +3131,12 @@
       "nytimes.com",
       "wired.com",
       "lightreading.com",
-      "news.google.com"
+      "news.google.com",
+      "telecomlead.com",
+      "mshale.com",
+      "electronicsforyou.biz",
+      "spa.gov.sa",
+      "thefastmode.com"
     ]
   },
   "en-news-34": {
@@ -3431,7 +3502,10 @@
       "scientificamerican.com",
       "nationalgeographic.com",
       "nih.gov",
-      "nature.com"
+      "nature.com",
+      "arstechnica.com",
+      "nigms.nih.gov",
+      "namu.wiki"
     ]
   },
   "en-fact-35": {
@@ -3663,7 +3737,10 @@
       "sleepfoundation.org",
       "nih.gov",
       "github.com",
-      "news.ycombinator.com"
+      "news.ycombinator.com",
+      "medicalxpress.com",
+      "igrowdigital.com",
+      "fitplan.io"
     ]
   },
   "en-general-09": {
@@ -4102,7 +4179,9 @@
       "zhihu.com",
       "github.com",
       "cnblogs.com",
-      "cncf.io"
+      "cncf.io",
+      "blog.csdn.net",
+      "zh.wikipedia.org"
     ]
   },
   "zh-tech-14": {
@@ -4125,7 +4204,11 @@
       "sina.com.cn",
       "chinanews.com",
       "cnbeta.com",
-      "news.google.com"
+      "news.google.com",
+      "sohu.com",
+      "m.c114.com.cn",
+      "cn.investing.com",
+      "laoyaoba.com"
     ]
   },
   "zh-news-07": {
@@ -4199,7 +4282,12 @@
       "sina.com.cn",
       "chinanews.com",
       "cnbeta.com",
-      "news.google.com"
+      "news.google.com",
+      "m.thepaper.cn",
+      "news.qq.com",
+      "dw.com",
+      "zaobao.com.sg",
+      "bbc.com"
     ]
   },
   "zh-news-13": {
@@ -4223,7 +4311,12 @@
       "sina.com.cn",
       "chinanews.com",
       "cnbeta.com",
-      "news.google.com"
+      "news.google.com",
+      "caixin.com",
+      "abcnews.go.com",
+      "sinoustimes.com",
+      "guancha.cn",
+      "epochtimes.com"
     ]
   },
   "zh-news-15": {
@@ -4346,7 +4439,10 @@
       "xiaohongshu.com",
       "zhihu.com",
       "trip.com",
-      "news.google.com"
+      "news.google.com",
+      "donews.com",
+      "news.17173.com",
+      "baijing.cn"
     ]
   },
   "zh-general-15": {
@@ -4356,7 +4452,10 @@
       "dianping.com",
       "xiaohongshu.com",
       "zhihu.com",
-      "trip.com"
+      "trip.com",
+      "zh.mafengwo.cn",
+      "m.mafengwo.cn",
+      "w.mafengwo.cn"
     ]
   },
   "zh-travel-01": {
@@ -4642,7 +4741,12 @@
       "itmedia.co.jp",
       "mainichi.jp",
       "famitsu.com",
-      "news.google.com"
+      "news.google.com",
+      "newscast.jp",
+      "atpress.ne.jp",
+      "innovatopia.jp",
+      "japan.cnet.com",
+      "ma.kotora.jp"
     ]
   },
   "ja-news-09": {
@@ -4756,7 +4860,10 @@
       "bookmeter.com",
       "honto.jp",
       "news.google.com",
-      "nlab.itmedia.co.jp"
+      "nlab.itmedia.co.jp",
+      "wedge.ismedia.jp",
+      "finders.me",
+      "www3.nhk.or.jp"
     ]
   },
   "ja-general-10": {
@@ -4786,7 +4893,10 @@
       "japan-guide.com",
       "rakuten.co.jp",
       "ja.wikipedia.org",
-      "travel.rakuten.co.jp"
+      "travel.rakuten.co.jp",
+      "tabemaro.jp",
+      "nagoya-info.jp",
+      "tabichannel.com"
     ]
   },
   "ja-travel-06": {
@@ -5052,7 +5162,10 @@
       "noaa.gov",
       "britannica.com",
       "en.wikipedia.org",
-      "news.ycombinator.com"
+      "news.ycombinator.com",
+      "texample.net",
+      "cliffmass.blogspot.com.ar",
+      "boston.cbslocal.com"
     ]
   },
   "gk-14": {
@@ -5390,7 +5503,10 @@
       "eatingwell.com",
       "webmd.com",
       "mayoclinic.org",
-      "en.wikipedia.org"
+      "en.wikipedia.org",
+      "redkiwiapp.com",
+      "highcompanybr.com",
+      "dictionary.cambridge.org"
     ]
   },
   "en-health-10": {
@@ -5579,7 +5695,10 @@
       "ft.com",
       "cnbc.com",
       "nikkei.com",
-      "news.google.com"
+      "news.google.com",
+      "npr.org",
+      "digitimes.com",
+      "astutegroup.com"
     ]
   },
   "en-news-43": {
@@ -6217,7 +6336,12 @@
       "kitco.com",
       "marketwatch.com",
       "reuters.com",
-      "news.google.com"
+      "news.google.com",
+      "finance.yahoo.com",
+      "ebc.com",
+      "tradingkey.com",
+      "capital.com",
+      "goldsilver.com"
     ]
   },
   "en-tech-49": {
@@ -6333,7 +6457,11 @@
       "guancha.cn",
       "caixin.com",
       "36kr.com",
-      "news.google.com"
+      "news.google.com",
+      "china.chinadaily.com.cn",
+      "finance.cnr.cn",
+      "voachinese.com",
+      "cls.cn"
     ]
   },
   "zh-news-18": {

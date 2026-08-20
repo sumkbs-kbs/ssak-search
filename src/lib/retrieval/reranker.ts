@@ -43,6 +43,10 @@ export interface RerankResult {
   rerankScore: number
   originalRank: number
   newRank: number
+  /** Individual sidecar reranker score (BGE-Reranker-v2-m3) */
+  sidecarScore?: number
+  /** Individual Workers AI reranker score (bge-reranker-base) */
+  workersScore?: number
 }
 
 export interface RerankConfig {
@@ -78,6 +82,8 @@ export interface RerankOptions {
   /** Disable Workers AI pass for this call (e.g. in tests) */
   enableWorkersAI?: boolean
   enableSidecar?: boolean
+  /** Override blend weight for this call (A/B testing) */
+  blendWeight?: number
 }
 
 // ============================================================
@@ -618,7 +624,7 @@ export class CrossEncoderReranker {
     }
 
     // Blend sidecar + Workers AI scores (both available → weighted blend)
-    const blendWeight = this.config.blendWeight
+    const blendWeight = options?.blendWeight ?? this.config.blendWeight
     const scored = docsToRerank.map((doc, i) => {
       const sidecarScore = sidecarScores?.get(doc.id)
       const workersScore = workersScores?.get(doc.id)
@@ -644,6 +650,8 @@ export class CrossEncoderReranker {
         rerankScore,
         originalRank: i,
         newRank: 0,
+        sidecarScore,
+        workersScore,
       }
     })
 

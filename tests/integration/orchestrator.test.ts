@@ -413,12 +413,37 @@ describe('Orchestrator executeSearch() Integration', () => {
   })
 
   it('uses news backends for news queries', async () => {
+    // Bing News RSS — the actual backend for news queries (format=rss)
+    const BING_NEWS_RSS = `<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0" xmlns:news="http://www.bing.com/news">
+  <channel>
+    <title>Bing News Search</title>
+    <item>
+      <title>AI Latest News Title 1</title>
+      <link>http://www.bing.com/news/apiclick.aspx?ref=FexRss&amp;aid=&amp;tid=1&amp;url=https%3a%2f%2fnews.example.com%2f1&amp;c=1</link>
+      <News:Source>Test News</News:Source>
+      <pubDate>Mon, 15 Jan 2024 10:00:00 GMT</pubDate>
+    </item>
+    <item>
+      <title>AI Latest News Title 2</title>
+      <link>http://www.bing.com/news/apiclick.aspx?ref=FexRss&amp;aid=&amp;tid=2&amp;url=https%3a%2f%2fnews.example.com%2f2&amp;c=1</link>
+      <News:Source>Another Source</News:Source>
+      <pubDate>Mon, 15 Jan 2024 08:00:00 GMT</pubDate>
+    </item>
+  </channel>
+</rss>`
+    // Bing News HTML — old-style newscard fallback
     const BING_NEWS_HTML = `
       <div class="newscard vr" data-url="https://news.example.com/1" data-title="News Title 1" data-author="Reporter" data-published="2024-01-15T10:00:00Z"></div>
       <div class="newscard vr" data-url="https://news.example.com/2" data-title="News Title 2" data-author="Editor" data-published="2024-01-15T08:00:00Z"></div>
     `
     mockFetch.mockImplementation(async (url: string | URL) => {
       const urlStr = url.toString()
+      // Bing News RSS (format=rss) — primary news backend
+      if (urlStr.includes('bing.com/news') && urlStr.includes('format=rss')) {
+        return new Response(BING_NEWS_RSS, { status: 200, headers: { 'content-type': 'application/rss+xml' } })
+      }
+      // Bing News HTML — fallback for old-style parser
       if (urlStr.includes('bing.com/news')) {
         return new Response(BING_NEWS_HTML, { status: 200, headers: { 'content-type': 'text/html' } })
       }

@@ -42,7 +42,7 @@ export const BACKEND_TIERS: BackendTier[] = [
     latencyMs: 500,
     reliability: 0.99,
     priority: 1,
-    backends: ['bing', 'brave', 'naver'],
+    backends: ['bing', 'brave', 'naver', 'naver-finance', 'naver-news'],
   },
   {
     id: 'tier2',
@@ -58,7 +58,7 @@ export const BACKEND_TIERS: BackendTier[] = [
     latencyMs: 2000,
     reliability: 0.90,
     priority: 3,
-    backends: ['reddit', 'arxiv', 'stackoverflow', 'duckduckgo'],
+    backends: ['reddit', 'arxiv', 'stackoverflow', 'duckduckgo', 'bing-news-rss', 'google-news-rss', 'bing-news'],
   },
 ]
 

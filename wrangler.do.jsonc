@@ -70,10 +70,8 @@
         "CanaryOrchestratorDO"
       ]
     },
-    // v2: AuditLogDO, TenancyDO, NewsHubDO를 all-in-one으로 등록.
-    // 이전 v2 배포가 실패했으므로 v3 태그로 시도.
     {
-      "tag": "v3",
+      "tag": "v2",
       "new_sqlite_classes": ["AuditLogDO", "TenancyDO", "NewsHubDO"]
     }
   ],

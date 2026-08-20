@@ -1,7 +1,7 @@
 {
-  "timestamp": "2026-08-20T22:24:59.503Z",
+  "timestamp": "2026-08-20T23:59:33.090Z",
   "report": {
-    "timestamp": "2026-08-20T22:24:59.503Z",
+    "timestamp": "2026-08-20T23:59:33.090Z",
     "totalQueries": 600,
     "passedQueries": 600,
     "failedQueries": 0,
@@ -59,9 +59,9 @@
     },
     "ranking": {
       "queriesWithGoldStandard": 600,
-      "avgNdcgAt10": 0.5813758241027274,
-      "avgMrr": 0.9733333333333334,
-      "avgPrecisionAt10": 0.7586249999999998
+      "avgNdcgAt10": 0.5831224399146792,
+      "avgMrr": 0.9741666666666666,
+      "avgPrecisionAt10": 0.7591249999999996
     },
     "results": [
       {
@@ -47724,10 +47724,10 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.6871475159848289,
-          "mrr": 0.5,
-          "precisionAt10": 0.6,
-          "relevantHits": 6
+          "ndcgAt10": 0.9619991470595832,
+          "mrr": 1,
+          "precisionAt10": 0.9,
+          "relevantHits": 9
         }
       },
       {
@@ -48902,7 +48902,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.5471607238743422,
+          "ndcgAt10": 0.6630893635181904,
           "mrr": 1,
           "precisionAt10": 1,
           "relevantHits": 10
@@ -49172,7 +49172,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.45224633769702605,
+          "ndcgAt10": 0.575748626988831,
           "mrr": 1,
           "precisionAt10": 1,
           "relevantHits": 10
@@ -49306,7 +49306,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.5310500112078503,
+          "ndcgAt10": 0.6151464719937656,
           "mrr": 1,
           "precisionAt10": 0.8,
           "relevantHits": 8
@@ -49554,7 +49554,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.38121301394452073,
+          "ndcgAt10": 0.510383374527714,
           "mrr": 1,
           "precisionAt10": 1,
           "relevantHits": 10
@@ -49688,7 +49688,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.4483039899025303,
+          "ndcgAt10": 0.510383374527714,
           "mrr": 1,
           "precisionAt10": 0.9,
           "relevantHits": 9
@@ -49822,7 +49822,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.38121301394452073,
+          "ndcgAt10": 0.510383374527714,
           "mrr": 1,
           "precisionAt10": 1,
           "relevantHits": 10
@@ -50083,7 +50083,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.38121301394452073,
+          "ndcgAt10": 0.510383374527714,
           "mrr": 1,
           "precisionAt10": 0.9,
           "relevantHits": 9

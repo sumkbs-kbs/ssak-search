@@ -4015,7 +4015,8 @@
     "relevantDomains": [
       "zh.wikipedia.org",
       "baike.baidu.com",
-      "zhihu.com"
+      "zhihu.com",
+      "blog.csdn.net"
     ]
   },
   "zh-fact-09": {
@@ -4088,7 +4089,8 @@
       "zhihu.com",
       "github.com",
       "cnblogs.com",
-      "docker.com"
+      "docker.com",
+      "blog.csdn.net"
     ]
   },
   "zh-tech-06": {
@@ -4110,7 +4112,8 @@
       "zhihu.com",
       "github.com",
       "cnblogs.com",
-      "nodejs.org"
+      "nodejs.org",
+      "blog.csdn.net"
     ]
   },
   "zh-tech-08": {
@@ -4121,7 +4124,8 @@
       "zhihu.com",
       "github.com",
       "cnblogs.com",
-      "mysql.com"
+      "mysql.com",
+      "blog.csdn.net"
     ]
   },
   "zh-tech-09": {
@@ -4146,7 +4150,8 @@
       "zhihu.com",
       "github.com",
       "cnblogs.com",
-      "web.dev"
+      "web.dev",
+      "blog.csdn.net"
     ]
   },
   "zh-tech-11": {
@@ -4157,7 +4162,8 @@
       "zhihu.com",
       "github.com",
       "cnblogs.com",
-      "docs.python.org"
+      "docs.python.org",
+      "blog.csdn.net"
     ]
   },
   "zh-tech-12": {
@@ -4168,7 +4174,8 @@
       "zhihu.com",
       "github.com",
       "cnblogs.com",
-      "tensorflow.org"
+      "tensorflow.org",
+      "blog.csdn.net"
     ]
   },
   "zh-tech-13": {
@@ -4192,7 +4199,8 @@
       "zhihu.com",
       "github.com",
       "cnblogs.com",
-      "git-scm.com"
+      "git-scm.com",
+      "blog.csdn.net"
     ]
   },
   "zh-news-06": {

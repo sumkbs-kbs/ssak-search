@@ -117,6 +117,17 @@ const LOW_QUALITY_DOMAINS: Record<string, number> = {
   // so a global demotion is safe. A news-gate would only add complexity for no
   // measured benefit.
   'msn.com': -0.2,
+  // Cat C diagnosis (2026-08-20): position-1 non-gold domains that outrank
+  // gold domains in eval queries. These are low-authority personal blogs,
+  // niche content sites, and marketing pages that keyword-match queries
+  // but provide no authoritative value.
+  'simform.com': -0.15, // tech blog marketing pages (en-tech-52, cmp-21)
+  'quietkit.com': -0.15, // minimalist blog (en-general-11)
+  'stario.dev': -0.15, // small dev blog (en-tech-17)
+  'rodrigoalvesvieira.com': -0.2, // personal blog (en-general-15)
+  'complexsystemspodcast.com': -0.2, // podcast site (en-general-15)
+  'curepro.jp': -0.15, // Japanese fitness blog (ja-general-10)
+  'tantanapps.com': -0.2, // dating app blog (kr-tech-03)
 }
 
 /**

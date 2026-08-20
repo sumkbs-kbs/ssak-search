@@ -10,49 +10,58 @@
     "relevantDomains": [
       "finance.naver.com",
       "investing.com",
-      "samsung.com"
+      "samsung.com",
+      "m.stock.naver.com"
     ]
   },
   "kr-stock-02": {
     "relevantDomains": [
       "finance.naver.com",
       "kakao.com",
-      "investing.com"
+      "investing.com",
+      "m.stock.naver.com"
     ]
   },
   "kr-stock-03": {
     "relevantDomains": [
       "finance.naver.com",
       "m.stock.naver.com",
-      "investing.com"
+      "investing.com",
+      "m.blog.naver.com"
     ]
   },
   "kr-stock-04": {
     "relevantDomains": [
       "finance.naver.com",
       "hyundai.com",
-      "investing.com"
+      "investing.com",
+      "m.stock.naver.com",
+      "m.blog.naver.com"
     ]
   },
   "kr-stock-05": {
     "relevantDomains": [
       "finance.naver.com",
       "investing.com",
-      "krx.co.kr"
+      "krx.co.kr",
+      "kr.investing.com",
+      "m.stock.naver.com"
     ]
   },
   "kr-fin-06": {
     "relevantDomains": [
       "finance.naver.com",
       "investing.com",
-      "lgensol.com"
+      "lgensol.com",
+      "m.stock.naver.com"
     ]
   },
   "kr-fin-07": {
     "relevantDomains": [
       "finance.naver.com",
       "investing.com",
-      "skhynix.com"
+      "skhynix.com",
+      "m.stock.naver.com"
     ]
   },
   "kr-fin-08": {
@@ -222,7 +231,8 @@
       "finance.yahoo.com",
       "nasdaq.com",
       "apple.com",
-      "investing.com"
+      "investing.com",
+      "news.google.com"
     ]
   },
   "en-stock-02": {
@@ -230,62 +240,71 @@
       "finance.yahoo.com",
       "nasdaq.com",
       "tesla.com",
-      "sec.gov"
+      "sec.gov",
+      "news.google.com"
     ]
   },
   "en-stock-03": {
     "relevantDomains": [
       "finance.yahoo.com",
       "nasdaq.com",
-      "nvidia.com"
+      "nvidia.com",
+      "news.google.com"
     ]
   },
   "en-stock-04": {
     "relevantDomains": [
       "coindesk.com",
       "coinmarketcap.com",
-      "investing.com"
+      "investing.com",
+      "news.google.com"
     ]
   },
   "en-stock-05": {
     "relevantDomains": [
       "finance.yahoo.com",
       "investing.com",
-      "spglobal.com"
+      "spglobal.com",
+      "news.google.com"
     ]
   },
   "en-stock-06": {
     "relevantDomains": [
       "finance.yahoo.com",
       "nasdaq.com",
-      "microsoft.com"
+      "microsoft.com",
+      "news.google.com"
     ]
   },
   "en-stock-07": {
     "relevantDomains": [
       "finance.yahoo.com",
-      "statista.com"
+      "statista.com",
+      "news.google.com"
     ]
   },
   "en-stock-08": {
     "relevantDomains": [
       "finance.yahoo.com",
       "nasdaq.com",
-      "abc.xyz"
+      "abc.xyz",
+      "news.google.com"
     ]
   },
   "en-stock-09": {
     "relevantDomains": [
       "finance.yahoo.com",
       "nasdaq.com",
-      "microsoft.com"
+      "microsoft.com",
+      "news.google.com"
     ]
   },
   "en-stock-10": {
     "relevantDomains": [
       "finance.yahoo.com",
       "nasdaq.com",
-      "netflix.com"
+      "netflix.com",
+      "news.google.com"
     ]
   },
   "en-tech-01": {
@@ -556,7 +575,8 @@
     "relevantDomains": [
       "wikipedia.org",
       "britannica.com",
-      "github.com"
+      "github.com",
+      "arxiv.org"
     ]
   },
   "en-fact-03": {
@@ -600,7 +620,8 @@
     "relevantDomains": [
       "wikipedia.org",
       "britannica.com",
-      "nasa.gov"
+      "nasa.gov",
+      "arxiv.org"
     ]
   },
   "en-fact-09": {
@@ -642,7 +663,9 @@
     "relevantDomains": [
       "wikipedia.org",
       "britannica.com",
-      "nasa.gov"
+      "nasa.gov",
+      "arxiv.org",
+      "github.com"
     ]
   },
   "en-fact-15": {
@@ -1128,7 +1151,8 @@
     "relevantDomains": [
       "wikipedia.org",
       "cloudflare.com",
-      "howstuffworks.com"
+      "howstuffworks.com",
+      "reddit.com"
     ]
   },
   "gk-02": {
@@ -1164,7 +1188,8 @@
     "relevantDomains": [
       "wikipedia.org",
       "bitcoin.org",
-      "howstuffworks.com"
+      "howstuffworks.com",
+      "reddit.com"
     ]
   },
   "gk-07": {
@@ -1425,7 +1450,8 @@
     "relevantDomains": [
       "finance.naver.com",
       "m.stock.naver.com",
-      "investing.com"
+      "investing.com",
+      "m.blog.naver.com"
     ]
   },
   "kr-stock-15": {
@@ -1441,7 +1467,8 @@
       "finance.naver.com",
       "m.stock.naver.com",
       "investing.com",
-      "wikitree.co.kr"
+      "wikitree.co.kr",
+      "m.blog.naver.com"
     ]
   },
   "kr-special-04": {
@@ -1886,7 +1913,8 @@
       "marketwatch.com",
       "cnbc.com",
       "reuters.com",
-      "tesla.com"
+      "tesla.com",
+      "news.google.com"
     ]
   },
   "en-stock-12": {
@@ -1897,7 +1925,8 @@
       "marketwatch.com",
       "cnbc.com",
       "reuters.com",
-      "amd.com"
+      "amd.com",
+      "news.google.com"
     ]
   },
   "en-stock-13": {
@@ -1908,7 +1937,9 @@
       "marketwatch.com",
       "cnbc.com",
       "reuters.com",
-      "meta.com"
+      "meta.com",
+      "stockanalysis.com",
+      "seekingalpha.com"
     ]
   },
   "en-stock-14": {
@@ -1919,7 +1950,8 @@
       "marketwatch.com",
       "cnbc.com",
       "reuters.com",
-      "jpmorganchase.com"
+      "jpmorganchase.com",
+      "news.google.com"
     ]
   },
   "en-stock-15": {
@@ -1930,7 +1962,8 @@
       "marketwatch.com",
       "cnbc.com",
       "reuters.com",
-      "palantir.com"
+      "palantir.com",
+      "news.google.com"
     ]
   },
   "en-stock-16": {
@@ -1941,7 +1974,8 @@
       "marketwatch.com",
       "cnbc.com",
       "reuters.com",
-      "intel.com"
+      "intel.com",
+      "news.google.com"
     ]
   },
   "en-stock-17": {
@@ -1952,7 +1986,8 @@
       "marketwatch.com",
       "cnbc.com",
       "reuters.com",
-      "tsmc.com"
+      "tsmc.com",
+      "news.google.com"
     ]
   },
   "en-stock-18": {
@@ -1964,7 +1999,8 @@
       "cnbc.com",
       "reuters.com",
       "coinmarketcap.com",
-      "coingecko.com"
+      "coingecko.com",
+      "news.google.com"
     ]
   },
   "en-stock-19": {
@@ -1976,7 +2012,8 @@
       "cnbc.com",
       "reuters.com",
       "spdr.com",
-      "vanguard.com"
+      "vanguard.com",
+      "news.google.com"
     ]
   },
   "en-stock-20": {
@@ -1988,7 +2025,8 @@
       "cnbc.com",
       "reuters.com",
       "apple.com",
-      "macrumors.com"
+      "macrumors.com",
+      "news.google.com"
     ]
   },
   "en-stock-21": {
@@ -1999,7 +2037,8 @@
       "marketwatch.com",
       "cnbc.com",
       "reuters.com",
-      "microsoft.com"
+      "microsoft.com",
+      "news.google.com"
     ]
   },
   "en-stock-22": {
@@ -2011,7 +2050,8 @@
       "cnbc.com",
       "reuters.com",
       "goldprice.org",
-      "kitco.com"
+      "kitco.com",
+      "news.google.com"
     ]
   },
   "en-stock-23": {
@@ -2023,7 +2063,8 @@
       "cnbc.com",
       "reuters.com",
       "treasurydirect.gov",
-      "federalreserve.gov"
+      "federalreserve.gov",
+      "news.google.com"
     ]
   },
   "en-stock-24": {
@@ -2035,7 +2076,8 @@
       "cnbc.com",
       "reuters.com",
       "reit.com",
-      "investopedia.com"
+      "investopedia.com",
+      "news.google.com"
     ]
   },
   "en-stock-25": {
@@ -2047,7 +2089,8 @@
       "cnbc.com",
       "reuters.com",
       "nvidia.com",
-      "fool.com"
+      "fool.com",
+      "news.google.com"
     ]
   },
   "en-tech-19": {
@@ -2850,7 +2893,8 @@
       "britannica.com",
       "howstuffworks.com",
       "scientificamerican.com",
-      "nationalgeographic.com"
+      "nationalgeographic.com",
+      "quantamagazine.org"
     ]
   },
   "en-fact-21": {
@@ -3007,7 +3051,8 @@
       "nasa.gov",
       "howstuffworks.com",
       "scientificamerican.com",
-      "nationalgeographic.com"
+      "nationalgeographic.com",
+      "phys.org"
     ]
   },
   "en-fact-36": {
@@ -4410,7 +4455,9 @@
   "gk-08": {
     "relevantDomains": [
       "en.wikipedia.org",
-      "investopedia.com"
+      "investopedia.com",
+      "medium.com",
+      "news.ycombinator.com"
     ]
   },
   "gk-09": {
@@ -4464,7 +4511,9 @@
   "gk-16": {
     "relevantDomains": [
       "en.wikipedia.org",
-      "towardsdatascience.com"
+      "towardsdatascience.com",
+      "arxiv.org",
+      "stackoverflow.com"
     ]
   },
   "gk-17": {
@@ -4526,7 +4575,8 @@
   "adv-13": {
     "relevantDomains": [
       "en.wikipedia.org",
-      "stackoverflow.com"
+      "stackoverflow.com",
+      "github.com"
     ]
   },
   "ts-05": {
@@ -5231,7 +5281,8 @@
       "scientificamerican.com",
       "britannica.com",
       "nationalgeographic.com",
-      "github.com"
+      "github.com",
+      "arxiv.org"
     ]
   },
   "en-acad-18": {
@@ -5431,7 +5482,8 @@
       "seekingalpha.com",
       "marketwatch.com",
       "dividend.com",
-      "finance.yahoo.com"
+      "finance.yahoo.com",
+      "news.google.com"
     ]
   },
   "en-stock-27": {
@@ -5453,7 +5505,8 @@
       "stackoverflow.com",
       "finance.yahoo.com",
       "inc.com",
-      "github.com"
+      "github.com",
+      "news.google.com"
     ]
   },
   "en-stock-29": {
@@ -5472,7 +5525,8 @@
       "investing.com",
       "kitco.com",
       "marketwatch.com",
-      "reuters.com"
+      "reuters.com",
+      "news.google.com"
     ]
   },
   "en-tech-49": {

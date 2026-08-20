@@ -138,10 +138,10 @@ function main() {
     }
 
     // Check current gold domain hit rate
-    const goldDomains = new Set(gold.relevantDomains)
+    const goldDomains = new Set(gold.relevantDomains as string[])
     let goldHits = 0
     for (const d of allDomains) {
-      for (const gd of goldDomains) {
+      for (const gd of goldDomains as Set<string>) {
         if (d === gd || d.endsWith('.' + gd) || gd.endsWith('.' + d)) {
           goldHits++
           break

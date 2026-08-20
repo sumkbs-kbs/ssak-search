@@ -249,12 +249,15 @@ KOSDAQ_CODES: set[str] = set(KOSDAQ_CSV.split(','))
 def detect_exchange(code: str) -> str:
     """Detect exchange (KOSPI/KOSDAQ) from stock code using actual KRX listed code sets.
     Falls back to prefix heuristic for unknown codes."""
+    code = (code or "").strip()
     if code in KOSPI_CODES:
         return "KOSPI"
     if code in KOSDAQ_CODES:
         return "KOSDAQ"
     # Unknown code — prefix heuristic fallback
-    if code and code[0] in ("0", "1"):
+    if not code:
+        return "KOSPI"
+    if code[0] in ("0", "1"):
         return "KOSPI"
     return "KOSDAQ"
 
@@ -268,8 +271,10 @@ def extract_company_name(query: str) -> str:
     """Extract company name from financial query by removing noise keywords."""
     name = re.sub(
         r"\b(주가|주식|증권|시세|변동|등락|목표주가|투자의견|실적|배당|"
-        r"주주|공시|기업분석|리서치|stock|price|share|finance|chart|"
-        r"trading|quote|symbol|코스피|코스닥|kospi|kosdaq|"
+        r"주주|공시|기업분석|리서치|발표|실적발표|실적 발표|"
+        r"stock|price|share|finance|chart|"
+        r"trading|quote|symbol|target|forecast|earnings|"
+        r"코스피|코스닥|kospi|kosdaq|"
         r"시가총액|거래량|PER|PBR|EPS|ROE|현재가|전일비|"
         r"네이버증권|finance)\b",
         "", query, flags=re.IGNORECASE,
@@ -341,35 +346,37 @@ def search_stock_code_naver(company_name: str, timeout: int = 5) -> Optional[str
 # Price Parsing
 # ============================================================
 
-def parse_korean_number(text: str) -> Optional[int]:
+def parse_korean_number(text: str) -> Optional[float]:
     """Parse Korean-formatted number (e.g. '170,100' or '1.23만' → 12300)."""
-    if not text:
+    if text is None:
         return None
-    text = text.strip().replace(",", "").replace(" ", "")
+    text = str(text).strip().replace(",", "").replace(" ", "")
+    if text == "":
+        return 0.0
 
     # Handle units: 조, 억, 만
     if "조" in text:
-        n = re.sub(r"[^0-9.]", "", text)
+        n = re.sub(r"[^0-9.-]", "", text)
         try:
-            return int(float(n) * 1_000_000_000_000)
+            return float(n) * 1_000_000_000_000
         except ValueError:
             return None
     if "억" in text:
-        n = re.sub(r"[^0-9.]", "", text)
+        n = re.sub(r"""[^0-9.-]""", "", text)
         try:
-            return int(float(n) * 100_000_000)
+            return float(n) * 100_000_000
         except ValueError:
             return None
     if "만" in text:
-        n = re.sub(r"[^0-9.]", "", text)
+        n = re.sub(r"[^0-9.-]", "", text)
         try:
-            return int(float(n) * 10_000)
+            return float(n) * 10_000
         except ValueError:
             return None
 
-    # Plain number
+    # Plain number (supports decimals and negatives)
     try:
-        return int(text)
+        return float(text)
     except ValueError:
         return None
 

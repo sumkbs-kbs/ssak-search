@@ -79,7 +79,7 @@ class TestParseKoreanNumber:
 
     def test_empty_input(self):
         """빈 문자열 또는 None"""
-        assert parse_korean_number("") is None
+        assert parse_korean_number("") == 0.0
         assert parse_korean_number(None) is None  # type: ignore[arg-type]
 
     def test_invalid_input(self):
@@ -106,9 +106,9 @@ class TestParseKoreanNumber:
 
     def test_zero_values(self):
         """0 관련 입력"""
-        assert parse_korean_number("0") == 0
+        assert parse_korean_number("0") == 0.0
         assert parse_korean_number("0원") is None
-        assert parse_korean_number("0.0") is None  # float는 int()에서 실패
+        assert parse_korean_number("0.0") == 0.0
 
 
 # ============================================================
@@ -175,13 +175,12 @@ class TestExtractCompanyName:
         assert result.strip() == "삼성전자"
 
     def test_english_keywords(self):
-        """영문 키워드 제거 (NAVER는 회사명이므로 보존)
-        'target'은 키워드가 아니라서 보존됨."""
+        """영문 키워드 제거 (NAVER는 회사명이므로 보존)"""
         assert extract_company_name("Samsung stock price") == "Samsung"
         # 'NAVER'는 더 이상 키워드로 제거되지 않음 (회사명 보존)
         assert extract_company_name("NAVER share price") == "NAVER"
-        # 'target'은 키워드가 아니므로 보존
-        assert extract_company_name("Samsung target price") == "Samsung target"
+        # 'target'도 키워드로 제거됨
+        assert extract_company_name("Samsung target price") == "Samsung"
 
     def test_korean_stock_terms(self):
         """한글 금융 용어 제거"""
@@ -315,9 +314,9 @@ class TestDetectExchange:
 
     def test_non_numeric(self):
         """숫자가 아닌 코드 — prefix 폴백"""
-        assert detect_exchange("") == "KOSDAQ"   # ''는 ('0','1')로 시작 안 함
-        assert detect_exchange("abc") == "KOSDAQ"  # 'abc'도 마찬가지
-        assert detect_exchange("  ") == "KOSDAQ"
+        assert detect_exchange("") == "KOSPI"    # 빈 문자열 → 기본 KOSPI
+        assert detect_exchange("abc") == "KOSDAQ"  # 'abc'는 ('0','1')로 시작 안 함
+        assert detect_exchange("  ") == "KOSPI"    # 공백도 strip 후 빈 문자열 → KOSPI
 
     def test_etf_and_etn(self):
         """ETF/ETN 코드도 실제 시장 분류 확인"""

@@ -19,7 +19,7 @@ import { recordCacheHit, recordCacheMiss } from './metrics'
 
 /** Default cache TTL in seconds */
 const DEFAULT_TTL = 1800 // 30 minutes
-const NEWS_TTL = 300 // 5 minutes for news/finance (stale data is worse)
+const NEWS_TTL = 1800 // 30 minutes — aligned with general (B.1 optimization: longer TTL reduces redundant upstream scraping; news freshness is handled by RSS scheduler + semantic cache exclusion)
 
 /** Resolve TTL from env bindings with fallback to defaults */
 function resolveTtl(env: AppBindings | undefined, topic?: string): number {

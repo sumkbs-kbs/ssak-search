@@ -210,7 +210,7 @@ describe('hybrid reranker — sidecar only', () => {
 // ============================================================
 
 describe('hybrid reranker — blend (Workers AI + sidecar)', () => {
-  it('blends scores 0.6 sidecar + 0.4 Workers AI when both succeed', async () => {
+  it('blends scores 0.7 sidecar + 0.3 Workers AI when both succeed', async () => {
     const env = {
       AI: makeFakeAI(async () =>
         workersAIResponse([
@@ -230,12 +230,12 @@ describe('hybrid reranker — blend (Workers AI + sidecar)', () => {
     const docs = makeDocs(2)
     const results = await reranker.rerank('test query', docs, env)
 
-    // doc_0: 0.5*0.9 + 0.5*0.5 = 0.7
-    // doc_1: 0.5*0.1 + 0.5*0.5 = 0.3
+    // doc_0: 0.7*0.9 + 0.3*0.5 = 0.78
+    // doc_1: 0.7*0.1 + 0.3*0.5 = 0.22
     const doc0 = results.find((r) => r.id === 'doc_0')!
     const doc1 = results.find((r) => r.id === 'doc_1')!
-    expect(doc0.rerankScore).toBeCloseTo(0.7, 5)
-    expect(doc1.rerankScore).toBeCloseTo(0.3, 5)
+    expect(doc0.rerankScore).toBeCloseTo(0.78, 5)
+    expect(doc1.rerankScore).toBeCloseTo(0.22, 5)
     expect(results[0].id).toBe('doc_0')
   })
 
@@ -260,7 +260,7 @@ describe('hybrid reranker — blend (Workers AI + sidecar)', () => {
     const docs = makeDocs(2)
     const results = await reranker.rerank('test query', docs, env)
 
-    // doc_0: 0.3*0.9 + 0.7*0.5 = 0.62
+    // doc_0: 0.3*0.9 + 0.7*0.5 = 0.62 (custom blendWeight=0.3)
     const doc0 = results.find((r) => r.id === 'doc_0')!
     expect(doc0.rerankScore).toBeCloseTo(0.62, 5)
   })

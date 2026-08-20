@@ -83,7 +83,7 @@ const MEMORY_CACHE = new Map<string, CacheEntry>()
 // (~1ms) for its whole Cache-API-valid lifetime. The eval keeps median-of-3
 // integrity by clearing this map between runs (see eval/index.ts run loop).
 const MEMORY_CACHE_TTL_GENERAL = 1_800_000 // 30 minutes (Cache API DEFAULT_TTL)
-const MEMORY_CACHE_TTL_NEWS = 300_000 // 5 minutes (Cache API NEWS_TTL)
+const MEMORY_CACHE_TTL_NEWS = 1_800_000 // 30 minutes — aligned with general (B.1 optimization: news freshness handled by RSS scheduler + semantic cache exclusion, not cache TTL)
 
 /**
  * Single-flight map: in-flight executeSearch promises keyed by memory cache

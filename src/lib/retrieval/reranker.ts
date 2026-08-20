@@ -13,7 +13,7 @@
  *   4. Fallback: heuristic reranking when both are unavailable
  *
  * Score blending when both passes succeed:
- *   final = 0.6 * sidecarScore + 0.4 * workersAiScore
+ *   final = 0.7 * sidecarScore + 0.3 * workersAiScore (BGE-v2-m3 > bge-reranker-base)
  */
 
 import type { Env, SearchResult } from '../../types'
@@ -92,7 +92,7 @@ export const DEFAULT_RERANK_CONFIG: RerankConfig = {
   topK: 10,
   enableWorkersAI: true,
   enableSidecar: true,
-  blendWeight: 0.5,  // sidecar(50%) + workers-ai(50%) — v2.0에서 균형 조정
+  blendWeight: 0.7,  // sidecar(70%) + workers-ai(30%) — B.1 최적화: BGE-v2-m3 sidecar가 bge-reranker-base보다 정확도 높으므로 가중치 강화
 }
 
 // ============================================================

@@ -1,4 +1,5 @@
 import type { EvalQuery } from './types'
+import { EXPANSION_QUERIES } from './queries-expansion'
 
 /**
  * Canonical eval query set — 500 queries across all types, languages, and topics.
@@ -4899,4 +4900,10 @@ export const EVAL_QUERIES: EvalQuery[] = [
     maxTimeMs: 14_000,
     tags: ['japanese', 'news'],
   },
+
+  // ════════════════════════════════════════════════════════════════
+  // EXPANSION QUERIES (+399: 600→999)
+  // See eval/queries-expansion.ts for source
+  // ════════════════════════════════════════════════════════════════
+  ...EXPANSION_QUERIES,
 ]

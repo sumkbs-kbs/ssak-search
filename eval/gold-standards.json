@@ -68,7 +68,10 @@
     "relevantDomains": [
       "finance.naver.com",
       "bok.or.kr",
-      "investing.com"
+      "investing.com",
+      "chartlog.net",
+      "ko.wikipedia.org",
+      "xn--vj4b13a.com"
     ]
   },
   "kr-news-01": {
@@ -188,7 +191,11 @@
     "relevantDomains": [
       "mangoplate.com",
       "blog.naver.com",
-      "tripadvisor.com"
+      "tripadvisor.com",
+      "suggestravel.com",
+      "m.blog.naver.com",
+      "m.cafe.naver.com",
+      "korean.visitseoul.net"
     ]
   },
   "kr-general-02": {
@@ -237,7 +244,8 @@
       "hyundai.com",
       "kia.com",
       "blog.naver.com",
-      "n.news.naver.com"
+      "n.news.naver.com",
+      "ko.accio.com"
     ]
   },
   "en-stock-01": {
@@ -323,7 +331,12 @@
   },
   "en-tech-01": {
     "relevantDomains": [
-      "cloudflare.com"
+      "cloudflare.com",
+      "blog.cloudflare.com",
+      "github.com",
+      "twitter.com",
+      "news.ycombinator.com",
+      "stackoverflow.com"
     ]
   },
   "en-tech-02": {
@@ -438,7 +451,8 @@
     "relevantDomains": [
       "rust-lang.org",
       "github.com",
-      "stackoverflow.com"
+      "stackoverflow.com",
+      "paulkernfeld.com"
     ]
   },
   "en-tech-17": {
@@ -490,7 +504,10 @@
       "reuters.com",
       "europa.eu",
       "theverge.com",
-      "news.google.com"
+      "news.google.com",
+      "sg.news.yahoo.com",
+      "fasi.eu",
+      "lastweekin.ai"
     ]
   },
   "en-news-05": {
@@ -517,14 +534,20 @@
       "npr.org",
       "fivethirtyeight.com",
       "news.ycombinator.com",
-      "news.google.com"
+      "news.google.com",
+      "thehill.com",
+      "bbc.com",
+      "asiae.co.kr",
+      "americanresearchgroup.com",
+      "wionews.com"
     ]
   },
   "en-news-08": {
     "relevantDomains": [
       "reuters.com",
       "bloomberg.com",
-      "semi.org"
+      "semi.org",
+      "cnbc.com"
     ]
   },
   "en-news-09": {
@@ -636,14 +659,21 @@
       "wikipedia.org",
       "britannica.com",
       "internetsociety.org",
-      "en.wikipedia.org"
+      "en.wikipedia.org",
+      "online.wsj.com",
+      "quora.com",
+      "hackernoon.com",
+      "cnn.com",
+      "youtube.com"
     ]
   },
   "en-fact-06": {
     "relevantDomains": [
       "wikipedia.org",
       "usgs.gov",
-      "britannica.com"
+      "britannica.com",
+      "newscientist.com",
+      "en.wikipedia.org"
     ]
   },
   "en-fact-07": {
@@ -665,7 +695,10 @@
     "relevantDomains": [
       "wikipedia.org",
       "britannica.com",
-      "nih.gov"
+      "nih.gov",
+      "news.ycombinator.com",
+      "physorg.com",
+      "futurism.com"
     ]
   },
   "en-fact-10": {
@@ -673,7 +706,11 @@
       "wikipedia.org",
       "nasa.gov",
       "esa.int",
-      "en.wikipedia.org"
+      "en.wikipedia.org",
+      "washingtonpost.com",
+      "backreaction.blogspot.com",
+      "cosmos.nautil.us",
+      "iai.tv"
     ]
   },
   "en-fact-11": {
@@ -742,7 +779,8 @@
     "relevantDomains": [
       "arxiv.org",
       "scholar.google.com",
-      "ieee.org"
+      "ieee.org",
+      "reddit.com"
     ]
   },
   "en-acad-04": {
@@ -788,7 +826,11 @@
       "healthline.com",
       "eatingwell.com",
       "allrecipes.com",
-      "news.ycombinator.com"
+      "news.ycombinator.com",
+      "loveandlemons.com",
+      "tasteofhome.com",
+      "therealfooddietitians.com",
+      "foodnetwork.com"
     ]
   },
   "en-general-03": {
@@ -839,20 +881,27 @@
   "zh-fact-04": {
     "relevantDomains": [
       "zh.wikipedia.org",
-      "baike.baidu.com"
+      "baike.baidu.com",
+      "zhuanlan.zhihu.com",
+      "blog.csdn.net",
+      "juejin.cn"
     ]
   },
   "zh-fact-05": {
     "relevantDomains": [
       "zh.wikipedia.org",
       "baike.baidu.com",
-      "nasa.gov"
+      "nasa.gov",
+      "blog.csdn.net",
+      "hanyuguoxue.com"
     ]
   },
   "zh-fact-06": {
     "relevantDomains": [
       "zh.wikipedia.org",
-      "baike.baidu.com"
+      "baike.baidu.com",
+      "ibm.com",
+      "zhuanlan.zhihu.com"
     ]
   },
   "zh-news-01": {
@@ -909,14 +958,16 @@
     "relevantDomains": [
       "vuejs.org",
       "github.com",
-      "developer.mozilla.org"
+      "developer.mozilla.org",
+      "juejin.cn"
     ]
   },
   "zh-tech-03": {
     "relevantDomains": [
       "typescriptlang.org",
       "github.com",
-      "juejin.cn"
+      "juejin.cn",
+      "blog.csdn.net"
     ]
   },
   "zh-tech-04": {
@@ -952,7 +1003,9 @@
     "relevantDomains": [
       "ctrip.com",
       "mafengwo.cn",
-      "zh.wikipedia.org"
+      "zh.wikipedia.org",
+      "you.ctrip.com",
+      "blog.csdn.net"
     ]
   },
   "zh-general-05": {
@@ -1118,7 +1171,8 @@
       "react.dev",
       "vuejs.org",
       "angular.io",
-      "github.com"
+      "github.com",
+      "stackoverflow.com"
     ]
   },
   "cmp-02": {
@@ -1138,7 +1192,9 @@
       "anthropic.com",
       "gemini.google.com",
       "en.wikipedia.org",
-      "news.ycombinator.com"
+      "news.ycombinator.com",
+      "llmonestop.com",
+      "instaask.ai"
     ]
   },
   "cmp-04": {
@@ -1153,7 +1209,9 @@
       "nextjs.org",
       "nuxt.com",
       "svelte.dev",
-      "github.com"
+      "github.com",
+      "jesperbylund.com",
+      "blog.runar.dev"
     ]
   },
   "cmp-06": {
@@ -1161,7 +1219,8 @@
       "vuejs.org",
       "react.dev",
       "svelte.dev",
-      "github.com"
+      "github.com",
+      "stackoverflow.com"
     ]
   },
   "cmp-07": {
@@ -1224,7 +1283,9 @@
     "relevantDomains": [
       "hono.dev",
       "github.com",
-      "developers.cloudflare.com"
+      "developers.cloudflare.com",
+      "en.wikipedia.org",
+      "stackoverflow.com"
     ]
   },
   "lt-06": {
@@ -1279,7 +1340,9 @@
     "relevantDomains": [
       "wikipedia.org",
       "aws.amazon.com",
-      "cloudflare.com"
+      "cloudflare.com",
+      "theregister.co.uk",
+      "en.wikipedia.org"
     ]
   },
   "gk-05": {
@@ -1449,7 +1512,10 @@
     "relevantDomains": [
       "wikipedia.org",
       "who.int",
-      "commonwealthfund.org"
+      "commonwealthfund.org",
+      "nytimes.com",
+      "news.ycombinator.com",
+      "astralcodexten.substack.com"
     ]
   },
   "adv-04": {
@@ -1569,7 +1635,9 @@
       "investing.com",
       "thebell.co.kr",
       "m.blog.naver.com",
-      "namu.wiki"
+      "namu.wiki",
+      "finance.yahoo.com",
+      "horongstory.com"
     ]
   },
   "kr-stock-14": {
@@ -1604,7 +1672,10 @@
       "investing.com",
       "goldprice.org",
       "m.blog.naver.com",
-      "n.news.naver.com"
+      "n.news.naver.com",
+      "tossbank.com",
+      "m.youtube.com",
+      "wikitree.co.kr"
     ]
   },
   "kr-news-07": {
@@ -1639,7 +1710,9 @@
       "sedaily.com",
       "khan.co.kr",
       "chosun.com",
-      "donga.com"
+      "donga.com",
+      "news.kbs.co.kr",
+      "asiae.co.kr"
     ]
   },
   "kr-news-10": {
@@ -1676,7 +1749,10 @@
       "khan.co.kr",
       "chosun.com",
       "donga.com",
-      "koreabaseball.com"
+      "koreabaseball.com",
+      "newspim.com",
+      "kbo-dashboard.co.kr",
+      "fnnews.com"
     ]
   },
   "kr-news-13": {
@@ -1737,7 +1813,8 @@
     "relevantDomains": [
       "n.news.naver.com",
       "etnews.com",
-      "autoview.co.kr"
+      "autoview.co.kr",
+      "epnc.co.kr"
     ]
   },
   "kr-tech-09": {
@@ -1772,7 +1849,8 @@
       "tistory.com",
       "medium.com",
       "developer.mozilla.org",
-      "nodejs.org"
+      "nodejs.org",
+      "m.blog.naver.com"
     ]
   },
   "kr-tech-12": {
@@ -1784,7 +1862,8 @@
       "tistory.com",
       "medium.com",
       "developer.mozilla.org",
-      "w3schools.com"
+      "w3schools.com",
+      "thebook.io"
     ]
   },
   "kr-tech-13": {
@@ -1832,7 +1911,9 @@
       "tistory.com",
       "medium.com",
       "developer.mozilla.org",
-      "tensorflow.org"
+      "tensorflow.org",
+      "m.youtube.com",
+      "kmu.ac.kr"
     ]
   },
   "kr-tech-17": {
@@ -1871,7 +1952,9 @@
       "tistory.com",
       "medium.com",
       "developer.mozilla.org",
-      "postgresql.org"
+      "postgresql.org",
+      "ko.wikipedia.org",
+      "mongodb.com"
     ]
   },
   "kr-tech-20": {
@@ -1925,7 +2008,8 @@
       "developer.mozilla.org",
       "jestjs.io",
       "ko.wikipedia.org",
-      "m.blog.naver.com"
+      "m.blog.naver.com",
+      "simritest.com"
     ]
   },
   "kr-general-08": {
@@ -1934,7 +2018,10 @@
       "blog.naver.com",
       "terms.naver.com",
       "youtube.com",
-      "diningcode.com"
+      "diningcode.com",
+      "m.blog.naver.com",
+      "siksinhot.com",
+      "reddit.com"
     ]
   },
   "kr-general-09": {
@@ -2040,7 +2127,12 @@
       "blog.naver.com",
       "terms.naver.com",
       "youtube.com",
-      "vivino.com"
+      "vivino.com",
+      "gall.dcinside.com",
+      "m.youtube.com",
+      "pandarank.net",
+      "m.blog.naver.com",
+      "m.cafe.naver.com"
     ]
   },
   "en-stock-11": {
@@ -2337,7 +2429,9 @@
       "medium.com",
       "freecodecamp.org",
       "digitalocean.com",
-      "docker.com"
+      "docker.com",
+      "blog.docker.com",
+      "blog.sqreen.io"
     ]
   },
   "en-tech-28": {
@@ -2516,7 +2610,10 @@
       "digitalocean.com",
       "openai.com",
       "anthropic.com",
-      "promptingguide.ai"
+      "promptingguide.ai",
+      "docs.anthropic.com",
+      "help.openai.com",
+      "aws.amazon.com"
     ]
   },
   "en-tech-42": {
@@ -2529,7 +2626,9 @@
       "freecodecamp.org",
       "digitalocean.com",
       "cloudflare.com",
-      "web.dev"
+      "web.dev",
+      "blog.hasura.io",
+      "news.ycombinator.com"
     ]
   },
   "en-tech-43": {
@@ -2541,7 +2640,9 @@
       "medium.com",
       "freecodecamp.org",
       "digitalocean.com",
-      "webassembly.org"
+      "webassembly.org",
+      "8bitworkshop.com",
+      "blog.sessionstack.com"
     ]
   },
   "en-tech-44": {
@@ -2566,7 +2667,10 @@
       "freecodecamp.org",
       "digitalocean.com",
       "gitlab.com",
-      "news.ycombinator.com"
+      "news.ycombinator.com",
+      "cloudqa.io",
+      "reactiveops.com",
+      "confident-ai.com"
     ]
   },
   "en-tech-46": {
@@ -2591,7 +2695,8 @@
       "freecodecamp.org",
       "digitalocean.com",
       "martinfowler.com",
-      "microservices.io"
+      "microservices.io",
+      "reddit.com"
     ]
   },
   "en-tech-48": {
@@ -3023,7 +3128,11 @@
       "scientificamerican.com",
       "nationalgeographic.com",
       "cdc.gov",
-      "nih.gov"
+      "nih.gov",
+      "youcanknowthings.com",
+      "economist.com",
+      "ft.com",
+      "remoteclan.com"
     ]
   },
   "en-fact-18": {
@@ -3035,7 +3144,10 @@
       "scientificamerican.com",
       "nationalgeographic.com",
       "iaea.org",
-      "energy.gov"
+      "energy.gov",
+      "nytimes.com",
+      "bbc.co.uk",
+      "newatlas.com"
     ]
   },
   "en-fact-19": {
@@ -3086,7 +3198,10 @@
       "nasa.gov",
       "howstuffworks.com",
       "scientificamerican.com",
-      "nationalgeographic.com"
+      "nationalgeographic.com",
+      "allstar.fiu.edu",
+      "fermatslibrary.com",
+      "twitter.com"
     ]
   },
   "en-fact-24": {
@@ -3097,7 +3212,9 @@
       "howstuffworks.com",
       "scientificamerican.com",
       "nationalgeographic.com",
-      "nist.gov"
+      "nist.gov",
+      "phys.org",
+      "reddit.com"
     ]
   },
   "en-fact-25": {
@@ -3107,7 +3224,11 @@
       "howstuffworks.com",
       "scientificamerican.com",
       "nationalgeographic.com",
-      "nih.gov"
+      "nih.gov",
+      "npr.org",
+      "cnn.com",
+      "inc.com",
+      "news.ycombinator.com"
     ]
   },
   "en-fact-26": {
@@ -3143,7 +3264,11 @@
       "howstuffworks.com",
       "scientificamerican.com",
       "nationalgeographic.com",
-      "investopedia.com"
+      "investopedia.com",
+      "medium.com",
+      "bloomberg.com",
+      "danco.substack.com",
+      "call-levels.com"
     ]
   },
   "en-fact-29": {
@@ -3153,7 +3278,10 @@
       "howstuffworks.com",
       "scientificamerican.com",
       "nationalgeographic.com",
-      "mayoclinic.org"
+      "mayoclinic.org",
+      "popsci.com",
+      "medicalxpress.com",
+      "medium.com"
     ]
   },
   "en-fact-30": {
@@ -3199,7 +3327,11 @@
       "howstuffworks.com",
       "scientificamerican.com",
       "nationalgeographic.com",
-      "seti.org"
+      "seti.org",
+      "universetoday.com",
+      "slatestarcodex.com",
+      "jodrellbank.manchester.ac.uk",
+      "waitbutwhy.com"
     ]
   },
   "en-fact-34": {
@@ -3292,7 +3424,8 @@
       "semanticscholar.org",
       "paperswithcode.com",
       "openreview.net",
-      "acm.org"
+      "acm.org",
+      "stackoverflow.com"
     ]
   },
   "en-acad-09": {
@@ -3310,7 +3443,8 @@
       "semanticscholar.org",
       "paperswithcode.com",
       "openreview.net",
-      "acm.org"
+      "acm.org",
+      "stackoverflow.com"
     ]
   },
   "en-acad-11": {
@@ -3328,7 +3462,8 @@
       "semanticscholar.org",
       "paperswithcode.com",
       "openreview.net",
-      "acm.org"
+      "acm.org",
+      "github.com"
     ]
   },
   "en-acad-13": {
@@ -3415,7 +3550,9 @@
       "budgetbytes.com",
       "eatingwell.com",
       "news.ycombinator.com",
-      "en.wikipedia.org"
+      "en.wikipedia.org",
+      "merriam-webster.com",
+      "dictionary.cambridge.org"
     ]
   },
   "en-general-08": {
@@ -3456,7 +3593,8 @@
       "wikihow.com",
       "spotify.com",
       "dev.to",
-      "news.ycombinator.com"
+      "news.ycombinator.com",
+      "ko.wordow.com"
     ]
   },
   "en-general-11": {
@@ -3474,15 +3612,19 @@
   },
   "en-general-12": {
     "relevantDomains": [
+      "finance.yahoo.com",
+      "investopedia.com",
+      "nerdwallet.com",
+      "fool.com",
+      "etf.com",
+      "investing.com",
+      "nytimes.com",
+      "wikihow.com",
       "reddit.com",
       "quora.com",
       "healthline.com",
       "webmd.com",
-      "nytimes.com",
-      "wikihow.com",
-      "investopedia.com",
-      "fool.com",
-      "finance.yahoo.com"
+      "britannica.com"
     ]
   },
   "en-general-13": {
@@ -3509,7 +3651,10 @@
       "wikihow.com",
       "goodreads.com",
       "news.ycombinator.com",
-      "en.wikipedia.org"
+      "en.wikipedia.org",
+      "brainpickings.org",
+      "digest.bps.org.uk",
+      "sparringmind.com"
     ]
   },
   "en-general-15": {
@@ -3562,7 +3707,10 @@
       "edx.org",
       "news.stanford.edu",
       "relate.mit.edu",
-      "en.wikipedia.org"
+      "en.wikipedia.org",
+      "qz.com",
+      "openculture.com",
+      "ko.wordow.com"
     ]
   },
   "en-general-19": {
@@ -3575,7 +3723,10 @@
       "wikihow.com",
       "mayoclinic.org",
       "stackoverflow.com",
-      "news.ycombinator.com"
+      "news.ycombinator.com",
+      "digitalcitizen.life",
+      "canopy.us",
+      "16personalities.com"
     ]
   },
   "en-health-01": {
@@ -3725,14 +3876,18 @@
     "relevantDomains": [
       "zh.wikipedia.org",
       "baike.baidu.com",
-      "zhihu.com"
+      "zhihu.com",
+      "blog.csdn.net"
     ]
   },
   "zh-fact-15": {
     "relevantDomains": [
       "zh.wikipedia.org",
       "baike.baidu.com",
-      "zhihu.com"
+      "zhihu.com",
+      "news.qq.com",
+      "hanyuguoxue.com",
+      "blog.csdn.net"
     ]
   },
   "zh-fact-16": {
@@ -3993,7 +4148,10 @@
       "dianping.com",
       "xiaohongshu.com",
       "zhihu.com",
-      "trip.com"
+      "trip.com",
+      "blog.csdn.net",
+      "zhuanlan.zhihu.com",
+      "sohu.com"
     ]
   },
   "zh-general-08": {
@@ -4063,7 +4221,9 @@
       "dianping.com",
       "xiaohongshu.com",
       "zhihu.com",
-      "trip.com"
+      "trip.com",
+      "blog.csdn.net",
+      "zhuanlan.zhihu.com"
     ]
   },
   "zh-general-14": {
@@ -4178,14 +4338,19 @@
     "relevantDomains": [
       "ja.wikipedia.org",
       "kotobank.jp",
-      "weblio.jp"
+      "weblio.jp",
+      "quants.co.jp"
     ]
   },
   "ja-fact-08": {
     "relevantDomains": [
       "ja.wikipedia.org",
       "kotobank.jp",
-      "weblio.jp"
+      "weblio.jp",
+      "subutsugaien.hatenablog.com",
+      "mossottiblog.com",
+      "spacethings.jp",
+      "koriscience.com"
     ]
   },
   "ja-fact-09": {
@@ -4213,14 +4378,19 @@
     "relevantDomains": [
       "ja.wikipedia.org",
       "kotobank.jp",
-      "weblio.jp"
+      "weblio.jp",
+      "starwalk.space"
     ]
   },
   "ja-fact-12": {
     "relevantDomains": [
       "ja.wikipedia.org",
       "kotobank.jp",
-      "weblio.jp"
+      "weblio.jp",
+      "jaci.jp",
+      "jsi-men-eki.org",
+      "chugai-pharm.co.jp",
+      "hus.ac.jp"
     ]
   },
   "ja-tech-05": {
@@ -4291,7 +4461,10 @@
       "github.com",
       "dev.to",
       "itmedia.co.jp",
-      "ipa.go.jp"
+      "ipa.go.jp",
+      "crexgroup.com",
+      "cybersecurity-info.com",
+      "npa.go.jp"
     ]
   },
   "ja-tech-12": {
@@ -4410,7 +4583,9 @@
       "rakuten.co.jp",
       "welcome2japan.jp",
       "travel.rakuten.co.jp",
-      "rurubu.jp"
+      "rurubu.jp",
+      "hokkaido.world",
+      "day-trip-sapporo.com"
     ]
   },
   "ja-general-06": {
@@ -4428,7 +4603,11 @@
       "tripadvisor.jp",
       "japan-guide.com",
       "rakuten.co.jp",
-      "travel.rakuten.co.jp"
+      "travel.rakuten.co.jp",
+      "aumo.jp",
+      "travel.jr",
+      "trip-kamakura.com",
+      "kamakuraguide.com"
     ]
   },
   "ja-general-08": {
@@ -4503,7 +4682,9 @@
       "rakuten.co.jp",
       "travel.rakuten.co.jp",
       "rurubu.jp",
-      "hokkaido.world-tours.jp"
+      "hokkaido.world-tours.jp",
+      "misomochi-24.hatenablog.com",
+      "tabisurujikan.com"
     ]
   },
   "ja-travel-08": {
@@ -4560,7 +4741,9 @@
     "relevantDomains": [
       "vitest.dev",
       "jestjs.io",
-      "github.com"
+      "github.com",
+      "speakeasy.com",
+      "stackoverflow.com"
     ]
   },
   "cmp-16": {
@@ -4574,7 +4757,9 @@
     "relevantDomains": [
       "playwright.dev",
       "cypress.io",
-      "github.com"
+      "github.com",
+      "stackoverflow.com",
+      "en.wikipedia.org"
     ]
   },
   "cmp-18": {
@@ -4591,7 +4776,8 @@
       "snowflake.com",
       "cloud.google.com",
       "stackoverflow.com",
-      "en.wikipedia.org"
+      "en.wikipedia.org",
+      "castled.io"
     ]
   },
   "cmp-20": {
@@ -4641,7 +4827,10 @@
   "lt-13": {
     "relevantDomains": [
       "bun.sh",
-      "github.com"
+      "github.com",
+      "reddit.com",
+      "developer.mozilla.org",
+      "stackoverflow.com"
     ]
   },
   "lt-14": {
@@ -4690,13 +4879,18 @@
   "gk-09": {
     "relevantDomains": [
       "en.wikipedia.org",
-      "britannica.com"
+      "britannica.com",
+      "scientificamerican.com",
+      "economist.com"
     ]
   },
   "gk-10": {
     "relevantDomains": [
       "en.wikipedia.org",
-      "submarinecablemap.com"
+      "submarinecablemap.com",
+      "arstechnica.com",
+      "arstechnica.co.uk",
+      "iscpc.org"
     ]
   },
   "gk-11": {
@@ -4732,7 +4926,10 @@
   "gk-15": {
     "relevantDomains": [
       "starlink.com",
-      "en.wikipedia.org"
+      "en.wikipedia.org",
+      "youtube.com",
+      "medium.com",
+      "bloomberg.com"
     ]
   },
   "gk-16": {
@@ -4753,14 +4950,21 @@
   "adv-06": {
     "relevantDomains": [
       "nasa.gov",
-      "en.wikipedia.org"
+      "en.wikipedia.org",
+      "youtube.com",
+      "phys.org"
     ]
   },
   "adv-07": {
     "relevantDomains": [
       "en.wikipedia.org",
       "stanford.edu",
-      "mit.edu"
+      "mit.edu",
+      "aperiodical.com",
+      "aeon.co",
+      "web.media.mit.edu",
+      "friesian.com",
+      "kbsc.com"
     ]
   },
   "adv-08": {
@@ -4788,7 +4992,11 @@
   "adv-11": {
     "relevantDomains": [
       "reddit.com",
-      "stackoverflow.com"
+      "stackoverflow.com",
+      "programmingzen.com",
+      "medium.freecodecamp.com",
+      "news.ycombinator.com",
+      "marco.org"
     ]
   },
   "adv-12": {
@@ -4796,7 +5004,12 @@
       "opensource.org",
       "redhat.com",
       "en.wikipedia.org",
-      "arstechnica.com"
+      "arstechnica.com",
+      "lwn.net",
+      "artagnon.com",
+      "theregister.com",
+      "clojuriststogether.org",
+      "youtube.com"
     ]
   },
   "adv-13": {
@@ -4851,7 +5064,9 @@
       "theguardian.com",
       "nytimes.com",
       "wired.com",
-      "android.com"
+      "android.com",
+      "mobileos.it",
+      "gizmochina.com"
     ]
   },
   "ts-08": {
@@ -4946,7 +5161,10 @@
       "arxiv.org",
       "aclweb.org",
       "reddit.com",
-      "news.ycombinator.com"
+      "news.ycombinator.com",
+      "alphadevx.com",
+      "cnn.com",
+      "nature.com"
     ]
   },
   "ds-15": {
@@ -4984,7 +5202,10 @@
     "relevantDomains": [
       "ja.wikipedia.org",
       "nikkei.com",
-      "itmedia.co.jp"
+      "itmedia.co.jp",
+      "qcnavigator.hatenablog.com",
+      "crexgroup.com",
+      "point-investment.com"
     ]
   },
   "en-health-06": {
@@ -5061,7 +5282,10 @@
       "healthline.com",
       "nimh.nih.gov",
       "github.com",
-      "news.ycombinator.com"
+      "news.ycombinator.com",
+      "cbtsanfrancisco.com",
+      "thinkpacifica.com",
+      "sleepedy.com"
     ]
   },
   "en-health-14": {
@@ -5161,7 +5385,11 @@
       "nih.gov",
       "eatright.org",
       "en.wikipedia.org",
-      "news.ycombinator.com"
+      "news.ycombinator.com",
+      "blog.naver.com",
+      "qz.com",
+      "m.blog.naver.com",
+      "rootcamper.com"
     ]
   },
   "en-health-24": {
@@ -5193,7 +5421,9 @@
       "cnbc.com",
       "ft.com",
       "marketwatch.com",
-      "news.google.com"
+      "news.google.com",
+      "theguardian.com",
+      "finance.yahoo.com"
     ]
   },
   "en-news-42": {
@@ -5309,7 +5539,11 @@
       "nytimes.com",
       "theguardian.com",
       "npr.org",
-      "theverge.com"
+      "theverge.com",
+      "ign.com",
+      "cosmopolitan.com",
+      "ocregister.com",
+      "awealthofcommonsense.com"
     ]
   },
   "en-general-22": {
@@ -5400,7 +5634,9 @@
       "theverge.com",
       "wired.com",
       "news.ycombinator.com",
-      "en.wikipedia.org"
+      "en.wikipedia.org",
+      "newbest.lge.com",
+      "dictionary.cambridge.org"
     ]
   },
   "en-general-31": {
@@ -5459,7 +5695,9 @@
       "space.com",
       "en.wikipedia.org",
       "britannica.com",
-      "scientificamerican.com"
+      "scientificamerican.com",
+      "wired.com",
+      "science.nasa.gov"
     ]
   },
   "en-fact-43": {
@@ -5475,7 +5713,12 @@
       "britannica.com",
       "en.wikipedia.org",
       "nationalgeographic.com",
-      "worldatlas.com"
+      "worldatlas.com",
+      "electrek.co",
+      "qz.com",
+      "treehugger.com",
+      "nbcnews.com",
+      "santiagotimes.cl"
     ]
   },
   "en-fact-45": {
@@ -5484,7 +5727,10 @@
       "who.int",
       "nih.gov",
       "en.wikipedia.org",
-      "britannica.com"
+      "britannica.com",
+      "sciencealert.com",
+      "news.ycombinator.com",
+      "metro.co.uk"
     ]
   },
   "en-fact-46": {
@@ -5493,7 +5739,8 @@
       "nationalgeographic.com",
       "scientificamerican.com",
       "smithsonianmag.com",
-      "en.wikipedia.org"
+      "en.wikipedia.org",
+      "zhihu.com"
     ]
   },
   "en-fact-47": {
@@ -5564,7 +5811,8 @@
       "science.org",
       "agu.org",
       "ipcc.ch",
-      "github.com"
+      "github.com",
+      "arxiv.org"
     ]
   },
   "en-acad-22": {
@@ -5681,7 +5929,10 @@
       "cnet.com",
       "tomshardware.com",
       "walmart.com",
-      "en.wikipedia.org"
+      "en.wikipedia.org",
+      "ko.wordow.com",
+      "namu.wiki",
+      "dictionary.cambridge.org"
     ]
   },
   "en-shopping-04": {
@@ -5708,7 +5959,11 @@
       "rtings.com",
       "tomshardware.com",
       "theverge.com",
-      "mechanicalkeyboards.com"
+      "mechanicalkeyboards.com",
+      "news.ycombinator.com",
+      "wired.com",
+      "melmagazine.com",
+      "github.com"
     ]
   },
   "en-shopping-07": {
@@ -5790,7 +6045,11 @@
       "postgresql.org",
       "stackoverflow.com",
       "digitalocean.com",
-      "medium.com"
+      "medium.com",
+      "devops-daily.com",
+      "datacamp.com",
+      "devbolt.dev",
+      "betterstack.com"
     ]
   },
   "en-tech-50": {
@@ -5808,7 +6067,10 @@
       "anthropic.com",
       "promptingguide.ai",
       "github.com",
-      "medium.com"
+      "medium.com",
+      "docs.anthropic.com",
+      "help.openai.com",
+      "aws.amazon.com"
     ]
   },
   "en-tech-52": {
@@ -5826,7 +6088,9 @@
       "developer.mozilla.org",
       "stackoverflow.com",
       "digitalocean.com",
-      "medium.com"
+      "medium.com",
+      "github.com",
+      "wundergraph.com"
     ]
   },
   "kr-news-17": {

@@ -288,7 +288,9 @@ export async function validateApiKeyAsync(headers: Headers, env: AppBindings): P
           case 'key_expired':
             return { valid: false, reason: 'API key has expired. Create a new one.' }
           default:
-            return { valid: false, reason: result.reason || 'Invalid API key' }
+            // Key not found in DO — fall through to legacy validation
+            // (SEARCH_API_KEY / TENANTS_CONFIG may still recognize it)
+            break
         }
       }
     } catch (err) {

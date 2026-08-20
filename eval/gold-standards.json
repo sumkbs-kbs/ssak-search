@@ -933,21 +933,25 @@
     "relevantDomains": [
       "nhk.or.jp",
       "itmedia.co.jp",
-      "nikkei.com"
+      "nikkei.com",
+      "news.google.com"
     ]
   },
   "ja-news-02": {
     "relevantDomains": [
       "nintendo.co.jp",
       "famitsu.com",
-      "itmedia.co.jp"
+      "itmedia.co.jp",
+      "news.google.com",
+      "ja.wikipedia.org"
     ]
   },
   "ja-news-03": {
     "relevantDomains": [
       "nikkei.com",
       "itmedia.co.jp",
-      "nhk.or.jp"
+      "nhk.or.jp",
+      "news.google.com"
     ]
   },
   "ja-news-04": {
@@ -955,14 +959,17 @@
       "nikkei.com",
       "nhk.or.jp",
       "bloomberg.co.jp",
-      "note.com"
+      "note.com",
+      "news.google.com"
     ]
   },
   "ja-tech-01": {
     "relevantDomains": [
       "developer.mozilla.org",
       "github.com",
-      "react.dev"
+      "react.dev",
+      "qiita.com",
+      "ja.wikipedia.org"
     ]
   },
   "ja-tech-02": {
@@ -976,7 +983,8 @@
     "relevantDomains": [
       "typescriptlang.org",
       "qiita.com",
-      "developer.mozilla.org"
+      "developer.mozilla.org",
+      "ja.wikipedia.org"
     ]
   },
   "ja-tech-04": {
@@ -993,7 +1001,9 @@
     "relevantDomains": [
       "gotokyo.org",
       "tripadvisor.com",
-      "japan-guide.com"
+      "japan-guide.com",
+      "travel.rakuten.co.jp",
+      "rurubu.jp"
     ]
   },
   "ja-travel-02": {
@@ -1011,14 +1021,19 @@
       "okinawatravelinfo.com",
       "tripadvisor.com",
       "japan-guide.com",
-      "ja.wikipedia.org"
+      "ja.wikipedia.org",
+      "rurubu.jp",
+      "tabirai.net"
     ]
   },
   "ja-travel-04": {
     "relevantDomains": [
       "osaka-info.jp",
       "tripadvisor.com",
-      "japan-guide.com"
+      "japan-guide.com",
+      "ja.wikipedia.org",
+      "rurubu.jp",
+      "4travel.jp"
     ]
   },
   "cmp-01": {
@@ -4109,7 +4124,8 @@
       "yomiuri.co.jp",
       "itmedia.co.jp",
       "mainichi.jp",
-      "digital.go.jp"
+      "digital.go.jp",
+      "news.google.com"
     ]
   },
   "ja-news-06": {
@@ -4119,7 +4135,8 @@
       "asahi.com",
       "yomiuri.co.jp",
       "itmedia.co.jp",
-      "mainichi.jp"
+      "mainichi.jp",
+      "news.google.com"
     ]
   },
   "ja-news-07": {
@@ -4144,7 +4161,8 @@
       "yomiuri.co.jp",
       "itmedia.co.jp",
       "mainichi.jp",
-      "famitsu.com"
+      "famitsu.com",
+      "news.google.com"
     ]
   },
   "ja-news-09": {
@@ -4155,7 +4173,8 @@
       "yomiuri.co.jp",
       "itmedia.co.jp",
       "mainichi.jp",
-      "jaxa.jp"
+      "jaxa.jp",
+      "news.google.com"
     ]
   },
   "ja-news-10": {
@@ -4179,7 +4198,8 @@
       "asahi.com",
       "yomiuri.co.jp",
       "itmedia.co.jp",
-      "mainichi.jp"
+      "mainichi.jp",
+      "news.google.com"
     ]
   },
   "ja-news-12": {
@@ -4190,7 +4210,8 @@
       "yomiuri.co.jp",
       "itmedia.co.jp",
       "mainichi.jp",
-      "digital.go.jp"
+      "digital.go.jp",
+      "news.google.com"
     ]
   },
   "ja-general-05": {
@@ -4199,7 +4220,9 @@
       "tripadvisor.jp",
       "japan-guide.com",
       "rakuten.co.jp",
-      "welcome2japan.jp"
+      "welcome2japan.jp",
+      "travel.rakuten.co.jp",
+      "rurubu.jp"
     ]
   },
   "ja-general-06": {
@@ -4216,7 +4239,8 @@
       "yahoo.co.jp",
       "tripadvisor.jp",
       "japan-guide.com",
-      "rakuten.co.jp"
+      "rakuten.co.jp",
+      "travel.rakuten.co.jp"
     ]
   },
   "ja-general-08": {
@@ -4224,7 +4248,10 @@
       "yahoo.co.jp",
       "tripadvisor.jp",
       "japan-guide.com",
-      "rakuten.co.jp"
+      "rakuten.co.jp",
+      "travel.rakuten.co.jp",
+      "ja.wikipedia.org",
+      "rurubu.jp"
     ]
   },
   "ja-general-09": {
@@ -4251,11 +4278,12 @@
   "ja-general-11": {
     "relevantDomains": [
       "yahoo.co.jp",
-      "tripadvisor.jp",
-      "japan-guide.com",
       "rakuten.co.jp",
       "kurashiru.com",
-      "cookpad.com"
+      "cookpad.com",
+      "delishkitchen.tv",
+      "ja.wikipedia.org",
+      "orangepage.net"
     ]
   },
   "ja-travel-05": {
@@ -4263,7 +4291,9 @@
       "yahoo.co.jp",
       "tripadvisor.jp",
       "japan-guide.com",
-      "rakuten.co.jp"
+      "rakuten.co.jp",
+      "ja.wikipedia.org",
+      "travel.rakuten.co.jp"
     ]
   },
   "ja-travel-06": {
@@ -4282,7 +4312,9 @@
       "yahoo.co.jp",
       "tripadvisor.jp",
       "japan-guide.com",
-      "rakuten.co.jp"
+      "rakuten.co.jp",
+      "travel.rakuten.co.jp",
+      "rurubu.jp"
     ]
   },
   "ja-travel-08": {
@@ -4748,7 +4780,8 @@
     "relevantDomains": [
       "itmedia.co.jp",
       "nikkei.com",
-      "zenn.dev"
+      "zenn.dev",
+      "news.google.com"
     ]
   },
   "xl-08": {
@@ -5677,7 +5710,8 @@
       "asahi.com",
       "yomiuri.co.jp",
       "japantimes.co.jp",
-      "nhk.or.jp"
+      "nhk.or.jp",
+      "news.google.com"
     ]
   },
   "ja-news-15": {
@@ -5698,7 +5732,8 @@
       "nikkei.com",
       "asahi.com",
       "mainichi.jp",
-      "yomiuri.co.jp"
+      "yomiuri.co.jp",
+      "news.google.com"
     ]
   },
   "ja-news-17": {
@@ -5707,7 +5742,8 @@
       "nikkei.com",
       "response.jp",
       "car.watch.impress.co.jp",
-      "japantimes.co.jp"
+      "japantimes.co.jp",
+      "news.google.com"
     ]
   }
 }

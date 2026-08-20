@@ -70,6 +70,7 @@
     "eval:median:save": "npx tsx eval/index.ts --runs 3 --json --save",
     "eval:median:ci": "npx tsx eval/index.ts --runs 3 --ci --summary",
     "eval:cache": "npx tsx eval/index.ts --cache",
+    "eval:gate": "npx tsx scripts/verify-ndcg-gate.ts",
     "eval:availability": "npx tsx scripts/report-backend-availability.ts",
     "eval:availability:hackernews": "npx tsx scripts/report-backend-availability.ts --backend hackernews",
     "eval:loss": "npx tsx scripts/analyze-429-loss.ts",

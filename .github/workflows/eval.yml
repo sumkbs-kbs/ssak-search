@@ -280,16 +280,31 @@ jobs:
             echo "README metrics updated and committed"
           fi
 
+      # NDCG@10 Absolute Threshold Gate — quality floor enforcement.
+      # Blocks the workflow when NDCG@10 drops below the configured threshold,
+      # regardless of whether the eval step itself succeeded (network issues
+      # can produce low-quality results that still "pass" the query-level gate).
+      - name: NDCG@10 quality gate
+        id: ndcg_gate
+        if: always() && steps.eval.outcome != 'skipped'
+        run: npx tsx scripts/verify-ndcg-gate.ts --threshold 0.45
+
       - name: Check results
         id: check
         run: |
           OUTCOME="${{ steps.eval.outcome }}"
-          if [ "$OUTCOME" = "success" ]; then
+          NDCG_OUTCOME="${{ steps.ndcg_gate.outcome }}"
+          if [ "$OUTCOME" = "success" ] && [ "$NDCG_OUTCOME" = "success" ]; then
             echo "status=passed" >> $GITHUB_OUTPUT
-            echo "All eval queries passed with no regressions."
+            echo "All eval queries passed with no regressions. NDCG@10 gate passed."
           else
             echo "status=failed" >> $GITHUB_OUTPUT
-            echo "::warning::Eval detected failures or regressions!"
+            if [ "$NDCG_OUTCOME" != "success" ]; then
+              echo "::error::NDCG@10 quality gate failed — search quality below threshold."
+            fi
+            if [ "$OUTCOME" != "success" ]; then
+              echo "::warning::Eval detected failures or regressions!"
+            fi
           fi
 
       - name: Send Slack alert on regression

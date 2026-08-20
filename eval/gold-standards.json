@@ -75,42 +75,48 @@
     "relevantDomains": [
       "n.news.naver.com",
       "yna.co.kr",
-      "etnews.com"
+      "etnews.com",
+      "news.google.com"
     ]
   },
   "kr-news-02": {
     "relevantDomains": [
       "n.news.naver.com",
       "yna.co.kr",
-      "samsung.com"
+      "samsung.com",
+      "news.google.com"
     ]
   },
   "kr-news-03": {
     "relevantDomains": [
       "n.news.naver.com",
       "yna.co.kr",
-      "hani.co.kr"
+      "hani.co.kr",
+      "news.google.com"
     ]
   },
   "kr-news-04": {
     "relevantDomains": [
       "n.news.naver.com",
       "yna.co.kr",
-      "donga.com"
+      "donga.com",
+      "news.google.com"
     ]
   },
   "kr-news-05": {
     "relevantDomains": [
       "n.news.naver.com",
       "yna.co.kr",
-      "kcdc.go.kr"
+      "kcdc.go.kr",
+      "news.google.com"
     ]
   },
   "kr-news-06": {
     "relevantDomains": [
       "n.news.naver.com",
       "koreabaseball.com",
-      "sports.naver.com"
+      "sports.naver.com",
+      "news.google.com"
     ]
   },
   "kr-tech-01": {
@@ -448,7 +454,8 @@
     "relevantDomains": [
       "reuters.com",
       "bloomberg.com",
-      "cnbc.com"
+      "cnbc.com",
+      "news.google.com"
     ]
   },
   "en-news-03": {
@@ -472,7 +479,8 @@
     "relevantDomains": [
       "spacex.com",
       "reuters.com",
-      "nasaspaceflight.com"
+      "nasaspaceflight.com",
+      "news.google.com"
     ]
   },
   "en-news-06": {
@@ -515,7 +523,8 @@
       "reuters.com",
       "iea.org",
       "electrive.com",
-      "finance.yahoo.com"
+      "finance.yahoo.com",
+      "news.google.com"
     ]
   },
   "en-news-11": {
@@ -534,7 +543,8 @@
       "reuters.com",
       "sec.gov",
       "bloomberg.com",
-      "finance.yahoo.com"
+      "finance.yahoo.com",
+      "news.google.com"
     ]
   },
   "en-news-13": {
@@ -552,7 +562,8 @@
       "reuters.com",
       "gov.uk",
       "theverge.com",
-      "en.wikipedia.org"
+      "en.wikipedia.org",
+      "news.google.com"
     ]
   },
   "en-news-15": {
@@ -562,7 +573,8 @@
       "bbc.com",
       "theguardian.com",
       "nytimes.com",
-      "theverge.com"
+      "theverge.com",
+      "news.google.com"
     ]
   },
   "en-fact-01": {
@@ -582,7 +594,12 @@
   "en-fact-03": {
     "relevantDomains": [
       "wikipedia.org",
-      "britannica.com"
+      "britannica.com",
+      "blockchain-council.org",
+      "nvlpubs.nist.gov",
+      "eng.paxos.com",
+      "geeksforgeeks.org",
+      "blockstrap.com"
     ]
   },
   "en-fact-04": {
@@ -599,7 +616,8 @@
     "relevantDomains": [
       "wikipedia.org",
       "britannica.com",
-      "internetsociety.org"
+      "internetsociety.org",
+      "en.wikipedia.org"
     ]
   },
   "en-fact-06": {
@@ -635,14 +653,20 @@
     "relevantDomains": [
       "wikipedia.org",
       "nasa.gov",
-      "esa.int"
+      "esa.int",
+      "en.wikipedia.org"
     ]
   },
   "en-fact-11": {
     "relevantDomains": [
       "wikipedia.org",
       "gps.gov",
-      "britannica.com"
+      "britannica.com",
+      "electronics.howstuffworks.com",
+      "perthirtysix.com",
+      "trimble.com",
+      "youtube.com",
+      "media.ccc.de"
     ]
   },
   "en-fact-12": {
@@ -656,7 +680,13 @@
     "relevantDomains": [
       "wikipedia.org",
       "energy.gov",
-      "nrel.gov"
+      "nrel.gov",
+      "en.wikipedia.org",
+      "perthirtysix.com",
+      "news.ycombinator.com",
+      "bloomberg.com",
+      "youtube.com",
+      "newscientist.com"
     ]
   },
   "en-fact-14": {
@@ -762,19 +792,28 @@
   "zh-fact-01": {
     "relevantDomains": [
       "zh.wikipedia.org",
-      "baike.baidu.com"
+      "baike.baidu.com",
+      "ibm.com",
+      "blog.csdn.net",
+      "zhuanlan.zhihu.com"
     ]
   },
   "zh-fact-02": {
     "relevantDomains": [
       "zh.wikipedia.org",
-      "baike.baidu.com"
+      "baike.baidu.com",
+      "blog.csdn.net",
+      "ibm.com",
+      "cnblogs.com",
+      "aws.amazon.com"
     ]
   },
   "zh-fact-03": {
     "relevantDomains": [
       "zh.wikipedia.org",
-      "baike.baidu.com"
+      "baike.baidu.com",
+      "blog.csdn.net",
+      "runoob.com"
     ]
   },
   "zh-fact-04": {
@@ -817,7 +856,8 @@
       "autohome.com.cn",
       "people.com.cn",
       "xinhuanet.com",
-      "news.qq.com"
+      "news.qq.com",
+      "news.google.com"
     ]
   },
   "zh-news-04": {
@@ -906,27 +946,44 @@
   "ja-fact-01": {
     "relevantDomains": [
       "ja.wikipedia.org",
-      "kotobank.jp"
+      "kotobank.jp",
+      "dir.co.jp",
+      "spaceshipearth.jp",
+      "japan-ai.co.jp",
+      "nedo.go.jp"
     ]
   },
   "ja-fact-02": {
     "relevantDomains": [
       "ja.wikipedia.org",
-      "kotobank.jp"
+      "kotobank.jp",
+      "japan-ai.co.jp",
+      "ai-souken.com",
+      "hus.ac.jp",
+      "labmemo.com",
+      "basshii.com"
     ]
   },
   "ja-fact-03": {
     "relevantDomains": [
       "ja.wikipedia.org",
       "kotobank.jp",
-      "nao.ac.jp"
+      "nao.ac.jp",
+      "xn--29sob207cg49a.com",
+      "sorae.info",
+      "analyzegear.org"
     ]
   },
   "ja-fact-04": {
     "relevantDomains": [
       "ja.wikipedia.org",
       "kotobank.jp",
-      "enecho.meti.go.jp"
+      "enecho.meti.go.jp",
+      "evdays.tepco.co.jp",
+      "contents.shirokumapower.com",
+      "kyocera.co.jp",
+      "hojokin-solar.com",
+      "asahi.com"
     ]
   },
   "ja-news-01": {
@@ -1174,7 +1231,12 @@
     "relevantDomains": [
       "wikipedia.org",
       "cloudflare.com",
-      "howstuffworks.com"
+      "howstuffworks.com",
+      "sitepoint.com",
+      "jibinary.tistory.com",
+      "news.ycombinator.com",
+      "cdnjs.com",
+      "namu.wiki"
     ]
   },
   "gk-03": {
@@ -1196,7 +1258,11 @@
       "wikipedia.org",
       "cloudflare.com",
       "iana.org",
-      "news.ycombinator.com"
+      "news.ycombinator.com",
+      "verisign.com",
+      "cefboud.com",
+      "support.google.com",
+      "hadea.ec.europa.eu"
     ]
   },
   "gk-06": {
@@ -1228,7 +1294,8 @@
       "reuters.com",
       "quantamagazine.org",
       "theverge.com",
-      "bbc.com"
+      "bbc.com",
+      "news.google.com"
     ]
   },
   "ca-03": {
@@ -1236,7 +1303,8 @@
       "krebsonsecurity.com",
       "reuters.com",
       "cisa.gov",
-      "forbes.com"
+      "forbes.com",
+      "news.google.com"
     ]
   },
   "ca-04": {
@@ -1366,7 +1434,8 @@
     "relevantDomains": [
       "apple.com",
       "theverge.com",
-      "9to5mac.com"
+      "9to5mac.com",
+      "news.google.com"
     ]
   },
   "ts-02": {
@@ -1384,7 +1453,8 @@
       "techcrunch.com",
       "theverge.com",
       "news.ycombinator.com",
-      "medium.com"
+      "medium.com",
+      "news.google.com"
     ]
   },
   "ts-04": {
@@ -1504,7 +1574,8 @@
       "sedaily.com",
       "khan.co.kr",
       "chosun.com",
-      "donga.com"
+      "donga.com",
+      "news.google.com"
     ]
   },
   "kr-news-08": {
@@ -1515,7 +1586,8 @@
       "sedaily.com",
       "khan.co.kr",
       "chosun.com",
-      "donga.com"
+      "donga.com",
+      "news.google.com"
     ]
   },
   "kr-news-09": {
@@ -1538,7 +1610,8 @@
       "khan.co.kr",
       "chosun.com",
       "donga.com",
-      "bankofkorea.or.kr"
+      "bankofkorea.or.kr",
+      "news.google.com"
     ]
   },
   "kr-news-11": {
@@ -1549,7 +1622,8 @@
       "sedaily.com",
       "khan.co.kr",
       "chosun.com",
-      "donga.com"
+      "donga.com",
+      "news.google.com"
     ]
   },
   "kr-news-12": {
@@ -1573,7 +1647,8 @@
       "khan.co.kr",
       "chosun.com",
       "donga.com",
-      "kma.go.kr"
+      "kma.go.kr",
+      "news.google.com"
     ]
   },
   "kr-news-14": {
@@ -1586,7 +1661,8 @@
       "chosun.com",
       "donga.com",
       "jobkorea.co.kr",
-      "saramin.co.kr"
+      "saramin.co.kr",
+      "news.google.com"
     ]
   },
   "kr-news-15": {
@@ -1599,7 +1675,8 @@
       "chosun.com",
       "donga.com",
       "bloter.net",
-      "platum.kr"
+      "platum.kr",
+      "news.google.com"
     ]
   },
   "kr-news-16": {
@@ -1611,7 +1688,8 @@
       "khan.co.kr",
       "chosun.com",
       "donga.com",
-      "kostat.go.kr"
+      "kostat.go.kr",
+      "news.google.com"
     ]
   },
   "xl-06": {
@@ -2491,7 +2569,8 @@
       "nytimes.com",
       "wired.com",
       "macrumors.com",
-      "9to5mac.com"
+      "9to5mac.com",
+      "news.google.com"
     ]
   },
   "en-news-17": {
@@ -2504,7 +2583,8 @@
       "nytimes.com",
       "seekingalpha.com",
       "theverge.com",
-      "techcrunch.com"
+      "techcrunch.com",
+      "news.google.com"
     ]
   },
   "en-news-18": {
@@ -2520,7 +2600,8 @@
       "wsj.com",
       "arstechnica.com",
       "markets.businessinsider.com",
-      "seekingalpha.com"
+      "seekingalpha.com",
+      "news.google.com"
     ]
   },
   "en-news-19": {
@@ -2535,7 +2616,8 @@
       "nytimes.com",
       "wired.com",
       "huggingface.co",
-      "github.com"
+      "github.com",
+      "news.google.com"
     ]
   },
   "en-news-20": {
@@ -2548,7 +2630,8 @@
       "techcrunch.com",
       "theguardian.com",
       "nytimes.com",
-      "wired.com"
+      "wired.com",
+      "news.google.com"
     ]
   },
   "en-news-21": {
@@ -2563,7 +2646,8 @@
       "nytimes.com",
       "wired.com",
       "quantamagazine.org",
-      "forbes.com"
+      "forbes.com",
+      "news.google.com"
     ]
   },
   "en-news-22": {
@@ -2576,7 +2660,8 @@
       "techcrunch.com",
       "theguardian.com",
       "nytimes.com",
-      "wired.com"
+      "wired.com",
+      "news.google.com"
     ]
   },
   "en-news-23": {
@@ -2591,7 +2676,8 @@
       "nytimes.com",
       "wired.com",
       "datacenterdynamics.com",
-      "arstechnica.com"
+      "arstechnica.com",
+      "news.google.com"
     ]
   },
   "en-news-24": {
@@ -2605,7 +2691,8 @@
       "theguardian.com",
       "nytimes.com",
       "wired.com",
-      "nasa.gov"
+      "nasa.gov",
+      "news.google.com"
     ]
   },
   "en-news-25": {
@@ -2638,7 +2725,8 @@
       "fao.org",
       "sg.finance.yahoo.com",
       "forbes.com",
-      "finance.yahoo.com"
+      "finance.yahoo.com",
+      "news.google.com"
     ]
   },
   "en-news-27": {
@@ -2652,7 +2740,8 @@
       "theguardian.com",
       "nytimes.com",
       "wired.com",
-      "ec.europa.eu"
+      "ec.europa.eu",
+      "news.google.com"
     ]
   },
   "en-news-28": {
@@ -2683,7 +2772,8 @@
       "theguardian.com",
       "nytimes.com",
       "wired.com",
-      "semiengineering.com"
+      "semiengineering.com",
+      "news.google.com"
     ]
   },
   "en-news-30": {
@@ -2697,7 +2787,8 @@
       "theguardian.com",
       "nytimes.com",
       "wired.com",
-      "arstechnica.com"
+      "arstechnica.com",
+      "news.google.com"
     ]
   },
   "en-news-31": {
@@ -2712,7 +2803,8 @@
       "nytimes.com",
       "wired.com",
       "gartner.com",
-      "finance.yahoo.com"
+      "finance.yahoo.com",
+      "news.google.com"
     ]
   },
   "en-news-32": {
@@ -2743,7 +2835,8 @@
       "theguardian.com",
       "nytimes.com",
       "wired.com",
-      "lightreading.com"
+      "lightreading.com",
+      "news.google.com"
     ]
   },
   "en-news-34": {
@@ -2774,7 +2867,8 @@
       "theguardian.com",
       "nytimes.com",
       "wired.com",
-      "krebsonsecurity.com"
+      "krebsonsecurity.com",
+      "news.google.com"
     ]
   },
   "en-news-36": {
@@ -2791,7 +2885,8 @@
       "crunchbase.com",
       "pitchbook.com",
       "en.wikipedia.org",
-      "finance.yahoo.com"
+      "finance.yahoo.com",
+      "news.google.com"
     ]
   },
   "en-news-37": {
@@ -2856,7 +2951,8 @@
       "theguardian.com",
       "nytimes.com",
       "wired.com",
-      "roboticsbusinessreview.com"
+      "roboticsbusinessreview.com",
+      "news.google.com"
     ]
   },
   "en-fact-16": {
@@ -2984,7 +3080,10 @@
       "howstuffworks.com",
       "scientificamerican.com",
       "nationalgeographic.com",
-      "noaa.gov"
+      "noaa.gov",
+      "mrgris.com",
+      "youtube.com",
+      "nytimes.com"
     ]
   },
   "en-fact-28": {
@@ -3024,7 +3123,12 @@
       "howstuffworks.com",
       "scientificamerican.com",
       "nationalgeographic.com",
-      "ieee.org"
+      "ieee.org",
+      "nonblocking.io",
+      "thepointsguy.com",
+      "arstechnica.com",
+      "serverfault.com",
+      "phoronix.com"
     ]
   },
   "en-fact-32": {
@@ -3088,7 +3192,12 @@
       "howstuffworks.com",
       "scientificamerican.com",
       "nationalgeographic.com",
-      "wired.com"
+      "wired.com",
+      "coursera.org",
+      "meta.com",
+      "news.ycombinator.com",
+      "outline.com",
+      "clivethompson.medium.com"
     ]
   },
   "en-fact-38": {
@@ -3119,7 +3228,12 @@
       "howstuffworks.com",
       "scientificamerican.com",
       "nationalgeographic.com",
-      "nih.gov"
+      "nih.gov",
+      "youtube.com",
+      "nbcnews.com",
+      "researchgate.net",
+      "kortran.com",
+      "ko.ichacha.net"
     ]
   },
   "en-acad-08": {
@@ -3756,7 +3870,8 @@
       "chinanews.com",
       "cnbeta.com",
       "blog.csdn.net",
-      "sohu.com"
+      "sohu.com",
+      "news.google.com"
     ]
   },
   "zh-news-12": {
@@ -3982,14 +4097,22 @@
     "relevantDomains": [
       "ja.wikipedia.org",
       "kotobank.jp",
-      "weblio.jp"
+      "weblio.jp",
+      "minerva-clinic.or.jp",
+      "maintainbrain.co.jp",
+      "hiro-clinic.or.jp",
+      "note.com"
     ]
   },
   "ja-fact-06": {
     "relevantDomains": [
       "ja.wikipedia.org",
       "kotobank.jp",
-      "weblio.jp"
+      "weblio.jp",
+      "mitsui.com",
+      "crexgroup.com",
+      "spaceshipearth.jp",
+      "enecho.meti.go.jp"
     ]
   },
   "ja-fact-07": {
@@ -4010,7 +4133,11 @@
     "relevantDomains": [
       "ja.wikipedia.org",
       "kotobank.jp",
-      "weblio.jp"
+      "weblio.jp",
+      "erca.go.jp",
+      "aeon1p.or.jp",
+      "pid-corp.jp",
+      "sol.kepco.jp"
     ]
   },
   "ja-fact-10": {
@@ -4993,7 +5120,8 @@
       "bloomberg.com",
       "cnbc.com",
       "ft.com",
-      "marketwatch.com"
+      "marketwatch.com",
+      "news.google.com"
     ]
   },
   "en-news-42": {
@@ -5002,7 +5130,8 @@
       "bloomberg.com",
       "ft.com",
       "cnbc.com",
-      "nikkei.com"
+      "nikkei.com",
+      "news.google.com"
     ]
   },
   "en-news-43": {
@@ -5012,7 +5141,8 @@
       "ft.com",
       "theguardian.com",
       "techcrunch.com",
-      "finance.yahoo.com"
+      "finance.yahoo.com",
+      "news.google.com"
     ]
   },
   "en-news-44": {
@@ -5021,7 +5151,8 @@
       "apnews.com",
       "aljazeera.com",
       "bbc.com",
-      "theguardian.com"
+      "theguardian.com",
+      "news.google.com"
     ]
   },
   "en-news-45": {
@@ -5043,7 +5174,8 @@
       "ft.com",
       "cnbc.com",
       "economist.com",
-      "nytimes.com"
+      "nytimes.com",
+      "news.google.com"
     ]
   },
   "en-news-47": {
@@ -5052,7 +5184,8 @@
       "space.com",
       "reuters.com",
       "apnews.com",
-      "bbc.com"
+      "bbc.com",
+      "news.google.com"
     ]
   },
   "en-news-48": {
@@ -5071,7 +5204,8 @@
       "theverge.com",
       "reuters.com",
       "cnbc.com",
-      "bloomberg.com"
+      "bloomberg.com",
+      "news.google.com"
     ]
   },
   "en-news-50": {
@@ -5080,7 +5214,8 @@
       "japantimes.co.jp",
       "reuters.com",
       "bloomberg.com",
-      "ft.com"
+      "ft.com",
+      "news.google.com"
     ]
   },
   "en-general-20": {
@@ -5613,7 +5748,8 @@
       "yna.co.kr",
       "hankyung.com",
       "sedaily.com",
-      "etnews.com"
+      "etnews.com",
+      "news.google.com"
     ]
   },
   "kr-news-18": {
@@ -5622,7 +5758,8 @@
       "hankyung.com",
       "sedaily.com",
       "chosun.com",
-      "hani.co.kr"
+      "hani.co.kr",
+      "news.google.com"
     ]
   },
   "kr-news-19": {
@@ -5640,7 +5777,8 @@
       "yna.co.kr",
       "chosun.com",
       "donga.com",
-      "koreaherald.com"
+      "koreaherald.com",
+      "news.google.com"
     ]
   },
   "zh-news-16": {
@@ -5650,7 +5788,8 @@
       "sina.com.cn",
       "36kr.com",
       "ithome.com",
-      "news.qq.com"
+      "news.qq.com",
+      "news.google.com"
     ]
   },
   "zh-news-17": {
@@ -5671,7 +5810,8 @@
       "sina.com.cn",
       "caixin.com",
       "blog.csdn.net",
-      "juejin.cn"
+      "juejin.cn",
+      "news.google.com"
     ]
   },
   "zh-news-19": {

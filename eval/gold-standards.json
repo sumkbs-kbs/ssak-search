@@ -218,12 +218,11 @@
   },
   "kr-general-02": {
     "relevantDomains": [
-      "visitjeju.net",
-      "blog.naver.com",
-      "tripadvisor.com",
       "ko.wikipedia.org",
       "zhihu.com",
-      "forestriverforums.com"
+      "forestriverforums.com",
+      "visitjeju.net",
+      "blog.naver.com"
     ]
   },
   "kr-general-03": {
@@ -236,12 +235,14 @@
   },
   "kr-general-04": {
     "relevantDomains": [
-      "ko.wikipedia.org",
-      "wikipedia.org",
-      "kmdb.or.kr",
-      "cine21.com",
+      "news.google.com",
+      "h21.hani.co.kr",
+      "sports.khan.co.kr",
       "n.news.naver.com",
-      "news.google.com"
+      "ajunews.com",
+      "star.ohmynews.com",
+      "ko.wikipedia.org",
+      "wikipedia.org"
     ]
   },
   "kr-general-05": {
@@ -448,12 +449,11 @@
   },
   "en-tech-12": {
     "relevantDomains": [
-      "webassembly.org",
-      "developer.mozilla.org",
-      "w3.org",
       "reddit.com",
       "en.wikipedia.org",
-      "medium.com"
+      "medium.com",
+      "webassembly.org",
+      "developer.mozilla.org"
     ]
   },
   "en-tech-13": {
@@ -473,12 +473,11 @@
   },
   "en-tech-15": {
     "relevantDomains": [
-      "postgresql.org",
-      "mysql.com",
-      "use-the-index-luke.com",
       "stackoverflow.com",
       "github.com",
-      "en.wikipedia.org"
+      "en.wikipedia.org",
+      "postgresql.org",
+      "mysql.com"
     ]
   },
   "en-tech-16": {
@@ -619,12 +618,10 @@
   },
   "en-news-12": {
     "relevantDomains": [
-      "coindesk.com",
-      "reuters.com",
-      "sec.gov",
       "bloomberg.com",
       "finance.yahoo.com",
-      "news.google.com"
+      "coindesk.com",
+      "reuters.com"
     ]
   },
   "en-news-13": {
@@ -684,12 +681,11 @@
   },
   "en-fact-04": {
     "relevantDomains": [
-      "wikipedia.org",
-      "britannica.com",
-      "ibm.com",
       "news.ycombinator.com",
       "hai.stanford.edu",
-      "theverge.com"
+      "theverge.com",
+      "wikipedia.org",
+      "britannica.com"
     ]
   },
   "en-fact-05": {
@@ -889,13 +885,12 @@
   },
   "en-general-04": {
     "relevantDomains": [
-      "duolingo.com",
-      "bbc.co.uk",
-      "fluentin3months.com",
       "stackoverflow.com",
       "github.com",
+      "arxiv.org",
       "nolanlawson.com",
-      "arxiv.org"
+      "duolingo.com",
+      "bbc.co.uk"
     ]
   },
   "zh-fact-01": {
@@ -1046,13 +1041,11 @@
   },
   "zh-general-03": {
     "relevantDomains": [
-      "douban.com",
-      "maoyan.com",
-      "zh.wikipedia.org",
-      "news.google.com",
+      "sina.com.cn",
       "m.thepaper.cn",
       "view.inews.qq.com",
-      "sina.com.cn"
+      "douban.com",
+      "maoyan.com"
     ]
   },
   "zh-general-04": {
@@ -1176,12 +1169,11 @@
   },
   "ja-tech-04": {
     "relevantDomains": [
-      "aws.amazon.com",
-      "qiita.com",
-      "aws.amazon.co.jp",
       "support.google.com",
       "github.com",
-      "zhihu.com"
+      "zhihu.com",
+      "aws.amazon.com",
+      "qiita.com"
     ]
   },
   "ja-travel-01": {
@@ -1195,12 +1187,11 @@
   },
   "ja-travel-02": {
     "relevantDomains": [
-      "kyoto.travel",
-      "tripadvisor.com",
-      "japan-guide.com",
       "jp.trip.com",
       "koyo.walkerplus.com",
-      "kyototravel.info"
+      "kyototravel.info",
+      "kyoto.travel",
+      "tripadvisor.com"
     ]
   },
   "ja-travel-03": {
@@ -1497,12 +1488,12 @@
   },
   "ds-02": {
     "relevantDomains": [
-      "pinecone.io",
-      "weaviate.io",
+      "en.wikipedia.org",
       "github.com",
       "news.ycombinator.com",
       "medium.com",
-      "en.wikipedia.org"
+      "pinecone.io",
+      "weaviate.io"
     ]
   },
   "ds-03": {
@@ -1545,12 +1536,11 @@
   },
   "xl-02": {
     "relevantDomains": [
-      "blog.google",
-      "36kr.com",
-      "ithome.com",
       "news.google.com",
       "reddit.com",
-      "gemini-cnblog.com"
+      "gemini-cnblog.com",
+      "blog.google",
+      "36kr.com"
     ]
   },
   "xl-03": {
@@ -1598,12 +1588,11 @@
   },
   "adv-05": {
     "relevantDomains": [
-      "cnet.com",
-      "gsmarena.com",
-      "theverge.com",
       "news.google.com",
       "indiatvnews.com",
-      "in.mashable.com"
+      "in.mashable.com",
+      "cnet.com",
+      "gsmarena.com"
     ]
   },
   "ts-01": {
@@ -1625,12 +1614,10 @@
   },
   "ts-03": {
     "relevantDomains": [
-      "reuters.com",
-      "techcrunch.com",
-      "theverge.com",
       "news.ycombinator.com",
       "medium.com",
-      "news.google.com"
+      "reuters.com",
+      "techcrunch.com"
     ]
   },
   "ts-04": {
@@ -1723,12 +1710,11 @@
   },
   "kr-stock-15": {
     "relevantDomains": [
-      "finance.naver.com",
       "m.stock.naver.com",
-      "investing.com",
-      "kofia.or.kr",
       "fss.or.kr",
-      "namu.wiki"
+      "namu.wiki",
+      "finance.naver.com",
+      "investing.com"
     ]
   },
   "kr-special-03": {
@@ -1756,15 +1742,10 @@
   "kr-news-07": {
     "relevantDomains": [
       "n.news.naver.com",
-      "yna.co.kr",
-      "hankyung.com",
-      "sedaily.com",
-      "khan.co.kr",
-      "chosun.com",
-      "donga.com",
-      "news.google.com",
       "news1.kr",
-      "jeonmae.co.kr"
+      "jeonmae.co.kr",
+      "yna.co.kr",
+      "hankyung.com"
     ]
   },
   "kr-news-08": {
@@ -1783,13 +1764,10 @@
     "relevantDomains": [
       "n.news.naver.com",
       "yna.co.kr",
-      "hankyung.com",
-      "sedaily.com",
-      "khan.co.kr",
-      "chosun.com",
-      "donga.com",
       "news.kbs.co.kr",
-      "asiae.co.kr"
+      "asiae.co.kr",
+      "hankyung.com",
+      "sedaily.com"
     ]
   },
   "kr-news-10": {
@@ -1798,71 +1776,44 @@
       "yna.co.kr",
       "hankyung.com",
       "sedaily.com",
-      "khan.co.kr",
-      "chosun.com",
-      "donga.com",
-      "bankofkorea.or.kr",
-      "news.google.com"
+      "khan.co.kr"
     ]
   },
   "kr-news-11": {
     "relevantDomains": [
       "n.news.naver.com",
       "yna.co.kr",
-      "hankyung.com",
-      "sedaily.com",
-      "khan.co.kr",
-      "chosun.com",
-      "donga.com",
-      "news.google.com"
+      "hankyung.com"
     ]
   },
   "kr-news-12": {
     "relevantDomains": [
-      "n.news.naver.com",
       "yna.co.kr",
-      "hankyung.com",
-      "sedaily.com",
-      "khan.co.kr",
-      "chosun.com",
-      "donga.com",
-      "koreabaseball.com",
-      "newspim.com",
       "kbo-dashboard.co.kr",
-      "fnnews.com"
+      "newspim.com",
+      "fnnews.com",
+      "n.news.naver.com",
+      "hankyung.com"
     ]
   },
   "kr-news-13": {
     "relevantDomains": [
       "n.news.naver.com",
-      "yna.co.kr",
-      "hankyung.com",
-      "sedaily.com",
-      "khan.co.kr",
-      "chosun.com",
-      "donga.com",
-      "kma.go.kr",
-      "news.google.com",
-      "thefairnews.co.kr",
       "economytalk.kr",
-      "gukjenews.com"
+      "gukjenews.com",
+      "thefairnews.co.kr",
+      "yna.co.kr",
+      "hankyung.com"
     ]
   },
   "kr-news-14": {
     "relevantDomains": [
       "n.news.naver.com",
-      "yna.co.kr",
-      "hankyung.com",
-      "sedaily.com",
-      "khan.co.kr",
-      "chosun.com",
-      "donga.com",
-      "jobkorea.co.kr",
-      "saramin.co.kr",
-      "news.google.com",
       "hs.ac.kr",
       "hani.co.kr",
-      "marketin.edaily.co.kr"
+      "marketin.edaily.co.kr",
+      "yna.co.kr",
+      "hankyung.com"
     ]
   },
   "kr-news-15": {
@@ -1870,13 +1821,7 @@
       "n.news.naver.com",
       "yna.co.kr",
       "hankyung.com",
-      "sedaily.com",
-      "khan.co.kr",
-      "chosun.com",
-      "donga.com",
-      "bloter.net",
-      "platum.kr",
-      "news.google.com"
+      "sedaily.com"
     ]
   },
   "kr-news-16": {
@@ -1884,12 +1829,7 @@
       "n.news.naver.com",
       "yna.co.kr",
       "hankyung.com",
-      "sedaily.com",
-      "khan.co.kr",
-      "chosun.com",
-      "donga.com",
-      "kostat.go.kr",
-      "news.google.com"
+      "sedaily.com"
     ]
   },
   "xl-06": {
@@ -1917,52 +1857,37 @@
   "kr-tech-10": {
     "relevantDomains": [
       "github.com",
-      "stackoverflow.com",
       "velog.io",
-      "inflearn.com",
-      "tistory.com",
-      "medium.com",
-      "developer.mozilla.org"
+      "developer.mozilla.org",
+      "stackoverflow.com",
+      "inflearn.com"
     ]
   },
   "kr-tech-11": {
     "relevantDomains": [
       "github.com",
-      "stackoverflow.com",
-      "velog.io",
-      "inflearn.com",
-      "tistory.com",
-      "medium.com",
-      "developer.mozilla.org",
+      "m.blog.naver.com",
       "nodejs.org",
-      "m.blog.naver.com"
+      "stackoverflow.com",
+      "velog.io"
     ]
   },
   "kr-tech-12": {
     "relevantDomains": [
       "github.com",
-      "stackoverflow.com",
-      "velog.io",
-      "inflearn.com",
-      "tistory.com",
-      "medium.com",
-      "developer.mozilla.org",
-      "w3schools.com",
-      "thebook.io",
       "m.blog.naver.com",
-      "ko.wikipedia.org"
+      "thebook.io",
+      "ko.wikipedia.org",
+      "stackoverflow.com",
+      "velog.io"
     ]
   },
   "kr-tech-13": {
     "relevantDomains": [
       "github.com",
-      "stackoverflow.com",
       "velog.io",
-      "inflearn.com",
-      "tistory.com",
-      "medium.com",
-      "developer.mozilla.org",
-      "react.dev"
+      "stackoverflow.com",
+      "inflearn.com"
     ]
   },
   "kr-tech-14": {
@@ -1974,29 +1899,21 @@
   "kr-tech-15": {
     "relevantDomains": [
       "github.com",
-      "stackoverflow.com",
       "velog.io",
-      "inflearn.com",
-      "tistory.com",
-      "medium.com",
-      "developer.mozilla.org",
-      "docs.python.org",
       "wikidocs.net",
-      "eclipse.trading"
+      "eclipse.trading",
+      "stackoverflow.com",
+      "inflearn.com"
     ]
   },
   "kr-tech-16": {
     "relevantDomains": [
-      "github.com",
-      "stackoverflow.com",
       "velog.io",
       "inflearn.com",
-      "tistory.com",
-      "medium.com",
-      "developer.mozilla.org",
-      "tensorflow.org",
       "m.youtube.com",
-      "kmu.ac.kr"
+      "kmu.ac.kr",
+      "github.com",
+      "stackoverflow.com"
     ]
   },
   "kr-tech-17": {
@@ -2016,48 +1933,32 @@
   },
   "kr-tech-18": {
     "relevantDomains": [
-      "github.com",
-      "stackoverflow.com",
-      "velog.io",
-      "inflearn.com",
-      "tistory.com",
-      "medium.com",
-      "developer.mozilla.org",
-      "owasp.org",
       "m.blog.naver.com",
+      "reddit.com",
       "blog.naver.com",
       "ko.wikipedia.org",
-      "reddit.com"
+      "github.com",
+      "stackoverflow.com"
     ]
   },
   "kr-tech-19": {
     "relevantDomains": [
-      "github.com",
-      "stackoverflow.com",
-      "velog.io",
-      "inflearn.com",
-      "tistory.com",
-      "medium.com",
-      "developer.mozilla.org",
-      "postgresql.org",
       "ko.wikipedia.org",
-      "mongodb.com"
+      "velog.io",
+      "mongodb.com",
+      "github.com",
+      "stackoverflow.com"
     ]
   },
   "kr-tech-20": {
     "relevantDomains": [
-      "github.com",
-      "stackoverflow.com",
       "velog.io",
-      "inflearn.com",
-      "tistory.com",
-      "medium.com",
-      "developer.mozilla.org",
-      "mongodb.com",
-      "mysql.com",
-      "m.blog.naver.com",
       "soojle.gitbook.io",
-      "aws.amazon.com"
+      "mongodb.com",
+      "m.blog.naver.com",
+      "aws.amazon.com",
+      "github.com",
+      "stackoverflow.com"
     ]
   },
   "kr-tech-21": {
@@ -2077,17 +1978,11 @@
   },
   "kr-tech-22": {
     "relevantDomains": [
-      "github.com",
-      "stackoverflow.com",
-      "velog.io",
-      "inflearn.com",
-      "tistory.com",
-      "medium.com",
-      "developer.mozilla.org",
-      "aws.amazon.com",
-      "freechoi.tistory.com",
       "namu.wiki",
-      "cloudflare.com"
+      "cloudflare.com",
+      "freechoi.tistory.com",
+      "github.com",
+      "stackoverflow.com"
     ]
   },
   "kr-tech-23": {
@@ -2109,24 +2004,20 @@
   },
   "kr-general-08": {
     "relevantDomains": [
-      "namu.wiki",
-      "blog.naver.com",
-      "terms.naver.com",
-      "youtube.com",
-      "diningcode.com",
+      "reddit.com",
       "m.blog.naver.com",
       "siksinhot.com",
-      "reddit.com"
+      "namu.wiki",
+      "blog.naver.com"
     ]
   },
   "kr-general-09": {
     "relevantDomains": [
+      "ko.wikipedia.org",
       "namu.wiki",
       "blog.naver.com",
       "terms.naver.com",
-      "youtube.com",
-      "tripadvisor.com",
-      "ko.wikipedia.org"
+      "youtube.com"
     ]
   },
   "kr-general-10": {
@@ -2139,24 +2030,19 @@
   },
   "kr-general-11": {
     "relevantDomains": [
-      "namu.wiki",
-      "blog.naver.com",
-      "terms.naver.com",
-      "youtube.com",
-      "health.chosun.com",
+      "m.blog.naver.com",
       "m.cafe.naver.com",
-      "m.blog.naver.com"
+      "blog.naver.com",
+      "namu.wiki",
+      "terms.naver.com"
     ]
   },
   "kr-general-12": {
     "relevantDomains": [
-      "namu.wiki",
+      "m.blog.naver.com",
       "blog.naver.com",
-      "terms.naver.com",
-      "youtube.com",
-      "zigbang.com",
-      "dabangapp.com",
-      "m.blog.naver.com"
+      "namu.wiki",
+      "terms.naver.com"
     ]
   },
   "kr-general-13": {
@@ -2171,24 +2057,18 @@
   },
   "kr-general-14": {
     "relevantDomains": [
-      "namu.wiki",
+      "m.blog.naver.com",
       "blog.naver.com",
-      "terms.naver.com",
-      "youtube.com",
-      "tripadvisor.com",
       "info4rest.co.kr",
-      "m.blog.naver.com"
+      "namu.wiki",
+      "terms.naver.com"
     ]
   },
   "kr-general-15": {
     "relevantDomains": [
+      "m.blog.naver.com",
       "namu.wiki",
-      "blog.naver.com",
-      "terms.naver.com",
-      "youtube.com",
-      "yes24.com",
-      "kyobobook.co.kr",
-      "m.blog.naver.com"
+      "blog.naver.com"
     ]
   },
   "kr-general-16": {
@@ -2214,13 +2094,11 @@
   },
   "kr-special-01": {
     "relevantDomains": [
-      "namu.wiki",
-      "blog.naver.com",
-      "terms.naver.com",
-      "youtube.com",
       "ko.wikipedia.org",
       "seireki.jp",
-      "apidog.com"
+      "apidog.com",
+      "namu.wiki",
+      "blog.naver.com"
     ]
   },
   "kr-special-02": {
@@ -2249,12 +2127,7 @@
     "relevantDomains": [
       "finance.yahoo.com",
       "nasdaq.com",
-      "investing.com",
-      "marketwatch.com",
-      "cnbc.com",
-      "reuters.com",
-      "tesla.com",
-      "news.google.com"
+      "investing.com"
     ]
   },
   "en-stock-12": {
@@ -2272,38 +2145,25 @@
   "en-stock-13": {
     "relevantDomains": [
       "finance.yahoo.com",
-      "nasdaq.com",
-      "investing.com",
-      "marketwatch.com",
-      "cnbc.com",
-      "reuters.com",
-      "meta.com",
       "stockanalysis.com",
-      "seekingalpha.com"
+      "seekingalpha.com",
+      "nasdaq.com",
+      "investing.com"
     ]
   },
   "en-stock-14": {
     "relevantDomains": [
       "finance.yahoo.com",
       "nasdaq.com",
-      "investing.com",
-      "marketwatch.com",
-      "cnbc.com",
-      "reuters.com",
-      "jpmorganchase.com",
-      "news.google.com"
+      "investing.com"
     ]
   },
   "en-stock-15": {
     "relevantDomains": [
       "finance.yahoo.com",
-      "nasdaq.com",
-      "investing.com",
-      "marketwatch.com",
       "cnbc.com",
-      "reuters.com",
-      "palantir.com",
-      "news.google.com"
+      "nasdaq.com",
+      "investing.com"
     ]
   },
   "en-stock-16": {
@@ -2321,26 +2181,18 @@
   "en-stock-17": {
     "relevantDomains": [
       "finance.yahoo.com",
-      "nasdaq.com",
       "investing.com",
-      "marketwatch.com",
-      "cnbc.com",
-      "reuters.com",
-      "tsmc.com",
-      "news.google.com"
+      "nasdaq.com",
+      "marketwatch.com"
     ]
   },
   "en-stock-18": {
     "relevantDomains": [
       "finance.yahoo.com",
-      "nasdaq.com",
-      "investing.com",
-      "marketwatch.com",
-      "cnbc.com",
-      "reuters.com",
       "coinmarketcap.com",
       "coingecko.com",
-      "news.google.com"
+      "nasdaq.com",
+      "investing.com"
     ]
   },
   "en-stock-19": {
@@ -2362,39 +2214,27 @@
   "en-stock-20": {
     "relevantDomains": [
       "finance.yahoo.com",
-      "nasdaq.com",
-      "investing.com",
-      "marketwatch.com",
-      "cnbc.com",
       "reuters.com",
       "apple.com",
-      "macrumors.com",
-      "news.google.com"
+      "nasdaq.com",
+      "investing.com"
     ]
   },
   "en-stock-21": {
     "relevantDomains": [
       "finance.yahoo.com",
-      "nasdaq.com",
-      "investing.com",
-      "marketwatch.com",
-      "cnbc.com",
       "reuters.com",
-      "microsoft.com",
-      "news.google.com"
+      "nasdaq.com",
+      "investing.com"
     ]
   },
   "en-stock-22": {
     "relevantDomains": [
       "finance.yahoo.com",
-      "nasdaq.com",
-      "investing.com",
-      "marketwatch.com",
-      "cnbc.com",
-      "reuters.com",
       "goldprice.org",
       "kitco.com",
-      "news.google.com"
+      "nasdaq.com",
+      "investing.com"
     ]
   },
   "en-stock-23": {
@@ -2430,39 +2270,26 @@
   "en-stock-25": {
     "relevantDomains": [
       "finance.yahoo.com",
-      "nasdaq.com",
       "investing.com",
-      "marketwatch.com",
-      "cnbc.com",
-      "reuters.com",
-      "nvidia.com",
-      "fool.com",
-      "news.google.com"
+      "nasdaq.com",
+      "marketwatch.com"
     ]
   },
   "en-tech-19": {
     "relevantDomains": [
-      "github.com",
       "stackoverflow.com",
-      "developer.mozilla.org",
-      "dev.to",
-      "medium.com",
-      "freecodecamp.org",
-      "digitalocean.com",
       "react.dev",
-      "nextjs.org"
+      "github.com",
+      "developer.mozilla.org",
+      "dev.to"
     ]
   },
   "en-tech-20": {
     "relevantDomains": [
-      "github.com",
       "stackoverflow.com",
+      "github.com",
       "developer.mozilla.org",
-      "dev.to",
-      "medium.com",
-      "freecodecamp.org",
-      "digitalocean.com",
-      "nextjs.org"
+      "dev.to"
     ]
   },
   "en-tech-21": {
@@ -2473,52 +2300,39 @@
   },
   "en-tech-22": {
     "relevantDomains": [
-      "github.com",
       "stackoverflow.com",
+      "github.com",
+      "typescriptlang.org",
       "developer.mozilla.org",
-      "dev.to",
-      "medium.com",
-      "freecodecamp.org",
-      "digitalocean.com",
-      "typescriptlang.org"
+      "dev.to"
     ]
   },
   "en-tech-23": {
     "relevantDomains": [
-      "github.com",
       "stackoverflow.com",
-      "developer.mozilla.org",
-      "dev.to",
-      "medium.com",
-      "freecodecamp.org",
-      "digitalocean.com",
-      "nodejs.org",
+      "github.com",
       "voidcanvas.com",
-      "sheldonkreger.com"
+      "sheldonkreger.com",
+      "developer.mozilla.org",
+      "dev.to"
     ]
   },
   "en-tech-24": {
     "relevantDomains": [
-      "github.com",
       "stackoverflow.com",
+      "github.com",
+      "postgresql.org",
       "developer.mozilla.org",
-      "dev.to",
-      "medium.com",
-      "freecodecamp.org",
-      "digitalocean.com",
-      "postgresql.org"
+      "dev.to"
     ]
   },
   "en-tech-25": {
     "relevantDomains": [
-      "github.com",
       "stackoverflow.com",
+      "github.com",
+      "kubernetes.io",
       "developer.mozilla.org",
-      "dev.to",
-      "medium.com",
-      "freecodecamp.org",
-      "digitalocean.com",
-      "kubernetes.io"
+      "dev.to"
     ]
   },
   "en-tech-26": {
@@ -2546,68 +2360,49 @@
   },
   "en-tech-29": {
     "relevantDomains": [
-      "github.com",
       "stackoverflow.com",
-      "developer.mozilla.org",
-      "dev.to",
       "medium.com",
-      "freecodecamp.org",
-      "digitalocean.com",
-      "rust-lang.org",
-      "tokio.rs"
+      "tokio.rs",
+      "github.com",
+      "developer.mozilla.org"
     ]
   },
   "en-tech-30": {
     "relevantDomains": [
-      "github.com",
       "stackoverflow.com",
-      "developer.mozilla.org",
-      "dev.to",
-      "medium.com",
-      "freecodecamp.org",
-      "digitalocean.com",
-      "go.dev",
       "blog.golang.org",
-      "talks.golang.org"
+      "talks.golang.org",
+      "github.com",
+      "developer.mozilla.org"
     ]
   },
   "en-tech-31": {
     "relevantDomains": [
-      "github.com",
       "stackoverflow.com",
+      "reddit.com",
       "developer.mozilla.org",
-      "dev.to",
-      "medium.com",
-      "freecodecamp.org",
-      "digitalocean.com",
-      "testing-library.com",
       "open.nytimes.com",
-      "reddit.com"
+      "github.com",
+      "dev.to"
     ]
   },
   "en-tech-32": {
     "relevantDomains": [
       "github.com",
       "stackoverflow.com",
-      "developer.mozilla.org",
-      "dev.to",
       "medium.com",
-      "freecodecamp.org",
-      "digitalocean.com",
-      "css-tricks.com"
+      "developer.mozilla.org",
+      "dev.to"
     ]
   },
   "en-tech-33": {
     "relevantDomains": [
-      "github.com",
       "stackoverflow.com",
-      "developer.mozilla.org",
-      "dev.to",
-      "medium.com",
-      "freecodecamp.org",
-      "digitalocean.com",
+      "github.com",
       "engineering.fb.com",
-      "ajaxian.com"
+      "ajaxian.com",
+      "developer.mozilla.org",
+      "dev.to"
     ]
   },
   "en-tech-34": {
@@ -2630,33 +2425,22 @@
   },
   "en-tech-35": {
     "relevantDomains": [
-      "github.com",
       "stackoverflow.com",
-      "developer.mozilla.org",
       "dev.to",
-      "medium.com",
-      "freecodecamp.org",
-      "digitalocean.com",
-      "hashicorp.com",
-      "aws.amazon.com",
       "spacelift.io",
-      "devops-daily.com"
+      "devops-daily.com",
+      "github.com",
+      "developer.mozilla.org"
     ]
   },
   "en-tech-36": {
     "relevantDomains": [
-      "github.com",
       "stackoverflow.com",
-      "developer.mozilla.org",
-      "dev.to",
-      "medium.com",
-      "freecodecamp.org",
-      "digitalocean.com",
-      "aws.amazon.com",
-      "serverless.com",
       "hole.build",
       "arxiv.org",
-      "read.acloud.guru"
+      "read.acloud.guru",
+      "github.com",
+      "developer.mozilla.org"
     ]
   },
   "en-tech-37": {
@@ -2667,43 +2451,30 @@
   },
   "en-tech-38": {
     "relevantDomains": [
-      "github.com",
       "stackoverflow.com",
-      "developer.mozilla.org",
-      "dev.to",
-      "medium.com",
-      "freecodecamp.org",
-      "digitalocean.com",
-      "oauth.net",
-      "auth0.com",
+      "github.com",
       "reddit.com",
-      "metacpan.org"
+      "metacpan.org",
+      "developer.mozilla.org",
+      "dev.to"
     ]
   },
   "en-tech-39": {
     "relevantDomains": [
-      "github.com",
       "stackoverflow.com",
+      "github.com",
+      "lethargy.org",
       "developer.mozilla.org",
-      "dev.to",
-      "medium.com",
-      "freecodecamp.org",
-      "digitalocean.com",
-      "mongodb.com",
-      "lethargy.org"
+      "dev.to"
     ]
   },
   "en-tech-40": {
     "relevantDomains": [
       "github.com",
       "stackoverflow.com",
-      "developer.mozilla.org",
-      "dev.to",
       "medium.com",
-      "freecodecamp.org",
-      "digitalocean.com",
-      "mlflow.org",
-      "tensorflow.org"
+      "developer.mozilla.org",
+      "dev.to"
     ]
   },
   "en-tech-41": {
@@ -2727,43 +2498,30 @@
   },
   "en-tech-42": {
     "relevantDomains": [
-      "github.com",
-      "stackoverflow.com",
-      "developer.mozilla.org",
-      "dev.to",
-      "medium.com",
-      "freecodecamp.org",
+      "news.ycombinator.com",
       "digitalocean.com",
-      "cloudflare.com",
       "web.dev",
       "blog.hasura.io",
-      "news.ycombinator.com"
+      "github.com",
+      "stackoverflow.com"
     ]
   },
   "en-tech-43": {
     "relevantDomains": [
-      "github.com",
       "stackoverflow.com",
-      "developer.mozilla.org",
-      "dev.to",
-      "medium.com",
-      "freecodecamp.org",
-      "digitalocean.com",
-      "webassembly.org",
       "8bitworkshop.com",
-      "blog.sessionstack.com"
+      "blog.sessionstack.com",
+      "github.com",
+      "developer.mozilla.org"
     ]
   },
   "en-tech-44": {
     "relevantDomains": [
-      "github.com",
       "stackoverflow.com",
-      "developer.mozilla.org",
-      "dev.to",
+      "github.com",
       "medium.com",
-      "freecodecamp.org",
-      "digitalocean.com",
-      "typescriptlang.org"
+      "developer.mozilla.org",
+      "dev.to"
     ]
   },
   "en-tech-45": {
@@ -2784,59 +2542,38 @@
   },
   "en-tech-46": {
     "relevantDomains": [
-      "github.com",
       "stackoverflow.com",
-      "developer.mozilla.org",
-      "dev.to",
       "medium.com",
-      "freecodecamp.org",
-      "digitalocean.com",
-      "neo4j.com"
+      "neo4j.com",
+      "github.com",
+      "developer.mozilla.org"
     ]
   },
   "en-tech-47": {
     "relevantDomains": [
+      "reddit.com",
       "github.com",
-      "stackoverflow.com",
-      "developer.mozilla.org",
-      "dev.to",
       "medium.com",
-      "freecodecamp.org",
-      "digitalocean.com",
-      "martinfowler.com",
-      "microservices.io",
-      "reddit.com"
+      "stackoverflow.com",
+      "developer.mozilla.org"
     ]
   },
   "en-tech-48": {
     "relevantDomains": [
       "github.com",
       "stackoverflow.com",
-      "developer.mozilla.org",
-      "dev.to",
-      "medium.com",
-      "freecodecamp.org",
-      "digitalocean.com",
-      "grafana.com",
-      "opentelemetry.io",
+      "en.wikipedia.org",
       "brendangregg.com",
-      "en.wikipedia.org"
+      "developer.mozilla.org",
+      "dev.to"
     ]
   },
   "en-news-16": {
     "relevantDomains": [
       "reuters.com",
-      "apnews.com",
-      "bbc.com",
-      "cnn.com",
-      "theverge.com",
-      "techcrunch.com",
-      "theguardian.com",
-      "nytimes.com",
-      "wired.com",
       "macrumors.com",
-      "9to5mac.com",
-      "news.google.com"
+      "apnews.com",
+      "bbc.com"
     ]
   },
   "en-news-17": {
@@ -2872,38 +2609,22 @@
   },
   "en-news-19": {
     "relevantDomains": [
-      "reuters.com",
-      "apnews.com",
-      "bbc.com",
-      "cnn.com",
-      "theverge.com",
-      "techcrunch.com",
-      "theguardian.com",
-      "nytimes.com",
-      "wired.com",
-      "huggingface.co",
       "github.com",
-      "news.google.com",
       "cnet.com",
       "hai.stanford.edu",
-      "businessinsider.com"
+      "businessinsider.com",
+      "reuters.com",
+      "apnews.com"
     ]
   },
   "en-news-20": {
     "relevantDomains": [
-      "reuters.com",
-      "apnews.com",
-      "bbc.com",
-      "cnn.com",
-      "theverge.com",
-      "techcrunch.com",
-      "theguardian.com",
-      "nytimes.com",
-      "wired.com",
-      "news.google.com",
       "bloomberg.com",
+      "theverge.com",
       "tesla.com",
-      "euronews.com"
+      "euronews.com",
+      "reuters.com",
+      "apnews.com"
     ]
   },
   "en-news-21": {
@@ -2944,21 +2665,12 @@
   },
   "en-news-23": {
     "relevantDomains": [
-      "reuters.com",
-      "apnews.com",
-      "bbc.com",
-      "cnn.com",
-      "theverge.com",
-      "techcrunch.com",
-      "theguardian.com",
-      "nytimes.com",
-      "wired.com",
-      "datacenterdynamics.com",
       "arstechnica.com",
-      "news.google.com",
       "energy.gov",
       "cnbc.com",
-      "gurufocus.com"
+      "gurufocus.com",
+      "reuters.com",
+      "apnews.com"
     ]
   },
   "en-news-24": {
@@ -2981,18 +2693,11 @@
   },
   "en-news-25": {
     "relevantDomains": [
-      "reuters.com",
-      "apnews.com",
-      "bbc.com",
-      "cnn.com",
-      "theverge.com",
-      "techcrunch.com",
-      "theguardian.com",
-      "nytimes.com",
-      "wired.com",
       "who.int",
-      "news.google.com",
-      "sciencebeta.com"
+      "nytimes.com",
+      "sciencebeta.com",
+      "reuters.com",
+      "apnews.com"
     ]
   },
   "en-news-26": {
@@ -3036,85 +2741,45 @@
   },
   "en-news-28": {
     "relevantDomains": [
-      "reuters.com",
-      "apnews.com",
-      "bbc.com",
-      "cnn.com",
-      "theverge.com",
-      "techcrunch.com",
-      "theguardian.com",
-      "nytimes.com",
-      "wired.com",
-      "electrek.co",
-      "news.google.com",
       "npr.org",
-      "jsonline.com"
+      "jsonline.com",
+      "reuters.com",
+      "apnews.com"
     ]
   },
   "en-news-29": {
     "relevantDomains": [
       "reuters.com",
-      "apnews.com",
-      "bbc.com",
-      "cnn.com",
-      "theverge.com",
       "techcrunch.com",
-      "theguardian.com",
-      "nytimes.com",
-      "wired.com",
-      "semiengineering.com",
-      "news.google.com"
+      "apnews.com",
+      "bbc.com"
     ]
   },
   "en-news-30": {
     "relevantDomains": [
-      "reuters.com",
-      "apnews.com",
-      "bbc.com",
-      "cnn.com",
       "theverge.com",
-      "techcrunch.com",
+      "reuters.com",
       "theguardian.com",
-      "nytimes.com",
-      "wired.com",
-      "arstechnica.com",
-      "news.google.com"
+      "apnews.com",
+      "bbc.com"
     ]
   },
   "en-news-31": {
     "relevantDomains": [
-      "reuters.com",
-      "apnews.com",
-      "bbc.com",
-      "cnn.com",
-      "theverge.com",
-      "techcrunch.com",
-      "theguardian.com",
-      "nytimes.com",
-      "wired.com",
-      "gartner.com",
       "finance.yahoo.com",
-      "news.google.com",
       "marketsandmarkets.com",
       "fortune.com",
-      "marketdataforecast.com"
+      "marketdataforecast.com",
+      "reuters.com",
+      "apnews.com"
     ]
   },
   "en-news-32": {
     "relevantDomains": [
-      "reuters.com",
-      "apnews.com",
-      "bbc.com",
-      "cnn.com",
-      "theverge.com",
-      "techcrunch.com",
-      "theguardian.com",
-      "nytimes.com",
-      "wired.com",
-      "statnews.com",
-      "news.google.com",
       "healthcareitnews.com",
-      "bangordailynews.com"
+      "bangordailynews.com",
+      "reuters.com",
+      "apnews.com"
     ]
   },
   "en-news-33": {
@@ -3139,69 +2804,34 @@
   },
   "en-news-34": {
     "relevantDomains": [
-      "reuters.com",
-      "apnews.com",
-      "bbc.com",
-      "cnn.com",
-      "theverge.com",
-      "techcrunch.com",
-      "theguardian.com",
-      "nytimes.com",
-      "wired.com",
-      "electrek.co",
-      "news.google.com",
       "npr.org",
-      "koreatimes.co.kr"
+      "koreatimes.co.kr",
+      "reuters.com",
+      "apnews.com"
     ]
   },
   "en-news-35": {
     "relevantDomains": [
       "reuters.com",
-      "apnews.com",
-      "bbc.com",
-      "cnn.com",
-      "theverge.com",
-      "techcrunch.com",
       "theguardian.com",
-      "nytimes.com",
-      "wired.com",
-      "krebsonsecurity.com",
-      "news.google.com"
+      "apnews.com",
+      "bbc.com"
     ]
   },
   "en-news-36": {
     "relevantDomains": [
-      "reuters.com",
-      "apnews.com",
-      "bbc.com",
-      "cnn.com",
-      "theverge.com",
-      "techcrunch.com",
-      "theguardian.com",
-      "nytimes.com",
-      "wired.com",
-      "crunchbase.com",
-      "pitchbook.com",
       "en.wikipedia.org",
       "finance.yahoo.com",
-      "news.google.com"
+      "reuters.com",
+      "apnews.com"
     ]
   },
   "en-news-37": {
     "relevantDomains": [
-      "reuters.com",
-      "apnews.com",
-      "bbc.com",
-      "cnn.com",
-      "theverge.com",
-      "techcrunch.com",
-      "theguardian.com",
-      "nytimes.com",
-      "wired.com",
-      "canarymedia.com",
-      "news.google.com",
       "gulftoday.ae",
-      "entrackr.com"
+      "entrackr.com",
+      "reuters.com",
+      "apnews.com"
     ]
   },
   "en-news-38": {
@@ -3222,35 +2852,19 @@
   },
   "en-news-39": {
     "relevantDomains": [
-      "reuters.com",
-      "apnews.com",
-      "bbc.com",
-      "cnn.com",
-      "theverge.com",
-      "techcrunch.com",
-      "theguardian.com",
-      "nytimes.com",
-      "wired.com",
-      "uploadvr.com",
       "roadtovr.com",
-      "news.google.com",
       "koreaherald.com",
-      "news18.com"
+      "news18.com",
+      "reuters.com",
+      "apnews.com"
     ]
   },
   "en-news-40": {
     "relevantDomains": [
-      "reuters.com",
       "apnews.com",
-      "bbc.com",
-      "cnn.com",
-      "theverge.com",
       "techcrunch.com",
-      "theguardian.com",
-      "nytimes.com",
-      "wired.com",
-      "roboticsbusinessreview.com",
-      "news.google.com"
+      "reuters.com",
+      "bbc.com"
     ]
   },
   "en-fact-16": {
@@ -3284,86 +2898,64 @@
   "en-fact-18": {
     "relevantDomains": [
       "en.wikipedia.org",
-      "britannica.com",
-      "nasa.gov",
-      "howstuffworks.com",
-      "scientificamerican.com",
-      "nationalgeographic.com",
-      "iaea.org",
-      "energy.gov",
-      "nytimes.com",
       "bbc.co.uk",
-      "newatlas.com"
+      "nytimes.com",
+      "newatlas.com",
+      "britannica.com",
+      "nasa.gov"
     ]
   },
   "en-fact-19": {
     "relevantDomains": [
       "en.wikipedia.org",
-      "britannica.com",
-      "howstuffworks.com",
       "scientificamerican.com",
-      "nationalgeographic.com",
-      "nih.gov"
+      "britannica.com",
+      "howstuffworks.com"
     ]
   },
   "en-fact-20": {
     "relevantDomains": [
       "en.wikipedia.org",
+      "quantamagazine.org",
       "britannica.com",
-      "howstuffworks.com",
-      "scientificamerican.com",
-      "nationalgeographic.com",
-      "quantamagazine.org"
+      "howstuffworks.com"
     ]
   },
   "en-fact-21": {
     "relevantDomains": [
       "en.wikipedia.org",
-      "britannica.com",
-      "howstuffworks.com",
       "scientificamerican.com",
-      "nationalgeographic.com",
-      "gemsociety.org"
+      "britannica.com",
+      "howstuffworks.com"
     ]
   },
   "en-fact-22": {
     "relevantDomains": [
       "en.wikipedia.org",
-      "britannica.com",
-      "nasa.gov",
-      "howstuffworks.com",
-      "scientificamerican.com",
-      "nationalgeographic.com",
-      "noaa.gov",
       "bbc.com",
       "npr.org",
-      "indiatoday.in"
+      "indiatoday.in",
+      "britannica.com",
+      "nasa.gov"
     ]
   },
   "en-fact-23": {
     "relevantDomains": [
       "en.wikipedia.org",
-      "britannica.com",
-      "nasa.gov",
-      "howstuffworks.com",
-      "scientificamerican.com",
-      "nationalgeographic.com",
       "allstar.fiu.edu",
       "fermatslibrary.com",
-      "twitter.com"
+      "twitter.com",
+      "britannica.com",
+      "nasa.gov"
     ]
   },
   "en-fact-24": {
     "relevantDomains": [
       "en.wikipedia.org",
-      "britannica.com",
-      "nasa.gov",
-      "howstuffworks.com",
-      "scientificamerican.com",
-      "nationalgeographic.com",
-      "nist.gov",
       "phys.org",
-      "reddit.com"
+      "reddit.com",
+      "britannica.com",
+      "nasa.gov"
     ]
   },
   "en-fact-25": {
@@ -3400,15 +2992,11 @@
   "en-fact-27": {
     "relevantDomains": [
       "en.wikipedia.org",
-      "britannica.com",
-      "nasa.gov",
-      "howstuffworks.com",
-      "scientificamerican.com",
-      "nationalgeographic.com",
-      "noaa.gov",
       "mrgris.com",
       "youtube.com",
-      "nytimes.com"
+      "nytimes.com",
+      "britannica.com",
+      "nasa.gov"
     ]
   },
   "en-fact-28": {
@@ -3428,26 +3016,20 @@
   "en-fact-29": {
     "relevantDomains": [
       "en.wikipedia.org",
-      "britannica.com",
-      "howstuffworks.com",
-      "scientificamerican.com",
-      "nationalgeographic.com",
-      "mayoclinic.org",
       "popsci.com",
       "medicalxpress.com",
-      "medium.com"
+      "medium.com",
+      "britannica.com",
+      "howstuffworks.com"
     ]
   },
   "en-fact-30": {
     "relevantDomains": [
       "en.wikipedia.org",
-      "britannica.com",
-      "howstuffworks.com",
-      "scientificamerican.com",
-      "nationalgeographic.com",
-      "rsc.org",
       "economist.com",
-      "nytimes.com"
+      "nytimes.com",
+      "britannica.com",
+      "howstuffworks.com"
     ]
   },
   "en-fact-31": {
@@ -3495,15 +3077,11 @@
   "en-fact-34": {
     "relevantDomains": [
       "en.wikipedia.org",
-      "britannica.com",
-      "howstuffworks.com",
-      "scientificamerican.com",
-      "nationalgeographic.com",
-      "nih.gov",
-      "nature.com",
       "arstechnica.com",
       "nigms.nih.gov",
-      "namu.wiki"
+      "namu.wiki",
+      "britannica.com",
+      "howstuffworks.com"
     ]
   },
   "en-fact-35": {
@@ -3523,11 +3101,7 @@
     "relevantDomains": [
       "en.wikipedia.org",
       "britannica.com",
-      "nasa.gov",
-      "howstuffworks.com",
-      "scientificamerican.com",
-      "nationalgeographic.com",
-      "usgs.gov"
+      "nasa.gov"
     ]
   },
   "en-fact-37": {
@@ -3548,27 +3122,20 @@
   "en-fact-38": {
     "relevantDomains": [
       "en.wikipedia.org",
-      "britannica.com",
-      "howstuffworks.com",
-      "scientificamerican.com",
-      "nationalgeographic.com",
-      "nih.gov",
       "smithsonianmag.com",
+      "docker.com",
       "hub.docker.com",
-      "docker.com"
+      "britannica.com",
+      "howstuffworks.com"
     ]
   },
   "en-fact-39": {
     "relevantDomains": [
       "en.wikipedia.org",
-      "britannica.com",
-      "nasa.gov",
-      "howstuffworks.com",
-      "scientificamerican.com",
-      "nationalgeographic.com",
-      "fnal.gov",
       "quantamagazine.org",
-      "nature.com"
+      "nature.com",
+      "britannica.com",
+      "nasa.gov"
     ]
   },
   "en-fact-40": {
@@ -3588,12 +3155,10 @@
   },
   "en-acad-08": {
     "relevantDomains": [
+      "stackoverflow.com",
       "arxiv.org",
       "semanticscholar.org",
-      "paperswithcode.com",
-      "openreview.net",
-      "acm.org",
-      "stackoverflow.com"
+      "paperswithcode.com"
     ]
   },
   "en-acad-09": {
@@ -3608,42 +3173,34 @@
   "en-acad-10": {
     "relevantDomains": [
       "arxiv.org",
+      "stackoverflow.com",
       "semanticscholar.org",
-      "paperswithcode.com",
-      "openreview.net",
-      "acm.org",
-      "stackoverflow.com"
+      "paperswithcode.com"
     ]
   },
   "en-acad-11": {
     "relevantDomains": [
       "arxiv.org",
-      "semanticscholar.org",
-      "paperswithcode.com",
-      "openreview.net",
-      "acm.org",
       "github.com",
-      "ko.shaip.com"
+      "ko.shaip.com",
+      "semanticscholar.org",
+      "paperswithcode.com"
     ]
   },
   "en-acad-12": {
     "relevantDomains": [
+      "github.com",
       "arxiv.org",
       "semanticscholar.org",
-      "paperswithcode.com",
-      "openreview.net",
-      "acm.org",
-      "github.com"
+      "paperswithcode.com"
     ]
   },
   "en-acad-13": {
     "relevantDomains": [
       "arxiv.org",
+      "en.wikipedia.org",
       "semanticscholar.org",
-      "paperswithcode.com",
-      "openreview.net",
-      "acm.org",
-      "en.wikipedia.org"
+      "paperswithcode.com"
     ]
   },
   "en-acad-14": {
@@ -3655,34 +3212,28 @@
   "en-acad-15": {
     "relevantDomains": [
       "arxiv.org",
-      "semanticscholar.org",
-      "paperswithcode.com",
-      "openreview.net",
-      "acm.org",
       "en.wikipedia.org",
       "stackoverflow.com",
-      "ibm.com"
+      "ibm.com",
+      "semanticscholar.org",
+      "paperswithcode.com"
     ]
   },
   "en-acad-16": {
     "relevantDomains": [
       "arxiv.org",
-      "semanticscholar.org",
-      "paperswithcode.com",
-      "openreview.net",
-      "acm.org",
       "en.wikipedia.org",
-      "blog.kakaocloud.com"
+      "blog.kakaocloud.com",
+      "semanticscholar.org",
+      "paperswithcode.com"
     ]
   },
   "en-acad-17": {
     "relevantDomains": [
       "arxiv.org",
+      "github.com",
       "semanticscholar.org",
-      "paperswithcode.com",
-      "openreview.net",
-      "acm.org",
-      "github.com"
+      "paperswithcode.com"
     ]
   },
   "en-general-05": {
@@ -3702,50 +3253,33 @@
   },
   "en-general-06": {
     "relevantDomains": [
-      "reddit.com",
-      "quora.com",
-      "healthline.com",
-      "webmd.com",
-      "nytimes.com",
-      "wikihow.com",
-      "nerdfitness.com",
       "en.wikipedia.org",
       "news.ycombinator.com",
       "home.google.com",
-      "parianlabs.com"
+      "parianlabs.com",
+      "reddit.com",
+      "quora.com"
     ]
   },
   "en-general-07": {
     "relevantDomains": [
-      "reddit.com",
-      "quora.com",
-      "healthline.com",
-      "webmd.com",
-      "nytimes.com",
-      "wikihow.com",
-      "budgetbytes.com",
-      "eatingwell.com",
       "news.ycombinator.com",
+      "dictionary.cambridge.org",
       "en.wikipedia.org",
       "merriam-webster.com",
-      "dictionary.cambridge.org"
+      "reddit.com",
+      "quora.com"
     ]
   },
   "en-general-08": {
     "relevantDomains": [
-      "reddit.com",
-      "quora.com",
-      "healthline.com",
-      "webmd.com",
-      "nytimes.com",
-      "wikihow.com",
-      "sleepfoundation.org",
-      "nih.gov",
       "github.com",
       "news.ycombinator.com",
       "medicalxpress.com",
       "igrowdigital.com",
-      "fitplan.io"
+      "fitplan.io",
+      "reddit.com",
+      "quora.com"
     ]
   },
   "en-general-09": {
@@ -3768,32 +3302,21 @@
   },
   "en-general-10": {
     "relevantDomains": [
-      "reddit.com",
-      "quora.com",
-      "healthline.com",
-      "webmd.com",
-      "nytimes.com",
-      "wikihow.com",
-      "spotify.com",
-      "dev.to",
       "news.ycombinator.com",
       "ko.wordow.com",
       "dictionary.cambridge.org",
-      "podcastdiscovery.net"
+      "podcastdiscovery.net",
+      "reddit.com",
+      "quora.com"
     ]
   },
   "en-general-11": {
     "relevantDomains": [
-      "reddit.com",
-      "quora.com",
-      "healthline.com",
-      "webmd.com",
-      "nytimes.com",
-      "wikihow.com",
-      "headspace.com",
       "stackoverflow.com",
       "en.wikipedia.org",
-      "quietkit.com"
+      "quietkit.com",
+      "reddit.com",
+      "quora.com"
     ]
   },
   "en-general-12": {
@@ -3861,29 +3384,20 @@
   },
   "en-general-16": {
     "relevantDomains": [
-      "reddit.com",
-      "quora.com",
-      "healthline.com",
-      "webmd.com",
-      "nytimes.com",
-      "wikihow.com",
-      "almanac.com",
       "en.wikipedia.org",
-      "karnatakacareers.org"
+      "reddit.com",
+      "karnatakacareers.org",
+      "quora.com",
+      "healthline.com"
     ]
   },
   "en-general-17": {
     "relevantDomains": [
-      "reddit.com",
-      "quora.com",
-      "healthline.com",
-      "webmd.com",
-      "nytimes.com",
-      "wikihow.com",
-      "apartmenttherapy.com",
       "en.wikipedia.org",
       "news.ycombinator.com",
-      "play.google.com"
+      "play.google.com",
+      "reddit.com",
+      "quora.com"
     ]
   },
   "en-general-18": {
@@ -3922,14 +3436,12 @@
   },
   "en-health-01": {
     "relevantDomains": [
-      "healthline.com",
-      "webmd.com",
-      "nih.gov",
-      "hopkinsmedicine.org",
       "nytimes.com",
       "bbc.com",
       "en.wikipedia.org",
-      "medicalxpress.com"
+      "medicalxpress.com",
+      "healthline.com",
+      "webmd.com"
     ]
   },
   "en-health-02": {
@@ -3947,12 +3459,11 @@
   },
   "en-health-03": {
     "relevantDomains": [
-      "healthline.com",
-      "webmd.com",
-      "eatingwell.com",
       "en.wikipedia.org",
       "redkiwiapp.com",
-      "highcompanybr.com"
+      "highcompanybr.com",
+      "healthline.com",
+      "webmd.com"
     ]
   },
   "en-health-04": {
@@ -4116,23 +3627,16 @@
     "relevantDomains": [
       "juejin.cn",
       "csdn.net",
-      "segmentfault.com",
-      "zhihu.com",
-      "github.com",
-      "cnblogs.com",
-      "kubernetes.io"
+      "segmentfault.com"
     ]
   },
   "zh-tech-07": {
     "relevantDomains": [
+      "blog.csdn.net",
       "juejin.cn",
-      "csdn.net",
-      "segmentfault.com",
-      "zhihu.com",
       "github.com",
-      "cnblogs.com",
-      "nodejs.org",
-      "blog.csdn.net"
+      "csdn.net",
+      "segmentfault.com"
     ]
   },
   "zh-tech-08": {
@@ -4149,77 +3653,52 @@
   },
   "zh-tech-09": {
     "relevantDomains": [
-      "juejin.cn",
-      "csdn.net",
-      "segmentfault.com",
-      "zhihu.com",
-      "github.com",
-      "cnblogs.com",
-      "microservices.io",
       "blog.csdn.net",
       "weibo.com",
-      "weixin.qq.com"
+      "weixin.qq.com",
+      "juejin.cn",
+      "csdn.net"
     ]
   },
   "zh-tech-10": {
     "relevantDomains": [
       "juejin.cn",
+      "blog.csdn.net",
       "csdn.net",
-      "segmentfault.com",
-      "zhihu.com",
-      "github.com",
-      "cnblogs.com",
-      "web.dev",
-      "blog.csdn.net"
+      "segmentfault.com"
     ]
   },
   "zh-tech-11": {
     "relevantDomains": [
+      "blog.csdn.net",
       "juejin.cn",
       "csdn.net",
-      "segmentfault.com",
-      "zhihu.com",
-      "github.com",
-      "cnblogs.com",
-      "docs.python.org",
-      "blog.csdn.net"
+      "segmentfault.com"
     ]
   },
   "zh-tech-12": {
     "relevantDomains": [
       "juejin.cn",
+      "blog.csdn.net",
       "csdn.net",
-      "segmentfault.com",
-      "zhihu.com",
-      "github.com",
-      "cnblogs.com",
-      "tensorflow.org",
-      "blog.csdn.net"
+      "segmentfault.com"
     ]
   },
   "zh-tech-13": {
     "relevantDomains": [
-      "juejin.cn",
-      "csdn.net",
-      "segmentfault.com",
       "zhihu.com",
-      "github.com",
-      "cnblogs.com",
-      "cncf.io",
       "blog.csdn.net",
-      "zh.wikipedia.org"
+      "zh.wikipedia.org",
+      "juejin.cn",
+      "csdn.net"
     ]
   },
   "zh-tech-14": {
     "relevantDomains": [
       "juejin.cn",
+      "blog.csdn.net",
       "csdn.net",
-      "segmentfault.com",
-      "zhihu.com",
-      "github.com",
-      "cnblogs.com",
-      "git-scm.com",
-      "blog.csdn.net"
+      "segmentfault.com"
     ]
   },
   "zh-news-06": {
@@ -4240,50 +3719,35 @@
   },
   "zh-news-07": {
     "relevantDomains": [
-      "36kr.com",
-      "ithome.com",
-      "people.com.cn",
+      "news.google.com",
       "xinhuanet.com",
-      "sina.com.cn",
       "chinanews.com",
-      "cnbeta.com",
-      "news.google.com"
+      "36kr.com",
+      "ithome.com"
     ]
   },
   "zh-news-08": {
     "relevantDomains": [
-      "36kr.com",
-      "ithome.com",
-      "people.com.cn",
       "xinhuanet.com",
       "sina.com.cn",
-      "chinanews.com",
-      "cnbeta.com",
-      "news.google.com"
+      "36kr.com",
+      "ithome.com"
     ]
   },
   "zh-news-09": {
     "relevantDomains": [
-      "36kr.com",
-      "ithome.com",
       "people.com.cn",
       "xinhuanet.com",
-      "sina.com.cn",
-      "chinanews.com",
-      "cnbeta.com",
-      "news.google.com"
+      "36kr.com",
+      "ithome.com"
     ]
   },
   "zh-news-10": {
     "relevantDomains": [
-      "36kr.com",
-      "ithome.com",
+      "news.google.com",
       "people.com.cn",
-      "xinhuanet.com",
-      "sina.com.cn",
-      "chinanews.com",
-      "cnbeta.com",
-      "news.google.com"
+      "36kr.com",
+      "ithome.com"
     ]
   },
   "zh-news-11": {
@@ -4319,14 +3783,10 @@
   },
   "zh-news-13": {
     "relevantDomains": [
-      "36kr.com",
-      "ithome.com",
-      "people.com.cn",
-      "xinhuanet.com",
+      "news.google.com",
       "sina.com.cn",
-      "chinanews.com",
-      "cnbeta.com",
-      "news.google.com"
+      "36kr.com",
+      "ithome.com"
     ]
   },
   "zh-news-14": {
@@ -4348,14 +3808,11 @@
   },
   "zh-news-15": {
     "relevantDomains": [
-      "36kr.com",
-      "ithome.com",
-      "people.com.cn",
-      "xinhuanet.com",
+      "news.google.com",
       "sina.com.cn",
       "chinanews.com",
-      "cnbeta.com",
-      "news.google.com"
+      "36kr.com",
+      "ithome.com"
     ]
   },
   "zh-general-06": {
@@ -4375,15 +3832,11 @@
   },
   "zh-general-07": {
     "relevantDomains": [
-      "ctrip.com",
-      "mafengwo.cn",
-      "dianping.com",
-      "xiaohongshu.com",
-      "zhihu.com",
-      "trip.com",
       "blog.csdn.net",
       "zhuanlan.zhihu.com",
-      "sohu.com"
+      "sohu.com",
+      "ctrip.com",
+      "mafengwo.cn"
     ]
   },
   "zh-general-08": {
@@ -4398,160 +3851,119 @@
   },
   "zh-general-09": {
     "relevantDomains": [
-      "ctrip.com",
-      "mafengwo.cn",
-      "dianping.com",
-      "xiaohongshu.com",
-      "zhihu.com",
-      "trip.com",
       "blog.csdn.net",
       "zhuanlan.zhihu.com",
-      "baike.baidu.com"
+      "baike.baidu.com",
+      "ctrip.com",
+      "mafengwo.cn"
     ]
   },
   "zh-general-10": {
     "relevantDomains": [
-      "ctrip.com",
-      "mafengwo.cn",
-      "dianping.com",
-      "xiaohongshu.com",
-      "zhihu.com",
-      "trip.com",
       "google.com",
       "support.google.com",
       "tayori.com",
       "saiseich.com",
-      "chromewebstore.google.com"
+      "chromewebstore.google.com",
+      "ctrip.com",
+      "mafengwo.cn"
     ]
   },
   "zh-general-11": {
     "relevantDomains": [
-      "ctrip.com",
-      "mafengwo.cn",
-      "dianping.com",
-      "xiaohongshu.com",
-      "zhihu.com",
-      "trip.com",
       "blog.csdn.net",
       "sohu.com",
-      "zhuanlan.zhihu.com"
+      "zhuanlan.zhihu.com",
+      "ctrip.com",
+      "mafengwo.cn"
     ]
   },
   "zh-general-12": {
     "relevantDomains": [
-      "ctrip.com",
-      "mafengwo.cn",
-      "dianping.com",
-      "xiaohongshu.com",
-      "zhihu.com",
-      "trip.com",
       "blog.csdn.net",
-      "yzst.chsi.com.cn"
+      "zhihu.com",
+      "yzst.chsi.com.cn",
+      "ctrip.com",
+      "mafengwo.cn"
     ]
   },
   "zh-general-13": {
     "relevantDomains": [
-      "ctrip.com",
-      "mafengwo.cn",
-      "dianping.com",
-      "xiaohongshu.com",
-      "zhihu.com",
-      "trip.com",
       "blog.csdn.net",
-      "zhuanlan.zhihu.com"
+      "zhuanlan.zhihu.com",
+      "zhihu.com",
+      "ctrip.com",
+      "mafengwo.cn"
     ]
   },
   "zh-general-14": {
     "relevantDomains": [
-      "ctrip.com",
-      "mafengwo.cn",
-      "dianping.com",
-      "xiaohongshu.com",
-      "zhihu.com",
-      "trip.com",
-      "news.google.com",
-      "donews.com",
       "news.17173.com",
-      "baijing.cn"
+      "donews.com",
+      "baijing.cn",
+      "ctrip.com",
+      "mafengwo.cn"
     ]
   },
   "zh-general-15": {
     "relevantDomains": [
-      "ctrip.com",
       "mafengwo.cn",
-      "dianping.com",
-      "xiaohongshu.com",
-      "zhihu.com",
-      "trip.com",
       "zh.mafengwo.cn",
       "m.mafengwo.cn",
-      "w.mafengwo.cn"
+      "w.mafengwo.cn",
+      "ctrip.com",
+      "dianping.com"
     ]
   },
   "zh-travel-01": {
     "relevantDomains": [
-      "ctrip.com",
-      "mafengwo.cn",
-      "xiaohongshu.com",
-      "trip.com",
-      "qunar.com",
       "blog.csdn.net",
       "zhuanlan.zhihu.com",
       "sohu.com",
-      "baike.baidu.com"
+      "baike.baidu.com",
+      "ctrip.com",
+      "mafengwo.cn"
     ]
   },
   "zh-travel-02": {
     "relevantDomains": [
-      "ctrip.com",
-      "mafengwo.cn",
-      "xiaohongshu.com",
-      "trip.com",
-      "qunar.com",
       "blog.csdn.net",
       "zhuanlan.zhihu.com",
       "baike.baidu.com",
-      "sohu.com"
+      "sohu.com",
+      "ctrip.com",
+      "mafengwo.cn"
     ]
   },
   "zh-travel-03": {
     "relevantDomains": [
-      "ctrip.com",
-      "mafengwo.cn",
-      "xiaohongshu.com",
-      "trip.com",
-      "qunar.com",
       "zhuanlan.zhihu.com",
       "blog.csdn.net",
       "zhihu.com",
       "zh.wikipedia.org",
-      "baike.baidu.com"
+      "baike.baidu.com",
+      "ctrip.com",
+      "mafengwo.cn"
     ]
   },
   "zh-travel-04": {
     "relevantDomains": [
-      "ctrip.com",
-      "mafengwo.cn",
-      "xiaohongshu.com",
-      "trip.com",
-      "qunar.com",
       "zh.wikipedia.org",
       "blog.csdn.net",
-      "xinjiangtrip.com"
+      "xinjiangtrip.com",
+      "ctrip.com",
+      "mafengwo.cn"
     ]
   },
   "zh-travel-05": {
     "relevantDomains": [
-      "ctrip.com",
-      "mafengwo.cn",
-      "xiaohongshu.com",
-      "trip.com",
-      "qunar.com",
       "zh.wikipedia.org",
       "blog.csdn.net",
       "zhuanlan.zhihu.com",
       "news.qq.com",
-      "baike.baidu.com"
+      "baike.baidu.com",
+      "ctrip.com",
+      "mafengwo.cn"
     ]
   },
   "ja-fact-05": {
@@ -4651,14 +4063,12 @@
   },
   "ja-tech-06": {
     "relevantDomains": [
-      "qiita.com",
-      "zenn.dev",
-      "github.com",
-      "dev.to",
-      "itmedia.co.jp",
-      "kubernetes.io",
       "juejin.cn",
-      "blog.csdn.net"
+      "blog.csdn.net",
+      "github.com",
+      "kubernetes.io",
+      "qiita.com",
+      "zenn.dev"
     ]
   },
   "ja-tech-07": {
@@ -4679,11 +4089,9 @@
   "ja-tech-09": {
     "relevantDomains": [
       "qiita.com",
-      "zenn.dev",
       "github.com",
-      "dev.to",
-      "itmedia.co.jp",
-      "aws.amazon.com"
+      "zenn.dev",
+      "dev.to"
     ]
   },
   "ja-tech-10": {
@@ -4717,46 +4125,31 @@
       "qiita.com",
       "zenn.dev",
       "github.com",
-      "dev.to",
-      "itmedia.co.jp",
-      "swagger.io"
+      "dev.to"
     ]
   },
   "ja-news-05": {
     "relevantDomains": [
-      "nikkei.com",
-      "japantimes.co.jp",
-      "asahi.com",
-      "yomiuri.co.jp",
       "itmedia.co.jp",
-      "mainichi.jp",
-      "digital.go.jp",
-      "news.google.com"
+      "nikkei.com",
+      "japantimes.co.jp"
     ]
   },
   "ja-news-06": {
     "relevantDomains": [
       "nikkei.com",
-      "japantimes.co.jp",
-      "asahi.com",
-      "yomiuri.co.jp",
       "itmedia.co.jp",
-      "mainichi.jp",
-      "news.google.com"
+      "japantimes.co.jp",
+      "asahi.com"
     ]
   },
   "ja-news-07": {
     "relevantDomains": [
-      "nikkei.com",
-      "japantimes.co.jp",
-      "asahi.com",
-      "yomiuri.co.jp",
       "itmedia.co.jp",
-      "mainichi.jp",
-      "k-tai.watch.impress.co.jp",
-      "news.google.com",
       "msn.com",
-      "news.yahoo.co.jp"
+      "news.yahoo.co.jp",
+      "nikkei.com",
+      "japantimes.co.jp"
     ]
   },
   "ja-news-08": {
@@ -4790,16 +4183,12 @@
   },
   "ja-news-10": {
     "relevantDomains": [
-      "nikkei.com",
-      "japantimes.co.jp",
-      "asahi.com",
-      "yomiuri.co.jp",
-      "itmedia.co.jp",
-      "mainichi.jp",
-      "meti.go.jp",
       "news.google.com",
       "jp.reuters.com",
-      "nishinippon.co.jp"
+      "nishinippon.co.jp",
+      "mainichi.jp",
+      "nikkei.com",
+      "japantimes.co.jp"
     ]
   },
   "ja-news-11": {
@@ -4832,10 +4221,7 @@
       "travel.rakuten.co.jp",
       "day-trip-sapporo.com",
       "jtb.co.jp",
-      "tabi-toku-lab.com",
-      "onsentravel.net",
-      "yahoo.co.jp",
-      "tripadvisor.jp"
+      "tabi-toku-lab.com"
     ]
   },
   "ja-general-06": {
@@ -4880,17 +4266,12 @@
   },
   "ja-general-09": {
     "relevantDomains": [
-      "yahoo.co.jp",
-      "tripadvisor.jp",
-      "japan-guide.com",
-      "rakuten.co.jp",
-      "bookmeter.com",
-      "honto.jp",
-      "news.google.com",
       "nlab.itmedia.co.jp",
       "wedge.ismedia.jp",
       "finders.me",
-      "www3.nhk.or.jp"
+      "www3.nhk.or.jp",
+      "yahoo.co.jp",
+      "tripadvisor.jp"
     ]
   },
   "ja-general-10": {
@@ -4909,13 +4290,11 @@
   },
   "ja-general-11": {
     "relevantDomains": [
-      "yahoo.co.jp",
-      "rakuten.co.jp",
-      "kurashiru.com",
-      "cookpad.com",
-      "delishkitchen.tv",
       "ja.wikipedia.org",
-      "orangepage.net"
+      "delishkitchen.tv",
+      "cookpad.com",
+      "yahoo.co.jp",
+      "rakuten.co.jp"
     ]
   },
   "ja-travel-05": {
@@ -5066,12 +4445,11 @@
   },
   "cmp-21": {
     "relevantDomains": [
-      "aws.amazon.com",
-      "docker.com",
-      "serverless.com",
       "stackoverflow.com",
       "github.com",
-      "koyeb.com"
+      "koyeb.com",
+      "aws.amazon.com",
+      "docker.com"
     ]
   },
   "lt-09": {
@@ -5316,36 +4694,20 @@
   },
   "ts-05": {
     "relevantDomains": [
-      "reuters.com",
-      "apnews.com",
-      "bbc.com",
-      "cnn.com",
-      "theverge.com",
-      "techcrunch.com",
-      "theguardian.com",
-      "nytimes.com",
-      "wired.com",
       "macrumors.com",
       "9to5mac.com",
-      "news.google.com",
-      "appleinsider.com"
+      "appleinsider.com",
+      "reuters.com",
+      "apnews.com"
     ]
   },
   "ts-06": {
     "relevantDomains": [
       "reuters.com",
-      "apnews.com",
-      "bbc.com",
-      "cnn.com",
-      "theverge.com",
-      "techcrunch.com",
-      "theguardian.com",
-      "nytimes.com",
-      "wired.com",
-      "nobelprize.org",
-      "news.google.com",
       "wionews.com",
-      "improbable.com"
+      "improbable.com",
+      "apnews.com",
+      "bbc.com"
     ]
   },
   "ts-07": {
@@ -5366,35 +4728,18 @@
   },
   "ts-08": {
     "relevantDomains": [
-      "reuters.com",
-      "apnews.com",
-      "bbc.com",
-      "cnn.com",
-      "theverge.com",
-      "techcrunch.com",
-      "theguardian.com",
       "nytimes.com",
-      "wired.com",
-      "ces.tech",
-      "news.google.com",
-      "mashable.com"
+      "mashable.com",
+      "reuters.com",
+      "apnews.com"
     ]
   },
   "ts-09": {
     "relevantDomains": [
-      "reuters.com",
-      "apnews.com",
-      "bbc.com",
-      "cnn.com",
-      "theverge.com",
-      "techcrunch.com",
-      "theguardian.com",
-      "nytimes.com",
-      "wired.com",
-      "fifa.com",
-      "news.google.com",
       "outlookindia.com",
-      "economictimes.indiatimes.com"
+      "economictimes.indiatimes.com",
+      "reuters.com",
+      "apnews.com"
     ]
   },
   "ds-06": {
@@ -5505,12 +4850,10 @@
   },
   "en-health-06": {
     "relevantDomains": [
-      "healthline.com",
-      "webmd.com",
-      "mayoclinic.org",
-      "heart.org",
       "github.com",
-      "en.wikipedia.org"
+      "en.wikipedia.org",
+      "healthline.com",
+      "webmd.com"
     ]
   },
   "en-health-07": {
@@ -5521,12 +4864,10 @@
   },
   "en-health-08": {
     "relevantDomains": [
-      "healthline.com",
-      "webmd.com",
-      "mayoclinic.org",
-      "hopkinsmedicine.org",
       "reddit.com",
-      "en.wikipedia.org"
+      "en.wikipedia.org",
+      "healthline.com",
+      "webmd.com"
     ]
   },
   "en-health-09": {
@@ -5543,34 +4884,28 @@
   },
   "en-health-10": {
     "relevantDomains": [
-      "sleepfoundation.org",
-      "cdc.gov",
-      "healthline.com",
-      "nih.gov",
       "en.wikipedia.org",
-      "news.ycombinator.com"
+      "news.ycombinator.com",
+      "sleepfoundation.org",
+      "cdc.gov"
     ]
   },
   "en-health-11": {
     "relevantDomains": [
-      "healthline.com",
-      "webmd.com",
-      "medicalnewstoday.com",
-      "cdc.gov",
       "en.wikipedia.org",
       "astrology.com",
-      "signs.com"
+      "signs.com",
+      "healthline.com",
+      "webmd.com"
     ]
   },
   "en-health-12": {
     "relevantDomains": [
-      "healthline.com",
-      "webmd.com",
-      "nih.gov",
-      "health.harvard.edu",
       "en.wikipedia.org",
       "bko8764.tistory.com",
-      "redkiwiapp.com"
+      "redkiwiapp.com",
+      "healthline.com",
+      "webmd.com"
     ]
   },
   "en-health-13": {
@@ -5588,99 +4923,80 @@
   },
   "en-health-14": {
     "relevantDomains": [
-      "healthline.com",
-      "webmd.com",
-      "mayoclinic.org",
-      "runnersworld.com",
       "en.wikipedia.org",
       "zhihu.com",
-      "drreginaldopereira.com"
+      "drreginaldopereira.com",
+      "healthline.com",
+      "webmd.com"
     ]
   },
   "en-health-15": {
     "relevantDomains": [
-      "healthline.com",
-      "eatingwell.com",
-      "mayoclinic.org",
-      "health.harvard.edu",
       "en.wikipedia.org",
       "britannica.com",
-      "themediterraneandish.com"
+      "themediterraneandish.com",
+      "healthline.com",
+      "eatingwell.com"
     ]
   },
   "en-health-16": {
     "relevantDomains": [
-      "healthline.com",
-      "webmd.com",
-      "medicalnewstoday.com",
-      "hopkinsmedicine.org",
       "github.com",
       "wordreference.com",
-      "m.blog.naver.com"
+      "m.blog.naver.com",
+      "healthline.com",
+      "webmd.com"
     ]
   },
   "en-health-17": {
     "relevantDomains": [
-      "apa.org",
-      "mayoclinic.org",
-      "nimh.nih.gov",
-      "healthline.com",
       "en.wikipedia.org",
       "y8.com",
-      "y100.info"
+      "y100.info",
+      "apa.org",
+      "mayoclinic.org"
     ]
   },
   "en-health-18": {
     "relevantDomains": [
-      "healthline.com",
-      "webmd.com",
-      "medicalnewstoday.com",
-      "nih.gov",
       "en.wikipedia.org",
       "scitechdaily.com",
       "medicalxpress.com",
-      "nature.com"
+      "healthline.com",
+      "webmd.com"
     ]
   },
   "en-health-19": {
     "relevantDomains": [
-      "healthline.com",
-      "cdc.gov",
-      "health.harvard.edu",
-      "nih.gov",
       "github.com",
-      "en.wikipedia.org"
+      "en.wikipedia.org",
+      "healthline.com",
+      "cdc.gov"
     ]
   },
   "en-health-20": {
     "relevantDomains": [
-      "healthline.com",
-      "webmd.com",
-      "eatingwell.com",
-      "medicalnewstoday.com",
       "en.wikipedia.org",
       "theguardian.com",
-      "news.ycombinator.com"
+      "news.ycombinator.com",
+      "healthline.com",
+      "webmd.com"
     ]
   },
   "en-health-21": {
     "relevantDomains": [
-      "cdc.gov",
-      "mayoclinic.org",
-      "healthline.com",
-      "nih.gov",
       "reddit.com",
-      "en.wikipedia.org"
+      "en.wikipedia.org",
+      "cdc.gov",
+      "mayoclinic.org"
     ]
   },
   "en-health-22": {
     "relevantDomains": [
-      "healthline.com",
-      "webmd.com",
-      "mayoclinic.org",
-      "hopkinsmedicine.org",
       "reddit.com",
-      "en.wikipedia.org"
+      "en.wikipedia.org",
+      "healthline.com",
+      "webmd.com"
     ]
   },
   "en-health-23": {
@@ -5699,36 +5015,30 @@
   },
   "en-health-24": {
     "relevantDomains": [
-      "apa.org",
-      "healthline.com",
-      "mayoclinic.org",
-      "nimh.nih.gov",
       "en.wikipedia.org",
-      "stackoverflow.com"
+      "stackoverflow.com",
+      "apa.org",
+      "healthline.com"
     ]
   },
   "en-health-25": {
     "relevantDomains": [
-      "healthline.com",
-      "webmd.com",
-      "nih.gov",
-      "health.harvard.edu",
       "reddit.com",
       "en.wikipedia.org",
       "britannica.com",
-      "news.ycombinator.com"
+      "news.ycombinator.com",
+      "healthline.com",
+      "webmd.com"
     ]
   },
   "en-news-41": {
     "relevantDomains": [
-      "reuters.com",
-      "bloomberg.com",
+      "theguardian.com",
       "cnbc.com",
       "ft.com",
-      "marketwatch.com",
-      "news.google.com",
-      "theguardian.com",
-      "finance.yahoo.com"
+      "finance.yahoo.com",
+      "reuters.com",
+      "bloomberg.com"
     ]
   },
   "en-news-42": {
@@ -5816,47 +5126,37 @@
   },
   "en-news-48": {
     "relevantDomains": [
-      "politico.com",
-      "reuters.com",
-      "apnews.com",
-      "nytimes.com",
-      "washingtonpost.com",
-      "en.wikipedia.org",
       "arxiv.org",
-      "news.google.com",
+      "doi.org",
+      "en.wikipedia.org",
       "asiae.co.kr",
-      "doi.org"
+      "politico.com",
+      "reuters.com"
     ]
   },
   "en-news-49": {
     "relevantDomains": [
-      "techcrunch.com",
-      "theverge.com",
-      "reuters.com",
       "cnbc.com",
-      "bloomberg.com",
-      "news.google.com"
+      "techcrunch.com",
+      "theverge.com"
     ]
   },
   "en-news-50": {
     "relevantDomains": [
-      "nikkei.com",
-      "japantimes.co.jp",
-      "reuters.com",
+      "news.google.com",
       "bloomberg.com",
-      "ft.com",
-      "news.google.com"
+      "reuters.com",
+      "nikkei.com",
+      "japantimes.co.jp"
     ]
   },
   "en-general-20": {
     "relevantDomains": [
-      "indeed.com",
-      "glassdoor.com",
-      "hbr.org",
-      "thebalancemoney.com",
       "stackoverflow.com",
       "news.ycombinator.com",
-      "en.wikipedia.org"
+      "en.wikipedia.org",
+      "indeed.com",
+      "glassdoor.com"
     ]
   },
   "en-general-21": {
@@ -5874,54 +5174,44 @@
   },
   "en-general-22": {
     "relevantDomains": [
-      "almanac.com",
-      "wikihow.com",
-      "thespruce.com",
-      "gardeningknowhow.com",
       "github.com",
-      "en.wikipedia.org"
+      "en.wikipedia.org",
+      "almanac.com",
+      "wikihow.com"
     ]
   },
   "en-general-23": {
     "relevantDomains": [
-      "healthline.com",
-      "nerdfitness.com",
-      "menshealth.com",
-      "wikihow.com",
       "reddit.com",
       "news.ycombinator.com",
-      "en.wikipedia.org"
+      "en.wikipedia.org",
+      "healthline.com",
+      "nerdfitness.com"
     ]
   },
   "en-general-24": {
     "relevantDomains": [
-      "lonelyplanet.com",
-      "ricksteves.com",
-      "tripadvisor.com",
-      "nomadicmatt.com",
       "reddit.com",
-      "news.ycombinator.com"
+      "news.ycombinator.com",
+      "lonelyplanet.com",
+      "ricksteves.com"
     ]
   },
   "en-general-25": {
     "relevantDomains": [
-      "investopedia.com",
-      "nerdwallet.com",
-      "thebalancemoney.com",
-      "fool.com",
       "github.com",
       "wordreference.com",
-      "m.blog.naver.com"
+      "m.blog.naver.com",
+      "investopedia.com",
+      "nerdwallet.com"
     ]
   },
   "en-general-26": {
     "relevantDomains": [
-      "budgetbytes.com",
-      "eatingwell.com",
-      "allrecipes.com",
-      "delish.com",
       "reddit.com",
-      "en.wikipedia.org"
+      "en.wikipedia.org",
+      "budgetbytes.com",
+      "eatingwell.com"
     ]
   },
   "en-general-27": {
@@ -5940,12 +5230,10 @@
   },
   "en-general-28": {
     "relevantDomains": [
-      "lifehacker.com",
-      "apartmenttherapy.com",
-      "thespruce.com",
-      "wikihow.com",
       "github.com",
-      "en.wikipedia.org"
+      "en.wikipedia.org",
+      "lifehacker.com",
+      "apartmenttherapy.com"
     ]
   },
   "en-general-29": {
@@ -5974,23 +5262,19 @@
   },
   "en-general-31": {
     "relevantDomains": [
-      "indeed.com",
-      "thebalancemoney.com",
-      "zety.com",
-      "hbr.org",
       "github.com",
       "stackoverflow.com",
-      "news.ycombinator.com"
+      "news.ycombinator.com",
+      "indeed.com",
+      "thebalancemoney.com"
     ]
   },
   "en-general-32": {
     "relevantDomains": [
-      "wikihow.com",
-      "realsimple.com",
-      "artofmanliness.com",
-      "survivopedia.com",
       "en.wikipedia.org",
-      "reddit.com"
+      "reddit.com",
+      "wikihow.com",
+      "realsimple.com"
     ]
   },
   "en-general-33": {
@@ -6029,23 +5313,20 @@
   },
   "en-fact-42": {
     "relevantDomains": [
-      "nasa.gov",
-      "space.com",
       "en.wikipedia.org",
-      "britannica.com",
-      "scientificamerican.com",
       "wired.com",
-      "science.nasa.gov"
+      "science.nasa.gov",
+      "nasa.gov",
+      "space.com"
     ]
   },
   "en-fact-43": {
     "relevantDomains": [
-      "britannica.com",
-      "history.com",
       "en.wikipedia.org",
-      "nationalarchives.gov.uk",
       "it.indeed.com",
-      "en.m.wikipedia.org"
+      "en.m.wikipedia.org",
+      "britannica.com",
+      "history.com"
     ]
   },
   "en-fact-44": {
@@ -6075,32 +5356,28 @@
   },
   "en-fact-46": {
     "relevantDomains": [
-      "noaa.gov",
-      "nationalgeographic.com",
-      "scientificamerican.com",
-      "smithsonianmag.com",
       "en.wikipedia.org",
-      "zhihu.com"
+      "zhihu.com",
+      "noaa.gov",
+      "nationalgeographic.com"
     ]
   },
   "en-fact-47": {
     "relevantDomains": [
-      "britannica.com",
       "en.wikipedia.org",
-      "history.com",
-      "smithsonianmag.com",
       "zhihu.com",
-      "pvp.wanmei.com"
+      "pvp.wanmei.com",
+      "britannica.com",
+      "history.com"
     ]
   },
   "en-fact-48": {
     "relevantDomains": [
-      "usgs.gov",
-      "britannica.com",
       "en.wikipedia.org",
-      "scientificamerican.com",
+      "cricbuzz.com",
       "cricketwinner.com",
-      "cricbuzz.com"
+      "usgs.gov",
+      "britannica.com"
     ]
   },
   "en-fact-49": {
@@ -6116,24 +5393,20 @@
   },
   "en-fact-50": {
     "relevantDomains": [
-      "space.com",
-      "nasa.gov",
-      "scientificamerican.com",
-      "britannica.com",
-      "nationalgeographic.com",
       "github.com",
       "arxiv.org",
-      "doi.org"
+      "doi.org",
+      "space.com",
+      "nasa.gov"
     ]
   },
   "en-acad-18": {
     "relevantDomains": [
       "arxiv.org",
-      "paperswithcode.com",
-      "acm.org",
-      "semanticscholar.org",
       "stackoverflow.com",
-      "github.com"
+      "github.com",
+      "paperswithcode.com",
+      "acm.org"
     ]
   },
   "en-acad-19": {
@@ -6147,33 +5420,28 @@
   },
   "en-acad-20": {
     "relevantDomains": [
-      "nature.com",
-      "pubmed.ncbi.nlm.nih.gov",
-      "science.org",
-      "nih.gov",
       "reddit.com",
+      "en.wikipedia.org",
       "nigms.nih.gov",
-      "en.wikipedia.org"
+      "nature.com",
+      "pubmed.ncbi.nlm.nih.gov"
     ]
   },
   "en-acad-21": {
     "relevantDomains": [
-      "nature.com",
-      "science.org",
-      "agu.org",
-      "ipcc.ch",
+      "arxiv.org",
       "github.com",
-      "arxiv.org"
+      "nature.com",
+      "science.org"
     ]
   },
   "en-acad-22": {
     "relevantDomains": [
       "arxiv.org",
-      "acm.org",
-      "ieee.org",
-      "semanticscholar.org",
       "github.com",
-      "en.wikipedia.org"
+      "en.wikipedia.org",
+      "acm.org",
+      "ieee.org"
     ]
   },
   "en-acad-23": {
@@ -6193,57 +5461,47 @@
   },
   "en-acad-25": {
     "relevantDomains": [
-      "nature.com",
-      "arxiv.org",
-      "science.org",
-      "acm.org",
       "en.wikipedia.org",
       "reuters.com",
       "arstechnica.com",
-      "tomshardware.com"
+      "tomshardware.com",
+      "nature.com",
+      "arxiv.org"
     ]
   },
   "en-travel-04": {
     "relevantDomains": [
-      "japan-guide.com",
-      "lonelyplanet.com",
-      "timeout.com",
-      "cntraveler.com",
       "en.wikipedia.org",
       "namu.wiki",
-      "ko.wordow.com"
+      "ko.wordow.com",
+      "japan-guide.com",
+      "lonelyplanet.com"
     ]
   },
   "en-travel-05": {
     "relevantDomains": [
-      "lonelyplanet.com",
-      "tripadvisor.com",
-      "nomadicmatt.com",
-      "theculturetrip.com",
       "en.wikipedia.org",
       "github.com",
       "desktop.github.com",
-      "reddit.com"
+      "reddit.com",
+      "lonelyplanet.com",
+      "tripadvisor.com"
     ]
   },
   "en-travel-06": {
     "relevantDomains": [
-      "lonelyplanet.com",
-      "tripadvisor.com",
-      "timeout.com",
-      "cntraveler.com",
       "en.wikipedia.org",
-      "news.ycombinator.com"
+      "news.ycombinator.com",
+      "lonelyplanet.com",
+      "tripadvisor.com"
     ]
   },
   "en-travel-07": {
     "relevantDomains": [
-      "ricksteves.com",
-      "lonelyplanet.com",
-      "seat61.com",
-      "trenitalia.com",
       "en.wikipedia.org",
-      "britannica.com"
+      "britannica.com",
+      "ricksteves.com",
+      "lonelyplanet.com"
     ]
   },
   "en-travel-08": {
@@ -6257,22 +5515,21 @@
   },
   "en-travel-09": {
     "relevantDomains": [
-      "lonelyplanet.com",
-      "cntraveler.com",
-      "responsibletravel.com",
-      "theguardian.com",
+      "news.google.com",
       "reddit.com",
-      "news.google.com"
+      "independent.co.uk",
+      "breakingtravelnews.com",
+      "msn.com",
+      "lonelyplanet.com",
+      "cntraveler.com"
     ]
   },
   "en-travel-10": {
     "relevantDomains": [
-      "lonelyplanet.com",
-      "tripadvisor.com",
-      "timeout.com",
-      "nycgo.com",
       "en.wikipedia.org",
-      "news.ycombinator.com"
+      "news.ycombinator.com",
+      "lonelyplanet.com",
+      "tripadvisor.com"
     ]
   },
   "en-shopping-03": {
@@ -6289,12 +5546,11 @@
   },
   "en-shopping-04": {
     "relevantDomains": [
-      "rtings.com",
-      "cnet.com",
-      "theverge.com",
-      "wired.com",
       "en.wikipedia.org",
-      "news.ycombinator.com"
+      "wired.com",
+      "news.ycombinator.com",
+      "rtings.com",
+      "cnet.com"
     ]
   },
   "en-shopping-05": {
@@ -6324,13 +5580,11 @@
   },
   "en-shopping-07": {
     "relevantDomains": [
-      "cnet.com",
-      "wired.com",
-      "bonappetit.com",
-      "americastestkitchen.com",
       "github.com",
       "en.wikipedia.org",
-      "airbnb.com"
+      "airbnb.com",
+      "cnet.com",
+      "wired.com"
     ]
   },
   "en-shopping-08": {
@@ -6344,13 +5598,10 @@
   },
   "en-stock-26": {
     "relevantDomains": [
-      "investing.com",
-      "fool.com",
-      "seekingalpha.com",
-      "marketwatch.com",
-      "dividend.com",
       "finance.yahoo.com",
-      "news.google.com"
+      "fool.com",
+      "investing.com",
+      "seekingalpha.com"
     ]
   },
   "en-stock-27": {
@@ -6378,13 +5629,11 @@
   },
   "en-stock-29": {
     "relevantDomains": [
-      "investing.com",
-      "marketwatch.com",
-      "cnbc.com",
-      "reuters.com",
       "reddit.com",
       "finance.yahoo.com",
-      "ft.com"
+      "ft.com",
+      "investing.com",
+      "marketwatch.com"
     ]
   },
   "en-stock-30": {
@@ -6416,12 +5665,10 @@
   },
   "en-tech-50": {
     "relevantDomains": [
-      "oauth.net",
-      "auth0.com",
       "stackoverflow.com",
-      "developer.mozilla.org",
-      "okta.com",
-      "github.com"
+      "github.com",
+      "oauth.net",
+      "auth0.com"
     ]
   },
   "en-tech-51": {
@@ -6440,35 +5687,29 @@
   },
   "en-tech-52": {
     "relevantDomains": [
-      "aws.amazon.com",
-      "cloudflare.com",
-      "serverless.com",
-      "digitalocean.com",
       "stackoverflow.com",
-      "koyeb.com",
       "github.com",
-      "simform.com"
+      "koyeb.com",
+      "simform.com",
+      "aws.amazon.com",
+      "cloudflare.com"
     ]
   },
   "en-tech-53": {
     "relevantDomains": [
-      "graphql.org",
-      "developer.mozilla.org",
       "stackoverflow.com",
-      "digitalocean.com",
-      "medium.com",
       "github.com",
-      "wundergraph.com"
+      "wundergraph.com",
+      "graphql.org",
+      "developer.mozilla.org"
     ]
   },
   "kr-news-17": {
     "relevantDomains": [
       "n.news.naver.com",
-      "yna.co.kr",
-      "hankyung.com",
-      "sedaily.com",
       "etnews.com",
-      "news.google.com"
+      "yna.co.kr",
+      "hankyung.com"
     ]
   },
   "kr-news-18": {
@@ -6493,22 +5734,20 @@
   "kr-news-20": {
     "relevantDomains": [
       "n.news.naver.com",
-      "yna.co.kr",
       "chosun.com",
-      "donga.com",
-      "koreaherald.com",
-      "news.google.com"
+      "yna.co.kr",
+      "donga.com"
     ]
   },
   "zh-news-16": {
     "relevantDomains": [
-      "people.com.cn",
+      "news.google.com",
+      "x.qianzhan.com",
+      "news.qq.com",
       "xinhuanet.com",
       "sina.com.cn",
-      "36kr.com",
-      "ithome.com",
-      "news.qq.com",
-      "news.google.com"
+      "people.com.cn",
+      "36kr.com"
     ]
   },
   "zh-news-17": {
@@ -6527,14 +5766,10 @@
   },
   "zh-news-18": {
     "relevantDomains": [
-      "36kr.com",
-      "ithome.com",
-      "jiqizhixin.com",
-      "sina.com.cn",
-      "caixin.com",
       "blog.csdn.net",
       "juejin.cn",
-      "news.google.com"
+      "36kr.com",
+      "ithome.com"
     ]
   },
   "zh-news-19": {
@@ -6549,12 +5784,9 @@
   },
   "zh-news-20": {
     "relevantDomains": [
+      "news.google.com",
       "ithome.com",
-      "36kr.com",
-      "cnbeta.com",
-      "sohu.com",
-      "163.com",
-      "news.google.com"
+      "36kr.com"
     ]
   },
   "ja-news-13": {
@@ -6579,14 +5811,12 @@
   },
   "ja-news-15": {
     "relevantDomains": [
-      "itmedia.co.jp",
-      "nikkei.com",
-      "watch.impress.co.jp",
-      "ascii.jp",
-      "zdnet.com",
       "news.google.com",
       "dreamai.art",
-      "aivideomaker.ai"
+      "aivideomaker.ai",
+      "klingai.com",
+      "itmedia.co.jp",
+      "nikkei.com"
     ]
   },
   "ja-news-16": {
@@ -6601,12 +5831,10 @@
   },
   "ja-news-17": {
     "relevantDomains": [
-      "itmedia.co.jp",
       "nikkei.com",
       "response.jp",
-      "car.watch.impress.co.jp",
-      "japantimes.co.jp",
-      "news.google.com"
+      "itmedia.co.jp",
+      "car.watch.impress.co.jp"
     ]
   },
   "kr-stock-16": {

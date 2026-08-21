@@ -1968,13 +1968,6 @@
   "kr-tech-14": {
     "relevantDomains": [
       "github.com",
-      "stackoverflow.com",
-      "velog.io",
-      "inflearn.com",
-      "tistory.com",
-      "medium.com",
-      "developer.mozilla.org",
-      "kubernetes.io",
       "m.blog.naver.com"
     ]
   },
@@ -2474,14 +2467,8 @@
   },
   "en-tech-21": {
     "relevantDomains": [
-      "github.com",
       "stackoverflow.com",
-      "developer.mozilla.org",
-      "dev.to",
-      "medium.com",
-      "freecodecamp.org",
-      "digitalocean.com",
-      "tailwindcss.com"
+      "github.com"
     ]
   },
   "en-tech-22": {
@@ -2536,14 +2523,8 @@
   },
   "en-tech-26": {
     "relevantDomains": [
-      "github.com",
       "stackoverflow.com",
-      "developer.mozilla.org",
-      "dev.to",
-      "medium.com",
-      "freecodecamp.org",
-      "digitalocean.com",
-      "grpc.io",
+      "github.com",
       "opensource.com"
     ]
   },
@@ -2559,14 +2540,8 @@
   },
   "en-tech-28": {
     "relevantDomains": [
-      "github.com",
       "stackoverflow.com",
-      "developer.mozilla.org",
-      "dev.to",
-      "medium.com",
-      "freecodecamp.org",
-      "digitalocean.com",
-      "redis.io"
+      "github.com"
     ]
   },
   "en-tech-29": {
@@ -2686,14 +2661,8 @@
   },
   "en-tech-37": {
     "relevantDomains": [
-      "github.com",
       "stackoverflow.com",
-      "developer.mozilla.org",
-      "dev.to",
-      "medium.com",
-      "freecodecamp.org",
-      "digitalocean.com",
-      "cloudflare.com"
+      "github.com"
     ]
   },
   "en-tech-38": {
@@ -3680,10 +3649,6 @@
   "en-acad-14": {
     "relevantDomains": [
       "arxiv.org",
-      "semanticscholar.org",
-      "paperswithcode.com",
-      "openreview.net",
-      "acm.org",
       "stackoverflow.com"
     ]
   },
@@ -4698,12 +4663,8 @@
   },
   "ja-tech-07": {
     "relevantDomains": [
-      "qiita.com",
-      "zenn.dev",
       "github.com",
-      "dev.to",
-      "itmedia.co.jp",
-      "developer.mozilla.org"
+      "qiita.com"
     ]
   },
   "ja-tech-08": {
@@ -5554,10 +5515,6 @@
   },
   "en-health-07": {
     "relevantDomains": [
-      "healthline.com",
-      "webmd.com",
-      "medicalnewstoday.com",
-      "nih.gov",
       "reddit.com",
       "en.wikipedia.org"
     ]
@@ -6230,12 +6187,8 @@
   },
   "en-acad-24": {
     "relevantDomains": [
-      "nature.com",
-      "pubmed.ncbi.nlm.nih.gov",
-      "nih.gov",
-      "science.org",
-      "github.com",
-      "arxiv.org"
+      "arxiv.org",
+      "github.com"
     ]
   },
   "en-acad-25": {

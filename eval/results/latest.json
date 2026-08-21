@@ -1,6 +1,6 @@
 {
   "report": {
-    "timestamp": "2026-08-21T00:13:37.296Z",
+    "timestamp": "2026-08-21T00:20:49.817Z",
     "totalQueries": 600,
     "passedQueries": 600,
     "failedQueries": 0,
@@ -58,7 +58,7 @@
     },
     "ranking": {
       "queriesWithGoldStandard": 600,
-      "avgNdcgAt10": 0.5971989837172627,
+      "avgNdcgAt10": 0.603820442539312,
       "avgMrr": 0.98375,
       "avgPrecisionAt10": 0.7818630952380947
     },
@@ -27532,7 +27532,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.33627415762678553,
+          "ndcgAt10": 0.8772153153380493,
           "mrr": 1,
           "precisionAt10": 1,
           "relevantHits": 10
@@ -33101,7 +33101,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.32908604348504067,
+          "ndcgAt10": 0.7977228895450266,
           "mrr": 1,
           "precisionAt10": 1,
           "relevantHits": 10
@@ -33751,7 +33751,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.3971189798851739,
+          "ndcgAt10": 0.7928654229965442,
           "mrr": 1,
           "precisionAt10": 1,
           "relevantHits": 10
@@ -34010,7 +34010,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.32908604348504067,
+          "ndcgAt10": 0.7977228895450266,
           "mrr": 1,
           "precisionAt10": 1,
           "relevantHits": 10
@@ -35166,7 +35166,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.3327372413301053,
+          "ndcgAt10": 0.8065735963827293,
           "mrr": 1,
           "precisionAt10": 1,
           "relevantHits": 10
@@ -43948,7 +43948,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.3980628465882808,
+          "ndcgAt10": 0.8065735963827293,
           "mrr": 1,
           "precisionAt10": 1,
           "relevantHits": 10
@@ -54396,7 +54396,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.3936948167222715,
+          "ndcgAt10": 0.7977228895450266,
           "mrr": 1,
           "precisionAt10": 1,
           "relevantHits": 10
@@ -65302,7 +65302,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.3936948167222715,
+          "ndcgAt10": 0.7977228895450266,
           "mrr": 1,
           "precisionAt10": 1,
           "relevantHits": 10
@@ -72925,7 +72925,7 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.3980628465882808,
+          "ndcgAt10": 0.8065735963827293,
           "mrr": 1,
           "precisionAt10": 1,
           "relevantHits": 10

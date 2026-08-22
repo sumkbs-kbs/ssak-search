@@ -1,5 +1,4 @@
 #!/usr/bin/env tsx
-// @ts-nocheck
 /**
  * Live Reranker Blend Weight A/B Benchmark
  *
@@ -12,16 +11,19 @@
 
 import * as fs from 'node:fs'
 import * as path from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { CrossEncoderReranker, type RerankDocument } from '../src/lib/retrieval/reranker'
+import type { SearchResult } from '../src/types'
 import { computeNdcg } from '../eval/metrics'
 
-const EVAL_DIR = path.resolve(import.meta.dirname!, '..', 'eval')
+const HERE = import.meta.dirname ?? path.dirname(fileURLToPath(import.meta.url))
+const EVAL_DIR = path.resolve(HERE, '..', 'eval')
 const RESULTS_DIR = path.join(EVAL_DIR, 'results')
 
 // ── Parse CLI args ──
 const args = process.argv.slice(2)
-const queryCount = parseInt(args.find(a => a.startsWith('--queries'))?.split('=')[1] || args[args.indexOf('--queries') + 1] || '30')
-const weightsArg = args.find(a => a.startsWith('--weights'))?.split('=')[1] || args[args.indexOf('--weights') + 1] || '0.6,0.7,0.8,0.9'
+const queryCount = parseInt(args.find((a: string) => a.startsWith('--queries'))?.split('=')[1] || args[args.indexOf('--queries') + 1] || '30')
+const weightsArg = args.find((a: string) => a.startsWith('--weights'))?.split('=')[1] || args[args.indexOf('--weights') + 1] || '0.6,0.7,0.8,0.9'
 const WEIGHTS = weightsArg.split(',').map(Number)
 
 // ── Load data ──
@@ -71,7 +73,7 @@ for (const qid of queryIds) {
 
 const selectedIds: string[] = []
 const perTag = Math.max(3, Math.ceil(queryCount / Object.keys(tagBuckets).length))
-for (const [tag, ids] of Object.entries(tagBuckets)) {
+for (const [_tag, ids] of Object.entries(tagBuckets)) {
   const step = Math.max(1, Math.floor(ids.length / perTag))
   for (let i = 0; i < ids.length && selectedIds.length < queryCount; i += step) {
     selectedIds.push(ids[i])
@@ -112,14 +114,20 @@ for (const qid of selectedIds) {
         { enableWorkersAI: false, enableSidecar: false, topK: 10 },
       )
 
-      const resultsForNdcg = reranked.map(r => ({ url: r.url, domain: r.domain }))
+      const resultsForNdcg: SearchResult[] = reranked.map(r => ({
+        title: r.title,
+        url: r.url,
+        content: r.content,
+        score: r.rerankScore,
+        domain: r.domain,
+      }))
       const ndcg = computeNdcg(resultsForNdcg, gold.relevantDomains, 10)
 
       results[w].ndcgSum += ndcg
       results[w].count++
       results[w].queries.push({ id: qid, ndcg, tag })
       successCount++
-    } catch (err) {
+    } catch (_err) {
       failCount++
     }
   }
@@ -152,7 +160,7 @@ console.log('\n═══ Per-Tag NDCG@10 ═══')
 const tags = [...new Set(selectedIds.map(qid => tagMap.get(qid) || 'unknown'))].sort()
 
 for (const tag of tags) {
-  const parts = WEIGHTS.map(w => {
+  const parts = WEIGHTS.map((w: number) => {
     const tagQ = results[w].queries.filter(q => q.tag === tag)
     const avg = tagQ.length > 0 ? tagQ.reduce((s, q) => s + q.ndcg, 0) / tagQ.length : 0
     return `w=${w.toFixed(1)}: ${avg.toFixed(4)}`
@@ -176,7 +184,7 @@ const report = {
   queryCount: selectedIds.length,
   mode: 'heuristic-fallback (offline)',
   weights: WEIGHTS,
-  results: WEIGHTS.map(w => ({
+  results: WEIGHTS.map((w: number) => ({
     weight: w,
     ndcgAt10: results[w].count > 0 ? results[w].ndcgSum / results[w].count : 0,
     queryCount: results[w].count,

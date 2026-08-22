@@ -26,6 +26,16 @@ interface CheckResult {
   errors: string[]
 }
 
+/**
+ * Exit with a failure code. Unlike `process.exit` (typed `any` by
+ * @cloudflare/workers-types, so it does not terminate control flow), the
+ * explicit `never` return type lets tsc narrow variables after guard clauses.
+ */
+function fail(code: number): never {
+  process.exit(code)
+  throw new Error('unreachable')
+}
+
 function main() {
   const configPath = resolve(process.cwd(), 'wrangler.jsonc')
 
@@ -41,12 +51,13 @@ function main() {
     console.error(err instanceof Error ? err.message : err)
     process.exit(2)
   }
-  if (!config) { process.exit(2) }
+  if (!config) fail(2)
+  const cfg = config
 
   const result: CheckResult = { ok: true, warnings: [], errors: [] }
 
   // ── Check 1: Vectorize binding ──────────────────────────
-  const vectorizeBindings = config!.vectorize ?? []
+  const vectorizeBindings = cfg.vectorize ?? []
   const vectorize = vectorizeBindings.find((b) => b.binding === 'VECTORIZE_INDEX')
 
   if (!vectorize) {
@@ -60,7 +71,7 @@ function main() {
   }
 
   // ── Check 2: D1 binding ─────────────────────────────────
-  const d1Bindings = config!.d1_databases ?? []
+  const d1Bindings = cfg.d1_databases ?? []
   const d1 = d1Bindings.find((b) => b.binding === 'SEARCH_INDEX_DB')
 
   if (!d1) {

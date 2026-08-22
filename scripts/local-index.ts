@@ -1,16 +1,16 @@
 #!/usr/bin/env -S npx tsx
 /**
  * 로컬 인덱싱 스크립트
- * 
+ *
  * ChromaDB + Ollama를 사용한 완전 로컬 인덱싱
  * Cloudflare 없이 로컬에서 인덱싱/검색 가능
- * 
+ *
  * 사용법:
  *   # 서비스 시작
  *   docker run -p 8000:8000 chromadb/chroma
  *   ollama serve
  *   ollama pull nomic-embed-text
- * 
+ *
  *   # 인덱싱 실행
  *   npx tsx scripts/local-index.ts --urls urls.txt
  *   npx tsx scripts/local-index.ts --category=tech
@@ -18,7 +18,6 @@
  */
 
 import * as fs from 'fs'
-import * as path from 'path'
 import { LocalIndexingService, type LocalDocument } from '../src/lib/local-indexing'
 
 // ============================================================
@@ -93,6 +92,16 @@ interface LocalIndexArgs {
   ollamaUrl?: string
 }
 
+/**
+ * Exit with a failure code. Unlike `process.exit` (typed `any` by
+ * @cloudflare/workers-types, so it does not terminate control flow), the
+ * explicit `never` return type lets tsc narrow variables after guard clauses.
+ */
+function fail(code: number): never {
+  process.exit(code)
+  throw new Error('unreachable')
+}
+
 function parseArgs(): LocalIndexArgs {
   const args = process.argv.slice(2)
   const options: LocalIndexArgs = {
@@ -105,10 +114,11 @@ function parseArgs(): LocalIndexArgs {
   for (const arg of args) {
     if (arg.startsWith('--urls=')) {
       const filePath = arg.split('=')[1]
-      options.urls = fs.readFileSync(filePath, 'utf-8')
+      options.urls = fs
+        .readFileSync(filePath, 'utf-8')
         .split('\n')
-        .map(l => l.trim())
-        .filter(l => l.length > 0 && l.startsWith('http'))
+        .map((l) => l.trim())
+        .filter((l) => l.length > 0 && l.startsWith('http'))
     } else if (arg.startsWith('--category=')) {
       options.category = arg.split('=')[1]
     } else if (arg.startsWith('--search=')) {
@@ -138,7 +148,7 @@ async function fetchDocument(url: string): Promise<LocalDocument | null> {
     if (!response.ok) return null
 
     const html = await response.text()
-    
+
     // 간단한 HTML 파싱
     const titleMatch = html.match(/<title[^>]*>([\s\S]*?)<\/title>/i)
     const title = titleMatch ? titleMatch[1].replace(/<[^>]+>/g, '').trim() : url
@@ -178,10 +188,18 @@ async function runIndexing(args: LocalIndexArgs) {
     urls = args.urls
   } else if (args.category) {
     switch (args.category) {
-      case 'tech': urls = TECH_DOCS; break
-      case 'news': urls = NEWS_SITES; break
-      case 'wiki': urls = WIKI_DOCS; break
-      case 'all': urls = [...TECH_DOCS, ...NEWS_SITES, ...WIKI_DOCS]; break
+      case 'tech':
+        urls = TECH_DOCS
+        break
+      case 'news':
+        urls = NEWS_SITES
+        break
+      case 'wiki':
+        urls = WIKI_DOCS
+        break
+      case 'all':
+        urls = [...TECH_DOCS, ...NEWS_SITES, ...WIKI_DOCS]
+        break
       default:
         console.error(`알 수 없는 카테고리: ${args.category}`)
         process.exit(1)
@@ -253,13 +271,14 @@ async function runIndexing(args: LocalIndexArgs) {
 async function runSearch(args: LocalIndexArgs) {
   if (!args.query) {
     console.error('검색어를 입력하세요: --search="react hooks"')
-    process.exit(1)
+    fail(1)
   }
+  const query = args.query
 
   console.log('═══════════════════════════════════════════════════════')
   console.log('  로컬 검색')
   console.log('═══════════════════════════════════════════════════════')
-  console.log(`  쿼리: ${args.query}`)
+  console.log(`  쿼리: ${query}`)
   console.log(`  Top-K: ${args.topK}`)
   console.log('')
 
@@ -270,7 +289,7 @@ async function runSearch(args: LocalIndexArgs) {
 
   await service.initialize()
 
-  const results = await service.search(args.query!, args.topK)
+  const results = await service.search(query, args.topK)
 
   if (results.length === 0) {
     console.log('검색 결과 없음')
@@ -299,7 +318,7 @@ async function runStats(args: LocalIndexArgs) {
     ollamaUrl: args.ollamaUrl,
   })
 
-  const status = await service.initialize()
+  const _status = await service.initialize()
   const stats = await service.getStats()
 
   console.log(`  ChromaDB: ${stats.chromaReady ? '✅ 연결됨' : '❌ 미연결'}`)

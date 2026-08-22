@@ -14,6 +14,16 @@
 // in the shared global scope). Shebang scripts stay executable via tsx.
 export {}
 
+/**
+ * Exit with a failure code. Unlike `process.exit` (typed `any` by
+ * @cloudflare/workers-types, so it does not terminate control flow), the
+ * explicit `never` return type lets tsc narrow variables after guard clauses.
+ */
+function fail(code: number): never {
+  process.exit(code)
+  throw new Error('unreachable')
+}
+
 async function main() {
   const url = process.argv[2] || 'http://localhost:8788'
   const healthUrl = `${url.replace(/\/$/, '')}/api/metrics`
@@ -39,10 +49,11 @@ async function main() {
     if (!persistenceMatch) {
       console.error('❌ FAIL: search_metrics_persistence metric not found in output')
       console.error('   This usually means the ANALYTICS binding is not configured.')
-      process.exit(1)
+      fail(1)
     }
 
-    const value = parseInt(persistenceMatch![1], 10)
+    const pm = persistenceMatch
+    const value = parseInt(pm[1], 10)
 
     if (value === 1) {
       console.log('✅ PASS: Metrics persistence ACTIVE (search_metrics_persistence = 1)')

@@ -11,10 +11,12 @@
 
 import * as fs from 'node:fs'
 import * as path from 'node:path'
+import { fileURLToPath } from 'node:url'
 import type { EvalReport, EvalResult, AggregateRankingMetrics, LatencyPercentiles, QPSMetrics } from './types'
 import { computeNdcg } from './metrics'
 
-const EVAL_DIR = import.meta.dirname!
+const HERE = import.meta.dirname ?? path.dirname(fileURLToPath(import.meta.url))
+const EVAL_DIR = HERE
 const RESULTS_DIR = path.join(EVAL_DIR, 'results')
 
 interface ChunkReport {
@@ -91,7 +93,7 @@ function aggregate(chunks: ChunkReport[]): EvalReport {
     const ndcg = computeNdcg(poolResults, gold.relevantDomains, 10)
     const relevantHits = poolResults.slice(0, 10).filter((res: any) => {
       const candidates: string[] = []
-      try { candidates.push(new URL(res.url).hostname.replace(/^www\./, '').toLowerCase()) } catch {}
+      try { candidates.push(new URL(res.url).hostname.replace(/^www\./, '').toLowerCase()) } catch { /* ignore invalid URL */ }
       if (res.domain) candidates.push(res.domain.toLowerCase().replace(/^www\./, ''))
       return gold.relevantDomains.some((g: string) => candidates.some((d) => d === g || d.endsWith('.' + g)))
     }).length
@@ -99,7 +101,7 @@ function aggregate(chunks: ChunkReport[]): EvalReport {
       for (let i = 0; i < poolResults.length; i++) {
         const res = poolResults[i]
         const candidates: string[] = []
-        try { candidates.push(new URL(res.url).hostname.replace(/^www\./, '').toLowerCase()) } catch {}
+        try { candidates.push(new URL(res.url).hostname.replace(/^www\./, '').toLowerCase()) } catch { /* ignore invalid URL */ }
         if (res.domain) candidates.push(res.domain.toLowerCase().replace(/^www\./, ''))
         if (gold.relevantDomains.some((g: string) => candidates.some((d) => d === g || d.endsWith('.' + g)))) {
           return 1 / (i + 1)
@@ -227,7 +229,7 @@ console.error(`Wrote ${latestPath} (${(output.length / 1024).toFixed(0)} KB)`)
 
 // Save baseline if requested
 if (saveBaseline) {
-  const baselinePath = path.join(import.meta.dirname!, 'baseline.json')
+  const baselinePath = path.join(HERE, 'baseline.json')
   fs.writeFileSync(baselinePath, JSON.stringify({ timestamp: report.timestamp, report }, null, 2), 'utf-8')
   console.error(`Baseline saved: ${baselinePath}`)
 }

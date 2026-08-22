@@ -13,9 +13,11 @@
 
 import * as fs from 'node:fs'
 import * as path from 'node:path'
+import { fileURLToPath } from 'node:url'
 
-const GS_PATH = path.join(import.meta.dirname!, 'gold-standards.json')
-const RESULTS_DIR = path.join(import.meta.dirname!, 'results')
+const HERE = import.meta.dirname ?? path.dirname(fileURLToPath(import.meta.url))
+const GS_PATH = path.join(HERE, 'gold-standards.json')
+const RESULTS_DIR = path.join(HERE, 'results')
 
 function loadAllResults() {
   const results: any[] = []
@@ -24,7 +26,7 @@ function loadAllResults() {
     try {
       const data = JSON.parse(fs.readFileSync(f, 'utf-8'))
       results.push(...(data.report.results || []))
-    } catch {}
+    } catch { /* ignore invalid URL */ }
   }
   return results
 }
@@ -82,7 +84,7 @@ for (const [queryId, gold] of Object.entries(gs) as [string, any][]) {
       'nytimes.com', 'bbc.com', 'wired.com', 'arstechnica.com',
     ]
     for (const d of factualExtras) {
-      if (domainFreq.has(d) && domainFreq.get(d)! >= 2) {
+      if ((domainFreq.get(d) ?? 0) >= 2) {
         newDomains.add(d)
       }
     }
@@ -98,7 +100,7 @@ for (const [queryId, gold] of Object.entries(gs) as [string, any][]) {
       'm.blog.naver.com', 'namu.wiki',
     ]
     for (const d of financialExtras) {
-      if (domainFreq.has(d) && domainFreq.get(d)! >= 2) {
+      if ((domainFreq.get(d) ?? 0) >= 2) {
         newDomains.add(d)
       }
     }

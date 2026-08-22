@@ -107,7 +107,7 @@ function generateEventId(): string {
   return `evt_${ts}${rand}`
 }
 
-function isoDate(ms: number): string {
+function _isoDate(ms: number): string {
   return new Date(ms).toISOString()
 }
 
@@ -115,7 +115,7 @@ function todayKey(): string {
   return new Date().toISOString().slice(0, 10) // "YYYY-MM-DD"
 }
 
-async function sha256(msg: string): Promise<string> {
+async function _sha256(msg: string): Promise<string> {
   const data = new TextEncoder().encode(msg)
   const hash = await crypto.subtle.digest('SHA-256', data)
   return Array.from(new Uint8Array(hash))
@@ -163,7 +163,8 @@ export class AuditLogDO extends DurableObject<Env> {
     const ids = this.store.eventsByTenant[tenantId] ?? []
     const max = this.store.maxPerTenant
     while (ids.length > max) {
-      const evictId = ids.shift()!
+      const evictId = ids.shift()
+      if (evictId === undefined) break
       delete this.store.events[evictId]
       await this.persist()
     }
@@ -236,7 +237,7 @@ export class AuditLogDO extends DurableObject<Env> {
       targetIds = [...idSet]
     }
 
-    let results: AuditEvent[] = []
+    const results: AuditEvent[] = []
     for (const id of targetIds) {
       const rec = this.store.events[id]
       if (!rec) continue
@@ -301,7 +302,7 @@ export class AuditLogDO extends DurableObject<Env> {
     if (tenantIds.length === 0) return { uploaded: false }
 
     const dateKey = todayKey()
-    let keys: string[] = []
+    const keys: string[] = []
 
     for (const tid of tenantIds) {
       const events = await this.getEvents({ tenantId: tid, sinceMs: Date.now() - 86_400_000, limit: 999_999 })

@@ -13,8 +13,10 @@
 
 import * as fs from 'node:fs'
 import * as path from 'node:path'
+import { fileURLToPath } from 'node:url'
 
-const EVAL_DIR = path.join(import.meta.dirname!)
+const HERE = import.meta.dirname ?? path.dirname(fileURLToPath(import.meta.url))
+const EVAL_DIR = path.join(HERE)
 const RESULTS_DIR = path.join(EVAL_DIR, 'results')
 const GS_PATH = path.join(EVAL_DIR, 'gold-standards.json')
 
@@ -81,7 +83,7 @@ function loadAllResults() {
     try {
       const data = JSON.parse(fs.readFileSync(f, 'utf-8'))
       results.push(...(data.report.results || []))
-    } catch {}
+    } catch { /* ignore invalid URL */ }
   }
   return results
 }

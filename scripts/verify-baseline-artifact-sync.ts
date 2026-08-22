@@ -164,6 +164,16 @@ function collectState(evalDir: string): ArtifactGitState {
   }
 }
 
+/**
+ * Exit with a failure code. Unlike `process.exit` (typed `any` by
+ * @cloudflare/workers-types, so it does not terminate control flow), the
+ * explicit `never` return type lets tsc narrow variables after guard clauses.
+ */
+function fail(code: number): never {
+  process.exit(code)
+  throw new Error('unreachable')
+}
+
 function main(): void {
   const evalDir = process.argv[2] ?? 'eval'
   let state: ArtifactGitState | undefined
@@ -173,8 +183,9 @@ function main(): void {
     console.error(`❌ [baseline-artifact-sync] git 실행 실패: ${(err as Error).message}`)
     process.exit(3)
   }
-  if (!state) { process.exit(3) }
-  const result = classifyArtifactSync(state!)
+  if (!state) fail(3)
+  const st = state
+  const result = classifyArtifactSync(st)
   const icon =
     result.status === 'DANGER'
       ? '❌'

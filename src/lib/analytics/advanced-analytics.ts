@@ -16,8 +16,6 @@
  * - Export to external analytics tools
  */
 
-import { logger, toError } from '../logger'
-import type { Env } from '../../types'
 
 // ============================================================
 // Types
@@ -281,7 +279,8 @@ export class CohortAnalyzer {
       if (!userId) continue
 
       // Track first seen
-      if (!userFirstSeen.has(userId) || event.timestamp < userFirstSeen.get(userId)!) {
+      const firstSeen = userFirstSeen.get(userId)
+      if (firstSeen === undefined || event.timestamp < firstSeen) {
         userFirstSeen.set(userId, event.timestamp)
       }
 
@@ -371,7 +370,7 @@ export class AnalyticsDashboard {
       : this.collector.getEventsByName('page_view')
 
     // Calculate active users
-    const uniqueUsers = new Set(events.map(e => e.userId ?? e.sessionId))
+    const _uniqueUsers = new Set(events.map(e => e.userId ?? e.sessionId))
     const now = Date.now()
     const dayAgo = now - 24 * 60 * 60 * 1000
     const weekAgo = now - 7 * 24 * 60 * 60 * 1000

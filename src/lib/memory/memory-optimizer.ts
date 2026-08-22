@@ -105,8 +105,8 @@ export class OptimizedLRUCache<T> {
    */
   set(key: string, value: T): void {
     // If key exists, update it
-    if (this.cache.has(key)) {
-      const entry = this.cache.get(key)!
+    const entry = this.cache.get(key)
+    if (entry) {
       entry.value = value
       entry.lastAccessed = Date.now()
       return
@@ -308,7 +308,7 @@ export class MemoryManager {
   cleanupAll(): number {
     let totalRemoved = 0
 
-    for (const [name, cache] of this.caches) {
+    for (const [_name, cache] of this.caches) {
       totalRemoved += cache.cleanup()
     }
 

@@ -41,6 +41,16 @@ const REQUIRED_BINDING = 'ANALYTICS'
 // Dashboard (Workers & Pages → Analytics → Analytics Engine).
 const EXPECTED_PRODUCTION_DATASET = 'ssak_search'
 
+/**
+ * Exit with a failure code. Unlike `process.exit` (typed `any` by
+ * @cloudflare/workers-types, so it does not terminate control flow), the
+ * explicit `never` return type lets tsc narrow variables after guard clauses.
+ */
+function fail(code: number): never {
+  process.exit(code)
+  throw new Error('unreachable')
+}
+
 function main() {
   const args = process.argv.slice(2)
   const configArg = args.find((a: string) => a.startsWith('--config='))
@@ -63,9 +73,10 @@ function main() {
     console.error(`❌ FAIL: Could not parse ${configPath}:`, err)
     process.exit(2)
   }
-  if (!config) { process.exit(2) }
+  if (!config) fail(2)
+  const cfg = config
 
-  const datasets = config!.analytics_engine_datasets ?? []
+  const datasets = cfg.analytics_engine_datasets ?? []
 
   if (datasets.length === 0) {
     console.error('❌ FAIL: analytics_engine_datasets block missing entirely')
@@ -90,10 +101,11 @@ function main() {
     console.error('Found bindings:', datasets.map((d) => d.binding).join(', ') || '(none)')
     console.error('')
     console.error(`Required: binding="${REQUIRED_BINDING}"`)
-    process.exit(1)
+    fail(1)
   }
 
-  if (!target!.dataset || target!.dataset.trim() === '') {
+  const t = target
+  if (!t.dataset || t.dataset.trim() === '') {
     console.error(`❌ FAIL: ${REQUIRED_BINDING} binding declared without dataset name`)
     process.exit(1)
   }
@@ -106,7 +118,7 @@ function main() {
   // checkout under /Users/dev/... would otherwise disable the check for the
   // production config (code-review catch).
   const isDeployableConfig = basename(configPath) !== 'wrangler.dev.jsonc'
-  const dataset = target!.dataset
+  const dataset = t.dataset
   if (isDeployableConfig && /[^A-Za-z0-9_]/.test(dataset)) {
     console.error(`❌ FAIL: dataset name "${dataset}" contains characters other than [A-Za-z0-9_]`)
     console.error('   Cloudflare rejects hyphenated Analytics Engine dataset names at deploy time.')
@@ -114,14 +126,12 @@ function main() {
   }
 
   if (isDeployableConfig && dataset !== EXPECTED_PRODUCTION_DATASET) {
-    console.warn(
-      `⚠️  dataset name is "${dataset}" (expected production dataset "${EXPECTED_PRODUCTION_DATASET}")`,
-    )
+    console.warn(`⚠️  dataset name is "${dataset}" (expected production dataset "${EXPECTED_PRODUCTION_DATASET}")`)
     console.warn('   Verify the Dashboard dataset matches the value declared here.')
   }
 
   console.log(`✅ PASS: Analytics Engine binding declared correctly`)
-  console.log(`   binding: ${target!.binding}`)
+  console.log(`   binding: ${t.binding}`)
   console.log(`   dataset: ${dataset}`)
   console.log('')
   console.log('Next step: runtime verification')

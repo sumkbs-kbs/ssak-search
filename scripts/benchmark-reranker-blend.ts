@@ -1,5 +1,4 @@
 #!/usr/bin/env tsx
-// @ts-nocheck
 /**
  * Reranker Blend Weight A/B Benchmark
  *
@@ -18,8 +17,10 @@
 
 import * as fs from 'node:fs'
 import * as path from 'node:path'
+import { fileURLToPath } from 'node:url'
 
-const EVAL_DIR = path.resolve(import.meta.dirname!, '..', 'eval')
+const HERE = import.meta.dirname ?? path.dirname(fileURLToPath(import.meta.url))
+const EVAL_DIR = path.resolve(HERE, '..', 'eval')
 const RESULTS_DIR = path.join(EVAL_DIR, 'results')
 const GOLD_PATH = path.join(EVAL_DIR, 'gold-standards.json')
 
@@ -62,9 +63,11 @@ function computeNdcg(results: Array<{ url: string; domain?: string }>, relevantD
   const seen = new Set<string>()
   let dcg = 0
   for (let i = 0; i < topK.length; i++) {
+    const item = topK[i]
     const candidates: string[] = []
-    try { candidates.push(new URL(topK[i].url).hostname.replace(/^www\./, '').toLowerCase()) } catch {}
-    if (topK[i].domain) candidates.push(topK[i].domain.toLowerCase().replace(/^www\./, ''))
+    try { candidates.push(new URL(item.url).hostname.replace(/^www\./, '').toLowerCase()) } catch { /* ignore invalid URL */ }
+    const domain = item.domain
+    if (domain) candidates.push(domain.toLowerCase().replace(/^www\./, ''))
 
     let assigned = false
     for (const g of golds) {
@@ -87,9 +90,11 @@ function computeNdcg(results: Array<{ url: string; domain?: string }>, relevantD
 // ── MRR computation ──
 function computeMrr(results: Array<{ url: string; domain?: string }>, relevantDomains: string[]): number {
   for (let i = 0; i < results.length; i++) {
+    const item = results[i]
     const candidates: string[] = []
-    try { candidates.push(new URL(results[i].url).hostname.replace(/^www\./, '').toLowerCase()) } catch {}
-    if (results[i].domain) candidates.push(results[i].domain.toLowerCase().replace(/^www\./, ''))
+    try { candidates.push(new URL(item.url).hostname.replace(/^www\./, '').toLowerCase()) } catch { /* ignore invalid URL */ }
+    const domain = item.domain
+    if (domain) candidates.push(domain.toLowerCase().replace(/^www\./, ''))
     if (relevantDomains.some(g => candidates.some(d => d === g || d.endsWith('.' + g)))) {
       return 1 / (i + 1)
     }
@@ -111,7 +116,7 @@ for (const qid of queryIds) {
 
 const selectedIds: string[] = []
 const perTag = Math.max(5, Math.ceil(queryCount / Object.keys(tagBuckets).length))
-for (const [tag, ids] of Object.entries(tagBuckets)) {
+for (const [_tag, ids] of Object.entries(tagBuckets)) {
   const step = Math.max(1, Math.floor(ids.length / perTag))
   for (let i = 0; i < ids.length && selectedIds.length < queryCount; i += step) {
     selectedIds.push(ids[i])
@@ -207,7 +212,7 @@ console.log('BlendWeight   NDCG@10     MRR       vs w=0.7')
 console.log('─────────────────────────────────────────────')
 
 const baseNdcg = weightResults[0.7].ndcgSum / weightResults[0.7].count
-const baseMrr = weightResults[0.7].mrrSum / weightResults[0.7].count
+const _baseMrr = weightResults[0.7].mrrSum / weightResults[0.7].count
 
 for (const w of WEIGHTS) {
   const r = weightResults[w]
@@ -317,7 +322,7 @@ const report = {
   optimalNdcg: bestNdcg,
 }
 
-const outDir = path.resolve(import.meta.dirname!, 'results')
+const outDir = path.resolve(HERE, 'results')
 fs.mkdirSync(outDir, { recursive: true })
 const outPath = path.join(outDir, 'reranker-blend-benchmark.json')
 fs.writeFileSync(outPath, JSON.stringify(report, null, 2))

@@ -188,8 +188,9 @@ export class BackendHealthTracker {
   }
 
   private getOrCreateHealth(backend: string): BackendHealth {
-    if (!this.healthMap.has(backend)) {
-      this.healthMap.set(backend, {
+    let health = this.healthMap.get(backend)
+    if (!health) {
+      health = {
         name: backend,
         successRate: 1.0,
         avgLatencyMs: 500,
@@ -198,9 +199,10 @@ export class BackendHealthTracker {
         consecutiveFailures: 0,
         isHealthy: true,
         predictedFailureProbability: 0,
-      })
+      }
+      this.healthMap.set(backend, health)
     }
-    return this.healthMap.get(backend)!
+    return health
   }
 
   /**

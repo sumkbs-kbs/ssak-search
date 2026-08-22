@@ -14,8 +14,7 @@
  * - Drift detection for data quality monitoring
  */
 
-import { logger, toError } from '../logger'
-import type { Env, SearchResult } from '../../types'
+import { logger } from '../logger'
 
 // ============================================================
 // Types
@@ -304,7 +303,7 @@ export class FeatureDriftDetector {
       if (stats.count >= this.windowSize) {
         const baseline = this.baselines.get(feature)
         if (baseline) {
-          const currentStd = Math.sqrt(stats.variance) || 1
+          const _currentStd = Math.sqrt(stats.variance) || 1
           const driftScore = Math.abs(stats.mean - baseline.mean) / baseline.std
 
           drifts.push({
@@ -332,10 +331,12 @@ export class FeatureDriftDetector {
     const drifts = [...this.currentStats.entries()]
       .filter(([feature]) => this.baselines.has(feature))
       .map(([feature, stats]) => {
-        const baseline = this.baselines.get(feature)!
+        const baseline = this.baselines.get(feature)
+        if (!baseline) return null
         const driftScore = Math.abs(stats.mean - baseline.mean) / baseline.std
         return { feature, driftScore }
       })
+      .filter((d): d is { feature: string; driftScore: number } => d !== null)
 
     const driftingFeatures = drifts
       .filter(d => d.driftScore > this.threshold)

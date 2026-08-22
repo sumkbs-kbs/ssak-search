@@ -53,6 +53,16 @@ const REQUIRED_DO_BINDINGS: DOBinding[] = [
 const REQUIRED_R2_BINDINGS = ['UPLOAD_BUCKET']
 const REQUIRED_QUEUE_BINDINGS = ['INDEX_QUEUE']
 
+/**
+ * Exit with a failure code. Unlike `process.exit` (typed `any` by
+ * @cloudflare/workers-types, so it does not terminate control flow), the
+ * explicit `never` return type lets tsc narrow variables after guard clauses.
+ */
+function fail(code: number): never {
+  process.exit(code)
+  throw new Error('unreachable')
+}
+
 function main() {
   const args = process.argv.slice(2)
   const configArg = args.find((a: string) => a.startsWith('--config='))
@@ -79,11 +89,12 @@ function main() {
     console.error(`❌ FAIL: Could not parse ${configPath}:`, err)
     process.exit(2)
   }
-  if (!config) { process.exit(2) }
+  if (!config) fail(2)
+  const cfg = config
 
-  const doBindings = config!.durable_objects?.bindings || []
-  const r2Bindings = (config!.r2_buckets || []).map((b) => b.binding)
-  const queueBindings = (config!.queues?.producers || []).map((q) => q.binding)
+  const doBindings = cfg.durable_objects?.bindings || []
+  const r2Bindings = (cfg.r2_buckets || []).map((b) => b.binding)
+  const queueBindings = (cfg.queues?.producers || []).map((q) => q.binding)
 
   let failCount = 0
 

@@ -41,6 +41,16 @@ interface LatestReport {
   }
 }
 
+/**
+ * Exit with a failure code. Unlike `process.exit` (typed `any` by
+ * @cloudflare/workers-types, so it does not terminate control flow), the
+ * explicit `never` return type lets tsc narrow variables after guard clauses.
+ */
+function fail(code: number): never {
+  process.exit(code)
+  throw new Error('unreachable')
+}
+
 export function buildMetricsSection(r: NonNullable<LatestReport['report']>): string {
   const rows: string[] = []
   rows.push('## 검색 품질 테스트 결과 (자동 측정)')
@@ -92,8 +102,9 @@ function main(): void {
   const parsed = JSON.parse(readFileSync(RESULTS_PATH, 'utf-8')) as LatestReport
   if (!parsed.report) {
     console.error('eval results missing "report" — invalid latest.json')
-    process.exit(1)
+    fail(1)
   }
+  const report = parsed.report
 
   const readme = readFileSync(README_PATH, 'utf-8')
   const sectionStart = readme.indexOf('## 검색 품질 테스트 결과')
@@ -108,7 +119,7 @@ function main(): void {
   const nextHeadingAt =
     sectionEnd === -1 ? readme.length : sectionStart + '## 검색 품질 테스트 결과'.length + sectionEnd
 
-  const updated = readme.slice(0, sectionStart) + buildMetricsSection(parsed.report!) + readme.slice(nextHeadingAt)
+  const updated = readme.slice(0, sectionStart) + buildMetricsSection(report) + readme.slice(nextHeadingAt)
   writeFileSync(README_PATH, updated, 'utf-8')
   console.log('README.md metrics section updated.')
 }

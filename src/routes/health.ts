@@ -28,6 +28,17 @@ import { alertBackendDown, resolveWebhookUrl } from '../lib/slack-alert'
 import { BUILD_COMMIT } from '../lib/deploy-env'
 import { IndexingPipeline } from '../lib/index/pipeline'
 
+/**
+ * Auth-required reporting must mirror validateApiKeyAsync's enforcement
+ * condition (auth.ts): a key is required when ANY of SEARCH_API_KEY,
+ * TENANTS_CONFIG, or the API_KEY_DO binding is configured. Reporting only
+ * SEARCH_API_KEY underestimates auth state when DO-backed keys are the
+ * default (wrangler.jsonc binds API_KEY_DO unconditionally).
+ */
+function isAuthRequired(env: AppBindings): boolean {
+  return !!(env.SEARCH_API_KEY || env.TENANTS_CONFIG || env.API_KEY_DO)
+}
+
 // Cache health probe results for 30 seconds to prevent self-DoS.
 // Without this, every /api/health call hammers all 7 backends simultaneously.
 interface HealthData {
@@ -200,7 +211,7 @@ export async function buildLightHealthData(env: AppBindings): Promise<HealthData
       // Binding presence only — the D1 corpus query is a full-mode concern.
       self_index: !!(env.VECTORIZE_INDEX && env.SEARCH_INDEX_DB),
     },
-    auth_required: !!env.SEARCH_API_KEY,
+    auth_required: isAuthRequired(env),
     index: {
       configured: !!(env.VECTORIZE_INDEX && env.SEARCH_INDEX_DB),
       vectorize_bound: !!env.VECTORIZE_INDEX,
@@ -333,7 +344,7 @@ export async function runDeepHealthProbe(
       analytics_engine: !!env.ANALYTICS,
       self_index: indexInfo.configured,
     },
-    auth_required: !!env.SEARCH_API_KEY,
+    auth_required: isAuthRequired(env),
     index: indexInfo,
     rate_limiter: {
       mode: (env.RATE_LIMITER ? 'durable_object' : 'in_memory_fallback') as 'durable_object' | 'in_memory_fallback',

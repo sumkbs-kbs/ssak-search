@@ -124,10 +124,10 @@ describe('council 라우트 e2e — 429 재시도 후 available:true', () => {
     app.route('/api/council', councilRoute)
     const req = new Request('http://localhost/api/council', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer test-key' },
       body: JSON.stringify({ query: '테스트', models: ['openai-gpt4o-mini'] }),
     })
-    const resPromise = app.fetch(req, { OPENAI_API_KEY: 'sk-test' }, stubExecutionCtx)
+    const resPromise = app.fetch(req, { OPENAI_API_KEY: 'sk-test', SEARCH_API_KEY: 'test-key' }, stubExecutionCtx)
     await vi.advanceTimersByTimeAsync(100)
     const res = await resPromise
     expect(res.status).toBe(200)
@@ -142,10 +142,10 @@ describe('council 라우트 e2e — 429 재시도 후 available:true', () => {
     app.route('/api/council', councilRoute)
     const req = new Request('http://localhost/api/council', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer test-key' },
       body: JSON.stringify({ query: '테스트', models: ['openai-gpt4o-mini'] }),
     })
-    const resPromise = app.fetch(req, { OPENAI_API_KEY: 'sk-test' }, stubExecutionCtx)
+    const resPromise = app.fetch(req, { OPENAI_API_KEY: 'sk-test', SEARCH_API_KEY: 'test-key' }, stubExecutionCtx)
     await vi.advanceTimersByTimeAsync(100)
     const res = await resPromise
     expect(res.status).toBe(200) // council은 모델 단위 실패를 200 본문으로 소화

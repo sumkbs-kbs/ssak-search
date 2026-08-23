@@ -19,9 +19,14 @@ import { logger, toError } from '../lib/logger'
 import { cors } from 'hono/cors'
 import type { AppBindings, ErrorResponse } from '../types'
 import { withRetry, isRateLimitError, retryAfterMsFromError, httpErrorFromResponse } from '../lib/resilience/retry'
+import { requireAuth } from '../lib/auth'
 
 const councilRoute = new Hono<{ Bindings: AppBindings }>()
 councilRoute.use('/*', cors({ origin: '*' }))
+// Security fix (CSO audit 2026-08-23): /api/council invokes server-held LLM keys
+// (OPENAI_API_KEY / ANTHROPIC_API_KEY / Workers AI). It must never accept
+// anonymous traffic — require a valid API key on every route.
+councilRoute.use('/*', requireAuth)
 
 // ============================================================
 // Types

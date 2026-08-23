@@ -58,3 +58,4 @@ local-index/benchmark-*.json
 local-index/sync-*.json
 local-index/logs/
 
+.gstack/

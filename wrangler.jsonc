@@ -113,6 +113,7 @@
       { "name": "EXPERIMENT_DO", "class_name": "ExperimentDO", "script_name": "ssak-do-worker" },
       { "name": "CANARY_DO", "class_name": "CanaryOrchestratorDO", "script_name": "ssak-do-worker" },
       // ⚠️ v2 DO — DO 워커 마이그레이션 완료 후 활성화
+      // (scripts/verify-do-binding.ts PENDING_V2_DO_BINDINGS 에서 warn-only 처리 중)
       // { "name": "TENANT_AUDIT_DO", "class_name": "AuditLogDO", "script_name": "ssak-do-worker" },
       // { "name": "TENANCY_DO", "class_name": "TenancyDO", "script_name": "ssak-do-worker" },
       // { "name": "NEWS_HUB_DO", "class_name": "NewsHubDO", "script_name": "ssak-do-worker" },

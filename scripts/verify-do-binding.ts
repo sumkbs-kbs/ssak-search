@@ -3,6 +3,9 @@
  * DO Binding Verification Script
  *
  * Verifies that ALL Durable Object bindings are present in a wrangler config.
+ * v2 DOs (PENDING_V2_DO_BINDINGS) are temporarily absent from production
+ * pending the ssak-do-worker migration — validated when declared, warn-only
+ * when absent (see 08668fc "v2 DO 일시 비활성화").
  *
  * P2 ④ (2026-08-10): production wrangler.jsonc now DECLARES the 11 DO
  * bindings (script_name → `ssak-do-worker`, a separate Workers deployment)
@@ -46,6 +49,16 @@ const REQUIRED_DO_BINDINGS: DOBinding[] = [
   { name: 'CLICK_LOG_DO', class_name: 'ClickLogDO' },
   { name: 'EXPERIMENT_DO', class_name: 'ExperimentDO' },
   { name: 'CANARY_DO', class_name: 'CanaryOrchestratorDO' },
+]
+
+// v2 DOs — temporarily NOT declared in production wrangler.jsonc
+// (08668fc, 2026-08-20 "v2 DO 일시 비활성화"): the Pages app cannot bind a
+// script_name class until ssak-do-worker is deployed with the v2 sqlite
+// migration (AuditLogDO/TenancyDO/NewsHubDO). Declared in wrangler.dev.jsonc,
+// so when present they are validated as usual; when absent this is a WARN,
+// not a FAIL. After the DO worker migration completes, move each entry back
+// into REQUIRED_DO_BINDINGS and uncomment it in wrangler.jsonc.
+const PENDING_V2_DO_BINDINGS: DOBinding[] = [
   // P2-2 (2026-08-18): 뉴스 RSS 허브 주기 수집 DO — alarm 기반 15분 수집.
   { name: 'NEWS_HUB_DO', class_name: 'NewsHubDO' },
 ]
@@ -112,6 +125,22 @@ function main() {
       continue
     }
     console.log(`✅ DO ${required.name.padEnd(18)} → ${required.class_name}`)
+  }
+
+  // v2 DOs pending the ssak-do-worker migration (see PENDING_V2_DO_BINDINGS):
+  // validate class_name when declared, warn only when absent.
+  for (const pending of PENDING_V2_DO_BINDINGS) {
+    const found = doBindings.find((b) => b.name === pending.name)
+    if (!found) {
+      console.log(`⚠️  PENDING DO: ${pending.name} not declared — v2 migration in progress (warn only)`)
+      continue
+    }
+    if (found.class_name !== pending.class_name) {
+      console.error(`❌ WRONG CLASS: ${pending.name} has "${found.class_name}", expected "${pending.class_name}"`)
+      failCount++
+      continue
+    }
+    console.log(`✅ DO ${pending.name.padEnd(18)} → ${pending.class_name} (v2)`)
   }
 
   // R2 buckets

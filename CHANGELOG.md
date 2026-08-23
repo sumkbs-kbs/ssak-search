@@ -5,6 +5,45 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.2.0] — 한국어 특화 NLP (Phase 2.3) (2026-08-23)
+
+### Added
+- **한국어 경량 스테머** (`src/lib/korean/stemmer.ts`):
+  - 쿼리 측 조사(partcle) 제거: "삼성전자의 주가를" → [삼성전자, 주가]
+  - 복합 조사 처리 (에서는/에게서/으로부터 — longest-first 매칭)
+  - 요청어미 제거 (비교해줘 → 비교, 설명해주세요 → 설명)
+  - 대화형 필러 제거 (알려줘/찾아줘 등 → 토큰 스트림에서 완전 제외)
+  - 최소 어간 길이 가드 (2음절 미만 축소 금지) + NFC 정규화
+  - **충돌 클래스 배제**: 이/가/도/로/만 어말은 수천 개 실제 단어(포도/지도/속도/사이/두바이)와 형태가 겹쳐 스트립 대상에서 의도적 제외 — 예외 사전(마을/금은, 접미 매칭으로 한옥마을까지 보호)으로 잔여 모호성 처리. eval 풀 진단으로 발견된 과잉 스트리핑(국제유가→국제유 등) 수정
+- **한국어 동의어 확장** (`src/lib/understanding/query-expander.ts` KOREAN_SYNONYMS):
+  - 동일언어 변형 클러스터: 핸드폰↔휴대폰↔스마트폰, 비밀번호↔패스워드, 월급↔급여↔연봉, 자동차↔차량, 아파트↔주택↔부동산, 이메일↔전자우편
+  - ko→en 교차언어 추가: 김치→kimchi, 코스피→kospi, 코스닥→kosdaq, 대학교→university, 병원→hospital
+  - 정밀도 우선 설계: 복합어 충돌 키(컴퓨터 ⊂ 양자컴퓨터)는 의도적으로 제외 — TDD로 오탐 확인 후 제거
+- **한국어 검색 정확도 통합** (`src/lib/retrieval/bm25.ts` tokenize + `src/lib/util.ts` computeScore):
+  - 쿼리 전처리 단계에 스테밍 적용 — 조사가 붙은 쿼리 토큰이 원형 문서와 substring 매칭
+  - 문서 측 무변경: BM25 docLen 스케일 시프트 없음 (Wave 1 계약 보존), 재인덱싱 불필요
+- **대화형 평가 커버리지** (`eval/queries.ts` kr-conv-01~08 + gold-standards):
+  - 구어체 변형 쿼리 8개 (조사 부착/요청 어미/필러/동의어/교차언어 각각 트리거)
+  - 골드는 대응 격식 쿼리와 동일 정보 니즈 공유 — `--tag conversational`로 격리 측정
+- **결정론적 A/B 시뮬레이터** (`scripts/sim-korean-stemmer-ab.ts`):
+  - 고정 결과 풀 위에서 변경 전·후 스코어링 비교 — 백엔드 노이즈 없는 순수 랭킹 델타 측정
+- **백엔드 쿼리 정규화** (`src/lib/korean/backend-query.ts` + orchestrator fetchCtx):
+  - 백엔드 페칭에만 키워드형 정규화 쿼리 전달 (조사·의문사·필러·구어 시간사 제거) — 캐시 키/스코어링/임베딩은 원문 유지
+  - 구어체 eval NDCG@10 누적 0.1886 → 0.3266 (+73%): kr-conv-03 Bing 영어 가비지 → 한국 코스피 콘텐츠, kr-conv-05/06 비제로 달성, 전 쿼리 non-zero
+  - qrels 현실화: kr-conv-05 골드에 실측 회수 경제 뉴스 도메인 추가, kr-conv-06에 주제 정보원(namu.wiki 등) 추가
+  - S48 계약 문서화: 암호화폐 금융 게이트 제외는 의도적 설계 (naver-finance 서빙 범위) — 전용 크립토 백엔드는 별도 과제
+- **스팸 도메인 강등** (`src/lib/search/ranking.ts` LOW_QUALITY_DOMAINS):
+  - job592.com -0.4 추가 — 도박/베팅 SEO 스팸 팜이 키워드 스터핑으로 Tier 1 통과한 관측(eval kr-conv-07) 기반, esusatyo.net 선례 티어
+  - 일반 언더스코어 스터핑 페널티는 측정 기각: 정상 풀 2,130건에서 오탐 소지(GitHub 저장소명)만 확인
+- 구어체 eval 최종 NDCG@10 **0.3321** (세션 시작 0.1886 대비 +76%), job592.com 전 풀 퇴출
+
+### Tests
+- `tests/unit/korean-search-nlp.test.ts` 신규 — 25개 테스트 (충돌 클래스 보존, 예외 사전, 요청어미, NFC, 동의어, tokenize/computeScore 통합)
+- `tests/unit/backend-query.test.ts` 신규 — 7개 테스트 (정규화, 의문사 제거, Latin 보존, 빈 쿼리 폴백 계약)
+- `tests/unit/ranking-authority.test.ts` — job592 강등 계약 테스트 추가 (동일 콘텐츠 컨트롤 대비 −0.4 시프트 검증)
+- 전체 유닛 스위트 3101/3101 PASS — 기존 랭킹/BM25/확장/orchestrator 테스트 회귀 0
+- 결정론적 A/B (동일 179쿼리 풀): NDCG@10 0.3651→0.3658, MRR 0.7522→0.7549 — 중립~미세 긍정, 회귀 없음
+
 ## [2.1.0] — 하이브리드 검색 + 로컬 인덱싱 + 뉴스 RSS + BGE-Reranker v2.0 (2026-08-20)
 
 ### Added

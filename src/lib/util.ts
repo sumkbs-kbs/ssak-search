@@ -2,7 +2,7 @@
  * Shared utility functions for the search engine
  */
 
-import type { Env } from '../types'
+import type { Env, SearchResult } from '../types'
 
 import { logger, toError } from './logger'
 
@@ -1653,4 +1653,23 @@ export function parseFlexibleDate(input: string | undefined | null, now: number 
 
   // Relative time fallback
   return parseRelativeTime(s, now)
+}
+
+/**
+ * FINDING-1 (2026-08-23): when bing is circuit-broken the pool thins and S35's
+ * DBpedia/Wikidata mirrors surface fuzzy label matches (football clubs for
+ * "cloudflare workers tutorial") at mid scores. Require at least one query
+ * token (latin word ≥3 chars or CJK bigram) in title+url; tokenless queries
+ * pass through untouched so S35 gold recovery stays intact.
+ */
+export function filterMirrorResults(query: string, results: SearchResult[]): SearchResult[] {
+  const latinTokens = new Set(query.toLowerCase().match(/[a-z0-9]{3,}/g) ?? [])
+  const cjkChars = query.match(/[\uAC00-\uD7AF\u3040-\u30FF\u4E00-\u9FFF]/g) ?? []
+  const bigrams: string[] = []
+  for (let i = 0; i + 1 < cjkChars.length; i++) bigrams.push(cjkChars[i] + cjkChars[i + 1])
+  if (latinTokens.size === 0 && bigrams.length === 0) return results
+  const hay = (r: SearchResult): string => `${r.title} ${r.url}`.toLowerCase()
+  return results.filter(
+    (r) => [...latinTokens].some((t) => hay(r).includes(t)) || bigrams.some((b) => hay(r).includes(b)),
+  )
 }

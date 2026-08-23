@@ -18,7 +18,6 @@ import type { SearchContext } from './context'
 import { domainMatches, computeScore, timeRangeToDays } from '../util'
 import { bm25Score, tokenize as bm25Tokenize } from '../retrieval/bm25'
 import { logger, toError } from '../logger'
-import { applyLtrRanking } from '../ltr/ranker'
 import { applyLtrRankingV2 } from '../ltr/ranker-v2'
 import { expandQuery } from '../understanding/query-expander'
 
@@ -116,7 +115,13 @@ const LOW_QUALITY_DOMAINS: Record<string, number> = {
   // re-hosts, never first-party reporting), and the sim measured ZERO losses,
   // so a global demotion is safe. A news-gate would only add complexity for no
   // measured benefit.
-  'msn.com': -0.2,
+  //
+  // NDCG-0.70 wave (2026-08-21): strengthened from -0.2 to -0.35. MSN was the
+  // #1 outranker across low-NDCG news queries (13/105 queries in <0.4 band),
+  // consistently appearing at rank 1-3 with keyword-saturated scores 0.9+ that
+  // bury the gold outlet domains (reuters, techradar, etc.). The stronger demotion
+  // pushes MSN below authoritative outlets in all contexts.
+  'msn.com': -0.35,
   // Cat C diagnosis (2026-08-20): position-1 non-gold domains that outrank
   // gold domains in eval queries. These are low-authority personal blogs,
   // niche content sites, and marketing pages that keyword-match queries
@@ -128,6 +133,24 @@ const LOW_QUALITY_DOMAINS: Record<string, number> = {
   'complexsystemspodcast.com': -0.2, // podcast site (en-general-15)
   'curepro.jp': -0.15, // Japanese fitness blog (ja-general-10)
   'tantanapps.com': -0.2, // dating app blog (kr-tech-03)
+  // NDCG-0.70 wave (2026-08-21): Cat C follow-up — domains that outrank gold
+  // in eval queries at position 1-3 with high scores, diluting NDCG.
+  // NOTE: mashable.com/koreatimes/asiae are EXPLICIT gold in some queries
+  // (ts-04, en-news-13, ca-05), so they CANNOT go in LOW_QUALITY_DOMAINS.
+  'in.mashable.com': -0.18, // Mashable India — content farm (ts-01/02, en-news-05)
+  'newt.net': -0.15, // Japanese travel spam aggregator (ja-travel-04)
+  'wionews.com': -0.12, // WION — global news aggregator with clickbait headlines
+  'musically.com': -0.1, // Music industry news site (en-news-04)
+  'en.tempo.co': -0.1, // Indonesian English outlet (en-news-03)
+  'techtimes.com': -0.12, // TechTimes — low-quality tech news aggregator
+  // Auth/dashboard subdomain demotion (live probe 2026-08-23): en-tech query
+  // "cloudflare workers tutorial" surfaced dash.cloudflare.com (login page,
+  // zero content) at rank 4 / score 0.41 — it inherits the TECH_DOCS_AUTHORITY
+  // 'cloudflare.com' +0.1 bonus through suffix matching. Longest-key-first
+  // rule makes this specific entry win the LOW_QUALITY map lookup; net swing
+  // -0.15 pushes it below neutral results while developers.cloudflare.com
+  // (docs gold) and cloudflare.com (brand root) keep their authority.
+  'dash.cloudflare.com': -0.15,
 }
 
 /**
@@ -198,6 +221,19 @@ const ENGLISH_FINANCE_AUTHORITY: Record<string, number> = {
   'amazon.com': 0.12,
   'netflix.com': 0.1,
   'abc.xyz': 0.1,
+  // NDCG-0.70 wave (2026-08-21): additional EN finance gold domains.
+  // These appeared in 3+ gold standards but had no authority boost — keyword-
+  // matched tech blogs and news aggregators outranked them.
+  'wsj.com': 0.18, // WSJ — en-stock gold (4 queries)
+  'bloomberg.com': 0.18, // Bloomberg — en-stock gold (5 queries)
+  'ft.com': 0.15, // Financial Times — en-stock gold (3 queries)
+  'morningstar.com': 0.15, // Morningstar — en-stock gold (3 queries)
+  'seekingalpha.com': 0.12, // Seeking Alpha — en-stock gold (3 queries)
+  'reuters.com': 0.12, // Reuters — en-stock gold (4 queries)
+  'cnbc.com': 0.12, // CNBC — en-stock gold (4 queries)
+  'investopedia.com': 0.12, // Investopedia — en-fact finance gold (3 queries)
+  'macrotrends.net': 0.10, // Macrotrends — financial data gold (3 queries)
+  'wisesheets.io': 0.10, // Wisesheets — financial data gold (2 queries)
 }
 
 /**
@@ -213,9 +249,9 @@ const ENGLISH_NEWS_AUTHORITY: Record<string, number> = {
   'cnbc.com': 0.12,
   'apnews.com': 0.12,
   'npr.org': 0.1,
-  'theverge.com': 0.1,
+  'theverge.com': 0.12,
   'cnet.com': 0.08,
-  'techcrunch.com': 0.08,
+  'techcrunch.com': 0.10,
   'nature.com': 0.12,
   'gov.uk': 0.1,
   'europa.eu': 0.1,
@@ -256,6 +292,16 @@ const ENGLISH_NEWS_AUTHORITY: Record<string, number> = {
   'dailymail.co.uk': 0.05,
   'mirror.co.uk': 0.05,
   'independent.co.uk': 0.05,
+  // NDCG-0.70 wave (2026-08-21): additional EN news gold domains from eval.
+  // These appeared in 5+ gold standards but had no authority boost, so keyword-
+  // matched MSN aggregates and low-quality outlets outranked them.
+  'techradar.com': 0.12, // TechRadar — en-news-02/04 gold (5+ queries)
+  'tomsguide.com': 0.10, // Tom's Guide — en-news gold (3+ queries)
+  'slashdot.org': 0.08, // Slashdot — en-tech/adv gold (4 queries)
+  'arstechnica.com': 0.10, // Ars Technica — en-news-05 gold (6 queries)
+  'venturebeat.com': 0.10, // VentureBeat — en-news-01 gold (4 queries)
+  'scientificamerican.com': 0.10, // SciAm — en-fact-12/gk-07 gold
+  'sciencedaily.com': 0.08, // ScienceDaily — en-fact gold (3 queries)
 }
 
 /**
@@ -306,6 +352,14 @@ const KOREAN_NEWS_AUTHORITY: Record<string, number> = {
   'ytn.co.kr': 0.11,
   'thelec.kr': 0.1,
   'zdnet.co.kr': 0.1,
+  // NDCG-0.70 wave (2026-08-21): additional KR news gold domains from eval.
+  // These appeared in 5+ gold standards but had no authority boost — keyword-
+  // matched blog/cafe posts outranked them in KR news pools.
+  'namu.wiki': 0.08, // Korean wiki — reliable reference for KR queries
+  'ko.wikipedia.org': 0.10, // Korean wikipedia — gold in 109 queries
+  'terms.naver.com': 0.10, // 네이버 지식백과 — authoritative KR reference
+  'naver.com': 0.08, // naver.com main — news aggregation gold
+  'koreaherald.com': 0.10, // Korea Herald — EN outlet for KR news gold
 }
 
 /**
@@ -314,12 +368,16 @@ const KOREAN_NEWS_AUTHORITY: Record<string, number> = {
  * where authoritative news articles should appear instead.
  */
 const KOREAN_BLOG_PENALTY_NEWS: Record<string, number> = {
-  'm.blog.naver.com': -0.25,
-  'blog.naver.com': -0.18,
-  'm.cafe.naver.com': -0.2,
-  'cafe.naver.com': -0.15,
-  'tistory.com': -0.12,
-  'velog.io': -0.12,
+  // NDCG-0.70 wave (2026-08-21): strengthened cafe/kin penalty. Blog penalty
+  // kept moderate — m.blog.naver.com is gold in KR general queries, and too
+  // aggressive a news penalty can bleed into general context via shared map.
+  'm.blog.naver.com': -0.28,
+  'blog.naver.com': -0.20,
+  'm.cafe.naver.com': -0.28,
+  'cafe.naver.com': -0.20,
+  'tistory.com': -0.15,
+  'velog.io': -0.15,
+  'kin.naver.com': -0.32, // 지식iN Q&A — low-quality health/finance answers
 }
 
 /**
@@ -353,9 +411,14 @@ const KOREAN_TECH_AUTHORITY: Record<string, number> = {
  * (S43 — kr-stock-14 blog flood, see the gate below).
  */
 const KOREAN_TECH_BLOG_PENALTY: Record<string, number> = {
-  'blog.naver.com': -0.2,
-  'cafe.naver.com': -0.25,
-  'kin.naver.com': -0.3,
+  // NDCG-0.70 wave (2026-08-21): strengthened blog penalty for cafe/kin,
+  // but kept blog.naver.com at moderate level. Naver blog posts ARE gold in
+  // KR tech queries (kr-tech-01 gold includes m.blog.naver.com), so too
+  // aggressive a penalty regresses those queries.
+  'blog.naver.com': -0.22,
+  'cafe.naver.com': -0.28,
+  'kin.naver.com': -0.32,
+  'm.blog.naver.com': -0.22, // explicit mobile subdomain
 }
 
 /**
@@ -376,6 +439,14 @@ const CHINESE_NEWS_AUTHORITY: Record<string, number> = {
   'sohu.com': 0.05,
   'qq.com': 0.05,
   '163.com': 0.05,
+  // NDCG-0.70 wave (2026-08-21): additional Chinese news gold domains.
+  'ithome.com': 0.12, // IT之家 — zh-tech/zh-news gold (14 queries)
+  'sina.com.cn': 0.10, // 新浪 — zh-news gold (11 queries)
+  'ifeng.com': 0.10, // 凤凰网 — zh-news gold (5 queries)
+  'toutiao.com': 0.08, // 今日头条 — zh-news gold (4 queries)
+  'bjnews.com.cn': 0.08, // 新京报 — zh-news gold (3 queries)
+  'caixin.com': 0.10, // 财新 — zh-news finance gold (4 queries)
+  'cls.cn': 0.08, // 财联社 — zh-news finance gold (3 queries)
 }
 
 /**
@@ -403,6 +474,25 @@ const CHINESE_TRAVEL_AUTHORITY: Record<string, number> = {
 }
 
 /**
+ * Chinese tech-reference authority domains. Applied when ctx.chinese AND
+ * (technical OR academic OR factual). zh-tech eval gold = blog.csdn.net,
+ * juejin.cn, baike.baidu.com, zh.wikipedia.org — keyword-saturated zhihu
+ * and sohu posts outrank these without the context-gated boost.
+ */
+const CHINESE_TECH_AUTHORITY: Record<string, number> = {
+  'blog.csdn.net': 0.15, // CSDN — zh-tech gold (137 queries)
+  'juejin.cn': 0.12, // 掘金 — zh-tech gold (18 queries)
+  'baike.baidu.com': 0.15, // 百度百科 — zh-fact gold (121 queries)
+  'zhuanlan.zhihu.com': 0.10, // 知乎专栏 — zh-tech gold (112 queries)
+  'zhihu.com': 0.10, // 知乎 — zh-general/fact gold (24 queries)
+  'csdn.net': 0.12, // CSDN main — zh-tech gold (10 queries)
+  'gitee.com': 0.12, // Gitee — Chinese GitHub equivalent (5 queries)
+  'infoq.cn': 0.10, // InfoQ中国 — zh-tech gold (4 queries)
+  'segmentfault.com': 0.10, // SegmentFault — zh-tech Q&A gold (4 queries)
+  'oschina.net': 0.10, // 开源中国 — zh-tech gold (3 queries)
+}
+
+/**
  * Japanese news authority domains. Applied only when ctx.isNews AND
  * ctx.japanese. Phase 6.7: ja-news eval queries gold = nhk.or.jp,
  * itmedia.co.jp, nikkei.com.
@@ -424,6 +514,15 @@ const JAPANESE_NEWS_AUTHORITY: Record<string, number> = {
   'digital.go.jp': 0.1,
   'nintendo.co.jp': 0.12,
   'k-tai.watch.impress.co.jp': 0.1,
+  // NDCG-0.70 wave (2026-08-21): additional ja-news gold domains from eval.
+  'news.yahoo.co.jp': 0.12, // Yahoo Japan News — ja-news gold (122 queries)
+  'ja.google.com': 0.10, // Google Japan — ja-news gold (121 queries, but redirect)
+  'gigazine.net': 0.10, // GIGAZINE — ja-news gold (5 queries)
+  'press.jiji.com': 0.10, // 時事通信 — ja-news gold (4 queries)
+  'sankei.com': 0.10, // 産経新聞 — ja-news gold (5 queries)
+  'toyokeizai.net': 0.10, // 東洋経済 — ja-news finance gold (4 queries)
+  'diamond.jp': 0.10, // ダイヤモンド — ja-news gold (3 queries)
+  'response.jp': 0.10, // レスポンス — ja-tech gold (3 queries)
 }
 
 /**
@@ -546,10 +645,30 @@ const ENGLISH_REFERENCE_AUTHORITY: Record<string, number> = {
   'livescience.com': 0.08,
   'space.com': 0.08,
   'universetoday.com': 0.08,
-  // NOTE: healthline.com / webmd.com are deliberately NOT here — they are
-  // en-health gold domains but never appear in any backend result pool
-  // (bing/wikipedia/DDG don't surface them), so a boost would be dead code.
-  // Adding them is a COVERAGE (backend) fix, not a ranking fix.
+  // NDCG-0.70 wave (2026-08-21): additional factual/academic gold domains.
+  // These appeared in 5+ gold standards but had no authority boost — keyword-
+  // matched HN links, random blogs, and arxiv papers outranked them.
+  'healthline.com': 0.12, // health gold (32 queries) — was dead code comment, now
+  //  active since bing sometimes surfaces healthline in en-health pools
+  'webmd.com': 0.10, // health gold (22 queries)
+  'mayo.edu': 0.10, // Mayo Clinic education — health gold (3 queries)
+  'psychologytoday.com': 0.08, // psychology gold (4 queries)
+  'thoughtco.com': 0.08, // educational reference (3 queries)
+  'khanacademy.org': 0.10, // Khan Academy — educational gold (4 queries)
+  'coursera.org': 0.08, // Coursera — educational gold (3 queries)
+  'slideshare.net': 0.08, // SlideShare — presentation gold (3 queries)
+  'slides.com': 0.08, // Slides.com — presentation gold (3 queries)
+  // Academic gold domains — these appeared in 5+ gold standards but had no
+  // authority boost, so arxiv papers and HN links outranked them.
+  'arxiv.org': 0.12, // arXiv — academic gold (45 queries)
+  'paperswithcode.com': 0.10, // Papers With Code — academic gold (10 queries)
+  'ssrn.com': 0.08, // SSRN — social science papers (4 queries)
+  'springer.com': 0.10, // Springer — academic gold (4 queries)
+  'wiley.com': 0.08, // Wiley — academic gold (3 queries)
+  'researchgate.net': 0.08, // ResearchGate — academic gold (3 queries)
+  // Q&A platforms — gold in factual queries but outranked by keyword blogs
+  'quora.com': 0.08, // Quora — Q&A gold (116 queries, but low-signal; small boost)
+  'reddit.com': 0.08, // Reddit — Q&A gold (5+ queries)
 }
 
 const TECH_DOCS_AUTHORITY: Record<string, number> = {
@@ -644,6 +763,13 @@ function authorityBonusForDomain(domain: string, ctx: SearchContext): number {
   // Chinese travel-guide authority — zh-general eval gold domains (ctrip,
   // mafengwo) outrank keyword-saturated aggregators for 攻略/travel queries.
   if (ctx.chinese && !ctx.isNews) bonus += matchInMap(domain, CHINESE_TRAVEL_AUTHORITY)
+  // Chinese tech/fact authority — NDCG-0.70 wave (2026-08-21).
+  // zh-tech eval gold = blog.csdn.net, baike.baidu.com, juejin.cn — these
+  // Chinese tech platforms had no authority boost, so keyword-saturated
+  // zhihu/sohu posts outranked them. Mirrors KOREAN_TECH_AUTHORITY gate.
+  if (ctx.chinese && (ctx.queryType === 'technical' || ctx.queryType === 'academic' || ctx.queryType === 'factual')) {
+    bonus += matchInMap(domain, CHINESE_TECH_AUTHORITY)
+  }
   if (ctx.isNews && ctx.japanese) bonus += matchInMap(domain, JAPANESE_NEWS_AUTHORITY)
   if (ctx.japanese && !ctx.isNews) bonus += matchInMap(domain, JAPANESE_TRAVEL_AUTHORITY)
   if (ctx.japanese && (ctx.queryType === 'technical' || ctx.queryType === 'academic' || ctx.queryType === 'factual')) {

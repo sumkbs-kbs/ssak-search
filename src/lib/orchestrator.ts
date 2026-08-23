@@ -44,7 +44,7 @@ import { extractContent } from './extractor'
 import { generateAnswer, attachFactCheckToAnswer } from './answer'
 import { buildKnowledgePanel, matchImagesToResults } from './knowledge-panel'
 import { hybridSearch } from './retrieval'
-import { generateRelatedQueries, truncateToTokens, countryToBingMkt, countryToLanguageTag } from './util'
+import { generateRelatedQueries, truncateToTokens, countryToBingMkt, countryToLanguageTag, filterMirrorResults } from './util'
 import { type AgenticSearchOptions, executeAgenticSearch } from './agentic'
 import { recordAgenticPipeline, getAgenticMetrics, recordCpuBudgetActivation } from './metrics'
 import { maybeAlertHighRegenerationRate } from './slack-alert'
@@ -53,15 +53,13 @@ import { semanticCacheLookup, semanticCacheStore } from './semantic-cache'
 // Phase 2: decomposed search modules
 import type { SearchContext, BackendTask } from './search/context'
 import { buildBackendTasks } from './search/strategies'
-import { fanoutBackends } from './search/fanout'
 import { TieredFanout } from './search/tiered-fanout'
-import { TierManager } from './search/backend-tiers'
-import { CircuitBreaker, type CircuitState } from './resilience/circuit-breaker'
+import type { CircuitBreaker } from './resilience/circuit-breaker'
 import { getCircuitBreaker } from './resilience/circuit-breaker-registry'
 import { mergeAndDeduplicate, normalizeUrlForDedup, normalizeTitleForDedup } from './search/dedup'
 import { emergencyFallback } from './search/fallback'
 import { applyRankingPipeline, capSourceResults } from './search/ranking'
-import { createCpuBudget, isFreePlan, type CpuBudget } from './resilience/cpu-budget'
+import { createCpuBudget, isFreePlan } from './resilience/cpu-budget'
 
 // ============================================================
 // Phase 2.4: Isolate-level in-memory result cache
@@ -357,18 +355,18 @@ interface MirrorResult {
  */
 async function runWikipediaMirrorChain(query: string, language: string, env: Env | undefined): Promise<MirrorResult> {
   if (language === 'en') {
-    const results = await dbpediaSearch(query, { maxResults: 5, timeoutMs: 5000, language: 'en', env })
+    const results = await dbpediaSearch(query, { maxResults: 5, timeoutMs: 3000, language: 'en', env })
     return { results, backend: 'dbpedia' }
   }
   const results = await wikidataWikiSearch(query, {
     maxResults: 5,
-    timeoutMs: 5000,
+    timeoutMs: 3000,
     language,
     env,
   })
   if (results.length > 0) return { results, backend: 'wikidata' }
   if (language === 'ja') {
-    const langResults = await dbpediaLangSearch(query, { maxResults: 5, timeoutMs: 5000, language: 'ja', env })
+    const langResults = await dbpediaLangSearch(query, { maxResults: 5, timeoutMs: 3000, language: 'ja', env })
     if (langResults.length > 0) return { results: langResults, backend: 'dbpedia-lang' }
   }
   return { results, backend: 'wikidata' }
@@ -614,6 +612,46 @@ export async function executeSearch(request: SearchRequest, config: Orchestrator
       breakerMap[name] = getCircuitBreaker(`${name}-fanout`, { failureThreshold: 3, resetTimeoutMs: 20_000 })
     }
 
+    // Restore the waitFor protections documented above (S75/P24/S16/arxiv/
+    // yahoo-finance) that never actually execute: TieredFanout's minResults
+    // early-exit drops tier2/3 gold-domain backends whenever bing/self-index
+    // fill the page first. Names absent from the task plan are no-ops.
+    const taskNames = new Set(tasks.map(t => t.name))
+    const wantedProtected: string[] = []
+    switch (ctx.queryType) {
+      case 'technical':
+        wantedProtected.push('github', 'github-issues')
+        if (ctx.japanese) wantedProtected.push('qiita')
+        if (ctx.chinese) wantedProtected.push('juejin')
+        break
+      case 'academic':
+        // PROTECTED (2026-08-23 late paired experiment): toggling ONLY this
+        // case within one time window gave NDCG@10 0.498 / MRR 1.0 (ON) vs
+        // 0.126–0.141 / ~0.30 (OFF) — arxiv+openalex are the primary gold
+        // suppliers for academic queries today. The interim revert rested on
+        // EVAL-1 baseline deltas later shown to be confounded by stale
+        // comparisons and 429 windows (see 08_CHANGELOG.md). Re-evaluate only
+        // with fresh paired data, never against stored baselines alone.
+        wantedProtected.push('arxiv', 'openalex')
+        break
+      case 'news':
+        if (ctx.korean) {
+          wantedProtected.push('naver-news')
+        } else {
+          wantedProtected.push('bing-news-rss', 'google-news-rss', 'reddit', 'ddg-site-reddit')
+        }
+        break
+      case 'financial':
+        wantedProtected.push('yahoo-finance')
+        break
+      default:
+        // P24: reddit.com is gold in 15/16 English general queries
+        if (!ctx.korean && !ctx.chinese && !ctx.japanese) {
+          wantedProtected.push('reddit', 'ddg-site-reddit')
+        }
+    }
+    const protectedBackends = wantedProtected.filter(name => taskNames.has(name))
+
     // Use tiered fanout for progressive result collection
     const tieredFanout = new TieredFanout()
     const tieredResult = await tieredFanout.execute(tasks, {
@@ -622,6 +660,7 @@ export async function executeSearch(request: SearchRequest, config: Orchestrator
       maxResults: max_results * 2,
       breakerMap,
       freePlan: lightweightMode,
+      protectedBackends,
     })
 
     // Convert tiered result to legacy format for compatibility
@@ -659,7 +698,7 @@ export async function executeSearch(request: SearchRequest, config: Orchestrator
     // wikipedia is missing (a healthy wikipedia run adds ZERO latency).
     if (ctx.sources.useWikipedia && !usedBackends.includes('wikipedia')) {
       try {
-        // timeoutMs 5000 (not 8000): this runs after the fanout already
+        // timeoutMs 3000 (reduced from 5000): this runs after the fanout already
         // waited up to 4500ms for wikipedia, so an 8s budget would add a
         // worst-case +8s tail to exactly the slowest (429'd) queries. Live
         // mirror latency is ~1.4s; 5s bounds the added p95 tail (review S35).
@@ -683,14 +722,26 @@ export async function executeSearch(request: SearchRequest, config: Orchestrator
         } else {
           mirror = await runWikipediaMirrorChain(query, effectiveWikiLang, env)
         }
-        if (mirror.results.length > 0) {
-          resultSets.push(mirror.results)
+        // MIRROR_RELEVANCE_GATE=0 disables the FINDING-1 relevance gate —
+        // field rollback switch after academic-tag NDCG dipped post-rollout
+        // (single-run 0.1262 vs prior median 0.2986; causality unproven,
+        // confounded by live-API state — see docs/assessment/08_CHANGELOG.md).
+        const gateEnabled = env?.MIRROR_RELEVANCE_GATE !== '0'
+        const relevantMirror =
+          mirror.results.length > 0
+            ? gateEnabled
+              ? filterMirrorResults(query, mirror.results)
+              : mirror.results
+            : []
+        if (relevantMirror.length > 0) {
+          resultSets.push(relevantMirror)
           usedBackends.push(mirror.backend)
           log.warn('[Orchestrator] Wikipedia mirror fallback recovered wikipedia gold (wikipedia backend missing):', {
             query,
             language: effectiveWikiLang,
             backend: mirror.backend,
-            count: mirror.results.length,
+            count: relevantMirror.length,
+            droppedByRelevanceGate: gateEnabled ? mirror.results.length - relevantMirror.length : 0,
             parallel,
           })
         }

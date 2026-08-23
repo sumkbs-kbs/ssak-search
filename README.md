@@ -10,21 +10,19 @@
 
 ## 검색 품질 테스트 결과 (자동 측정)
 
-> 주간 eval 하네스가 자동 생성한 정량 메트릭 (2026-08-09T11:32:46.041Z). 수동 수정 금지 — 
+> 주간 eval 하네스가 자동 생성한 정량 메트릭 (2026-08-23T02:57:55.415Z). 수동 수정 금지 — 
 > `npm run eval -- --cache --json` 실행 시 `scripts/update-readme-eval.ts`가 이 섹션을 갱신합니다.
 
 | 메트릭 | 값 |
 |--------|-----|
-| **Pass Rate** | 82.4% (412/500) |
-| **평균 결과 수** | 9.9건 |
-| **p50 / p95 / p99 지연시간** | 5913ms / 10046ms / 10100ms |
-| **평균 응답 시간** | 6792ms |
-| **Avg QPS** | 0.09 |
-| **NDCG@10** | 0.2839 (gold 500개) |
-| **MRR@10** | 0.5179 |
-| **Precision@10** | 0.3140 |
-| **Cache Hit Rate** | 100.0% (500/500) (skipped 0) |
-| **Cache avg cold→warm** | 10027ms → 0ms |
+| **Pass Rate** | 100.0% (921/921) |
+| **평균 결과 수** | 9.7건 |
+| **p50 / p95 / p99 지연시간** | 1599ms / 4423ms / 5489ms |
+| **평균 응답 시간** | 1891ms |
+| **Avg QPS** | 0.24 |
+| **NDCG@10** | 0.3567 (gold 921개) |
+| **MRR@10** | 0.7149 |
+| **Precision@10** | 0.4752 |
 
 ## 아키텍처
 
@@ -439,7 +437,12 @@ src/
 # 빌드
 npm run build
 
-# 개발 서버 (PM2)
+# 개발 서버 (권장 — DO 워커 자동 기동 포함)
+npm run start:local
+
+# 개발 서버 (PM2) — 주의: Durable Object가 별도 워커(ssak-do-worker)로 분리되어 있어
+# PM2 단독 실행 시 /api/* 가 500을 반환합니다. 먼저 다음을 실행하세요:
+#   npx wrangler dev -c wrangler.do.jsonc --port 8787
 pm2 start ecosystem.config.cjs
 
 # 헬스 체크
@@ -551,8 +554,14 @@ npm install
 npm run typecheck           # 0 에러 게이트
 npm test                   # 단위 테스트
 npm run build              # dist/_worker.js 산출
-npm run preview            # wrangler pages dev (http://localhost:8788)
+npm run start:local        # 빌드 + DO 워커(8787) + pages dev(8788) 자동 기동
+# npm run preview          # (참고) DO 워커 없이 단독 실행 — /api/* 500 발생
 ```
+
+> **왜 두 프로세스인가**: Cloudflare Pages는 Durable Object 클래스를 직접 소유할 수
+> 없어(공식 제약) 15개 DO가 별도 Workers 배포(`wrangler.do.jsonc`)에 있고 Pages는
+> `script_name: ssak-do-worker`로 참조합니다. 로컬에서도 동일하게 DO 워커가 dev
+> registry에 등록되어야 하며, `start-local.sh`가 이를 자동화합니다.
 
 ### 5. SLA / 한계
 

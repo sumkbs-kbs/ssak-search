@@ -137,7 +137,7 @@ interface PassRow {
 }
 
 /** 한 패스(전체 쿼리 1회 순회)를 측정한다. */
-async function runPass(passIndex: number): Promise<{ rows: PassRow[]; failed: Array<{ id: string; reason: string }> }> {
+async function runPass(_passIndex: number): Promise<{ rows: PassRow[]; failed: Array<{ id: string; reason: string }> }> {
   const rows: PassRow[] = []
   const failed: Array<{ id: string; reason: string }> = []
   for (let i = 0; i < newsQueries.length; i++) {

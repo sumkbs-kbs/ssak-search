@@ -24,7 +24,8 @@ async function main(): Promise<void> {
   console.log(`=== DDG site:reddit 라이브 (발화 ${firing.length}쿼리) ===`)
   let recovered = 0
   for (const id of firing) {
-    const q = byId.get(id)!
+    const q = byId.get(id)
+    if (!q) continue
     const t0 = Date.now()
     try {
       const res = await duckDuckGoSearch(`site:reddit.com ${q.query}`, { maxResults: 5, timeoutMs: 6000 })

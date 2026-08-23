@@ -36,14 +36,14 @@ async function main(): Promise<void> {
   for (const q of QUERIES) {
     for (const r of REGIONS) {
       const res = await bingSearch(q.query, { maxResults: 10, region: r.region })
-      let gold = 0
+      let _gold = 0
       let inTop10 = 0
       const doms = new Map<string, number>()
       for (let i = 0; i < res.length; i++) {
         const d = (res[i].domain || extractDomain(res[i].url)).replace(/^www\./, '')
         doms.set(d, (doms.get(d) ?? 0) + 1)
         if (q.gold.some((g) => d === g || d.endsWith('.' + g))) {
-          gold++
+          _gold++
           if (i < 10) inTop10++
         }
       }

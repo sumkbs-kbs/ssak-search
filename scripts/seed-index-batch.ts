@@ -11,8 +11,6 @@
  *   npx tsx scripts/seed-index-batch.ts --api-url=https://search-engine-api.pages.dev --dry-run
  */
 
-import * as fs from 'fs'
-import * as path from 'path'
 
 // ============================================================
 // Seed URLs by Category
@@ -336,3 +334,6 @@ function parseArgs(): SeedOptions {
 // Run
 const options = parseArgs()
 seedUrls(options).catch(console.error)
+
+// Restores module scope (fs/path imports removed for lint)
+export {}

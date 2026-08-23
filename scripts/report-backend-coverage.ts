@@ -70,8 +70,12 @@ let zeroGoldRuns = 0
 let totalRuns = 0
 
 function bump(name: string, fn: (s: BackendStat) => void) {
-  if (!stats.has(name)) stats.set(name, { used: 0, goldHit: 0, goldMissUsed: 0, goldMissAbsent: 0, expected: 0 })
-  fn(stats.get(name)!)
+  let entry = stats.get(name)
+  if (!entry) {
+    entry = { used: 0, goldHit: 0, goldMissUsed: 0, goldMissAbsent: 0, expected: 0 }
+    stats.set(name, entry)
+  }
+  fn(entry)
 }
 
 for (const rep of reps) {

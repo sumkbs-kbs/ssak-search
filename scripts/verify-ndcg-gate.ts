@@ -6,7 +6,7 @@
  * threshold. Exit 0 = PASS, exit 1 = FAIL.
  *
  * Usage:
- *   npx tsx scripts/verify-ndcg-gate.ts                    # uses default threshold 0.60
+ *   npx tsx scripts/verify-ndcg-gate.ts                    # uses default threshold 0.65
  *   npx tsx scripts/verify-ndcg-gate.ts --threshold 0.70   # target threshold
  *   npx tsx scripts/verify-ndcg-gate.ts --report path.json  # custom report path
  *
@@ -19,7 +19,7 @@
 import * as fs from 'node:fs'
 import * as path from 'node:path'
 
-const DEFAULT_THRESHOLD = 0.60
+const DEFAULT_THRESHOLD = 0.65
 const DEFAULT_REPORT = path.join(process.cwd(), 'eval', 'results', 'latest.json')
 
 function parseArgs() {

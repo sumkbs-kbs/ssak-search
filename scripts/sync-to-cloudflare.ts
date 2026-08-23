@@ -158,7 +158,7 @@ async function syncToCloudflare(args: SyncArgs) {
         console.log(`❌ HTTP ${response.status}`)
         failCount += batch.length
       }
-    } catch (err) {
+    } catch (_err) {
       console.log(`❌ 에러`)
       failCount += batch.length
     }

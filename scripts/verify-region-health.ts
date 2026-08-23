@@ -17,8 +17,6 @@
  *   HEALTH_URLS  — comma-separated health endpoint URLs (default: http://localhost:8787/api/health)
  */
 
-import * as fs from 'node:fs'
-import * as path from 'node:path'
 
 interface RegionConfig {
   id: string
@@ -197,3 +195,6 @@ async function main() {
 }
 
 main()
+
+// Restores module scope (fs/path imports removed for lint)
+export {}

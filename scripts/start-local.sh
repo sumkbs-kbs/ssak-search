@@ -166,6 +166,33 @@ if [ ! -d "node_modules" ]; then
   ok "의존성 설치 완료"
 fi
 
+# ── Step 4.5: DO 워커 기동 ──
+# Pages 워커가 Durable Object를 script_name: ssak-do-worker 로 참조하므로
+# 로컬에서도 DO 워커가 dev registry에 등록되어 있어야 /api/* 가 500 없이 동작한다.
+DO_WORKER_PID=""
+if lsof -i :8787 -sTCP:LISTEN &>/dev/null; then
+  ok "DO 워커가 이미 8787 포트에서 실행 중"
+else
+  if [ ! -f "wrangler.do.jsonc" ]; then
+    warn "wrangler.do.jsonc 없음 — DO 바인딩이 필요한 엔드포인트(/api/health 등)에서 500 발생 가능"
+  else
+    info "DO 워커(ssak-do-worker) 시작 중... (포트 8787)"
+    nohup npx wrangler dev -c wrangler.do.jsonc --port 8787 >/tmp/ssak-do-worker.log 2>&1 &
+    DO_WORKER_PID=$!
+    for _ in $(seq 1 20); do
+      if lsof -i :8787 -sTCP:LISTEN &>/dev/null; then
+        ok "DO 워커 시작 완료 (PID: $DO_WORKER_PID, 로그: /tmp/ssak-do-worker.log)"
+        break
+      fi
+      sleep 1
+    done
+    if [ -n "$DO_WORKER_PID" ] && ! lsof -i :8787 -sTCP:LISTEN &>/dev/null; then
+      warn "DO 워커 시작 확인 실패 — 로그 확인: /tmp/ssak-do-worker.log"
+    fi
+    echo ""
+  fi
+fi
+
 # ── Step 5: 서버 시작 ──
 if [ "$DEV_MODE" = true ]; then
   info "Vite Dev Server 시작 (HMR 지원)..."
@@ -200,6 +227,10 @@ else
   cleanup() {
     echo ""
     info "서버 종료 중..."
+    if [ -n "${DO_WORKER_PID:-}" ]; then
+      info "DO 워커 종료 중... (PID: $DO_WORKER_PID)"
+      kill "$DO_WORKER_PID" 2>/dev/null || true
+    fi
     if [ -n "${OLLAMA_PID:-}" ]; then
       info "Ollama 서버 종료 중... (PID: $OLLAMA_PID)"
       kill "$OLLAMA_PID" 2>/dev/null || true

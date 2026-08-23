@@ -551,6 +551,78 @@ export const EVAL_QUERIES: EvalQuery[] = [
   },
 
   // ════════════════════════════════════════════════════════════════
+  // KOREAN CONVERSATIONAL QUERIES (8) — Phase E.5
+  // 구어체 변형: 조사 부착 / 요청 어미 / 필러 / 동의어 / 교차언어 트리거.
+  // 골드는 대응하는 격식 쿼리(kr-stock-01 등)와 동일 정보 니즈를 공유 —
+  // 표현만 다르므로 관련 도메인 집합이 같다. 스테머·동의어 회귀 감지용.
+  // ════════════════════════════════════════════════════════════════
+  {
+    id: 'kr-conv-01',
+    query: '삼성전자의 주가를 알려줘',
+    topic: 'finance',
+    minResults: 0,
+    maxTimeMs: 10_000,
+    requiredBackends: ['naver'],
+    tags: ['korean', 'conversational'],
+  },
+  {
+    id: 'kr-conv-02',
+    query: '카카오 실적 발표 자료 좀 보여줘',
+    topic: 'finance',
+    minResults: 0,
+    maxTimeMs: 10_000,
+    tags: ['korean', 'conversational'],
+  },
+  {
+    id: 'kr-conv-03',
+    query: '코스피가 오늘 왜 이래?',
+    topic: 'finance',
+    minResults: 0,
+    maxTimeMs: 10_000,
+    tags: ['korean', 'conversational'],
+  },
+  {
+    id: 'kr-conv-04',
+    query: '김치 담그는 법 자세히 알려줘',
+    topic: 'general',
+    minResults: 0,
+    maxTimeMs: 10_000,
+    tags: ['korean', 'conversational'],
+  },
+  {
+    id: 'kr-conv-05',
+    query: '국제유가가 하락한 이유 뭐야?',
+    topic: 'finance',
+    minResults: 0,
+    maxTimeMs: 10_000,
+    tags: ['korean', 'conversational'],
+  },
+  {
+    id: 'kr-conv-06',
+    query: '비트코인 지금 얼마야 알려줘',
+    topic: 'finance',
+    minResults: 0,
+    maxTimeMs: 10_000,
+    tags: ['korean', 'conversational'],
+  },
+  {
+    id: 'kr-conv-07',
+    query: '서울에서는 아파트 청약 어떻게 해?',
+    topic: 'general',
+    minResults: 0,
+    maxTimeMs: 10_000,
+    tags: ['korean', 'conversational'],
+  },
+  {
+    id: 'kr-conv-08',
+    query: '리액트 훅 사용법 설명해줘',
+    topic: 'general',
+    minResults: 0,
+    maxTimeMs: 10_000,
+    tags: ['korean', 'conversational'],
+  },
+
+  // ════════════════════════════════════════════════════════════════
   // CHINESE QUERIES (12)
   // ════════════════════════════════════════════════════════════════
   {

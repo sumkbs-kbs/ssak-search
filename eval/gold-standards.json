@@ -9312,5 +9312,80 @@
       "en.wikipedia.org",
       "stackoverflow.com"
     ]
+  },
+  "kr-conv-01": {
+    "relevantDomains": [
+      "finance.naver.com",
+      "investing.com",
+      "samsung.com",
+      "m.stock.naver.com"
+    ]
+  },
+  "kr-conv-02": {
+    "relevantDomains": [
+      "finance.naver.com",
+      "kakao.com",
+      "investing.com",
+      "m.stock.naver.com"
+    ]
+  },
+  "kr-conv-03": {
+    "relevantDomains": [
+      "finance.naver.com",
+      "investing.com",
+      "m.stock.naver.com",
+      "kr.investing.com"
+    ]
+  },
+  "kr-conv-04": {
+    "relevantDomains": [
+      "maangchi.com",
+      "10000recipe.com",
+      "koreanbapsang.com",
+      "m.blog.naver.com"
+    ]
+  },
+  "kr-conv-05": {
+    "relevantDomains": [
+      "chosun.com",
+      "finance.naver.com",
+      "hankyung.com",
+      "info.fx.co.kr",
+      "investing.com",
+      "kbs.co.kr",
+      "m.stock.naver.com",
+      "mk.co.kr",
+      "mt.co.kr",
+      "sbs.co.kr",
+      "yna.co.kr",
+      "ytn.co.kr"
+    ]
+  },
+  "kr-conv-06": {
+    "relevantDomains": [
+      "bithumb.com",
+      "coinmarketcap.com",
+      "finance.naver.com",
+      "m.blog.naver.com",
+      "m.stock.naver.com",
+      "namu.wiki",
+      "upbit.com"
+    ]
+  },
+  "kr-conv-07": {
+    "relevantDomains": [
+      "applyhome.co.kr",
+      "kbland.kr",
+      "m.blog.naver.com",
+      "n.news.naver.com"
+    ]
+  },
+  "kr-conv-08": {
+    "relevantDomains": [
+      "react.dev",
+      "ko.reactjs.org",
+      "legacy.reactjs.org",
+      "m.blog.naver.com"
+    ]
   }
 }

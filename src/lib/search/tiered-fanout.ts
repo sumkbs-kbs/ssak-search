@@ -14,9 +14,10 @@
 
 import type { SearchResult } from '../../types'
 import type { BackendTask } from './context'
-import { BACKEND_TIERS, type BackendTier, TierManager } from './backend-tiers'
-import { CircuitBreaker } from '../resilience/circuit-breaker'
+import { BACKEND_TIERS, TierManager } from './backend-tiers'
+import type { CircuitBreaker } from '../resilience/circuit-breaker'
 import { logger } from '../logger'
+import { backendTimeoutMs } from './fanout'
 
 // ============================================================
 // Types
@@ -33,6 +34,14 @@ export interface TieredFanoutOptions {
   breakerMap?: Record<string, CircuitBreaker>
   /** Free plan mode */
   freePlan?: boolean
+  /**
+   * Gold-domain backends that must run even after minResults is met.
+   * Without this, the minResults early-exit drops tier2/3 backends (github,
+   * reddit, arxiv…) whenever bing/self-index fill the page first — the exact
+   * regression S75/P24/S16 waitFor originally guarded against in fanout.ts.
+   * Names absent from the task plan are no-ops.
+   */
+  protectedBackends?: string[]
 }
 
 export interface TieredFanoutResult {
@@ -92,17 +101,34 @@ export class TieredFanout {
     const allResults: SearchResult[] = []
     const usedBackends: string[] = []
     let tierUsed = 'none'
+    const protectedSet = new Set(options.protectedBackends ?? [])
+    let minMet = false
+
+    const anyPendingProtected = () => {
+      if (protectedSet.size === 0) return false
+      for (const state of this.taskState.values()) {
+        if (!state.resolved && !state.rejected && protectedSet.has(state.task.name)) return true
+      }
+      return false
+    }
 
     for (const tier of BACKEND_TIERS) {
       // Skip tiers with higher latency than target
-      if (tier.latencyMs > targetLatencyMs && allResults.length >= minResults) {
+      if (
+        tier.latencyMs > targetLatencyMs &&
+        allResults.length >= minResults &&
+        !anyPendingProtected()
+      ) {
         break
       }
 
       // Get tasks for this tier
       const tierTasks = tasks.filter(t => {
         const taskTier = this.tierManager.getTier(t.name)
-        return taskTier?.id === tier.id
+        if (taskTier?.id !== tier.id) return false
+        // Past minResults only protected gold-domain backends still run
+        if (minMet && !protectedSet.has(t.name)) return false
+        return true
       })
 
       if (tierTasks.length === 0) continue
@@ -132,11 +158,19 @@ export class TieredFanout {
 
       // Check if we have enough results
       if (allResults.length >= minResults) {
-        logger.debug('[TieredFanout] Min results reached', {
-          tier: tier.id,
-          count: allResults.length,
-        })
-        break
+        minMet = true
+        if (anyPendingProtected()) {
+          logger.debug('[TieredFanout] Min results reached — draining protected backends', {
+            tier: tier.id,
+            count: allResults.length,
+          })
+        } else {
+          logger.debug('[TieredFanout] Min results reached', {
+            tier: tier.id,
+            count: allResults.length,
+          })
+          break
+        }
       }
     }
 
@@ -201,11 +235,16 @@ export class TieredFanout {
       return { backend: task.name, results: [], rejected: true }
     }
 
+    // Use the larger of tier timeout and backend timeout
+    // This ensures backends with higher timeouts (e.g., CSDN/Juejin at 4000ms)
+    // are not prematurely killed by the tier's latency target
+    const effectiveTimeout = Math.max(timeoutMs, backendTimeoutMs(task.name, 0))
+
     try {
       const results = await Promise.race([
         task.run(),
         new Promise<never>((_, reject) =>
-          setTimeout(() => reject(new Error('Timeout')), timeoutMs)
+          setTimeout(() => reject(new Error('Timeout')), effectiveTimeout)
         ),
       ])
 

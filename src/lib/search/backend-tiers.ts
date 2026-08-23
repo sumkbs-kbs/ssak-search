@@ -47,10 +47,10 @@ export const BACKEND_TIERS: BackendTier[] = [
   {
     id: 'tier2',
     name: 'Secondary',
-    latencyMs: 1000,
+    latencyMs: 2000,
     reliability: 0.95,
     priority: 2,
-    backends: ['wikipedia', 'github', 'hackernews'],
+    backends: ['wikipedia', 'github', 'github-issues', 'hackernews', 'csdn', 'juejin', 'qiita', 'baidu', 'yahoo-finance'],
   },
   {
     id: 'tier3',
@@ -58,7 +58,7 @@ export const BACKEND_TIERS: BackendTier[] = [
     latencyMs: 2000,
     reliability: 0.90,
     priority: 3,
-    backends: ['reddit', 'arxiv', 'stackoverflow', 'duckduckgo', 'bing-news-rss', 'google-news-rss', 'bing-news'],
+    backends: ['reddit', 'arxiv', 'openalex', 'stackoverflow', 'duckduckgo', 'bing-news-rss', 'google-news-rss', 'bing-news', 'ddg-site-reddit'],
   },
 ]
 

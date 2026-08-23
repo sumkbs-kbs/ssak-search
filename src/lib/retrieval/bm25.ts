@@ -16,6 +16,8 @@
  * Standard parameters: k1 = 1.5, b = 0.75
  */
 
+import { normalizeKoreanQuery } from '../korean/stemmer'
+
 // ============================================================
 // Types
 // ============================================================
@@ -240,15 +242,28 @@ function extractCJKBigrams(text: string): string[] {
  * Tokenize text into terms for BM25 scoring.
  * For CJK text, extracts character bigrams.
  * For non-CJK text, splits on whitespace and filters stop words.
+ *
+ * Korean queries are stemmed FIRST (조사/요청어미 stripping via the korean
+ * stemmer) so bare stems feed both the bigram extractor and the term filter:
+ * "삼성전자의 주가를" → stems [삼성전자, 주가] → bigrams without particle
+ * fragments (자의/가를) and clean full-noun tokens that substring-match
+ * inflected document forms. tokenize() is QUERY-side only (bm25Score /
+ * hybridScore callers pass the query); documents are never re-tokenized.
  */
 export function tokenize(text: string): string[] {
   if (!text || text.length === 0) return []
 
   if (hasCJK(text)) {
+    // Korean-aware pre-pass: stem particles/request endings, drop fillers.
+    // Falls through to raw text when stemming yields nothing (e.g. pure
+    // Chinese input, where stripping is a no-op anyway).
+    const { stems } = normalizeKoreanQuery(text)
+    const source = stems.length > 0 ? stems.join(' ') : text
+
     // CJK text: extract bigrams + split on whitespace for mixed content
-    const bigrams = extractCJKBigrams(text)
+    const bigrams = extractCJKBigrams(source)
     // Also split into words for mixed CJK-Latin text
-    const latinTerms = text
+    const latinTerms = source
       .toLowerCase()
       .split(/[\s,.;:!?()[\]{}【】「」『』]+/)
       .map((t) => t.replace(/[^\w&+#\u{4E00}-\u{9FFF}\u{AC00}-\u{D7A3}]+/gu, ''))

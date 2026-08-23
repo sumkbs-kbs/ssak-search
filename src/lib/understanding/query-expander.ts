@@ -127,6 +127,41 @@ const CJK_EXPANSIONS: Record<string, string[]> = {
   最適化: ['optimization', 'optimize', 'performance'],
   セキュリティ: ['security'],
   株価: ['stock price'],
+
+  // Korean — culture/finance/general ko→en (Phase 2.3). Gold pages for these
+  // queries are frequently English (kimchi recipes, KOSPI index coverage).
+  김치: ['kimchi', 'korean food'],
+  코스피: ['kospi'],
+  코스닥: ['kosdaq'],
+  대학교: ['university', 'college'],
+  병원: ['hospital'],
+}
+
+/**
+ * Intra-Korean synonym variants — same concept, different Korean surface
+ * forms. Unlike CJK_EXPANSIONS (cross-language), these expand a Korean term
+ * to its Korean variants so documents using the other variant still match
+ * the `expansionMatchBoost` signal in ranking.ts.
+ *
+ * Same precision bar as the tables above: multi-syllable unambiguous keys
+ * only, no self-referential entries, bidirectional clusters written out
+ * explicitly (the includes() containment match is directional).
+ */
+const KOREAN_SYNONYMS: Record<string, string[]> = {
+  핸드폰: ['휴대폰', '스마트폰'],
+  휴대폰: ['핸드폰', '스마트폰'],
+  스마트폰: ['휴대폰', '핸드폰'],
+  비밀번호: ['패스워드'],
+  패스워드: ['비밀번호'],
+  이메일: ['전자우편'],
+  전자우편: ['이메일'],
+  월급: ['급여', '연봉'],
+  연봉: ['급여', '월급'],
+  급여: ['월급', '연봉'],
+  자동차: ['차량', '승용차'],
+  차량: ['자동차', '승용차'],
+  아파트: ['주택', '부동산'],
+  부동산: ['아파트', '주택'],
 }
 
 /** Abbreviation / short token → full-name expansion terms. */
@@ -215,6 +250,14 @@ export function expandQuery(query: string): string[] {
   // equivalents. Exact-ish containment; CJK substrings are distinctive enough.
   for (const [cjk, expansions] of Object.entries(CJK_EXPANSIONS)) {
     if (lower.includes(cjk)) {
+      for (const t of expansions) terms.add(t)
+    }
+  }
+
+  // Intra-Korean variants: same containment semantics as above — Korean keys
+  // are multi-syllable and distinctive enough for substring matching.
+  for (const [ko, expansions] of Object.entries(KOREAN_SYNONYMS)) {
+    if (lower.includes(ko)) {
       for (const t of expansions) terms.add(t)
     }
   }

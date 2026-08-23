@@ -5,6 +5,7 @@
 import type { Env, SearchResult } from '../types'
 
 import { logger, toError } from './logger'
+import { normalizeKoreanToken } from './korean/stemmer'
 
 // ============================================================
 // Subrequest budget — guards the Cloudflare 50-subrequest/request cap
@@ -490,10 +491,15 @@ export function computeScore(
   // (drops the &, and "S" alone is a stopword-sized fragment), "C++" → "c",
   // ".NET" → "net". We keep an ampersand and strip only leading/trailing
   // punctuation so "s&p", "c++", "c#" survive as matchable terms.
+  // Hangul terms additionally pass through the Korean stemmer (조사/요청어미
+  // stripping) so "삼성전자의" matches documents containing bare "삼성전자".
   const queryTerms = query
     .toLowerCase()
     .split(/\s+/)
-    .map((t) => t.replace(/[^\p{L}\p{N}&+#]/gu, ''))
+    .map((t) => {
+      const cleaned = t.replace(/[^\p{L}\p{N}&+#]/gu, '')
+      return normalizeKoreanToken(cleaned).toLowerCase()
+    })
     .filter((t) => t.length > 1)
 
   const titleLower = title.toLowerCase()

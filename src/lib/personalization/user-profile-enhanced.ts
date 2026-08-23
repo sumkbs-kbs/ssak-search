@@ -15,7 +15,7 @@
  */
 
 import { logger, toError } from '../logger'
-import type { Env, SearchRequest, SearchResult } from '../../types'
+import type { Env, SearchResult } from '../../types'
 
 // ============================================================
 // Enhanced Types
@@ -118,7 +118,7 @@ const TOPIC_KEYWORDS: Record<string, string[]> = {
   education: ['learn', 'course', 'tutorial', 'university', 'student', 'exam', 'degree', 'certificate'],
 }
 
-const CATEGORY_MAP: Record<string, string[]> = {
+const _CATEGORY_MAP: Record<string, string[]> = {
   'tech': ['github.com', 'stackoverflow.com', 'dev.to', 'medium.com', 'hackernews.com'],
   'news': ['cnn.com', 'bbc.com', 'reuters.com', 'nytimes.com', 'apnews.com'],
   'finance': ['finance.yahoo.com', 'bloomberg.com', 'investing.com', 'coinmarketcap.com'],
@@ -427,8 +427,8 @@ export class EnhancedProfileManager {
   private updateInterests(
     profile: EnhancedUserProfile,
     query: string,
-    results: SearchResult[],
-    clickedUrls: string[],
+    _results: SearchResult[],
+    _clickedUrls: string[],
   ): void {
     const topic = this.extractTopic(query)
     const now = Date.now()

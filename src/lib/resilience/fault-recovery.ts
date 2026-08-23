@@ -373,10 +373,12 @@ export class FaultRecoveryManager {
    * Get or create circuit breaker for a service.
    */
   getCircuitBreaker(service: string): CircuitBreaker {
-    if (!this.circuitBreakers.has(service)) {
-      this.circuitBreakers.set(service, new CircuitBreaker())
+    let breaker = this.circuitBreakers.get(service)
+    if (!breaker) {
+      breaker = new CircuitBreaker()
+      this.circuitBreakers.set(service, breaker)
     }
-    return this.circuitBreakers.get(service)!
+    return breaker
   }
 
   /**

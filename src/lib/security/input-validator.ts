@@ -76,6 +76,7 @@ const INJECTION_PATTERNS = [
 export function sanitizeInput(input: string): string {
   return input
     .trim()
+    // eslint-disable-next-line no-control-regex -- intentional: strip ASCII control characters
     .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '') // Remove control chars
     .normalize('NFC') // Normalize Unicode
 }

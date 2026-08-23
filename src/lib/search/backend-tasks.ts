@@ -28,7 +28,7 @@ import { searxngSearch } from '../searxng-search'
 import { yahooFinanceSearch } from '../yahoo-finance-search'
 import { searchKoreanStock } from '../stock-finance'
 import { stackExchangeSearch } from '../stack-exchange'
-import { qiitaSearch, juejinSearch, csdnSearch } from '../community-search'
+import { qiitaSearch, juejinSearch, csdnSearch, baiduSearch } from '../community-search'
 import { braveSearch, isBraveAvailable } from '../brave-search'
 import { youtubeSearch } from '../youtube-search'
 import { isChineseQuery, cleanChineseQuery } from '../orchestrator'
@@ -461,6 +461,18 @@ export function buildCsdnTask(ctx: SearchContext, maxResults = 5): BackendTask {
   return {
     name: 'csdn',
     run: () => csdnSearch(ctx.query, { maxResults, env: ctx.env }),
+  }
+}
+
+/**
+ * Baidu search — Chinese search engine for zh queries.
+ * Returns real Chinese content including baike.baidu.com (zh-fact gold).
+ * Handles CAPTCHA gracefully (returns empty on non-CN IPs).
+ */
+export function buildBaiduTask(ctx: SearchContext, maxResults = 5): BackendTask {
+  return {
+    name: 'baidu',
+    run: () => baiduSearch(ctx.query, { maxResults, env: ctx.env }),
   }
 }
 

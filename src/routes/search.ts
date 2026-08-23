@@ -161,7 +161,7 @@ searchRoute.use('/*', async (c, next) => {
 searchRoute.post('/', async (c) => {
   setMetricsEnv(c.env)
   // request-scoped child logger
-  const log = logger.child({
+  const _log = logger.child({
     requestId: getRequestId(c.req.raw.headers),
     traceId: extractTraceId(c.req.raw.headers),
   })
@@ -344,7 +344,7 @@ searchRoute.post('/', async (c) => {
 searchRoute.get('/', async (c) => {
   setMetricsEnv(c.env)
   // request-scoped child logger
-  const log = logger.child({
+  const _log = logger.child({
     requestId: getRequestId(c.req.raw.headers),
     traceId: extractTraceId(c.req.raw.headers),
   })
@@ -529,7 +529,7 @@ searchRoute.get('/', async (c) => {
 searchRoute.get('/stream', async (c) => {
   setMetricsEnv(c.env)
   // request-scoped child logger
-  const log = logger.child({
+  const _log = logger.child({
     requestId: getRequestId(c.req.raw.headers),
     traceId: extractTraceId(c.req.raw.headers),
   })

@@ -39,11 +39,11 @@ import {
   buildZhTravelCommunityTask,
   buildKoreanStockTask,
   buildYahooFinanceTask,
-  buildBraveTask,
   buildStackExchangeTask,
   buildQiitaTask,
   buildJuejinTask,
   buildCsdnTask,
+  buildBaiduTask,
 } from '../backend-tasks'
 import { bingSearch } from '../../bing-search'
 import { duckDuckGoSearch } from '../../duckduckgo'
@@ -134,9 +134,10 @@ export class AllStrategy implements SearchStrategy {
       tasks.push(buildNewsHubTask(ctx))
     }
     
-    // Chinese query: CSDN 추가 (무료 플랜에서도 활성화)
+    // Chinese query: CSDN + Baidu 추가 (무료 플랜에서도 활성화)
     if (ctx.chinese) {
       tasks.push(buildCsdnTask(ctx, 3))
+      tasks.push(buildBaiduTask(ctx, 5))
       // S104: zh旅行·커뮤니티 gold site:-라우팅
       if (isZhTravelCommunityIntent(ctx.query)) {
         tasks.push(buildZhTravelCommunityTask(ctx))
@@ -190,6 +191,7 @@ export class AllStrategy implements SearchStrategy {
       if (ctx.queryType === 'technical' && ctx.chinese) {
         tasks.push(buildJuejinTask(ctx, 5))
         tasks.push(buildCsdnTask(ctx, 5))
+        tasks.push(buildBaiduTask(ctx, 5))
       }
     }
 

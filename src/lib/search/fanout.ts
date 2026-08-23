@@ -10,7 +10,7 @@
 
 import type { SearchResult } from '../../types'
 import type { BackendTask } from './context'
-import { CircuitBreaker, type CircuitState } from '../resilience/circuit-breaker'
+import type { CircuitBreaker } from '../resilience/circuit-breaker'
 import { logger } from '../logger'
 import { DEFAULT_BACKEND_TIMEOUT_MS } from '../util'
 
@@ -120,8 +120,9 @@ export const BACKEND_TIMEOUT_MS: Record<string, number> = {
   'news-hub': 4000,
   'stack-exchange': 4000,
   qiita: 4000,
-  juejin: 4000,
-  csdn: 4000,
+  juejin: 2000,
+  csdn: 2000,
+  baidu: 2000,
   'github-issues': 2000,
   // P24 (2026-08-14): DDG site:reddit.com community augmentation — same
   // round-trip as the main duckduckgo backend (~700ms–1.5s live); 2000ms keeps
@@ -282,7 +283,7 @@ export async function fanoutBackends(
     const task = tasks[idx]
     const state = taskState[idx]
 
-    const bgPromise = new Promise<void>(async (resolve) => {
+    const bgPromise = new Promise<void>((resolve) => {
       let settled = false
       const timer = setTimeout(() => {
         if (settled) return
@@ -306,25 +307,27 @@ export async function fanoutBackends(
         return
       }
 
-      try {
-        const value = await task.run()
-        if (!settled) {
-          breaker?.recordSuccess()
+      task
+        .run()
+        .then((value) => {
+          if (!settled) {
+            breaker?.recordSuccess()
+            settled = true
+            clearTimeout(timer)
+            state.value = value
+            state.resolved = true
+            resolve()
+          }
+        })
+        .catch(() => {
+          breaker?.recordFailure()
+          if (settled) return
           settled = true
           clearTimeout(timer)
-          state.value = value
           state.resolved = true
+          state.rejected = true
           resolve()
-        }
-      } catch (err) {
-        breaker?.recordFailure()
-        if (settled) return
-        settled = true
-        clearTimeout(timer)
-        state.resolved = true
-        state.rejected = true
-        resolve()
-      }
+        })
     })
 
     bgPromise.catch(() => {})

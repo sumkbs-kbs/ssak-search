@@ -23,7 +23,6 @@
 import type { SearchResult } from '../../types'
 import type { EmbeddingService } from '../index/embedding'
 import { bm25Score, tokenize as bm25Tokenize } from '../retrieval/bm25'
-import { expandQuery } from '../understanding/query-expander'
 
 // ============================================================
 // Configuration defaults (tunable knobs)
@@ -226,7 +225,7 @@ export async function hybridRank(
   const bm25RankIndex = bm25Scores
     .map((score, idx) => ({ score, idx }))
     .sort((a, b) => b.score - a.score)
-    .map((item, pos) => item.idx) // bm25RankIndex[original_idx] = position
+    .map((item, _pos) => item.idx) // bm25RankIndex[original_idx] = position
 
   const finalScores: number[] = new Array(candidates.length)
 

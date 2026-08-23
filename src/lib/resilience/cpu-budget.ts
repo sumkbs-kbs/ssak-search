@@ -51,7 +51,7 @@ export function createCpuBudget(
   startTime?: number,
 ): CpuBudget {
   const t0 = startTime ?? getCurrentTime()
-  let totalCpuTimeMs = 0
+  let _totalCpuTimeMs = 0
   let cpuBlockStart = 0
 
   return {
@@ -68,7 +68,7 @@ export function createCpuBudget(
     trackCpuTime: <T>(operation: () => T): T => {
       const blockStart = getCurrentTime()
       const result = operation()
-      totalCpuTimeMs += getCurrentTime() - blockStart
+      _totalCpuTimeMs += getCurrentTime() - blockStart
       return result
     },
     startCpuBlock: () => {
@@ -76,7 +76,7 @@ export function createCpuBudget(
     },
     endCpuBlock: () => {
       if (cpuBlockStart > 0) {
-        totalCpuTimeMs += getCurrentTime() - cpuBlockStart
+        _totalCpuTimeMs += getCurrentTime() - cpuBlockStart
         cpuBlockStart = 0
       }
     },

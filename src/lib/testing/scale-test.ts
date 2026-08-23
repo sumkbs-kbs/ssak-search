@@ -15,7 +15,7 @@
  * - Performance baseline comparison
  */
 
-import { logger, toError } from '../logger'
+import { logger } from '../logger'
 
 // ============================================================
 // Types

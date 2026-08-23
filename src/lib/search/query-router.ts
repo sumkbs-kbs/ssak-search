@@ -16,7 +16,6 @@
 
 import type { SearchContext } from './context'
 import type { BackendTask } from './context'
-import { detectQueryType, getSourcesForQueryType } from '../specialized'
 import { logger } from '../logger'
 
 // ============================================================
@@ -271,7 +270,7 @@ function detectTopic(query: string, words: string[]): QueryFeatures['topic'] {
     if (NEWS_KEYWORDS.has(word)) scores.news += 2
   }
   // News patterns
-  if (/\d{4}|\d{1,2}[\/\-]\d{1,2}|today|yesterday|this week|this month/.test(query)) {
+  if (/\d{4}|\d{1,2}[/-]\d{1,2}|today|yesterday|this week|this month/.test(query)) {
     scores.news += 2
   }
   // Korean news terms
@@ -444,7 +443,7 @@ function detectTimeSensitivity(query: string, topic: QueryFeatures['topic']): bo
   }
 
   // Date patterns
-  if (/\d{4}|\d{1,2}[\/\-]\d{1,2}/.test(query)) {
+  if (/\d{4}|\d{1,2}[/-]\d{1,2}/.test(query)) {
     return true
   }
 
@@ -765,7 +764,7 @@ export function buildRoutingTasks(
   return tasks
 }
 
-function createBackendTask(name: string, ctx: SearchContext): BackendTask | null {
+function createBackendTask(name: string, _ctx: SearchContext): BackendTask | null {
   // This is a placeholder — the full implementation would
   // import and wire up the actual backend functions
 

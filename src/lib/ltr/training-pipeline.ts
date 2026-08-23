@@ -11,7 +11,6 @@
  * from click data collected by ClickLogDO.
  */
 
-import { logger, toError } from '../logger'
 import type { Env } from '../../types'
 import { FEATURE_NAMES_V2, NUM_FEATURES } from './feature-store-v2'
 

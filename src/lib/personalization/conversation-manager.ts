@@ -13,8 +13,7 @@
  *   Turn 3: "What about performance?" → continues React vs Vue topic
  */
 
-import { logger, toError } from '../logger'
-import type { Env, SearchRequest, SearchResult } from '../../types'
+import type { Env, SearchResult } from '../../types'
 
 // ============================================================
 // Types
@@ -510,7 +509,7 @@ export class ConversationManager {
     }
 
     // Based on entities
-    for (const [entityName, entity] of context.entities) {
+    for (const [_entityName, entity] of context.entities) {
       if (entity.mention_count === 1) {
         followups.push(`Tell me more about ${entity.name}`)
       }

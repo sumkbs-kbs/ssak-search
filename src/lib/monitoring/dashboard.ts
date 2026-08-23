@@ -11,8 +11,6 @@
  * Exports metrics in Prometheus format for Grafana visualization.
  */
 
-import { logger, toError } from '../logger'
-import type { Env } from '../../types'
 
 // ============================================================
 // Types

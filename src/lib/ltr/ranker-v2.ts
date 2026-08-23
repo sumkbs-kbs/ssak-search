@@ -19,10 +19,8 @@ import type { SearchContext } from '../search/context'
 import { extractDomain } from '../util'
 import {
   FEATURE_NAMES_V2,
-  NUM_FEATURES,
   computeQueryFeaturesV2,
   computeResultFeaturesV2,
-  type QueryFeaturesV2,
   type UserDomainFeaturesV2,
 } from './feature-store-v2'
 
@@ -108,8 +106,9 @@ export async function applyLtrRankingV2(results: SearchResult[], ctx: SearchCont
   }
 
   // Apply scores with blending
+  const finalScores = scores
   return results.map((r, i) => {
-    const ltr = scores![i]
+    const ltr = finalScores[i]
     const base = Math.max(0, Math.min(1, r.score ?? 0))
     return { ...r, score: BLEND_WEIGHT * ltr + (1 - BLEND_WEIGHT) * base }
   })

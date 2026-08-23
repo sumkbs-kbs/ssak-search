@@ -13,8 +13,7 @@
  * - Redis for cross-isolate sharing (optional)
  */
 
-import { logger, toError } from '../logger'
-import type { Env, SearchRequest, SearchResult } from '../../types'
+import type { Env } from '../../types'
 
 // ============================================================
 // Types
@@ -407,7 +406,7 @@ export class SessionManager {
 
   private generateQuerySuggestions(session: SessionManager['sessions'] extends Map<string, infer V> ? V : never): string[] {
     const suggestions: string[] = []
-    const lastQueries = session.query_history.slice(-3).map(h => h.query)
+    const _lastQueries = session.query_history.slice(-3).map(h => h.query)
 
     // Generate follow-up queries based on intent
     if (session.current_intent === 'search') {

@@ -397,7 +397,7 @@ function heuristicRerank(query: string, documents: RerankDocument[], topK: numbe
     }
     
     // ── 6. 정확한 쿼리 매칭 ──
-    const exactMatch = content.includes(query.toLowerCase()) ? 0.1 : 0
+    const _exactMatch = content.includes(query.toLowerCase()) ? 0.1 : 0
     
     // ── 콘텐츠 품질 스코어 ──
     const contentQuality = computeContentQuality(content)

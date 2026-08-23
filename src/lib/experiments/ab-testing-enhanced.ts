@@ -10,8 +10,6 @@
  * - Guardrail metrics
  */
 
-import { logger, toError } from '../logger'
-import type { Env } from '../../types'
 
 // ============================================================
 // Types
@@ -288,7 +286,7 @@ export class StatisticalTests {
 
   private static logGamma(x: number): number {
     const c = [
-      76.18009172947146, -86.50532032941677,
+      76.18009172947146, -86.50532032941678,
       24.01409824083091, -1.231739572450155,
       0.1208650973866179e-2, -0.5395239384953e-5,
     ]
@@ -302,7 +300,7 @@ export class StatisticalTests {
       ser += c[j] / ++y
     }
 
-    return -tmp + Math.log(2.5066282746310005 * ser / x)
+    return -tmp + Math.log(2.5066282746310007 * ser / x)
   }
 
   private static betaSample(alpha: number, beta: number): number {
@@ -447,17 +445,19 @@ export class ExperimentManager {
     }
 
     // Build variant results
-    const variantResults: VariantResult[] = data.map(d => {
-      const variant = experiment.variants.find(v => v.id === d.variantId)!
-      return {
+    const variantResults: VariantResult[] = []
+    for (const d of data) {
+      const variant = experiment.variants.find(v => v.id === d.variantId)
+      if (!variant) continue
+      variantResults.push({
         variantId: d.variantId,
         name: variant.name,
         samples: d.samples,
         conversions: d.conversions,
         conversionRate: d.samples > 0 ? d.conversions / d.samples : 0,
         metrics: {},
-      }
-    })
+      })
+    }
 
     const result: ExperimentResult = {
       experimentId: id,

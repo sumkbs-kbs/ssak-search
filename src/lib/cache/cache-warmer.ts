@@ -13,7 +13,7 @@
  */
 
 import { logger, toError } from '../logger'
-import type { Env, SearchRequest, SearchResponse } from '../../types'
+import type { SearchRequest, SearchResponse } from '../../types'
 
 // ============================================================
 // Types

@@ -16,7 +16,6 @@
  * - Anomaly detection
  */
 
-import { logger, toError } from '../logger'
 import type { Env } from '../../types'
 
 // ============================================================

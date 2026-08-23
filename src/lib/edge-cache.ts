@@ -15,7 +15,7 @@
  */
 
 import { logger, toError } from './logger'
-import type { Env, SearchResponse } from '../types'
+import type { SearchResponse } from '../types'
 
 // ============================================================
 // Cache configuration

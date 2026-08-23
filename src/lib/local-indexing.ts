@@ -186,7 +186,7 @@ export class LocalIndexingService {
     chromaReady: boolean
     ollamaReady: boolean
   }> {
-    let totalDocuments = 0
+    const totalDocuments = 0
     let totalChunks = 0
 
     if (this.chromaReady) {

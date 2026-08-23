@@ -10,7 +10,6 @@
 
 import { DurableObject } from 'cloudflare:workers'
 import type { Env } from '../../types'
-import { logger, toError } from '../logger'
 
 // ============================================================
 // Types
@@ -294,7 +293,7 @@ export class TenancyDO extends DurableObject<Env> {
   }
 
   /** Resume a tenant (admin action). */
-  async resumeTenant(tenantId: string, by?: string): Promise<TenantStatusEntry> {
+  async resumeTenant(tenantId: string, _by?: string): Promise<TenantStatusEntry> {
     const entry = ensureTenantEntry(this.store.tenants, tenantId)
     entry.status = 'active' as TenantStatusType
     entry.suspendedAt = undefined

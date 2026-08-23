@@ -209,7 +209,7 @@ export class SSOManager {
     return `${this.config.providerUrl}/sso/saml?${params.toString()}`
   }
 
-  private async exchangeCode(code: string, state: string): Promise<{ accessToken: string; refreshToken: string }> {
+  private async exchangeCode(code: string, _state: string): Promise<{ accessToken: string; refreshToken: string }> {
     // In production, this would exchange the code with the IdP
     // For now, return mock tokens
     return {
@@ -218,7 +218,7 @@ export class SSOManager {
     }
   }
 
-  private async getUserInfo(accessToken: string): Promise<Record<string, unknown>> {
+  private async getUserInfo(_accessToken: string): Promise<Record<string, unknown>> {
     // In production, this would fetch user info from the IdP
     // For now, return mock user info
     return {
@@ -296,7 +296,7 @@ export class RBACManager {
   /**
    * Check if user has permission.
    */
-  hasPermission(userId: string, permission: string, resource?: string): boolean {
+  hasPermission(userId: string, permission: string, _resource?: string): boolean {
     const user = this.getUser(userId)
     if (!user) return false
 
@@ -373,7 +373,7 @@ export class RBACManager {
     return this.policy.roles.find(r => r.id === roleId)
   }
 
-  private getUser(userId: string): SSOUser | null {
+  private getUser(_userId: string): SSOUser | null {
     // In production, this would fetch from database
     return null
   }

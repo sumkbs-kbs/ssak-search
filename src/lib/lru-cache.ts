@@ -54,8 +54,8 @@ export class LruCache<V> {
     const expiresAt = now + (ttlMs ?? this.defaultTtlMs)
 
     // Update existing entry
-    if (this.cache.has(key)) {
-      const existing = this.cache.get(key)!
+    const existing = this.cache.get(key)
+    if (existing) {
       existing.value = value
       existing.expiresAt = expiresAt
       existing.lastAccessed = now

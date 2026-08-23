@@ -15,8 +15,7 @@
  * - Deployment state machine
  */
 
-import { logger, toError } from '../logger'
-import type { Env } from '../../types'
+import { logger } from '../logger'
 
 // ============================================================
 // Types

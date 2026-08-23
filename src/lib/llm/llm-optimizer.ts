@@ -13,7 +13,7 @@
  * - Better user experience
  */
 
-import { logger, toError } from '../logger'
+import { logger } from '../logger'
 
 // ============================================================
 // Types
@@ -251,11 +251,11 @@ export class LLMOptimizer {
   private async generateComplete(
     query: string,
     context: string[],
-    model: string,
+    _model: string,
   ): Promise<string> {
     // In production, this would call the actual LLM API
     // For now, return a simulated response
-    const prompt = this.buildPrompt(query, context)
+    const _prompt = this.buildPrompt(query, context)
 
     // Simulate API call
     await new Promise(resolve => setTimeout(resolve, 100))

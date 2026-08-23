@@ -96,7 +96,7 @@ export class QueryBuilder {
     let sql = `SELECT ${this._select.join(', ')} FROM ${this._table}`
 
     if (this._where.length > 0) {
-      const conditions = this._where.map((w, i) => {
+      const conditions = this._where.map((w, _i) => {
         params.push(...w.params)
         return w.condition
       })
@@ -238,7 +238,7 @@ export class PostgresClient {
 
   private async executeQuery<T>(
     sql: string,
-    params?: unknown[],
+    _params?: unknown[],
   ): Promise<{ rows: T[]; rowCount: number; command: string }> {
     // In production, this would use the actual PostgreSQL driver
     // For now, we'll use a mock implementation

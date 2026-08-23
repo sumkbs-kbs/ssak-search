@@ -1,0 +1,73 @@
+{
+  "snapshots": [
+    {
+      "timestamp": "2026-08-22T02:03:12.222Z",
+      "passRate": 1,
+      "totalQueries": 921,
+      "passedQueries": 921,
+      "failedQueries": 0,
+      "latency": {
+        "p50": 1175,
+        "p75": 2071,
+        "p90": 4394,
+        "p95": 5006,
+        "p99": 7215,
+        "max": 9294,
+        "min": 0
+      },
+      "avgTimeMs": 1715,
+      "avgResultCount": 9.5,
+      "backendCoverage": {
+        "bing": 1032,
+        "naver": 251,
+        "wikipedia": 50,
+        "hackernews": 209,
+        "dbpedia": 291,
+        "google": 107,
+        "github": 153,
+        "csdn": 230,
+        "wikidata": 2,
+        "juejin": 46,
+        "duckduckgo": 34,
+        "reddit": 16
+      },
+      "regressionCount": 555
+    },
+    {
+      "timestamp": "2026-08-22T03:39:03.530Z",
+      "passRate": 0.997828447339848,
+      "totalQueries": 921,
+      "passedQueries": 919,
+      "failedQueries": 2,
+      "latency": {
+        "p50": 1194,
+        "p75": 2125,
+        "p90": 3017,
+        "p95": 3797,
+        "p99": 5309,
+        "max": 7502,
+        "min": 0
+      },
+      "avgTimeMs": 1529,
+      "avgResultCount": 9.6,
+      "backendCoverage": {
+        "bing": 1021,
+        "naver": 251,
+        "hackernews": 205,
+        "dbpedia": 326,
+        "google": 102,
+        "reddit": 6,
+        "wikipedia": 64,
+        "github": 140,
+        "csdn": 218,
+        "duckduckgo": 42,
+        "wikidata": 6,
+        "juejin": 36,
+        "arxiv": 3,
+        "failed": 1
+      },
+      "regressionCount": 447
+    }
+  ],
+  "lastUpdated": "2026-08-22T03:43:35.259Z"
+}

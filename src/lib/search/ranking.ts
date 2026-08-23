@@ -90,6 +90,10 @@ const LOW_QUALITY_DOMAINS: Record<string, number> = {
   'wikitree.co.kr': -0.1,
   'seoul.co.kr': -0.05,
   'esusatyo.net': -0.4, // spam/keyword-stuffing domain observed in en-stock eval
+  // E.5 (2026-08-23): job592.com — gambling/sports-betting SEO spam farm
+  // observed in eval kr-conv-07 (keyword-stuffed titles passed Tier 1 at
+  // 0.11-0.14). Same observation-based tier as esusatyo.net.
+  'job592.com': -0.4,
   // S18 (2026-08-06): unresolved Google News RSS redirects. parseGoogleNewsRss
   // maps the title-suffix source via NEWS_SOURCE_DOMAINS, but sources outside
   // the map keep the transport URL (news.google.com/rss/articles/...) as their

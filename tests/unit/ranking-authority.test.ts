@@ -565,6 +565,40 @@ describe('ranking — query-context-aware domain authority (S2/S3)', () => {
     expect(plainRanked.score).toBeGreaterThan(msnRanked.score)
   })
 
+  it('E.5: job592.com gambling-spam SEO results are demoted below organic results', () => {
+    // eval kr-conv-07 (2026-08-23): job592.com 도박/스포츠 베팅 SEO 스팸이
+    // 0.11-0.14로 Tier 1 임계값을 통과해 상위권에 노출됨. 스팸은 쿼리 키워드를
+    // 스터핑하므로 오버랩만으로 임계값을 넘는다 — 도메인 강등(esusatyo.net
+    // -0.4 선례)이 유일한 방어선.
+    const ctx = makeCtx({ korean: true, chinese: false, isNews: false, query: '서울 아파트 청약' })
+    const spam = makeResult(
+      'https://job592.com/width/list.html',
+      '서울 아파트 청약_일정_공제조건_모집공고 라이브 중계',
+      '서울 아파트 청약 정보 스트리밍 링크 모음',
+    )
+    const cafe = makeResult(
+      'https://cafe.naver.com/joonggonara/1',
+      '서울 아파트 청약 정보 모음',
+      '서울 아파트 청약 자격과 일정 정리',
+    )
+    const control = makeResult(
+      'https://example.org/cheongyak/list.html',
+      '서울 아파트 청약_일정_공제조건_모집공고 라이브 중계',
+      '서울 아파트 청약 정보 스트리밍 링크 모음',
+    )
+
+    const both = recomputeScores([spam, cafe, control], ctx)
+    const spamRanked = both.find((r) => r.url === spam.url)
+    const cafeRanked = both.find((r) => r.url === cafe.url)
+    const controlRanked = both.find((r) => r.url === control.url)
+    if (!spamRanked || !cafeRanked || !controlRanked) throw new Error('ranked spam/cafe/control missing')
+
+    expect(cafeRanked.score).toBeGreaterThan(spamRanked.score)
+    // The map entry contributes a fixed −0.4 shift — verify against an
+    // identical-content control on a neutral domain.
+    expect(controlRanked.score - spamRanked.score).toBeGreaterThanOrEqual(0.35)
+  })
+
   it('S20: capSourceResults keeps at most max results from one source', () => {
     const hn1 = makeResult('https://news.ycombinator.com/item?id=1', 'story 1', 'x')
     const hn2 = makeResult('https://news.ycombinator.com/item?id=2', 'story 2', 'x')

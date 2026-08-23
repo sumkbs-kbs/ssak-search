@@ -111,7 +111,7 @@
     "test:e2e": "vitest run --config vitest.e2e.config.ts"
   },
   "dependencies": {
-    "@sentry/cloudflare": "^10.67.0",
+    "@sentry/cloudflare": "^10.70.0",
     "hono": "^4.12.30"
   },
   "devDependencies": {

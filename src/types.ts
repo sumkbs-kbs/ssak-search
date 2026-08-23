@@ -629,6 +629,8 @@ export interface AppBindings {
   PAGERDUTY_ROUTING_KEY?: string
   // Subrequest quota per request for capacity alerts (D.4, default 50 = free tier)
   SUBREQUEST_QUOTA_PER_REQUEST?: string
+  /** '0' disables the FINDING-1 mirror relevance gate (field rollback switch) */
+  MIRROR_RELEVANCE_GATE?: string
   // KV namespace for persistent response caching (optional, secondary to Cloudflare Cache API)
   CACHE_KV?: KVNamespace
   // Workers Analytics Engine for metrics persistence

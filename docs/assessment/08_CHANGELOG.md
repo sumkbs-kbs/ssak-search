@@ -112,3 +112,10 @@
 - 페어드 실험(같은 시간대, 케이스만 토글): ON → NDCG@10 **0.4980 / MRR 1.0000** vs OFF → 0.1405/0.3294. arxiv+openalex가 현재 학술 골드의 1위 공급자.
 - 이전 "원복" 판정(EVAL-1 baseline delta 근거)은 교란된 비교였음을 인정·정정. 스로틀 카운트 가설도 반박됨(정규화 시 감소).
 - 교훈 기록: 보호 정책 변경은 저장 baseline 단독 비교 금지, 반드시 같은 창의 페어드 토글로 판정.
+
+### BL-2 해소 (2026-08-23 심야): WIP 전량 커밋 정리 ✅
+- 15개 논리 커밋으로 분할 커밋 완료(git-master 스킬 프로세스 적용, SEMANTIC+한국어 스타일):
+  검증 수정 6건(fix*/feat*)·페어드 신규 테스트 2건·평가 아티팩트 갱신·분석 도구 6종·선존재 WIP 통합 2건·CI·config·문서.
+- 시크릿 스캔 클린(.dev.vars gitignored 확인), 커밋 전 typecheck/tests 그린 상태 그대로 스냅샷.
+- 세션 중 동시 외부 커밋 2건 관측(hono CVE bump, /api/council 키 필수화) — package.json은 해당 커밋에 흡수됨.
+- 최종: `git status --porcelain` = 0 (클린). main 로컬 브랜치, upstream 없음(푸시 불필요).

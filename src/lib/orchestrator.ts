@@ -60,6 +60,7 @@ import { mergeAndDeduplicate, normalizeUrlForDedup, normalizeTitleForDedup } fro
 import { emergencyFallback } from './search/fallback'
 import { applyRankingPipeline, capSourceResults } from './search/ranking'
 import { createCpuBudget, isFreePlan } from './resilience/cpu-budget'
+import { toBackendQuery } from './korean/backend-query'
 
 // ============================================================
 // Phase 2.4: Isolate-level in-memory result cache
@@ -536,8 +537,14 @@ export async function executeSearch(request: SearchRequest, config: Orchestrator
       })
     }
 
-    // Strategy-selected backends
-    tasks.push(...buildBackendTasks(ctx))
+    // Strategy-selected backends.
+    // E.5 병목 ①: backends receive the keyword-normalized query (조사·의문사·
+    // 필러 제거) while cache keys, scoring, answer generation and the semantic
+    // cache embedding keep the ORIGINAL ctx.query — normalization is a fetch
+    // boundary concern only (measured failure mode: eval kr-conv-03, Bing
+    // returning English garbage for the conversational form).
+    const fetchCtx: SearchContext = { ...ctx, query: toBackendQuery(ctx.query) }
+    tasks.push(...buildBackendTasks(fetchCtx))
 
     // ── 4.5 B1 (Wave 4): parallel wikipedia mirror for an ACTIVE 429 window ──
     // When wikipedia recently 429'd (pacing guard tripped), wikipediaSearch

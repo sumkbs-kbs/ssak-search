@@ -103,6 +103,11 @@
     "eval:self:save": "npx tsx eval/index-self.ts --save",
     "eval:self:ci": "npx tsx eval/index-self.ts --ci --summary",
     "eval:self:tag": "npx tsx eval/index-self.ts --tag",
+    "eval:monitor": "npx tsx eval/monitor.ts",
+    "eval:monitor:record": "npx tsx eval/monitor.ts --record",
+    "eval:monitor:report": "npx tsx eval/monitor.ts --report",
+    "eval:monitor:alert": "npx tsx eval/monitor.ts --alert",
+    "eval:monitor:diff": "npx tsx eval/monitor.ts --diff",
     "test:e2e": "vitest run --config vitest.e2e.config.ts"
   },
   "dependencies": {

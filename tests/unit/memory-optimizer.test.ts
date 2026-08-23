@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest'
-import { OptimizedLRUCache, MemoryManager, getMemoryManager, getMemoryStats, cleanupMemory } from '../../src/lib/memory/memory-optimizer'
+import { OptimizedLRUCache, type MemoryManager, getMemoryManager, getMemoryStats, cleanupMemory } from '../../src/lib/memory/memory-optimizer'
 
 describe('OptimizedLRUCache', () => {
   let cache: OptimizedLRUCache<string>

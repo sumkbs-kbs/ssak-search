@@ -94,7 +94,7 @@ async function fetchJson(url: string, init?: RequestInit): Promise<{ status: num
     const res = await fetch(url, { ...init, signal: AbortSignal.timeout(30_000) })
     const body = await res.json()
     return { status: res.status, body, latencyMs: performance.now() - start }
-  } catch (err) {
+  } catch (_err) {
     return { status: 0, body: null, latencyMs: performance.now() - start }
   }
 }
@@ -240,7 +240,7 @@ async function benchmarkCache(): Promise<BenchmarkResult> {
 
   // First request (miss)
   for (let i = 0; i < 5; i++) {
-    const { status, body, latencyMs } = await fetchJson(`${BASE_URL}/api/search`, {
+    const { status: _status, body, latencyMs } = await fetchJson(`${BASE_URL}/api/search`, {
       method: 'POST',
       headers: headers(),
       body: JSON.stringify({ query: `${query} ${i}`, max_results: 3 }),
@@ -253,7 +253,7 @@ async function benchmarkCache(): Promise<BenchmarkResult> {
 
   // Repeat same queries (should hit cache)
   for (let i = 0; i < 5; i++) {
-    const { status, body, latencyMs } = await fetchJson(`${BASE_URL}/api/search`, {
+    const { status: _status, body, latencyMs } = await fetchJson(`${BASE_URL}/api/search`, {
       method: 'POST',
       headers: headers(),
       body: JSON.stringify({ query: `${query} ${i}`, max_results: 3 }),
@@ -285,7 +285,7 @@ async function benchmarkCache(): Promise<BenchmarkResult> {
 async function benchmarkHealthDeep(): Promise<BenchmarkResult> {
   console.log('  ── Health Endpoint Analysis ──')
 
-  const { status, body, latencyMs } = await fetchJson(`${BASE_URL}/api/health`)
+  const { status: _status, body, latencyMs } = await fetchJson(`${BASE_URL}/api/health`)
 
   if (body) {
     console.log(`    Status:         ${body.status}`)
@@ -342,7 +342,7 @@ async function benchmarkSearchQuality(): Promise<void> {
   let successCount = 0
 
   for (const { q, expectMin } of queries) {
-    const { status, body, latencyMs } = await fetchJson(`${BASE_URL}/api/search`, {
+    const { status: _status, body, latencyMs } = await fetchJson(`${BASE_URL}/api/search`, {
       method: 'POST',
       headers: headers(),
       body: JSON.stringify({ query: q, max_results: 5 }),

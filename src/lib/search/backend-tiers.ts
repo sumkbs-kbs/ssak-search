@@ -44,7 +44,7 @@ export const BACKEND_TIERS: BackendTier[] = [
     priority: 1,
     // E.5 병목③: crypto-price — Upbit ticker 실측 ~86ms, 시세 카드는 쿼리의
     // 핵심 결과이므로 minResults 조기종료 전에 반드시 소진되어야 Tier 1.
-    backends: ['bing', 'brave', 'naver', 'naver-finance', 'naver-news', 'crypto-price'],
+    backends: ['bing', 'brave', 'naver', 'naver-finance', 'naver-news', 'crypto-price', 'browser'],
   },
   {
     id: 'tier2',

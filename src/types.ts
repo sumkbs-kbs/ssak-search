@@ -649,6 +649,9 @@ export interface AppBindings {
   EMBEDDING_API_KEY?: string
   // Self-hosted SearXNG instance URL (optional backend)
   SEARXNG_URL?: string
+  // Local browser agent (Phase I) — user's own Chrome via CDP/tunnel
+  BROWSER_AGENT_URL?: string
+  BROWSER_AGENT_TOKEN?: string
   // SearXNG API key (if required by instance)
   SEARXNG_API_KEY?: string
   // Ollama local LLM base URL (default: http://localhost:11434)

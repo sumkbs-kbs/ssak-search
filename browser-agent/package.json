@@ -1,0 +1,13 @@
+{
+  "name": "ssak-browser-agent",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Local Chrome(CDP)-based SERP/page backend for ssak-search — Phase I v1",
+  "scripts": {
+    "start": "node server.mjs"
+  },
+  "dependencies": {
+    "playwright": "^1.62.1"
+  }
+}

@@ -47,6 +47,7 @@ import {
   buildBaiduTask,
 } from '../backend-tasks'
 import { bingSearch } from '../../bing-search'
+import { buildBrowserAgentTask } from '../../browser-search'
 import { duckDuckGoSearch } from '../../duckduckgo'
 import { backendTimeoutMs } from '../fanout'
 import { isFreePlan } from '../../resilience/cpu-budget'
@@ -244,6 +245,10 @@ export class AllStrategy implements SearchStrategy {
     if (ctx.sources.useOpenAlex) {
       tasks.push(buildOpenAlexTask(ctx, 8))
     }
+
+    // ── Browser Agent (사용자 로컬 Chrome — Phase I, env 게이트) ──
+    const browserTask = buildBrowserAgentTask(ctx)
+    if (browserTask) tasks.push(browserTask)
 
     // ── SearXNG (설정된 경우) ──
     if (searxngConfigured && !ctx.isNews && !ctx.isFinance) {

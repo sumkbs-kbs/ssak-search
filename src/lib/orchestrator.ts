@@ -1093,6 +1093,14 @@ export async function executeSearch(request: SearchRequest, config: Orchestrator
       no_results: paginatedResults.length === 0,
     }
 
+    // Low-confidence answer gate — an answer built from contaminated/off-topic
+    // results (e.g. wrong-language fallback) is worse than no answer. Drop it
+    // below the 0.3 threshold so agents don't ingest hallucination-adjacent text.
+    if (searchResponse.answer && (searchResponse.answer.confidence ?? 0) < 0.3) {
+      delete searchResponse.answer
+      searchResponse.no_results = paginatedResults.length === 0
+    }
+
     // E.5 병목③: crypto 시세는 응답 캐시를 우회 — 60초 마이크로 캐시가
     // 유일한 신선도 계약 (장기 캐시 저장 시 가격이 30분 stale).
     if (!isCrypto) setInMemoryCache(memCacheKey, searchResponse, isNews || isFinance)
@@ -1201,12 +1209,14 @@ async function buildSearchContext(request: SearchRequest, config: OrchestratorCo
     ? language
     : country
       ? countryToBingMkt(country)
-      : japanese
-        ? 'ja-JP'
-        : chinese
-          ? 'zh-CN'
-          : undefined
-  const bingLang = language || (country ? countryToLanguageTag(country) : undefined)
+      : korean
+        ? 'ko-KR'
+        : japanese
+          ? 'ja-JP'
+          : chinese
+            ? 'zh-CN'
+            : undefined
+  const bingLang = language || (country ? countryToLanguageTag(country) : korean ? 'ko' : undefined)
   const wikiOverrideLang = language || (country ? countryToLanguageTag(country) : undefined)
   const effectiveWikiLang = wikiOverrideLang || wikiLang
   const bingTimeRange = toBingTimeRange(request.time_range)

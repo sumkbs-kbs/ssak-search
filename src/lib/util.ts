@@ -1137,7 +1137,15 @@ export function generateRelatedQueries(query: string, resultTitles: string[]): s
   }
 
   // Add keyword-based expansions (from frequent terms in titles)
+  // Contamination guard: if the query is Korean, only expand with tokens that
+  // contain Hangul or ASCII alphanumerics — a garbage result (e.g. a Japanese
+  // page) must not leak kana/kanji into related queries.
+  const tokenAllowed = (w: string): boolean => {
+    if (!isKorean) return true
+    return /[\uAC00-\uD7A3]/.test(w) || /^[a-zA-Z0-9]+$/.test(w)
+  }
   const topKeywords = [...topWords.entries()]
+    .filter(([w]) => tokenAllowed(w))
     .sort((a, b) => b[1] - a[1])
     .slice(0, 4)
     .map(([w]) => w)
@@ -1150,6 +1158,7 @@ export function generateRelatedQueries(query: string, resultTitles: string[]): s
 
   // Add bigram-based suggestions (more specific than single words)
   const topBigramList = [...topBigrams.entries()]
+    .filter(([b]) => b.split(' ').every(tokenAllowed))
     .sort((a, b) => b[1] - a[1])
     .slice(0, 2)
     .map(([b]) => b)

@@ -7,7 +7,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { djb2, semanticVectorId, semanticCacheLookup, semanticCacheStore } from '../../src/lib/semantic-cache'
+import { djb2, semanticVectorId, semanticCacheLookup, semanticCacheStore, lexicalDice } from '../../src/lib/semantic-cache'
 import type { Env, SearchResponse } from '../../src/types'
 
 /** Fake Ollama /v1/embeddings response (768-dim, matching nomic-embed-text). */
@@ -97,6 +97,34 @@ describe('djb2 / semanticVectorId', () => {
   })
 })
 
+describe('lexicalDice', () => {
+  it('is symmetric and ranges from 0 (disjoint) to 1 (identical)', () => {
+    expect(lexicalDice('react hooks guide', 'react hooks guide')).toBe(1)
+    expect(lexicalDice('quantum computing', 'stock market today')).toBe(0)
+    expect(lexicalDice('react hooks', 'hooks react')).toBe(1)
+    const ab = lexicalDice('apple banana', 'banana cherry')
+    expect(ab).toBeCloseTo((2 * 1) / (2 + 2), 6)
+    expect(lexicalDice('banana cherry', 'apple banana')).toBe(ab)
+  })
+
+  it('matches CJK via character bigrams, not whitespace tokens', () => {
+    expect(lexicalDice('量子计算机', '量子计算机原理')).toBeGreaterThan(0.5)
+    expect(lexicalDice('什么是量子计算', '少子化対策')).toBeLessThan(0.3)
+    expect(lexicalDice('区块链技术', '区块链')).toBeGreaterThan(0.5)
+  })
+
+  it('ignores case; punctuation splits tokens ("what\'s" ≠ "whats") but overlap stays high', () => {
+    expect(lexicalDice('React Hooks Guide', 'react hooks guide')).toBe(1)
+    expect(lexicalDice("What's New-York?", 'whats new york')).toBeGreaterThan(0.5)
+    expect(lexicalDice('What is New York', 'what is new york')).toBe(1)
+  })
+
+  it('returns 0 for empty or symbol-only input instead of NaN', () => {
+    expect(lexicalDice('', 'hello')).toBe(0)
+    expect(lexicalDice('!!!', 'hello')).toBe(0)
+  })
+})
+
 describe('semanticCacheLookup', () => {
   it('returns undefined when bindings are missing', async () => {
     const env = {} as unknown as Env
@@ -172,7 +200,7 @@ describe('semanticCacheLookup', () => {
         {
           id: 'sc_x',
           score: 0.95,
-          metadata: { cache_key: storedKey, params_sig: 'mr=10' },
+          metadata: { cache_key: storedKey, params_sig: 'mr=10', query: 'react hooks tutorial' },
         },
       ],
     })
@@ -193,10 +221,47 @@ describe('semanticCacheLookup', () => {
       SEMANTIC_CACHE_INDEX: index,
       SEARCH_INDEX_DB: db,
     } as unknown as Env
-    const hit = await semanticCacheLookup(env, 'k', 'q', { paramsSig: 'mr=10' })
+    const hit = await semanticCacheLookup(env, 'k', 'react hooks guide', { paramsSig: 'mr=10' })
     expect(hit?.response).toEqual(SAMPLE)
     expect(hit?.matchedQuery).toBe('similar query')
     expect(hit?.score).toBe(0.95)
+  })
+
+  it('blocks a high-cosine hit whose lexical overlap is below the dice gate', async () => {
+    // Measured failure mode: unrelated CJK queries collide at cos >= 0.98 with
+    // zero token/bigram agreement — embedding proximity alone serves wrong answers.
+    globalThis.fetch = vi.fn().mockResolvedValue(fakeOllamaResponse(1)) as unknown as typeof fetch
+    const index = makeIndex()
+    index.query.mockResolvedValue({
+      matches: [
+        {
+          id: 'sc_x',
+          score: 0.99,
+          metadata: { cache_key: 'other', params_sig: 'mr=10', query: '什么是量子计算' },
+        },
+      ],
+    })
+    const env = {
+      OLLAMA_BASE_URL: 'http://localhost:11434',
+      SEMANTIC_CACHE_INDEX: index,
+      SEARCH_INDEX_DB: makeDb({}),
+    } as unknown as Env
+    const hit = await semanticCacheLookup(env, 'k', '少子化対策', { paramsSig: 'mr=10' })
+    expect(hit).toBeUndefined()
+  })
+
+  it('fails closed when the matched vector carries no stored query text', async () => {
+    globalThis.fetch = vi.fn().mockResolvedValue(fakeOllamaResponse(1)) as unknown as typeof fetch
+    const index = makeIndex()
+    index.query.mockResolvedValue({
+      matches: [{ id: 'sc_x', score: 0.99, metadata: { cache_key: 'other', params_sig: 'mr=10' } }],
+    })
+    const env = {
+      OLLAMA_BASE_URL: 'http://localhost:11434',
+      SEMANTIC_CACHE_INDEX: index,
+      SEARCH_INDEX_DB: makeDb({}),
+    } as unknown as Env
+    expect(await semanticCacheLookup(env, 'k', 'q', { paramsSig: 'mr=10' })).toBeUndefined()
   })
 
   it('deletes expired entries lazily and misses', async () => {
@@ -204,7 +269,7 @@ describe('semanticCacheLookup', () => {
     const expired = 'search:old|mr=10'
     const index = makeIndex()
     index.query.mockResolvedValue({
-      matches: [{ id: 'sc_old', score: 0.95, metadata: { cache_key: expired, params_sig: 'mr=10' } }],
+      matches: [{ id: 'sc_old', score: 0.95, metadata: { cache_key: expired, params_sig: 'mr=10', query: 'q' } }],
     })
     const db = makeDb({
       'FROM semantic_cache WHERE cache_key': {

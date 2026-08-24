@@ -18,6 +18,7 @@ import { BACKEND_TIERS, TierManager } from './backend-tiers'
 import type { CircuitBreaker } from '../resilience/circuit-breaker'
 import { logger } from '../logger'
 import { backendTimeoutMs } from './fanout'
+import { recordHarvestJunkSuppressed } from '../metrics'
 
 // ============================================================
 // Types
@@ -42,6 +43,15 @@ export interface TieredFanoutOptions {
    * Names absent from the task plan are no-ops.
    */
   protectedBackends?: string[]
+  /**
+   * When set, only results passing this probe count toward minResults.
+   * Phase H: an anti-bot harvest returns 10+ tokenless links that satisfied
+   * the early-exit and starved tier2 (wikipedia never ran for en-fact
+   * queries), after which pool-level filtering emptied the response. Counting
+   * coherent results only lets garbage fail forward into lower tiers instead
+   * of suppressing them.
+   */
+  relevantFilter?: (r: SearchResult) => boolean
 }
 
 export interface TieredFanoutResult {
@@ -103,6 +113,8 @@ export class TieredFanout {
     let tierUsed = 'none'
     const protectedSet = new Set(options.protectedBackends ?? [])
     let minMet = false
+    const relevantFilter = options.relevantFilter
+    let relevantCount = 0
 
     const anyPendingProtected = () => {
       if (protectedSet.size === 0) return false
@@ -116,7 +128,7 @@ export class TieredFanout {
       // Skip tiers with higher latency than target
       if (
         tier.latencyMs > targetLatencyMs &&
-        allResults.length >= minResults &&
+        relevantCount >= minResults &&
         !anyPendingProtected()
       ) {
         break
@@ -149,15 +161,19 @@ export class TieredFanout {
       // Collect results
       for (const result of tierResults) {
         if (result.results.length > 0 && !result.rejected) {
-          allResults.push(...result.results)
+          for (const r of result.results) {
+            allResults.push(r)
+            if (!relevantFilter || relevantFilter(r)) relevantCount++
+          }
           usedBackends.push(result.backend)
         }
       }
 
       tierUsed = tier.id
 
-      // Check if we have enough results
-      if (allResults.length >= minResults) {
+      // Check if we have enough results — counted on COHERENT results only
+      // when a relevance probe is supplied (Phase H).
+      if (relevantCount >= minResults) {
         minMet = true
         if (anyPendingProtected()) {
           logger.debug('[TieredFanout] Min results reached — draining protected backends', {
@@ -175,12 +191,14 @@ export class TieredFanout {
     }
 
     // If we don't have enough results, continue to next tiers
-    if (allResults.length < minResults) {
+    if (relevantCount < minResults) {
       logger.warn('[TieredFanout] Insufficient results, continuing to lower tiers', {
-        current: allResults.length,
+        current: relevantCount,
+        raw: allResults.length,
         needed: minResults,
       })
     }
+    if (relevantFilter) recordHarvestJunkSuppressed(allResults.length - relevantCount)
 
     const latencyMs = Date.now() - startTime
 

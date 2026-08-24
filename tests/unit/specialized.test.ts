@@ -124,6 +124,17 @@ describe('detectQueryType', () => {
     expect(detectQueryType('코인 투자 추천')).not.toBe('financial')
   })
 
+  it('E.5 병목③: specific coin queries route to the dedicated crypto type', () => {
+    // kr-conv-06 진단: FINANCIAL_PATTERN이 price/stock 어휘로 크립토 시세 쿼리를
+    // financial로 삼켜 naver-finance(주식)만 태웠다 — crypto 타입이 그 자리를 대신
+    // 먹으며 S48의 의도(naver-finance 오남용 방지)를 오히려 충족한다.
+    expect(detectQueryType('비트코인 지금 얼마야')).toBe('crypto')
+    expect(detectQueryType('ethereum price')).toBe('crypto')
+    expect(detectQueryType('암호화폐 시세')).toBe('crypto')
+    // bare 코인은 여전히 crypto 아님 (코인노래방 충돌 가드)
+    expect(detectQueryType('코인 투자 추천')).not.toBe('crypto')
+  })
+
   it('keeps finance-term NEWS queries out of financial (S48 guard)', () => {
     // 금리/환율 match the product list but these are news intents with NO
     // learning word — classifying them financial would hijack the news

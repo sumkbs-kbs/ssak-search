@@ -27,12 +27,65 @@ import type { Env, SearchResponse } from '../types'
 
 /** Response validity window (roadmap: TTL 24시간). */
 const SEMANTIC_CACHE_TTL_MS = 24 * 60 * 60 * 1000
-/** Minimum cosine similarity for a cached query to be considered a match (roadmap: 0.92). */
+/**
+ * Minimum cosine similarity for a cached query to be considered a match.
+ * Calibrated against scripts/sim-semantic-cache-hitrate.ts (930 eval queries,
+ * nomic-embed-text space): 0.92 alone admits 342 distinct-query pairs whose
+ * intent precision is ~80% — wrong serves include unrelated queries scoring
+ * up to 1.0000 cosine. The DICE GATE below carries the correctness load;
+ * this constant stays as the coarse filter.
+ */
 const SEMANTIC_CACHE_MIN_SCORE = 0.92
+/**
+ * Lexical admission gate — a Vectorize hit proves embedding proximity only.
+ * Measured on the same simulation: requiring Dice >= 0.3 between the incoming
+ * and stored query (whitespace tokens + CJK bigrams) drops admission to 72/342
+ * pairs while raising judged intent precision from ~80% to 97.2%. Short
+ * non-Latin queries collapse to near-identical embeddings regardless of topic
+ * (measured cos=1.0000 / dice=0.000 pairs), so the gate is fail-closed: no
+ * stored query text means no serve.
+ */
+const SEMANTIC_CACHE_MIN_DICE = 0.3
 /** Upper bound on D1 rows before LRU eviction kicks in. */
 const SEMANTIC_CACHE_MAX_ENTRIES = 1000
 /** How many least-recently-used entries are evicted at once. */
 const SEMANTIC_CACHE_EVICT_BATCH = 50
+
+const CJK_RANGE = /[\u4E00-\u9FFF\u3040-\u30FF]/
+
+/**
+ * Dice coefficient over whitespace tokens + CJK character bigrams (CJK has no
+ * word boundaries — same tokenizer trick as bm25). 0 = disjoint, 1 = identical
+ * gram sets.
+ */
+export function lexicalDice(a: string, b: string): number {
+  const gramsOf = (text: string): Set<string> => {
+    const clean = text
+      .toLowerCase()
+      .replace(/[^\p{L}\p{N}\s]+/gu, ' ')
+      .trim()
+    const grams = new Set<string>()
+    for (const tok of clean.split(/\s+/)) {
+      if (!tok) continue
+      if (CJK_RANGE.test(tok)) {
+        if (tok.length === 1) {
+          grams.add(tok)
+          continue
+        }
+        for (let k = 0; k < tok.length - 1; k++) grams.add(tok.slice(k, k + 2))
+      } else {
+        grams.add(tok)
+      }
+    }
+    return grams
+  }
+  const ga = gramsOf(a)
+  const gb = gramsOf(b)
+  if (ga.size === 0 || gb.size === 0) return 0
+  let inter = 0
+  for (const g of ga) if (gb.has(g)) inter++
+  return (2 * inter) / (ga.size + gb.size)
+}
 
 /** Deterministic 32-bit hash — used to build Vectorize vector ids. */
 export function djb2(str: string): number {
@@ -112,6 +165,13 @@ export async function semanticCacheLookup(
     if (match.score < SEMANTIC_CACHE_MIN_SCORE) continue
     const storedKey = (match.metadata?.cache_key as string | undefined) ?? match.id
     if (storedKey === cacheKey) continue // exact key — handled by exact-match tiers
+
+    // Lexical admission gate — embedding proximity alone serves wrong-topic
+    // responses (measured: unrelated CJK query pairs at cos >= 0.98). Require
+    // token/bigram agreement with the stored query; fail closed when the
+    // stored text is missing.
+    const storedQuery = typeof match.metadata?.query === 'string' ? match.metadata.query : undefined
+    if (!storedQuery || lexicalDice(query, storedQuery) < SEMANTIC_CACHE_MIN_DICE) continue
 
     // A vector hit only proves the QUERY is similar — the stored response was
     // built for specific params (max_results, page, domains, ...). Serving it

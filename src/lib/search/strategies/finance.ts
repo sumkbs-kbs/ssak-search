@@ -11,6 +11,7 @@ import type { SearchStrategy } from './types'
 import type { BackendTask, SearchContext } from '../context'
 import {
   buildKoreanStockTask,
+  buildCryptoPriceTask,
   buildNaverTask,
   buildBingTask,
   buildBingFinanceDetailedTask,
@@ -28,6 +29,8 @@ export class FinanceStrategy implements SearchStrategy {
     if (ctx.korean) {
       // Naver Finance API — 실시간 시세 (JSON, 안정적)
       tasks.push(buildKoreanStockTask(ctx, 5))
+      // E.5 병목③: crypto 시세 카드 (crypto 쿼리에서만 카드 생성)
+      if (ctx.isCrypto) tasks.push(buildCryptoPriceTask(ctx))
       // Naver web search — 관련 뉴스/블로그
       tasks.push(buildNaverTask(ctx, ctx.maxResults * 2))
       // General web fallback — same gap as AllStrategy: naver 429 leaves only

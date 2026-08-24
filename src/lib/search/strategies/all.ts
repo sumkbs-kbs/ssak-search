@@ -38,6 +38,7 @@ import {
   buildNewsHubTask,
   buildZhTravelCommunityTask,
   buildKoreanStockTask,
+  buildCryptoPriceTask,
   buildYahooFinanceTask,
   buildStackExchangeTask,
   buildQiitaTask,
@@ -65,6 +66,13 @@ export class AllStrategy implements SearchStrategy {
     const tasks: BackendTask[] = []
     const searxngConfigured = !!ctx.env?.SEARXNG_URL
     const freePlan = isFreePlanEnv(ctx.env)
+
+    // E.5 병목③: crypto 시세 카드 최전방 선점 — TieredFanout이 버퍼(2×max)를
+    // 태스크 순서대로 채우고 slice로 잘라내므로, Bing(최대 30건)이 먼저 push되면
+    // 카드가 잘려나간다 (실측: rank 10 컷). 코인 미감지 시 no-op이라 무비용.
+    if (ctx.isCrypto) {
+      tasks.push(buildCryptoPriceTask(ctx))
+    }
 
     // Free plan: limit maxResults to reduce CPU overhead in scoring/dedup.
     // Tuned (2026-08-18): 1.5x from 2x — production data shows scoring/dedup

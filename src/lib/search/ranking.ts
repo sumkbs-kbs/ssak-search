@@ -1159,9 +1159,11 @@ export function sortResults(results: SearchResult[], ctx: SearchContext): Search
   // from the stronger freshness signal while NDCG on gold domains is preserved
   // (gold domains usually lack dates, so they never enter the freshness race).
   const freshnessWeight = ctx.isNews ? NEWS_FRESHNESS_WEIGHT : DEFAULT_FRESHNESS_WEIGHT
+  // stock_data 카드(주식/크립토 실시간 시세)는 정의상 최대 신선도 — date 미보유로
+  // recency 0 처리되어 신선 뉴스에 역전되는 것을 방지 (eval kr-conv-06 실측).
   return [...results].sort((a, b) => {
-    const keyA = freshnessBlendKey(a.score, recencyScore(a.published_date), freshnessWeight)
-    const keyB = freshnessBlendKey(b.score, recencyScore(b.published_date), freshnessWeight)
+    const keyA = freshnessBlendKey(a.score, a.stock_data ? 1 : recencyScore(a.published_date), freshnessWeight)
+    const keyB = freshnessBlendKey(b.score, b.stock_data ? 1 : recencyScore(b.published_date), freshnessWeight)
     return keyB - keyA
   })
 }
@@ -1244,4 +1246,79 @@ export function capSourceResults(results: SearchResult[], sourceDomain: string, 
     out.push(r)
   }
   return out
+}
+
+/**
+ * Phase H — pool coherence filter.
+ *
+ * Measured failure mode (live diagnosis, 2026-08-24): when Bing's anti-bot /
+ * consent shell is served instead of a SERP, the parser harvests whatever
+ * links the shell contains — Yahoo JP finance quotes for "리액트 훅 사용법",
+ * Microsoft support pages and Baidu zhidao for "how does photosynthesis work".
+ * The pool is non-empty, so the DDG emergency fallback (empty-pool only) never
+ * fires and junk fills the response.
+ *
+ * A result whose title+content share NO signal with the query (Latin tokens
+ * matched on word boundaries, CJK/Hangul bigrams as substrings) cannot be
+ * relevant to any user; dropping it either cleans a mixed pool or empties a
+ * fully-garbage one — which is exactly the trigger condition emergencyFallback
+ * already knows how to handle. Signals reuse the BM25 tokenizer (Korean
+ * stemming + CJK bigrams) so this filter can never disagree with the scorer
+ * about what a term IS.
+ */
+export function filterIncoherentResults(results: SearchResult[], query: string): SearchResult[] {
+  if (!query || results.length === 0) return results
+
+  const probe = buildRelevanceProbe(query)
+  // No usable signals (symbol-only query) — nothing can be judged incoherent.
+  if (!probe) return results
+
+  return results.filter(probe)
+}
+
+/**
+ * Build a per-result relevance probe sharing the exact signal semantics of
+ * filterIncoherentResults. Returned to TieredFanout so its minResults
+ * early-exit counts only COHERENT results — otherwise an anti-bot harvest
+ * satisfies the threshold, starves tier2+ authoritative backends (wikipedia,
+ * github) and the Phase H pool filter then empties a response that never got
+ * its real sources. Returns undefined for queries with no usable signals.
+ */
+export function buildRelevanceProbe(query: string): ((r: SearchResult) => boolean) | undefined {
+  if (!query) return undefined
+
+  const signals = bm25Tokenize(query).filter((t) => t.length >= 2)
+  if (signals.length === 0) return undefined
+
+  const latin = signals.filter((t) => /^[a-z0-9]+$/.test(t))
+  const cjkish = signals.filter((t) => !/^[a-z0-9]+$/.test(t))
+
+  // Cross-language knowledge sources are exempt: a Korean "리액트 훅" query
+  // legitimately retrieves English github repos / MDN docs (github.com is
+  // gold in 22 kr-tech-* queries), and factual lookups reach the English
+  // Wikipedia. Measured junk (Yahoo JP quote shells, Baidu zhidao, MS support
+  // pages) shares none of these domains.
+  const TRUSTED_SUFFIXES = ['wikipedia.org', 'github.com', 'developer.mozilla.org', 'stackoverflow.com']
+
+  return (r: SearchResult): boolean => {
+    const host = (() => {
+      try {
+        return new URL(r.url).hostname.replace(/^www\./, '').toLowerCase()
+      } catch {
+        return (r.domain ?? '').toLowerCase()
+      }
+    })()
+    if (TRUSTED_SUFFIXES.some((s) => host === s || host.endsWith(`.${s}`))) return true
+
+    const title = (r.title ?? '').toLowerCase()
+    const content = (r.content ?? '').slice(0, 1000).toLowerCase()
+    for (const t of cjkish) {
+      if (title.includes(t) || content.includes(t)) return true
+    }
+    for (const t of latin) {
+      const re = new RegExp(`\\b${t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`)
+      if (re.test(title) || re.test(content)) return true
+    }
+    return false
+  }
 }

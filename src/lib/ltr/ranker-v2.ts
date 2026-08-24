@@ -63,6 +63,14 @@ function localScore(features: number[]): number {
 export async function applyLtrRankingV2(results: SearchResult[], ctx: SearchContext): Promise<SearchResult[]> {
   if (results.length < MIN_RESULTS) return results
 
+  // Structured-data cards (주식/크립토 시세 카드)는 recomputeScores의
+  // stock_data 보존 브랜치로 hand-tuned 점수를 유지한다 — LTR 재점수 대상이
+  // 아니며 최상위에 고정한다 (미제외 시 신선 뉴스 피처에 밀려 하락하는 것을
+  // eval kr-conv-06에서 실측). organic 결과만 재점수한다.
+  const cards = results.filter((r) => r.stock_data)
+  const organicResults = cards.length > 0 ? results.filter((r) => !r.stock_data) : results
+  if (organicResults.length < MIN_RESULTS) return results
+
   const sidecarUrl = ctx.env?.SIDECAR_RERANK_URL
   const qFeats = computeQueryFeaturesV2(ctx.query)
 
@@ -72,7 +80,7 @@ export async function applyLtrRankingV2(results: SearchResult[], ctx: SearchCont
   if (userId && ctx.env?.USER_PROFILE_DO) {
     try {
       const { getProfileStub } = await import('../user-profile-do')
-      const domains = [...new Set(results.map((r) => extractDomain(r.url)).filter(Boolean))]
+      const domains = [...new Set(organicResults.map((r) => extractDomain(r.url)).filter(Boolean))]
       const visits = await getProfileStub(ctx.env).getVisitCounts(userId, domains)
       userFeats = { visits }
     } catch (err) {
@@ -81,7 +89,7 @@ export async function applyLtrRankingV2(results: SearchResult[], ctx: SearchCont
   }
 
   // Compute v2 features for all results
-  const allFeatures = results.map((r, i) =>
+  const allFeatures = organicResults.map((r, i) =>
     computeResultFeaturesV2(
       ctx.query,
       r,
@@ -107,11 +115,12 @@ export async function applyLtrRankingV2(results: SearchResult[], ctx: SearchCont
 
   // Apply scores with blending
   const finalScores = scores
-  return results.map((r, i) => {
+  const rescored = organicResults.map((r, i) => {
     const ltr = finalScores[i]
     const base = Math.max(0, Math.min(1, r.score ?? 0))
     return { ...r, score: BLEND_WEIGHT * ltr + (1 - BLEND_WEIGHT) * base }
   })
+  return [...cards, ...rescored]
 }
 
 /**

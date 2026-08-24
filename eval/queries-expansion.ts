@@ -372,4 +372,18 @@ export const EXPANSION_QUERIES: EvalQuery[] = [
       { id: 'en-general-35', query: 'best podcast apps 2025', topic: 'general', minResults: 5, maxTimeMs: 10_000, tags: ['english', 'general'] },
   { id: 'en-general-36', query: 'minimalist home design ideas', topic: 'general', minResults: 5, maxTimeMs: 10_000, tags: ['english', 'general'] },
   { id: 'en-general-37', query: 'intermittent fasting benefits', topic: 'general', minResults: 5, maxTimeMs: 10_000, tags: ['english', 'general'] },
-                ]
+
+  // ════════════════════════════════════════════════════════════════
+  // PHASE F — CONVERSATIONAL EN/JA (fetch-boundary normalization target)
+  // ════════════════════════════════════════════════════════════════
+  { id: 'en-conv-01', query: 'what is quantum computing', topic: 'general', minResults: 0, maxTimeMs: 10_000, tags: ['english', 'conversational'] },
+  { id: 'en-conv-02', query: 'who is elon musk', topic: 'general', minResults: 0, maxTimeMs: 10_000, tags: ['english', 'conversational'] },
+  { id: 'en-conv-03', query: 'tell me about the roman empire', topic: 'general', minResults: 0, maxTimeMs: 10_000, tags: ['english', 'conversational'] },
+  { id: 'en-conv-04', query: 'how does bitcoin mining work', topic: 'finance', minResults: 0, maxTimeMs: 10_000, tags: ['english', 'conversational'] },
+  { id: 'en-conv-05', query: 'why is the sky blue', topic: 'general', minResults: 0, maxTimeMs: 10_000, tags: ['english', 'conversational'] },
+  { id: 'en-conv-06', query: 'tell me about black holes nasa', topic: 'general', minResults: 0, maxTimeMs: 10_000, tags: ['english', 'conversational'] },
+  { id: 'en-conv-07', query: 'how does photosynthesis work', topic: 'general', minResults: 0, maxTimeMs: 10_000, tags: ['english', 'conversational'] },
+  { id: 'en-conv-08', query: 'who invented the telephone', topic: 'general', minResults: 0, maxTimeMs: 10_000, tags: ['english', 'conversational'] },
+  { id: 'ja-conv-01', query: '量子コンピュータとは 簡単に', topic: 'general', minResults: 0, maxTimeMs: 12_000, tags: ['japanese', 'conversational'] },
+  { id: 'ja-conv-02', query: '人工知能とは 何ですか', topic: 'general', minResults: 0, maxTimeMs: 12_000, tags: ['japanese', 'conversational'] },
+]

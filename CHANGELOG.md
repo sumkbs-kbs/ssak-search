@@ -5,6 +5,83 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.5.0] — 백엔드 풀 응집도 필터 (Phase H) (2026-08-24)
+
+### Fixed
+- **tier 기아(starvation)** (`src/lib/search/tiered-fanout.ts` `relevantFilter` 옵션 +
+  `src/lib/search/ranking.ts` `buildRelevanceProbe` export + orchestrator 주입):
+  - 안티봇 셸 정크가 minResults 조기 종료를 충족해 tier2(wikipedia/github)를
+    실행하지 않게 하는 결함 수정 (en-fact-* 9개 쿼리가 bing-only 빈 풀이던 근원) —
+    조기 종료 판정을 응집 통과 결과 수 기준으로 변경, 정크는 fail-forward
+- **doi.org 홍수**: 학술 풀의 doi.org 리다이렉트 도배를 capSourceResults 3건 캡으로
+  다양성 확보
+- **eval 아티팩트 위생** (`eval/index.ts`):
+  - `--tag` 진단 실행이 `eval/results/latest.json`(공식 풀폴 아티팩트)을 덮어쓰는 버그 수정 —
+    커밋 이력 전반에서 공식 아티팩트가 부분 집합 보고서로 오염된 실측 피해 기반.
+    풀폴 실행만 최신 아티팩트를 갱신, 태그 실행은 stdout으로 기록
+- **안티봇 셸 수확(harvest) 오염** (`src/lib/search/ranking.ts` `filterIncoherentResults` 신규 + orchestrator 연결):
+  - 라이브 진단으로 확인된 결함: Bing 안티봇/consent 셸에서 파서가 이물 링크를 수확
+    ("리액트 훅"→Yahoo JP 증권, "photosynthesis"→MS 지원 페이지+Baidu 지식iN) —
+    풀이 비어있지 않아 DDG 비상 폴백이 발동하지 않는 구조적 맹점
+  - 쿼리 신호(BM25 토크나이저 재사용: 한국어 스테밍+CJK 바이그램)와 제목+본문이
+    무관한 결과 폐기. 라틴어 단어 경계 매칭("work"≠"networks")
+  - 교차언어 지식원 면책(wikipedia/github/MDN/stackoverflow) — kr-tech 골드 22개의
+    영어 GitHub 결과 보존
+  - 전량 가비지 풀 → 빈 풀 변환으로 기존 폴백 체인(self-index→SearXNG→DDG) 실제 발동
+  - **측정**: conversational NDCG@10 0.2353→0.3025 (+28.5%), MRR +29%,
+    kr-conv-07 +0.361. kr-tech 타겟 검증 통과
+
+### Changed
+- **qrels 현실화**: kr-conv-02 골드에 kakaocorp.com 추가 (카카오 공식 IR 자료실 —
+  suffix 매칭 불일치로 0점 처리되던 최고 권위 소스 수정)
+- **README 품질 섹션을 공식 풀폴 아티팩트로 동기화**: NDCG@10 0.653 / MRR 0.980 /
+  P@10 0.741 (600쿼리 정상 환경 실행 기준)
+
+### Added
+- **방어 계층 관측성** (`src/lib/metrics.ts`): Phase H 카운터 4종을
+  /api/metrics(Prometheus)에 노출 — 응집도 폐기/빈 풀/하베스트 억제/doi 캡.
+  프로덕션에서 방어의 작동·과잉 여부를 메트릭으로 판정 가능
+- **동일 환경 풀폴 회귀 검증** (`scripts/run-chunk-eval.ts` 신규):
+  - Aug-17 청크 베이스라인 대동일 조건 재측정 — **600쿼리 평균 NDCG@10
+    0.2601 → 0.3716 (+42.9%)**, 6개 청크 전부 개선(+16~+89%)
+  - 절대치는 샌드박스 환경 기준, 게이트·상용 비교는 정상 아티팩트(0.653) 유지
+- 단위 테스트 3125 → 3132 (filterIncoherentResults 7건)
+
+## [2.4.0] — Semantic Cache 어휘 진입 게이트 (Phase G) (2026-08-24)
+
+### Added
+- **시맨틱 캐시 히트율 시뮬레이터** (`scripts/sim-semantic-cache-hitrate.ts` 신규):
+  - eval 풀 939개 쿼리를 실제 임베딩 공간(Ollama nomic-embed-text)에서 pairwise 분석 —
+    임계값별 충돌 수·골드 도메인 의도 판정·게이트 효과 측정
+- **어휘 진입 게이트** (`src/lib/semantic-cache.ts`):
+  - `lexicalDice()` export: 공백 토큰 + CJK 문자 바이그램 Dice 계수
+  - lookup에 fail-closed 이중 게이트 적용: cosine ≥ 0.92 AND dice ≥ 0.3
+- **측정 결과 (930 distinct 쿼리)**:
+  - 기존 0.92 단독: distinct 쌍 342개 충돌, 정밀도 ~80% — 이질 의도가 cos 1.0000까지 충돌
+    (「什么是暗物质」↔「箱根温泉旅館」), 임계값 상향만으로는 정밀도 곡선 평평해 해결 불가
+  - 게이트 적용: 진입 342 → 72 쌍, 판정 정밀도 **97.2%** (로드맵 목표 95%+ 달성)
+- 단위 테스트 3119 → 3125 (lexicalDice + 게이트 차단 + fail-closed)
+
+### Changed
+- 기존 semantic-cache hit 테스트가 metadata에 저장 query 텍스트를 포함하도록 현실화
+  (fail-closed 게이트 계약 반영)
+
+## [2.3.0] — 영어 구어체 백엔드 정규화 (Phase F) (2026-08-24)
+
+### Added
+- **영어 구어체 골격 제거** (`src/lib/korean/backend-query.ts` ENGLISH_NOISE):
+  - 백엔드 페칭 시 의문사(what/who/why/how + what's 축약)·계사(is/are/was/were/am)·조동사(does/did)·관사(the/an)·필러(tell/show/explain/please/about/me/my/us) 제거
+  - 충돌 클래스 의도적 제외: will/can/may/do/get/find/search — "will smith", "can bus", "windows search not working", "get request vs post" 보존
+  - **측정**: live A/B(`--tag conversational`) en-conv 평균 NDCG@10 0.1831 → 0.2337 (+28% 상대), 두 독립 실행에서 4개 쿼리 일관 개선, kr-conv 회귀 0
+- **영어/일본어 구어체 평가 커버리지** (`eval/queries-expansion.ts` en-conv-01~08 + ja-conv-01~02, gold-standards 동시 확장):
+  - `--tag conversational` 격리 측정 풀 8 → 18개
+- **일본어 とは 처리 — 측정 기반 철회**:
+  - 접미 제거 시도 후 라이브 A/B에서 ja-conv NDCG −0.24 부정 측정. とは는 일본어 표준 검색 질의형으로 보존이 정답 — 보존 계약 테스트로 명문화
+  - 단일 런 Bing 스크래핑 노이즈 ±0.07 NDCG/쿼리 확인 — 판정에 다중 실행 필요성 문서화
+
+### Changed
+- 전체 단위 테스트 3113 → 3119 (backend-query 7 → 13)
+
 ## [2.2.0] — 한국어 특화 NLP (Phase 2.3) (2026-08-23)
 
 ### Added
@@ -35,14 +112,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **스팸 도메인 강등** (`src/lib/search/ranking.ts` LOW_QUALITY_DOMAINS):
   - job592.com -0.4 추가 — 도박/베팅 SEO 스팸 팜이 키워드 스터핑으로 Tier 1 통과한 관측(eval kr-conv-07) 기반, esusatyo.net 선례 티어
   - 일반 언더스코어 스터핑 페널티는 측정 기각: 정상 풀 2,130건에서 오탐 소지(GitHub 저장소명)만 확인
-- 구어체 eval 최종 NDCG@10 **0.3321** (세션 시작 0.1886 대비 +76%), job592.com 전 풀 퇴출
+- **전용 크립토 시세 백엔드** (`src/lib/crypto-search.ts` 신규):
+  - 소스 체인: Upbit public ticker(KRW, 키리스) → CoinGecko 폴백 — 60초 마이크로 캐시로 상류 호출 절약
+  - QueryType `'crypto'` 신설: FINANCIAL_PATTERN 이전 감지(bare 코인 제외), S48 의도 충족
+  - 구조화 카드(stock_data): recomputeScores 점수 보존 + LTR 면제 + 신선도 정렬 최대값 — 파이프라인 3계층 정합 수정
+  - 캐시 제외: 크립토 쿼리는 memory/Cache API/semantic 장기 캐시 우회 (신선도 계약)
+- 구어체 eval 최종 NDCG@10 **0.3671** (세션 시작 0.1886 대비 **+95%**) — kr-conv-06 upbit.com rank 1 달성
 
 ### Tests
 - `tests/unit/korean-search-nlp.test.ts` 신규 — 25개 테스트 (충돌 클래스 보존, 예외 사전, 요청어미, NFC, 동의어, tokenize/computeScore 통합)
 - `tests/unit/backend-query.test.ts` 신규 — 7개 테스트 (정규화, 의문사 제거, Latin 보존, 빈 쿼리 폴백 계약)
+- `tests/unit/crypto-search.test.ts` 신규 — 11개 테스트 (코인 감지, 카드 합성, 폴백 체인, 마이크로 캐시, no-op 계약)
 - `tests/unit/ranking-authority.test.ts` — job592 강등 계약 테스트 추가 (동일 콘텐츠 컨트롤 대비 −0.4 시프트 검증)
-- 전체 유닛 스위트 3101/3101 PASS — 기존 랭킹/BM25/확장/orchestrator 테스트 회귀 0
-- 결정론적 A/B (동일 179쿼리 풀): NDCG@10 0.3651→0.3658, MRR 0.7522→0.7549 — 중립~미세 긍정, 회귀 없음
+- `tests/unit/specialized.test.ts` — crypto 라우팅 계약 테스트 추가
+- 전체 유닛 스위트 3113/3113 PASS — 기존 랭킹/BM25/확장/orchestrator 테스트 회귀 0
 
 ## [2.1.0] — 하이브리드 검색 + 로컬 인덱싱 + 뉴스 RSS + BGE-Reranker v2.0 (2026-08-20)
 

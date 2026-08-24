@@ -2339,7 +2339,13 @@ interface DDGInstantAnswerResponse {
  * Phase 1.3: Added optional entities parameter for entity-aware routing.
  * Pass entity information from the understanding module to refine query type.
  */
-export type QueryType = 'technical' | 'factual' | 'financial' | 'news' | 'academic' | 'general'
+export type QueryType = 'technical' | 'factual' | 'financial' | 'crypto' | 'news' | 'academic' | 'general'
+
+/** E.5 병목③: crypto price queries → 전용 백엔드. S48 의도(naver-finance가
+ * 주식/ETF만 서빙)를 충족하는 방향으로 해소 — bare '코인'은 코인노래방 충돌로
+ * 제외, 구체 코인명/섹터어만 감지한다. */
+const CRYPTO_PATTERN =
+  /비트코인|이더리움|리플|솔라나|도지코인|암호화폐|가상화폐|크립토|\b(bitcoin|ethereum|ripple|xrp|solana|dogecoin)\b/i
 
 export function detectQueryType(
   query: string,
@@ -2353,6 +2359,13 @@ export function detectQueryType(
   const hasTech = entities ? entities.technologies.length > 0 : false
   const hasProduct = entities ? entities.products.length > 0 : false
   const hasPerson = entities ? entities.people.length > 0 : false
+
+  // E.5 병목③: crypto MUST be checked BEFORE financial — FINANCIAL_PATTERN의
+  // price/stock 어휘가 크립토 시세 쿼리를 financial로 삼켜 naver-finance(주식)
+  // 백엔드만 태우는 실패 모드(kr-conv-06 진단).
+  if (CRYPTO_PATTERN.test(query)) {
+    return 'crypto'
+  }
 
   // Financial / stock keywords — single source: src/lib/financial-keywords.ts
   // (FINANCIAL_KEYWORDS + FINANCIAL_REGEX_ONLY). Must be checked BEFORE news
@@ -2583,6 +2596,18 @@ export function getSourcesForQueryType(type: QueryType): {
         useGitHub: true,
         useHackerNews: true,
         useReddit: false,
+        useArxiv: false,
+        useOpenAlex: false,
+      }
+    case 'crypto':
+      // E.5 병목③: 시세 카드는 전용 crypto-price 태스크가 담당(backend-tasks).
+      // 여기서는 커뮤니티 논의(HN/Reddit)만 보조 활성화 — 규제·전망 등
+      // 뉴스성 부질의를 일반 웹 결과와 함께 커버.
+      return {
+        useWikipedia: false,
+        useGitHub: false,
+        useHackerNews: true,
+        useReddit: true,
         useArxiv: false,
         useOpenAlex: false,
       }

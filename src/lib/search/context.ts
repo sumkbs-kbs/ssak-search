@@ -43,6 +43,9 @@ export interface SearchContext {
   // ── Normalized parameters ──
   isNews: boolean
   isFinance: boolean
+  /** E.5 병목③: crypto 시세 쿼리 — 전용 crypto-price 태스크 활성화 + 장기 캐시 제외.
+   * Optional: 기존 컨텍스트 생성부/테스트 픽스처 호환 (미설정 = non-crypto). */
+  isCrypto?: boolean
   focus: FocusMode
   hasExplicitFocus: boolean
   overFetch: number

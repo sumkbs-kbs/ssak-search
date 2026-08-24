@@ -497,6 +497,157 @@
   - **✅ 병목 ② 완료 (2026-08-23)**: job592.com 도박/베팅 SEO 스팸 도메인을 `LOW_QUALITY_DOMAINS` -0.4 강등 (esusatyo.net 선례의 관측 기반 티어). 일반 언더스코어 스터핑 페널티는 **측정으로 기각** — 정상 풀 2130건 스캔에서 CJK+스터핑 오탐 없이는 유의미한 재발 빈도 부족, GitHub 저장소명 오탐 위험만 확인. 랭킹 계약 검증 테스트(동일 콘텐츠 컨트롤 대비 −0.4 시프트) 추가.
     * **구어체 4차 측정**: NDCG@10 0.3321 (0.1886 → 0.2818 → 0.3266 → 0.3321), job592.com 전 풀 퇴출 확인
     * 남은 것: 전용 크립토 시세 백엔드(No-API-Key 소스 조사 필요), 다수 런 median 후 CI 게이트 0.80 판단
+  - **✅ 병목 ③ 완전 해소 — 전용 크립토 백엔드 (2026-08-23, 사용자 승인 설계)**:
+    * 소스 체인: Upbit public ticker(키리스 KRW, 실측 86ms) 주력 → CoinGecko 폴백. 자체 파싱 계층(코인 감지·카드 합성·60초 마이크로 캐시)이 소유 경계
+    * 라우팅: QueryType `'crypto'` 신설 — FINANCIAL_PATTERN 이전 감지(bare 코인 제외). S48 의도(naver-finance 오남용 방지) 충족
+    * 구조화 카드: stock_data 부착(Naver 주식 카드 선례)으로 recomputeScores 점수 보존
+    * 파이프라인 정합 수정 2건(실측 기반): ① LTR v2가 카드 재점수 하락 → stock_data 보유 결과 LTR 면제+최상위 고정(ranker-v2) ② sortResults 신선도 블렌딩이 date 없는 카드를 0점 처리 → stock_data는 최대 신선도 취급(ranking.ts) ③ TieredFanout 버퍼 slice로 Bing 30건에 카드 잘림 → 태스크 최전방 선점(all.ts) + tier1 등록(backend-tiers)
+    * 캐시: 크립토 쿼리는 장기 응답 캐시(memory/Cache API/semantic) 전부 제외 — 60초 마이크로 캐시가 유일한 신선도 계약
+    * **최종 구어체 NDCG@10 = 0.3671** (세션 시작 0.1886 대비 **+95%**). kr-conv-06 0.092→0.461(upbit.com rank 1), 8개 중 5개 골드 rank 1~3
+    * 단위 테스트: crypto-search 11건 + specialized crypto 라우팅 계약 추가 (전체 3113/3113 PASS)
+
+### Phase F — 영어 구어체 백엔드 정규화 + 상용 API 냉정 평가 (2026-08-23)
+
+> 상용 검색 API(Bravve/Exa/Tavily/Perplexity Sonar) 비교 분석에서 도출된 격차 중
+> 로컬에서 측정·검증 가능한 항목. E.5 병목 ①(`toBackendQuery`)의 언어 확장.
+
+- [x] **F.1** 영어 구어체 골격 제거 — `toBackendQuery()`에 ENGLISH_NOISE 세트 추가.
+  의문사(what/who/why/how... + what's 축약형)·계사(is/are/was/were/am)·조동사(does/did)·
+  관사(the/an)·필러(tell/show/explain/please/about/me/my/us)를 백엔드 페칭 시에만 제거.
+  **충돌 클래스 의도적 제외**: will/can/may/do/get/find/search("will smith", "can bus",
+  "windows search not working" 보존 — 단일 문자 토큰은 스테머 MIN_STEM_LEN 규칙 유지).
+  * 측정(live A/B, `--tag conversational` 18쿼리): en-conv 평균 NDCG@10 **0.1831 → 0.2337
+    (+28% 상대)**. 두 번의 독립 실행에서 4개 쿼리 일관 개선(en-conv-04 +0.20, -06 +0.12,
+    -05/+02 +0.04). kr-conv 회귀 0 (경로 불변). 전체 구어체 0.2353 → 0.254.
+  * 신규 eval 인프라: en-conv-01~08 + ja-conv-01~02 쿼리 및 골드 추가 (구어체 태그 8→18개)
+- [x] **F.2** 일본어 「とは」 접미 제거 — **측정 후 철회**. 라이브 A/B에서 ja-conv NDCG
+  −0.24 부정 측정. とは는 구어 노이즈가 아니라 일본어의 표준 검색 질의형임이 반증됨.
+  보존 계약 테스트로 명문화 (tests/unit/backend-query.test.ts). 단일 런 노이즈 크기 ±0.07/쿼리 확인.
+- [x] **F.3** 상용 서비스 냉정 평가 (2026-08-24 기준) — 아래 평가 섹션 참조.
+
+#### Phase F 교훈
+
+| 교훈 | 내용 |
+|------|------|
+| 질의형 ≠ 노이즈 | 한국어 조사는 제거 이득, 일본어 とは는 보존 이득 — "자연어 구어체 = 제거 대상" 가정은 위험. 언어별 실측 필수 |
+| 단일 런 노이즈 | Bing 스크래핑 변동성 ±0.07 NDCG/쿼리. 개선 판정은 다중 실행 또는 반복 일관성으로 |
+| fetch 경계 설계 | 스코어링이 아닌 페칭만 정규화하는 경계 계약(E.5)이 언어 확장 시에도 그대로 유효 — 캐시/스코어링 무회귀 |
+
+---
+
+### Phase G — Semantic Cache 히트율 실측 + 어휘 진입 게이트 (2026-08-24)
+
+> 사용자 우선순위(지연시간 레버)에 따라 semantic cache의 미검증 가정("히트율 30%+",
+> "감지 정확도 95%+")을 로컬 실측으로 검증. 프로덕션 트래픽 없이 eval 풀 939개 쿼리를
+> 실제 임베딩 공간(Ollama nomic-embed-text, 768d — 로컬 dev가 해석하는 동일 provider)
+> 에서 pairwise 유사도 분석.
+
+- [x] **G.1** 시뮬레이션 인프라 — `scripts/sim-semantic-cache-hitrate.ts` 신규.
+  Ollama /api/embed 배치 임베딩 → 930개 distinct 쿼리의 pairwise cosine →
+  임계값별 충돌 수·골드 도메인 기반 의도 일치 판정·게이트 시뮬레이션.
+- [x] **G.2** 측정 결과 — **0.92 임계값 단독은 위험**:
+  * cosine ≥ 0.92에서 distinct 쿼리 쌍 342개 충돌, 골드 판정 정밀도 ~80%
+    (수동 검열로는 더 낮음 — 범용 뉴스 도메인 골드 중첩이 오판 SAME 다수 생성)
+  * **명백한 이질 의도 쌍이 극단 고득점**: 「什么是暗物质」↔「箱根温泉旅館」
+    **cos=1.0000/dice=0.000**, 「영화 추천」↔「배당주 추천」 cos=0.960 —
+    짧은 비라틴 쿼리에서 임베딩 모델의 퇴화 영역 실측됨
+  * 임계값 상향만으로 해결 불가: 정밀도 곡선이 0.85→0.98 전 구간에서 평평 (~80%)
+- [x] **G.3** 어휘 진입 게이트 구현 — `src/lib/semantic-cache.ts`:
+  * `lexicalDice()` 신규 export — 공백 토큰 + CJK 문자 바이그램 Dice 계수
+    (CJK 무단어경계 대응, bm25와 동일 토크나이저 트릭)
+  * lookup 경로에 fail-closed 게이트 적용: cosine ≥ 0.92 AND dice ≥ 0.3,
+    저장된 query 메타데이터 부재 시 서빙 거부
+  * **측정 효과**: 진입 342 → 72 쌍, 판정 정밀도 80% → **97.2%**.
+    차단 목록 전부 이질 의도(위 극단 사례 포함), 유지 목록은 동일 정보 니즈
+    ("카카오 실적 발표"↔"카카오 실적 발표 자료 좀 보여줘" 등)
+  * 단위 테스트 14 → 20건 (lexicalDice 4건, 게이트 차단/fail-closed 2건,
+    기존 hit 테스트 metadata.query 현실화) — 전체 **3125/3125 PASS**
+  * 잔여 리스크 문서화: 공유 토큰("추천"+"2025")으로 통과하는 이질 의쌍 존재 —
+    dice 0.3은 히트율 보존과 정밀도의 절충점, 추가 상향 시 정당 쌍 손실 급증
+- [x] **G.4** 임베딩 모델 격차 식별 (인프라 바운드, 코드 변경 없음):
+  * 현재 매핑 `pplx-embed-v1-0.6b → @cf/baai/bge-base-en-v1.5`는 **영어 전용 모델**.
+    한국어 핵심 정체성 대비 semantic cache의 KR 유사도 품질이 미검증
+  * Workers AI 다국어 옵션 `@cf/baai/bge-m3`는 1024d — 현 Vectorize 인덱스(768d)와
+    불일치. 마이그레이션 경로: ① 신규 인덱스 1024d 생성 → ② 매핑 전환 → ③ 재시드 →
+    ④ 본 시뮬레이션 재실행으로 KR 정밀도 비교. 운영 창구 확보 후 진행
+
+---
+
+### Phase H — 백엔드 풀 응집도 필터 (2026-08-24)
+
+> NDCG 격차 해소 작업 중 라이브 진단으로 발견된 구조적 결함 수정.
+
+- [x] **H.1** 결함 진단 — **안티봇 셸 수확(harvest)이 응답을 오염하고 폴백을 억제**:
+  * 증상: "리액트 훅 사용법" → Yahoo JP 증권 셸, "how does photosynthesis work" →
+    Microsoft 지원/기술 블로그 + Baidu 지식iN, "who invented the telephone" →
+    크립토 사이트 + SERP 가구 링크(yahoo 로그인/bing.com 자체)
+  * 근원: Bing 안티봇/consent 페이지가 반환되면 파서가 페이지의 이물 링크를 결과로
+    수확. 풀이 **비어있지 않으므로** 기존 "전부 실패 시 DDG 폴백"(emergencyFallback의
+    `results.length === 0` 게이트)이 발동하지 않는 구조적 맹점
+- [x] **H.2** `filterIncoherentResults` 구현 — `src/lib/search/ranking.ts`:
+  * BM25 토크나이저 재사용(한국어 스테밍+CJK 바이그램)으로 쿼리 신호 집합 구성 —
+    스코어러와 "용어가 무엇인지"에 대한 불일치 불가능
+  * 라틴 토큰은 단어 경계 매칭("work" ⊄ "networks"), CJK/Hangul 바이그램은 서브스트링
+  * 제목+본문 1000자에서 신호와 무관한 결과 폐기. 교차언어 지식원 면책:
+    wikipedia.org/github.com/developer.mozilla.org/stackoverflow.com —
+    한국어 기술 쿼리의 영어 GitHub 결과는 정당한 관련성(kr-tech 골드 22개가 github 포함)
+  * orchestrator 연결 위치가 계약: merge 직후 ~ emergencyFallback 이전. 전량 가비지
+    풀은 여기서 빈 풀이 되어 폴백 체인(self-index→SearXNG→DDG)이 실제로 발동됨
+- [x] **H.3** 측정 (conversational 태그 18쿼리 live A/B):
+  * **NDCG@10 0.2353 → 0.3025 (+28.5%)**, MRR 0.4926 → 0.6335 (+29%)
+  * kr-conv-07(청약) 0.168→0.529(+0.361), en-conv-02/08 각 +0.232,
+    en-conv-04 0→0.209, kr-conv-06 +0.083. 유일 하락 ja-conv-01 −0.067 = 노이즈 범위
+  * kr-tech 타겟 검증: MDN/en.wikipedia 면책 라이브 확인, 한국어 풀 정상 유지
+  * 참고: 이 샌드박스 IP에서는 DDG도 안티봇(202)으로 막혀 빈 풀 복구는 부분적 —
+    프로덕션 엣지 IP에서 폴백이 실 기회를 가짐. kr-conv-08은 폴백 복구 후 재측정 필요
+- [x] **H.4** CI 게이트 0.80 판단 + latest.json 아티팩트 위생 수정:
+  * **판단: 0.65 유지, 0.80 상향 보류**. 근거: 마지막 정상 환경 풀폴 실행(600쿼리,
+    commit 5c6c850) NDCG@10 = **0.6530** — 게이트 통과와 동시에 0.80까지의 격차가
+    아직 0.147로 명확. 샌드박스(봇월 IP) 수치(NDCG 0.26~0.36)는 환경 데그레이드로
+    판단 근거에서 제외. Phase F/G/H 개선이 반영된 차기 정상 풀폴 median-of-3에서
+    지속 0.70+ 확인 시 0.75 → 0.80 단계 상향
+  * **latest.json 쓰기 버그 수정** (eval/index.ts): 무조건 쓰기 → 풀폴 전용.
+    실측 피해 이력: 태그 실행이 공식 아티팩트를 덮어써 커밋 이력 전반이 오염
+    ("921쿼리 공식 평가" 커밋의 실제 내용 = 34쿼리 보고서). verify-ndcg-gate와
+    README 업데이터가 문맥 없는 부분 집합을 판정하는 경로 차단
+  * 구어체 median-of-3 실측치 확보: NDCG@10 **0.2631** / MRR 0.545 (샌드박스,
+    Bing 가용성 변동 포함 — kr-conv-02/08·en-conv-07/08이 런 간 0↔0.39 변동)
+- [x] **H.5** qrels 현실화 + README 공식 수치 동기화:
+  * kr-conv-02("카카오 실적 발표 자료") 골드에 `kakaocorp.com` 추가 — 실측 회수된
+    카카오 공식 IR 자료실이 `kakao.com` suffix 매칭 불일치로 0점 처리되던 격차 해소
+    (E.5 qrels 현실화 선례). 카카오게임즈/페이/뱅크 IR은 별개 법인이라 미포함
+  * README "검색 품질" 섹션을 공식 풀폴 아티팩트(600쿼리)로 동기화 —
+    NDCG@10 0.653 / MRR 0.980 / P@10 0.741 (봇월 데그레이드 구수치 0.3567 대체)
+- [x] **H.6** 동일 환경 풀폴 회귀 검증 — Phase F/G/H 효과의 전수 측정:
+  * 프로토콜: Aug-17 청크 베이스라인과 동일 조건(100쿼리 × 6청크 순차, 청크 간
+    메모리 캐시 클리어, 동일 샌드박스 네트워크). 러너 `scripts/run-chunk-eval.ts` 신규
+  * **결과: 600쿼리 평균 NDCG@10 0.2601 → 0.3716 (+42.9%)**,
+    전체 6개 청크 일관 개선 — 0-100 +42.5% / 100-200 +45.7% / 200-300 +16.0% /
+    300-400 +58.3% / 400-500 +31.5% / 500-600 +88.6%
+    (+16~+89% 전 청크 동시 개선은 무작위 환경 드리프트로 설명 불가 — 코드 효과로 판정)
+  * 태그별(집계 리포트): factual 0.432 / korean 0.323 / chinese 0.480 /
+    japanese 0.438 / financial 0.378 / academic 0.361
+  * 유의점: 절대치는 샌드박스 Bing 데그레이드 환경 기준 — 상용 비교·게이트 판정은
+    정상 환경 수치(공식 아티팩트 NDCG 0.653)를 사용. latest.json은 정상 아티팩트 유지
+- [x] **H.7** tier 기아(starvation) 수정 + doi.org 캡 — 하위 18쿼리 군집 진단 후속:
+  * **기아 결함**: en-fact-* 9개 쿼리가 백엔드=bing만으로 빈 풀 — 안티봇 셸의
+    정크 10+개가 minResults 조기 종료를 충족해 tier2(wikipedia)가 아예 실행되지
+    않았고, Phase H 풀 필터가 그 응답을 비웠음 (가비지가 권위 백엔드를 굶김)
+  * 수정: `buildRelevanceProbe()`(ranking.ts export) → TieredFanout
+    `relevantFilter` 옵션 — 조기 종료 판정을 **응집 통과 결과 수** 기준으로 변경.
+    정크는 더 이상 진행으로 계산되지 않고 하위 tier로 넘어감 (fail-forward)
+  * 라이브 검증: tier1→tier2→tier3 전 tier 실행 확인. wikipedia/DDG 회복 여부는
+    정상 네트워크 필요 (샌드박스 봇월)
+  * doi.org 홍수: ds-* 학술 쿼리 top-4가 doi.org 리다이렉트로 도배 — OpenAlex
+    work에 DOI 외 위치가 없을 때 발생. `capSourceResults('doi.org', 3)`로
+    다양성 확보 (HN cap 선례). arxiv 골드 회복은 OpenAlex 데이터 가용성 의존
+  * 단위 테스트 3132 → 3135 (tiered-fanout-coherence 3건)
+- [x] **H.8** 방어 계층 관측성 — metrics.ts에 Phase H 카운터 4종 추가:
+  * `pool_coherence_dropped_results_total` / `pool_coherence_emptied_pools_total` /
+    `fanout_harvest_junk_suppressed_total` / `doi_org_capped_results_total`
+  * Prometheus(/api/metrics) 노출 + 스모크 실측(2쿼리 → 정크 12 폐기·풀 1 비움·
+    프로브 21 억제 카운트 정확). 프로덕션에서 방어의 작동/과잉 여부를
+    메트릭으로 판정 가능 (메트릭 주도 원칙)
 
 ---
 

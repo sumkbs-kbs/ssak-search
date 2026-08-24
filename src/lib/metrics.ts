@@ -111,6 +111,45 @@ export function recordCacheMiss(): void {
   cacheMisses++
 }
 
+// ============================================================
+// Phase H defense metrics (in-memory per-isolate)
+// ============================================================
+
+let coherenceDroppedResults = 0
+let coherenceEmptiedPools = 0
+let harvestJunkSuppressed = 0
+let doiCappedResults = 0
+
+/** Results removed by the pool coherence filter. */
+export function recordCoherenceDrop(dropped: number, emptiedPool: boolean): void {
+  if (dropped > 0) coherenceDroppedResults += dropped
+  if (emptiedPool) coherenceEmptiedPools++
+}
+
+/** Tokenless results seen by the fanout relevance probe (harvest frequency). */
+export function recordHarvestJunkSuppressed(count: number): void {
+  if (count > 0) harvestJunkSuppressed += count
+}
+
+/** doi.org entries trimmed by the diversity cap. */
+export function recordDoiCap(trimmed: number): void {
+  if (trimmed > 0) doiCappedResults += trimmed
+}
+
+export function getDefenseMetrics(): {
+  coherenceDroppedResults: number
+  coherenceEmptiedPools: number
+  harvestJunkSuppressed: number
+  doiCappedResults: number
+} {
+  return {
+    coherenceDroppedResults,
+    coherenceEmptiedPools,
+    harvestJunkSuppressed,
+    doiCappedResults,
+  }
+}
+
 export function getCacheMetrics(): {
   hits: number
   misses: number
@@ -225,6 +264,26 @@ export function getPrometheusMetrics(): string {
   lines.push('# HELP cache_tier2_hits_total KV (persistent) hits')
   lines.push('# TYPE cache_tier2_hits_total counter')
   lines.push(`cache_tier2_hits_total ${cache.tier2Hits}`)
+
+  // Phase H defense metrics — visibility into harvest/junk defenses so their
+  // production behavior (and over-aggressiveness) is observable.
+  const defense = getDefenseMetrics()
+  lines.push('')
+  lines.push('# HELP pool_coherence_dropped_results_total Results removed for sharing no query signal (anti-bot harvests)')
+  lines.push('# TYPE pool_coherence_dropped_results_total counter')
+  lines.push(`pool_coherence_dropped_results_total ${defense.coherenceDroppedResults}`)
+  lines.push('')
+  lines.push('# HELP pool_coherence_emptied_pools_total Queries whose whole pool was junk')
+  lines.push('# TYPE pool_coherence_emptied_pools_total counter')
+  lines.push(`pool_coherence_emptied_pools_total ${defense.coherenceEmptiedPools}`)
+  lines.push('')
+  lines.push('# HELP fanout_harvest_junk_suppressed_total Tokenless results seen by the fanout relevance probe')
+  lines.push('# TYPE fanout_harvest_junk_suppressed_total counter')
+  lines.push(`fanout_harvest_junk_suppressed_total ${defense.harvestJunkSuppressed}`)
+  lines.push('')
+  lines.push('# HELP doi_org_capped_results_total doi.org entries trimmed by the diversity cap')
+  lines.push('# TYPE doi_org_capped_results_total counter')
+  lines.push(`doi_org_capped_results_total ${defense.doiCappedResults}`)
 
   // Agentic pipeline metrics
   const agentic = getAgenticMetrics()

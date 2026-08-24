@@ -17,6 +17,7 @@ import { cors } from 'hono/cors'
 import type { AppBindings, SearchRequest, SearchResponse, ErrorResponse, FocusMode } from '../types'
 import { executeSearch } from '../lib/orchestrator'
 import { cacheKey, getCached, setCached } from '../lib/cache'
+import { isCryptoQuery } from '../lib/crypto-search'
 import { indexFromSearchResults } from '../lib/search/auto-index'
 import { logSearchImpression } from '../lib/ltr/click-logger'
 import {
@@ -226,7 +227,7 @@ searchRoute.post('/', async (c) => {
   try {
     // Check cache first (skip for news/finance — freshness matters)
     const key = cacheKey(request, experiment?.variant)
-    if (request.topic !== 'news' && request.topic !== 'finance') {
+    if (request.topic !== 'news' && request.topic !== 'finance' && !isCryptoQuery(request.query)) {
       const cached = await getCached<SearchResponse>(key, c.env)
       if (cached) {
         recordSearchRequest(Date.now() - startTime, true)
@@ -264,7 +265,8 @@ searchRoute.post('/', async (c) => {
     // Topic news/finance always bypassed (freshness > speed).
     const hasUsableResults = result.results && result.results.length > 0
     const notFailed = result.backend !== 'failed' && !result.fallback_used
-    const skipForTopic = request.topic === 'news' || request.topic === 'finance'
+    const skipForTopic =
+      request.topic === 'news' || request.topic === 'finance' || isCryptoQuery(request.query)
     if (hasUsableResults && notFailed && !skipForTopic) {
       c.executionCtx.waitUntil(setCached(key, result, request.topic, c.env))
     }
@@ -423,7 +425,7 @@ searchRoute.get('/', async (c) => {
     // Phase 5: Check cache first (skip for news/finance — freshness matters)
     // GET route previously had NO cache lookup, so every GET was a cold search.
     const key = cacheKey(request, experiment?.variant)
-    if (request.topic !== 'news' && request.topic !== 'finance') {
+    if (request.topic !== 'news' && request.topic !== 'finance' && !isCryptoQuery(request.query)) {
       const cached = await getCached<SearchResponse>(key, c.env)
       if (cached) {
         recordSearchRequest(Date.now() - startTime, true)
@@ -459,7 +461,8 @@ searchRoute.get('/', async (c) => {
     subrequestEstimate = (result as SearchResponse & { subrequest_estimate?: number }).subrequest_estimate ?? 0
     const hasUsableResults = result.results && result.results.length > 0
     const notFailed = result.backend !== 'failed' && !result.fallback_used
-    const skipForTopic = request.topic === 'news' || request.topic === 'finance'
+    const skipForTopic =
+      request.topic === 'news' || request.topic === 'finance' || isCryptoQuery(request.query)
     if (hasUsableResults && notFailed && !skipForTopic) {
       c.executionCtx.waitUntil(setCached(key, result, request.topic, c.env))
     }

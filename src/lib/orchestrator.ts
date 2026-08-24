@@ -46,7 +46,7 @@ import { buildKnowledgePanel, matchImagesToResults } from './knowledge-panel'
 import { hybridSearch } from './retrieval'
 import { generateRelatedQueries, truncateToTokens, countryToBingMkt, countryToLanguageTag, filterMirrorResults } from './util'
 import { type AgenticSearchOptions, executeAgenticSearch } from './agentic'
-import { recordAgenticPipeline, getAgenticMetrics, recordCpuBudgetActivation } from './metrics'
+import { recordAgenticPipeline, getAgenticMetrics, recordCpuBudgetActivation, recordCoherenceDrop, recordDoiCap } from './metrics'
 import { maybeAlertHighRegenerationRate } from './slack-alert'
 import { cacheKey, cacheParamsSignature } from './cache'
 import { semanticCacheLookup, semanticCacheStore } from './semantic-cache'
@@ -58,9 +58,10 @@ import type { CircuitBreaker } from './resilience/circuit-breaker'
 import { getCircuitBreaker } from './resilience/circuit-breaker-registry'
 import { mergeAndDeduplicate, normalizeUrlForDedup, normalizeTitleForDedup } from './search/dedup'
 import { emergencyFallback } from './search/fallback'
-import { applyRankingPipeline, capSourceResults } from './search/ranking'
+import { applyRankingPipeline, capSourceResults, filterIncoherentResults, buildRelevanceProbe } from './search/ranking'
 import { createCpuBudget, isFreePlan } from './resilience/cpu-budget'
 import { toBackendQuery } from './korean/backend-query'
+import { isCryptoQuery } from './crypto-search'
 
 // ============================================================
 // Phase 2.4: Isolate-level in-memory result cache
@@ -389,7 +390,10 @@ function isSemanticCacheEligible(request: SearchRequest): boolean {
     request.topic !== 'news' &&
     request.topic !== 'finance' &&
     detectQueryType(request.query) !== 'news' &&
-    detectQueryType(request.query) !== 'financial'
+    detectQueryType(request.query) !== 'financial' &&
+    // E.5 병목③: crypto 시세는 60초 마이크로 캐시가 신선도를 담당 — 장기
+    // semantic 캐시 저장은 부정확한 가격 재생산.
+    !isCryptoQuery(request.query)
   )
 }
 
@@ -492,6 +496,7 @@ export async function executeSearch(request: SearchRequest, config: Orchestrator
     // ── 2. Build SearchContext ──
     const ctx = await buildSearchContext(request, config)
     const { isNews, isFinance, effectiveWikiLang, entityHints } = ctx
+    const isCrypto = ctx.isCrypto === true
 
     // ── 3. Start image search (fire-and-forget, parallel with text backends) ──
     let imageResults: ImageResult[] = []
@@ -668,6 +673,9 @@ export async function executeSearch(request: SearchRequest, config: Orchestrator
       breakerMap,
       freePlan: lightweightMode,
       protectedBackends,
+      // Phase H: an anti-bot harvest must not satisfy the early-exit —
+      // counting only coherent results keeps tier2+ (wikipedia/github) alive.
+      relevantFilter: buildRelevanceProbe(ctx.query),
     })
 
     // Convert tiered result to legacy format for compatibility
@@ -764,6 +772,22 @@ export async function executeSearch(request: SearchRequest, config: Orchestrator
     // ── 6. Merge & deduplicate ──
     let results = mergeAndDeduplicate(resultSets)
     results = capSourceResults(results, 'ycombinator.com', 2)
+
+    // Phase H: academic pools flood with opaque doi.org redirects when OpenAlex
+    // works carry no landing page beyond their DOI — 4+ identical-domain links
+    // crowd out publisher/arxiv copies from other sources. Same remedy as the
+    // HN cap above: keep the best-ranked few, let diverse domains surface.
+    const beforeDoiCap = results.length
+    results = capSourceResults(results, 'doi.org', 3)
+    recordDoiCap(beforeDoiCap - results.length)
+
+    // Phase H: drop results that share no signal with the query (anti-bot
+    // shell harvests — see filterIncoherentResults doc). A fully-garbage pool
+    // becomes empty HERE so step 7's fallback chain can actually rescue the
+    // request; without this, a non-empty junk pool suppresses the fallback.
+    const beforeCoherence = results.length
+    results = filterIncoherentResults(results, ctx.query)
+    recordCoherenceDrop(beforeCoherence - results.length, beforeCoherence > 0 && results.length === 0)
 
     // S20: Hacker News diversity cap — HN Algolia over-saturates general
     // query pools (eval: en-general-03 top5 all-HN, adv-03 4/10 HN). Keep at
@@ -1056,7 +1080,9 @@ export async function executeSearch(request: SearchRequest, config: Orchestrator
       no_results: paginatedResults.length === 0,
     }
 
-    setInMemoryCache(memCacheKey, searchResponse, isNews || isFinance)
+    // E.5 병목③: crypto 시세는 응답 캐시를 우회 — 60초 마이크로 캐시가
+    // 유일한 신선도 계약 (장기 캐시 저장 시 가격이 30분 stale).
+    if (!isCrypto) setInMemoryCache(memCacheKey, searchResponse, isNews || isFinance)
 
     // ── 17. Semantic cache store (C.3) — fire-and-forget, never blocks the
     // response. Skipped for news/finance (freshness) and when the caller opted
@@ -1174,6 +1200,7 @@ async function buildSearchContext(request: SearchRequest, config: OrchestratorCo
 
   const isNews = request.topic === 'news' || queryType === 'news'
   const isFinance = request.topic === 'finance' || queryType === 'financial'
+  const isCrypto = queryType === 'crypto'
 
   const focus: FocusMode = (request as SearchRequest & { focus?: FocusMode }).focus || 'all'
   const hasExplicitFocus = focus !== 'all'
@@ -1193,6 +1220,7 @@ async function buildSearchContext(request: SearchRequest, config: OrchestratorCo
     entityHints,
     isNews,
     isFinance,
+    isCrypto,
     focus,
     hasExplicitFocus,
     overFetch,

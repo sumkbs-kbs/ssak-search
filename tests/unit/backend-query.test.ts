@@ -53,3 +53,43 @@ describe('toBackendQuery', () => {
     }
   })
 })
+
+describe('toBackendQuery — English conversational (Phase F)', () => {
+  it('strips question scaffolding into keyword-style queries', () => {
+    expect(toBackendQuery('what is quantum computing')).toBe('quantum computing')
+    expect(toBackendQuery('who is elon musk')).toBe('elon musk')
+    expect(toBackendQuery('tell me about the roman empire')).toBe('roman empire')
+    expect(toBackendQuery("what's my ip")).toBe('ip')
+    expect(toBackendQuery('how does bitcoin mining work')).toBe('bitcoin mining work')
+  })
+
+  it('keeps contractions intact via whole-token matching', () => {
+    expect(toBackendQuery("where's the nearest apple store")).toBe('nearest apple store')
+  })
+
+  it('preserves collision-class words that carry query meaning', () => {
+    expect(toBackendQuery('will smith movies')).toBe('will smith movies')
+    expect(toBackendQuery('can bus arduino tutorial')).toBe('can bus arduino tutorial')
+    expect(toBackendQuery('may 2026 events')).toBe('may 2026 events')
+    expect(toBackendQuery('windows search not working')).toBe('windows search not working')
+    // trailing duplicate "request" collapses via stemmer-level order-preserving dedup
+    expect(toBackendQuery('get request vs post request')).toBe('get request vs post')
+  })
+
+  it('single-char tokens follow the pre-existing stemmer min-length rule', () => {
+    expect(toBackendQuery('plan b side effects')).toBe('plan side effects')
+    expect(toBackendQuery('is c faster than rust')).toBe('faster than rust')
+  })
+
+  it('falls back to original when everything is scaffolding', () => {
+    expect(toBackendQuery('tell me about')).toBe('tell me about')
+    expect(toBackendQuery('tell me please')).toBe('tell me please')
+  })
+})
+
+describe('toBackendQuery — Japanese passthrough (Phase F, measured reversal)', () => {
+  it('keeps とは intact — stripping measured negative in live A/B (ja-conv NDCG −0.24)', () => {
+    expect(toBackendQuery('量子コンピュータとは')).toBe('量子コンピュータとは')
+    expect(toBackendQuery('人工知能とは 歴史')).toBe('人工知能とは 歴史')
+  })
+})

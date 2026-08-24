@@ -184,10 +184,14 @@ Options:
       // Persist each raw run for auditability (run-1.json … run-N.json).
       // Regressions are intentionally NOT computed here — per-run diffs against
       // a moving baseline are ambiguous; the median report is the signal.
-      try {
-        fs.writeFileSync(path.join(resultsDir, `run-${i}.json`), JSON.stringify({ report: rep }, null, 2), 'utf-8')
-      } catch (e) {
-        console.error(`Failed to write eval/results/run-${i}.json:`, e)
+      // Same full-pool-only contract as latest.json: tag-run subsets must not
+      // clobber the official median artifacts.
+      if (!opts.tag) {
+        try {
+          fs.writeFileSync(path.join(resultsDir, `run-${i}.json`), JSON.stringify({ report: rep }, null, 2), 'utf-8')
+        } catch (e) {
+          console.error(`Failed to write eval/results/run-${i}.json:`, e)
+        }
       }
     }
     report = computeMedianReport(reports, queries)
@@ -224,16 +228,22 @@ Options:
     console.error(`Baseline saved (${report.timestamp})\n`)
   }
 
-  // Always persist the latest report to eval/results/latest.json so the
+  // Persist the latest FULL-POOL report to eval/results/latest.json so the
   // weekly README updater and CI artifacts can consume it without re-running.
-  try {
-    const fs = await import('node:fs')
-    const path = await import('node:path')
-    const resultsDir = path.join(process.cwd(), 'eval', 'results')
-    fs.mkdirSync(resultsDir, { recursive: true })
-    fs.writeFileSync(path.join(resultsDir, 'latest.json'), formatReportJSON(report, regressions), 'utf-8')
-  } catch (e) {
-    console.error('Failed to write eval/results/latest.json:', e)
+  // Phase H fix: --tag runs are diagnostic subsets — persisting them here let
+  // an 18-query conversational report overwrite the official 921-query
+  // artifact, which the absolute NDCG gate (verify-ndcg-gate.ts) then judges
+  // out of context. Full-pool runs only; tag runs keep stdout as their record.
+  if (!opts.tag) {
+    try {
+      const fs = await import('node:fs')
+      const path = await import('node:path')
+      const resultsDir = path.join(process.cwd(), 'eval', 'results')
+      fs.mkdirSync(resultsDir, { recursive: true })
+      fs.writeFileSync(path.join(resultsDir, 'latest.json'), formatReportJSON(report, regressions), 'utf-8')
+    } catch (e) {
+      console.error('Failed to write eval/results/latest.json:', e)
+    }
   }
 
   // S37: post-median S34 wikipedia-429 loss report. Only meaningful for a

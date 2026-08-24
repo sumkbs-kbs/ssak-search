@@ -27,6 +27,7 @@ import { duckDuckGoSearch } from '../duckduckgo'
 import { searxngSearch } from '../searxng-search'
 import { yahooFinanceSearch } from '../yahoo-finance-search'
 import { searchKoreanStock } from '../stock-finance'
+import { cryptoPriceSearch } from '../crypto-search'
 import { stackExchangeSearch } from '../stack-exchange'
 import { qiitaSearch, juejinSearch, csdnSearch, baiduSearch } from '../community-search'
 import { braveSearch, isBraveAvailable } from '../brave-search'
@@ -533,6 +534,15 @@ export function buildKoreanStockTask(ctx: SearchContext, maxResults = 5): Backen
   return {
     name: 'naver-finance',
     run: () => searchKoreanStock(ctx.query, { maxResults, env: ctx.env }),
+  }
+}
+
+/** E.5 병목③: crypto 시세 카드 (Upbit→CoinGecko 체인). 코인 미감지 시
+ * cryptoPriceSearch가 []를 반환해 태스크가 no-op으로 소진된다. */
+export function buildCryptoPriceTask(ctx: SearchContext): BackendTask {
+  return {
+    name: 'crypto-price',
+    run: () => cryptoPriceSearch(ctx.query, { timeoutMs: backendTimeoutMs('crypto-price', 5000) }),
   }
 }
 

@@ -74,12 +74,13 @@ jobs:
         # 401→빈 결과→불일치 판정 (실측). README 제품 정체성("API 키 없이 무료")
         # 에 맞춰 양 환경을 오픈 모드(AUTH_OPEN_MODE=1 + 키 변수 공백화)로
         # 정규화한다. 롤백: 이 스텝 제거 + 두 환경에 키 재설정. 안정화 후 본
-        # 스텝은 제거 예정.
+        # 스텝은 제거 예정. 비고: SEARCH_API_KEY는 시크릿 타입이라 value ""
+        # 공백화가 무시됨(실측 07:05 런) — null 삭제로 전환.
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: |
-          HTTP=$(curl -s -o /tmp/patch.json -w '%{http_code}' -X PATCH             "https://api.cloudflare.com/client/v4/accounts/${CLOUDFLARE_ACCOUNT_ID}/pages/projects/${PROJECT_NAME}"             -H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}"             -H "Content-Type: application/json"             -d '{"deployment_configs":{"production":{"env_vars":{"AUTH_OPEN_MODE":{"value":"1"},"SEARCH_API_KEY":{"value":""},"TENANTS_CONFIG":{"value":""}}},"preview":{"env_vars":{"AUTH_OPEN_MODE":{"value":"1"},"SEARCH_API_KEY":{"value":""},"TENANTS_CONFIG":{"value":""}}}}}')
+          HTTP=$(curl -s -o /tmp/patch.json -w '%{http_code}' -X PATCH             "https://api.cloudflare.com/client/v4/accounts/${CLOUDFLARE_ACCOUNT_ID}/pages/projects/${PROJECT_NAME}"             -H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}"             -H "Content-Type: application/json"             -d '{"deployment_configs":{"production":{"env_vars":{"AUTH_OPEN_MODE":{"value":"1"},"SEARCH_API_KEY":null,"TENANTS_CONFIG":null}},"preview":{"env_vars":{"AUTH_OPEN_MODE":{"value":"1"},"SEARCH_API_KEY":null,"TENANTS_CONFIG":null}}}}')
           echo "PATCH http=$HTTP"
           cat /tmp/patch.json | head -c 300 || true
           [ "$HTTP" = "200" ] || { echo "❌ auth parity normalize failed"; exit 1; }

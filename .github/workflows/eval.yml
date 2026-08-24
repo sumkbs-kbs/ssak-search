@@ -65,7 +65,7 @@ jobs:
     # S73 G2) ≈ 2×23 + warm ≈ 51min nominal, ~64min worst case (wide 429
     # window). Bumped to 110min so an extreme weekly 429 window cannot kill
     # the schedule step (setup+install+format eat ~7min of the job budget).
-    timeout-minutes: 110
+    timeout-minutes: 180
     steps:
       - uses: actions/checkout@v4
 
@@ -188,7 +188,11 @@ jobs:
         # S37: 50→90min — median-of-3 runs ~60-75min; step must outlive the run.
         # S74: 90→100min — schedule (2 runs + cache-once) measured ~51min
         # nominal / ~64min worst case; margin absorbs an extreme 429 window.
-        timeout-minutes: 100
+        # Phase H (2026-08-24): pool 600→939 queries (+cache warm pass ≈1,880
+        # fanouts) measured >100min on ubuntu-latest — the run TIMED OUT and
+        # produced no report at all (worse than a late one). 100→170min,
+        # job ceiling 110→180.
+        timeout-minutes: 170
         run: |
           npm run ${{ steps.config.outputs.run_mode }} -- ${{ steps.config.outputs.tag_flag }} ${{ steps.config.outputs.save_flag }} ${{ steps.config.outputs.cache_flag }} ${{ steps.config.outputs.runs_flag }} ${{ steps.config.outputs.loss_flag }} 2>&1
 

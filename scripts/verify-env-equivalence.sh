@@ -51,10 +51,11 @@ LABEL_A="${LABEL_A:-staging}"
 LABEL_B="${LABEL_B:-production}"
 # EQ_SEARCH_API_KEY (선택): 양쪽 환경이 닫힌 모드(API_KEY_DO 바인딩)일 때
 # 동일 키를 프로브에 첨부한다 — 미설정 시 무인증 (오픈 모드 환경용).
-AUTH_HEADER=()
-if [ -n "${EQ_SEARCH_API_KEY:-}" ]; then
-  AUTH_HEADER=(-H "Authorization: Bearer ${EQ_SEARCH_API_KEY}")
-fi
+# 양측 개별 키 (환경별 API_KEY_DO 저장소가 분리되어 키가 다르다 — 실측)
+AUTH_HEADER_A=()
+AUTH_HEADER_B=()
+if [ -n "${EQ_A_KEY:-}" ]; then AUTH_HEADER_A=(-H "Authorization: Bearer ${EQ_A_KEY}"); fi
+if [ -n "${EQ_B_KEY:-}" ]; then AUTH_HEADER_B=(-H "Authorization: Bearer ${EQ_B_KEY}"); fi
 
 # 배포 커밋 동치 검증: staging 브랜치 최신 배포 vs Production 최신 배포의
 # Source commit (deployment list 테이블 — Source 는 컬럼 5). SKIP_COMMIT=1 이면
@@ -147,9 +148,9 @@ IFS='|'
 for q in $QUERIES; do
   IFS="$OLDIFS"
   # 수정 96: pace_curl 래퍼 — 공유 게이트 통과 + 잔량 자동 연장
-  DOMS_A="$(pace_curl -s -m 40 -X POST "$ENV_A/api/search" -H 'Content-Type: application/json' "${AUTH_HEADER[@]}" \
+  DOMS_A="$(pace_curl -s -m 40 -X POST "$ENV_A/api/search" -H 'Content-Type: application/json' "${AUTH_HEADER_A[@]}" \
     -d "{\"query\":\"$q\"}" | python3 -c "import json,sys; print(' '.join(r.get('domain','') for r in (json.load(sys.stdin).get('results') or [])[:5]))" 2>/dev/null || echo 'ERR')"
-  DOMS_B="$(pace_curl -s -m 40 -X POST "$ENV_B/api/search" -H 'Content-Type: application/json' "${AUTH_HEADER[@]}" \
+  DOMS_B="$(pace_curl -s -m 40 -X POST "$ENV_B/api/search" -H 'Content-Type: application/json' "${AUTH_HEADER_B[@]}" \
     -d "{\"query\":\"$q\"}" | python3 -c "import json,sys; print(' '.join(r.get('domain','') for r in (json.load(sys.stdin).get('results') or [])[:5]))" 2>/dev/null || echo 'ERR')"
   if [ "$DOMS_A" = "$DOMS_B" ] && [ "$DOMS_A" != "ERR" ] && [ -n "$DOMS_A" ]; then
     echo "   ✅ '$q' → $DOMS_A"
@@ -169,8 +170,8 @@ fi
 # ── 4. gold 회수 동치 ─────────────────────────────────────────────────────
 echo ""
 echo " [4/4] gold 회수 동치"
-GOLD_A="$(SEARCH_URL="$ENV_A" bash "$(dirname "${BASH_SOURCE[0]}")/verify-deployed-gold.sh" 2>&1 | grep -E '^GOLD_RESULT=' | tail -1 || true)"
-GOLD_B="$(SEARCH_URL="$ENV_B" bash "$(dirname "${BASH_SOURCE[0]}")/verify-deployed-gold.sh" 2>&1 | grep -E '^GOLD_RESULT=' | tail -1 || true)"
+GOLD_A="$(EQ_SEARCH_API_KEY="$EQ_A_KEY" SEARCH_URL="$ENV_A" bash "$(dirname "${BASH_SOURCE[0]}")/verify-deployed-gold.sh" 2>&1 | grep -E '^GOLD_RESULT=' | tail -1 || true)"
+GOLD_B="$(EQ_SEARCH_API_KEY="$EQ_B_KEY" SEARCH_URL="$ENV_B" bash "$(dirname "${BASH_SOURCE[0]}")/verify-deployed-gold.sh" 2>&1 | grep -E '^GOLD_RESULT=' | tail -1 || true)"
 echo "   $LABEL_A: ${GOLD_A:-(실패)}   $LABEL_B: ${GOLD_B:-실패}"
 if [ "$GOLD_A" = "$GOLD_B" ] && [ -n "$GOLD_A" ] && [[ "$GOLD_A" != *"/0"* ]]; then
   echo "   ✅ gold 회수 동치 ($GOLD_A)"

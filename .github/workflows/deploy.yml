@@ -68,26 +68,6 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Normalize auth parity — same probe key on both environments [TEMP]
-        id: auth_parity
-        # Phase H 후속 (2026-08-24): 양 환경 모두 API_KEY_DO 바인딩으로 닫힌
-        # 모드(auth.ts L249 — 바인딩 존재 시 오픈 분기 미달, 실측)라 동치
-        # 게이트의 무인증 프로브가 401 빈 결과 → 불일치 판정. value 공백화/
-        # null 삭제 모두 무시됨(07:05/07:17 런 실측 — SEARCH_API_KEY는
-        # secret_text 타입) → 양 환경에 동일 랜덤 키를 설정하고 그 값을
-        # 동치 프로브에 주입한다. 키는 실행마다 로테이션(외부 소비자 미연결
-        # 가정 — README 통합 안정화 후 영속화 또는 오픈 전환 별도 결정).
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-        run: |
-          RND="eqk_$(openssl rand -hex 24)"
-          BODY="{\"deployment_configs\":{\"production\":{\"env_vars\":{\"SEARCH_API_KEY\":{\"type\":\"secret_text\",\"value\":\"$RND\"}}},\"preview\":{\"env_vars\":{\"SEARCH_API_KEY\":{\"type\":\"secret_text\",\"value\":\"$RND\"}}}}}"
-          HTTP=$(curl -s -o /tmp/patch.json -w '%{http_code}' -X PATCH             "https://api.cloudflare.com/client/v4/accounts/${CLOUDFLARE_ACCOUNT_ID}/pages/projects/${PROJECT_NAME}"             -H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}"             -H "Content-Type: application/json"             -d "$BODY")
-          echo "PATCH http=$HTTP"
-          [ "$HTTP" = "200" ] || { echo "❌ key seeding failed"; head -c 300 /tmp/patch.json; exit 1; }
-          echo "search_key=${RND}" >> "$GITHUB_OUTPUT"
-
       - name: Verify staging deployment commit baseline (pre-deploy guard)
         # S104-③-⑥-② (2026-08-12): same guard as production. FAIL_ON_COMMIT_DRIFT=1
         # + ALLOW_BEHIND=1 blocks only when the CURRENT staging deployment is at
@@ -250,7 +230,8 @@ jobs:
           ALERT_SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK }}
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          EQ_SEARCH_API_KEY: ${{ steps.auth_parity.outputs.search_key }}
+          EQ_A_KEY: ${{ secrets.EQ_STAGING_API_KEY }}
+          EQ_B_KEY: ${{ secrets.EQ_PRODUCTION_API_KEY }}
         run: |
           for i in 1 2; do
             if EQ_NOTIFY=$([ "$i" = "2" ] && echo 1 || echo 0) SKIP_COMMIT=1 \

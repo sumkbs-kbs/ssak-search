@@ -11,15 +11,35 @@
  * PATCH  /api/keys/:keyId/scope — Update key scope (admin only)
  */
 
-import { Hono } from 'hono'
+import { Hono, type Context } from 'hono'
 import { logger, toError } from '../lib/logger'
 import { cors } from 'hono/cors'
 import type { AppBindings, ErrorResponse } from '../types'
 import { getApiKeyStub, type KeyScope, type CreateKeyRequest } from '../lib/api-key-do'
+import { validateApiKeyAsync } from '../lib/auth'
 
 const keysRoute = new Hono<{ Bindings: AppBindings }>()
 
 keysRoute.use('/*', cors({ origin: '*' }))
+
+// Phase H 보안 수정 (2026-08-24): POST/관리 오퍼레이션이 무인증으로 통과하던
+// 구멍 — 프로덕션에서 누구나 키를 발급·열람할 수 있었다(라이브 실측). DO가
+// 연결된 환경에서는 유효한 키 + write/admin 스코프를 요구한다. 부트스트랩
+// (API_KEY_DO 미연결 로컬)은 기존 경로 유지.
+async function requireManageAuth(
+  c: Context<{ Bindings: AppBindings }>,
+): Promise<{ ok: true; scope: KeyScope } | { ok: false; status: 401 | 403; detail: string }> {
+  const auth = await validateApiKeyAsync(c.req.raw.headers, c.env)
+  if (!auth.valid) return { ok: false, status: 401, detail: auth.reason || 'Unauthorized' }
+  const scope = auth.keyMeta?.scope as KeyScope | undefined
+  if (auth.keyMeta && scope !== 'write' && scope !== 'admin') {
+    return { ok: false, status: 403, detail: 'write or admin scope required for key management' }
+  }
+  if (!auth.keyMeta) {
+    return { ok: false, status: 403, detail: 'key management requires a DO-backed key' }
+  }
+  return { ok: true, scope: scope as KeyScope }
+}
 
 // ============================================================
 // POST /api/keys — Create a new API key
@@ -34,6 +54,13 @@ keysRoute.post('/', async (c) => {
   } catch (_err) {
     return c.json<ErrorResponse>({ detail: 'Invalid JSON body', code: 'invalid_body' }, 400)
   }
+
+  const mgmt = await requireManageAuth(c)
+  if (!mgmt.ok)
+    return c.json<ErrorResponse>(
+      { detail: mgmt.detail, code: mgmt.status === 401 ? 'unauthorized' : 'forbidden' },
+      mgmt.status,
+    )
 
   // Bootstrap mode — no DO configured => generate a random key and let it work via legacy SEARCH_API_KEY path
   if (!c.env.API_KEY_DO) {

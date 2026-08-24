@@ -53,32 +53,16 @@
       { "name": "NEWS_HUB_DO", "class_name": "NewsHubDO" }
     ]
   },
-  "migrations": [
-    {
-      "tag": "v1",
-      // RateLimiterDO is deliberately ABSENT: it predates the SQLite era and
-      // already exists server-side on legacy KV storage — re-declaring it as
-      // new_sqlite_class hits CF error 10074 (live CI deploy, 2026-08-24).
-      // The class only uses the KV-style ctx.storage API (see Storage note
-      // above), which works unchanged on the legacy backend.
-      "new_sqlite_classes": [
-        "ThreadDO",
-        "PagesDO",
-        "LibraryDO",
-        "UserProfileDO",
-        "SpaceDO",
-        "ApiKeyDO",
-        "CrawlerDO",
-        "ClickLogDO",
-        "ExperimentDO",
-        "CanaryOrchestratorDO"
-      ]
-    },
-    {
-      "tag": "v2",
-      "new_sqlite_classes": ["AuditLogDO", "TenancyDO", "NewsHubDO"]
-    }
-  ],
+  // Migrations REMOVED (2026-08-24): every DO class below already exists in
+  // production, and the server-side migration ledger for this script no
+  // longer matches this list — re-declaring any of them as new_sqlite_classes
+  // fails with CF error 10074 ("already depended on by existing Durable
+  // Objects"; measured live for RateLimiterDO then ThreadDO). All classes use
+  // only the KV-style ctx.storage.get/put API (see Storage note above), which
+  // works identically on SQLite and legacy backends, so no storage migration
+  // is needed. If a genuinely NEW class is added later, declare it in a fresh
+  // migrations entry with a new tag.
+
   // ── Env bindings the DOs read from this.env (subset of Pages) ──────────
   // CrawlerDO uses SEARCH_INDEX_DB + INDEX_QUEUE; search backends called from
   // CanaryOrchestratorDO use AI + CACHE_KV; metrics logging uses ANALYTICS.

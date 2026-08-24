@@ -56,8 +56,12 @@
   "migrations": [
     {
       "tag": "v1",
+      // RateLimiterDO is deliberately ABSENT: it predates the SQLite era and
+      // already exists server-side on legacy KV storage — re-declaring it as
+      // new_sqlite_class hits CF error 10074 (live CI deploy, 2026-08-24).
+      // The class only uses the KV-style ctx.storage API (see Storage note
+      // above), which works unchanged on the legacy backend.
       "new_sqlite_classes": [
-        "RateLimiterDO",
         "ThreadDO",
         "PagesDO",
         "LibraryDO",

@@ -25,13 +25,17 @@
 
 | 항목 | Production URL | Local Dev URL |
 |------|---------------|---------------|
-| **API Base** | `https://ssak-search.pages.dev/api` | `http://localhost:8788/api` |
+| **API Base** | `https://search-engine-api.pages.dev/api` | `http://localhost:8788/api` |
 | **Search** | `POST /api/search` | 동일 |
 | **Extract** | `POST /api/extract` | 동일 |
 | **Chat** | `POST /api/chat` | 동일 |
 | **Health** | `GET /api/health` | 동일 |
-| **OpenAI 호환** | `https://ssak-search.pages.dev/v1` | `http://localhost:8788/v1` |
-| **API 키** | 불필요 (open 모드) 또는 `SEARCH_API_KEY` 설정 시 필요 | 불필요 |
+| **OpenAI 호환** | `https://search-engine-api.pages.dev/v1` | `http://localhost:8788/v1` |
+| **API 키** | **필요** (2026-08-24부터 닫힌 모드 — 아래 키 발급 참조) | 불필요 |
+
+> ⚠️ **2026-08-24 업데이트**: `API_KEY_DO` 바인딩 활성화로 검색 API가 키를
+> 요구합니다. 프로덕션 키: `~/.ssak-search/api-key.txt` (read 스코프).
+> 요청 헤더에 `Authorization: Bearer <키>` 를 붙이세요.
 
 ---
 
@@ -45,7 +49,8 @@
 import httpx
 from typing import Optional
 
-SEARCH_API = "https://ssak-search.pages.dev/api"
+SEARCH_API = "https://search-engine-api.pages.dev/api"
+SEARCH_KEY = "sk-..."  # ~/.ssak-search/api-key.txt 의 값
 
 async def web_search(
     query: str,
@@ -70,7 +75,11 @@ async def web_search(
         body["focus"] = focus
 
     async with httpx.AsyncClient(timeout=30.0) as client:
-        resp = await client.post(f"{SEARCH_API}/search", json=body)
+        resp = await client.post(
+            f"{SEARCH_API}/search",
+            json=body,
+            headers={"Authorization": f"Bearer {SEARCH_KEY}"},
+        )
         resp.raise_for_status()
         return resp.json()
 
@@ -131,8 +140,8 @@ Hermes Agent가 **OpenAI SDK** 또는 **OpenAI-compatible function calling**을 
 from openai import OpenAI
 
 client = OpenAI(
-    base_url="https://ssak-search.pages.dev/v1",
-    api_key="any-string-works",  # open 모드: 아무 값이나 가능
+    base_url="https://search-engine-api.pages.dev/v1",
+    api_key="sk-...",  # 실제 발급 키 (~/.ssak-search/api-key.txt)
 )
 
 # 검색 기능이 내장된 AI 채팅
@@ -164,8 +173,8 @@ Hermes Agent가 OpenAI-style function calling을 지원하는 경우, 아래 too
 from openai import OpenAI
 
 client = OpenAI(
-    base_url="https://ssak-search.pages.dev/v1",
-    api_key="any-string-works",
+    base_url="https://search-engine-api.pages.dev/v1",
+    api_key="sk-...",  # 실제 발급 키
 )
 
 # Tool 정의 (OpenAI function calling 형식)
@@ -236,7 +245,7 @@ pip install hermes-search
 ```python
 from hermes_search import HermesSearch
 
-client = HermesSearch(    base_url="https://ssak-search.pages.dev/api"
+client = HermesSearch(    base_url="https://search-engine-api.pages.dev/api"
 )
 
 # Tavily 호환 검색 (raw dict)
@@ -257,7 +266,7 @@ import asyncio
 from hermes_search import HermesSearch
 
 async def main():
-    client = HermesSearch(    base_url="https://ssak-search.pages.dev/api"
+    client = HermesSearch(    base_url="https://search-engine-api.pages.dev/api"
 )
 
     # 1. 검색
@@ -286,7 +295,7 @@ asyncio.run(main())
 from hermes_search import HermesAgentTools
 
 # Tool 인스턴스 생성
-tools = HermesAgentTools(base_url="https://ssak-search.pages.dev/api")
+tools = HermesAgentTools(base_url="https://search-engine-api.pages.dev/api")
 
 # Hermes Agent에 등록할 tool 정의 획득
 tool_definitions = tools.get_tool_definitions()
@@ -494,7 +503,7 @@ class WebSearchTool(BaseTool):
     def _run(self, query: str, max_results: int = 10) -> str:
         import httpx
         resp = httpx.post(
-            "https://ssak-search.pages.dev/api/search",
+            "https://search-engine-api.pages.dev/api/search",
             json={"query": query, "max_results": max_results, "include_answer": True},
             timeout=30,
         )
@@ -515,10 +524,10 @@ class WebSearchTool(BaseTool):
 
 ```bash
 # 1. API가 응답하는지 확인
-curl -s https://ssak-search.pages.dev/api/health | python3 -m json.tool
+curl -s https://search-engine-api.pages.dev/api/health | python3 -m json.tool
 
 # 2. 검색 테스트
-curl -s -X POST https://ssak-search.pages.dev/api/search \
+curl -s -X POST https://search-engine-api.pages.dev/api/search \
   -H "Content-Type: application/json" \
   -d '{"query":"test","max_results":1}' | python3 -c "
 import sys, json
@@ -530,7 +539,7 @@ print(f'📡 백엔드: {d[\"backend\"]}')
 # 3. Python SDK 테스트
 python3 -c "
 from hermes_search import HermesSearch
-c = HermesSearch(base_url='https://ssak-search.pages.dev/api')
+c = HermesSearch(base_url='https://search-engine-api.pages.dev/api')
 r = c.search_dict('hello world', max_results=1)
 print(f'✅ {len(r[\"results\"])}건 결과')
 "
@@ -569,4 +578,4 @@ print(f'✅ {len(r[\"results\"])}건 결과')
 
 ---
 
-*문서 생성일: 2026-07-21 | 기준 URL: https://ssak-search.pages.dev | 현재 배포: https://4ebb7a0f.ssak-search.pages.dev*
+*문서 생성일: 2026-07-21 | 기준 URL: https://search-engine-api.pages.dev | 현재 배포: https://4ebb7a0f.search-engine-api.pages.dev*

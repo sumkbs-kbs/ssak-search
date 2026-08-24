@@ -68,22 +68,25 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Normalize auth parity — open mode on both environments [TEMP]
-        # Phase H 후속 (2026-08-24): staging/production 모두 SEARCH_API_KEY가
-        # 설정되어 닫힌 모드인데 동치 대조 게이트가 키 없는 프로브를 날려
-        # 401→빈 결과→불일치 판정 (실측). README 제품 정체성("API 키 없이 무료")
-        # 에 맞춰 양 환경을 오픈 모드(AUTH_OPEN_MODE=1 + 키 변수 공백화)로
-        # 정규화한다. 롤백: 이 스텝 제거 + 두 환경에 키 재설정. 안정화 후 본
-        # 스텝은 제거 예정. 비고: SEARCH_API_KEY는 시크릿 타입이라 value ""
-        # 공백화가 무시됨(실측 07:05 런) — null 삭제로 전환.
+      - name: Normalize auth parity — same probe key on both environments [TEMP]
+        id: auth_parity
+        # Phase H 후속 (2026-08-24): 양 환경 모두 API_KEY_DO 바인딩으로 닫힌
+        # 모드(auth.ts L249 — 바인딩 존재 시 오픈 분기 미달, 실측)라 동치
+        # 게이트의 무인증 프로브가 401 빈 결과 → 불일치 판정. value 공백화/
+        # null 삭제 모두 무시됨(07:05/07:17 런 실측 — SEARCH_API_KEY는
+        # secret_text 타입) → 양 환경에 동일 랜덤 키를 설정하고 그 값을
+        # 동치 프로브에 주입한다. 키는 실행마다 로테이션(외부 소비자 미연결
+        # 가정 — README 통합 안정화 후 영속화 또는 오픈 전환 별도 결정).
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: |
-          HTTP=$(curl -s -o /tmp/patch.json -w '%{http_code}' -X PATCH             "https://api.cloudflare.com/client/v4/accounts/${CLOUDFLARE_ACCOUNT_ID}/pages/projects/${PROJECT_NAME}"             -H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}"             -H "Content-Type: application/json"             -d '{"deployment_configs":{"production":{"env_vars":{"AUTH_OPEN_MODE":{"value":"1"},"SEARCH_API_KEY":null,"TENANTS_CONFIG":null}},"preview":{"env_vars":{"AUTH_OPEN_MODE":{"value":"1"},"SEARCH_API_KEY":null,"TENANTS_CONFIG":null}}}}')
+          RND="eqk_$(openssl rand -hex 24)"
+          BODY="{\"deployment_configs\":{\"production\":{\"env_vars\":{\"SEARCH_API_KEY\":{\"type\":\"secret_text\",\"value\":\"$RND\"}}},\"preview\":{\"env_vars\":{\"SEARCH_API_KEY\":{\"type\":\"secret_text\",\"value\":\"$RND\"}}}}}"
+          HTTP=$(curl -s -o /tmp/patch.json -w '%{http_code}' -X PATCH             "https://api.cloudflare.com/client/v4/accounts/${CLOUDFLARE_ACCOUNT_ID}/pages/projects/${PROJECT_NAME}"             -H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}"             -H "Content-Type: application/json"             -d "$BODY")
           echo "PATCH http=$HTTP"
-          cat /tmp/patch.json | head -c 300 || true
-          [ "$HTTP" = "200" ] || { echo "❌ auth parity normalize failed"; exit 1; }
+          [ "$HTTP" = "200" ] || { echo "❌ key seeding failed"; head -c 300 /tmp/patch.json; exit 1; }
+          echo "search_key=${RND}" >> "$GITHUB_OUTPUT"
 
       - name: Verify staging deployment commit baseline (pre-deploy guard)
         # S104-③-⑥-② (2026-08-12): same guard as production. FAIL_ON_COMMIT_DRIFT=1
@@ -247,6 +250,7 @@ jobs:
           ALERT_SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK }}
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          EQ_SEARCH_API_KEY: ${{ steps.auth_parity.outputs.search_key }}
         run: |
           for i in 1 2; do
             if EQ_NOTIFY=$([ "$i" = "2" ] && echo 1 || echo 0) SKIP_COMMIT=1 \

@@ -49,6 +49,12 @@ ENV_A="${ENV_A:-https://staging.search-engine-api.pages.dev}"
 ENV_B="${ENV_B:-https://search-engine-api.pages.dev}"
 LABEL_A="${LABEL_A:-staging}"
 LABEL_B="${LABEL_B:-production}"
+# EQ_SEARCH_API_KEY (선택): 양쪽 환경이 닫힌 모드(API_KEY_DO 바인딩)일 때
+# 동일 키를 프로브에 첨부한다 — 미설정 시 무인증 (오픈 모드 환경용).
+AUTH_HEADER=()
+if [ -n "${EQ_SEARCH_API_KEY:-}" ]; then
+  AUTH_HEADER=(-H "Authorization: Bearer ${EQ_SEARCH_API_KEY}")
+fi
 
 # 배포 커밋 동치 검증: staging 브랜치 최신 배포 vs Production 최신 배포의
 # Source commit (deployment list 테이블 — Source 는 컬럼 5). SKIP_COMMIT=1 이면
@@ -135,9 +141,9 @@ for q in $QUERIES; do
   IFS="$OLDIFS"
   # 수정 96: pace_curl 래퍼 — 공유 게이트 통과(수정 88) + 응답 X-RateLimit-Remaining
   # 을 pace 파일에 보고해 잔량이 낮아지면 다음 요청부터 간격이 자동 연장된다
-  DOMS_A="$(pace_curl -s -m 40 -X POST "$ENV_A/api/search" -H 'Content-Type: application/json' \
+  DOMS_A="$(pace_curl -s -m 40 -X POST "$ENV_A/api/search" -H 'Content-Type: application/json' "${AUTH_HEADER[@]}" \
     -d "{\"query\":\"$q\"}" | python3 -c "import json,sys; print(' '.join(r.get('domain','') for r in (json.load(sys.stdin).get('results') or [])[:5]))" 2>/dev/null || echo 'ERR')"
-  DOMS_B="$(pace_curl -s -m 40 -X POST "$ENV_B/api/search" -H 'Content-Type: application/json' \
+  DOMS_B="$(pace_curl -s -m 40 -X POST "$ENV_B/api/search" -H 'Content-Type: application/json' "${AUTH_HEADER[@]}" \
     -d "{\"query\":\"$q\"}" | python3 -c "import json,sys; print(' '.join(r.get('domain','') for r in (json.load(sys.stdin).get('results') or [])[:5]))" 2>/dev/null || echo 'ERR')"
   if [ "$DOMS_A" = "$DOMS_B" ] && [ "$DOMS_A" != "ERR" ] && [ -n "$DOMS_A" ]; then
     echo "   ✅ '$q' → $DOMS_A"

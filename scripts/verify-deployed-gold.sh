@@ -66,7 +66,7 @@ FULL_EVAL_SHOW_FAIL="${FULL_EVAL_SHOW_FAIL:-0}"
 # limit(30/min) 을 넘지 않도록 모든 gold 쿼리가 이 게이트를 통과한다.
 GOLD_PACE_FILE="${GOLD_PACE_FILE:-${XDG_STATE_HOME:-${HOME}/.local/state}/ssak-search/verify-pace.ts}"
 # python heredoc 이 os.environ 으로 읽도록 export
-export SEARCH_URL GOLD_TOP_N GOLD_TIMEOUT_MS GOLD_DELAY_MS FULL_EVAL_SHOW_FAIL GOLD_PACE_FILE
+export SEARCH_URL GOLD_TOP_N GOLD_TIMEOUT_MS GOLD_DELAY_MS FULL_EVAL_SHOW_FAIL GOLD_PACE_FILE EQ_SEARCH_API_KEY
 
 # 카테고리별 대표 gold 쿼리 — 배포 후 빠른 회수 스모크 테스트용.
 DEFAULT_QUERIES="kr-stock-01 zh-travel-01 en-fact-01 gk-01 en-tech-01 ja-news-01"
@@ -125,6 +125,7 @@ import json, sys, urllib.request, os
 
 queries = json.load(sys.stdin)
 url = os.environ.get('SEARCH_URL', 'https://search-engine-api.pages.dev').rstrip('/') + '/api/search'
+auth = os.environ.get('EQ_SEARCH_API_KEY', '')
 top_n = int(os.environ.get('GOLD_TOP_N', '10'))
 timeout = int(os.environ.get('GOLD_TIMEOUT_MS', '40000')) / 1000
 out_jsonl = os.environ.get('GOLD_OUT_JSONL', '/tmp/gold-verify-out.jsonl')
@@ -213,14 +214,17 @@ def fetch(q):
     if q.get('missing'):
         return {**q, 'ok': False, 'reason': 'gold 데이터 없음'}
     try:
-        req = urllib.request.Request(
-            url,
-            data=json.dumps({'query': q['query']}).encode(),
-            headers={
+        _headers = {
                 'Content-Type': 'application/json',
                 # 기본 python-urllib UA 는 WAF 에 403 차단됨 (실측) — 브라우저 UA 사용
                 'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36',
-            },
+        }
+        if auth:
+            _headers['Authorization'] = f'Bearer {auth}'
+        req = urllib.request.Request(
+            url,
+            data=json.dumps({'query': q['query']}).encode(),
+            headers=_headers,
             method='POST',
         )
         with urllib.request.urlopen(req, timeout=timeout) as resp:

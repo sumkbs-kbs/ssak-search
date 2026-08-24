@@ -860,10 +860,7 @@ export async function generateOpenRouterAnswer(
 
   if (!response.ok) {
     const errText = await response.text().catch(() => '')
-    throw httpErrorFromResponse(
-      response,
-      `OpenRouter API error ${response.status}: ${errText || response.statusText}`,
-    )
+    throw httpErrorFromResponse(response, `OpenRouter API error ${response.status}: ${errText || response.statusText}`)
   }
 
   const data = (await response.json()) as { choices?: Array<{ message?: { content?: string } }> }
@@ -910,10 +907,7 @@ export async function* streamAnthropic(
 
   if (!response.ok) {
     const errText = await response.text().catch(() => '')
-    throw httpErrorFromResponse(
-      response,
-      `Anthropic API error ${response.status}: ${errText || response.statusText}`,
-    )
+    throw httpErrorFromResponse(response, `Anthropic API error ${response.status}: ${errText || response.statusText}`)
   }
 
   const rawReader = response.body?.getReader()

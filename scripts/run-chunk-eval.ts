@@ -40,7 +40,9 @@ async function main(): Promise<void> {
   fs.writeFileSync(outPath, JSON.stringify({ report }, null, 1), 'utf-8')
 
   const ndcg = report.ranking?.avgNdcgAt10 ?? 0
-  console.log(`\nchunk-${from}-${to}: pass=${report.passedQueries}/${report.totalQueries} ndcg=${ndcg.toFixed(4)} -> ${outPath}`)
+  console.log(
+    `\nchunk-${from}-${to}: pass=${report.passedQueries}/${report.totalQueries} ndcg=${ndcg.toFixed(4)} -> ${outPath}`,
+  )
 }
 
 main().catch((err) => {

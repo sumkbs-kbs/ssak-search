@@ -25,50 +25,50 @@ import { getDomainAuthority, extractDomain } from '../util'
 
 export const FEATURE_NAMES_V2 = [
   // Query features (0-4)
-  'q_len',                    // 0  query length (normalized)
-  'q_terms',                  // 1  query token count (normalized)
-  'q_has_question',           // 2  0/1 — query is a question
-  'q_has_number',             // 3  0/1 — query contains numbers
-  'q_has_cjk',                // 4  0/1 — query contains CJK chars
+  'q_len', // 0  query length (normalized)
+  'q_terms', // 1  query token count (normalized)
+  'q_has_question', // 2  0/1 — query is a question
+  'q_has_number', // 3  0/1 — query contains numbers
+  'q_has_cjk', // 4  0/1 — query contains CJK chars
 
   // Document features (5-10)
-  'title_len',                // 5  title length (normalized)
-  'content_len',              // 6  content length (normalized)
-  'snippet_len',              // 7  snippet length (normalized)
-  'has_date',                 // 8  0/1 — document has published date
-  'date_recency',             // 9  days since publication (normalized)
-  'has_images',               // 10 0/1 — document has images
+  'title_len', // 5  title length (normalized)
+  'content_len', // 6  content length (normalized)
+  'snippet_len', // 7  snippet length (normalized)
+  'has_date', // 8  0/1 — document has published date
+  'date_recency', // 9  days since publication (normalized)
+  'has_images', // 10 0/1 — document has images
 
   // Query-document interaction (11-17)
-  'title_overlap',            // 11 query terms in title [0,1]
-  'content_overlap',          // 12 query terms in content [0,1]
-  'snippet_overlap',          // 13 query terms in snippet [0,1]
-  'title_exact_match',        // 14 exact query in title [0,1]
-  'bm25_title',               // 15 BM25 score on title (normalized)
-  'bm25_content',             // 16 BM25 score on content (normalized)
-  'tfidf_avg',                // 17 average TF-IDF of query terms (normalized)
+  'title_overlap', // 11 query terms in title [0,1]
+  'content_overlap', // 12 query terms in content [0,1]
+  'snippet_overlap', // 13 query terms in snippet [0,1]
+  'title_exact_match', // 14 exact query in title [0,1]
+  'bm25_title', // 15 BM25 score on title (normalized)
+  'bm25_content', // 16 BM25 score on content (normalized)
+  'tfidf_avg', // 17 average TF-IDF of query terms (normalized)
 
   // Authority features (18-20)
-  'domain_authority',         // 18 authority bonus [0,0.3]
-  'domain_age_proxy',         // 19 proxy for domain age (0-1)
-  'is_major_domain',          // 20 0/1 — top 100 domain
+  'domain_authority', // 18 authority bonus [0,0.3]
+  'domain_age_proxy', // 19 proxy for domain age (0-1)
+  'is_major_domain', // 20 0/1 — top 100 domain
 
   // Position & source features (21-24)
-  'result_source',            // 21 source backend ordinal [0,1]
-  'result_position',          // 22 1-based position (for debiasing)
-  'is_news_source',           // 23 0/1 — from news backend
-  'is_academic_source',       // 24 0/1 — from academic backend
+  'result_source', // 21 source backend ordinal [0,1]
+  'result_position', // 22 1-based position (for debiasing)
+  'is_news_source', // 23 0/1 — from news backend
+  'is_academic_source', // 24 0/1 — from academic backend
 
   // Context features (25-28)
-  'query_type_num',           // 25 query type ordinal [0,1]
-  'is_news',                  // 26 0/1
-  'is_finance',               // 27 0/1
-  'korean',                   // 28 0/1
-  'chinese',                  // 29 0/1
+  'query_type_num', // 25 query type ordinal [0,1]
+  'is_news', // 26 0/1
+  'is_finance', // 27 0/1
+  'korean', // 28 0/1
+  'chinese', // 29 0/1
 
   // User features (30-31)
-  'user_visited',             // 30 0/1 — user has visited domain
-  'user_visits_norm',         // 31 normalized visit count
+  'user_visited', // 30 0/1 — user has visited domain
+  'user_visits_norm', // 31 normalized visit count
 ] as const
 
 export const NUM_FEATURES = FEATURE_NAMES_V2.length
@@ -112,28 +112,78 @@ export interface DocumentFeatures {
 // ============================================================
 
 const MAJOR_DOMAINS = new Set([
-  'google.com', 'youtube.com', 'facebook.com', 'twitter.com', 'instagram.com',
-  'wikipedia.org', 'amazon.com', 'reddit.com', 'github.com', 'stackoverflow.com',
-  'linkedin.com', 'netflix.com', 'microsoft.com', 'apple.com', 'bbc.com',
-  'cnn.com', 'nytimes.com', 'reuters.com', 'bloomberg.com', 'washingtonpost.com',
-  'medium.com', 'quora.com', 'yahoo.com', 'bing.com', 'baidu.com',
-  'naver.com', 'daum.net', 'kakao.com', 'samsung.com', 'hyundai.com',
-  'tokyo.com', ' Rakuten.co.jp', 'line.me', 'zoho.com', 'adobe.com',
+  'google.com',
+  'youtube.com',
+  'facebook.com',
+  'twitter.com',
+  'instagram.com',
+  'wikipedia.org',
+  'amazon.com',
+  'reddit.com',
+  'github.com',
+  'stackoverflow.com',
+  'linkedin.com',
+  'netflix.com',
+  'microsoft.com',
+  'apple.com',
+  'bbc.com',
+  'cnn.com',
+  'nytimes.com',
+  'reuters.com',
+  'bloomberg.com',
+  'washingtonpost.com',
+  'medium.com',
+  'quora.com',
+  'yahoo.com',
+  'bing.com',
+  'baidu.com',
+  'naver.com',
+  'daum.net',
+  'kakao.com',
+  'samsung.com',
+  'hyundai.com',
+  'tokyo.com',
+  ' Rakuten.co.jp',
+  'line.me',
+  'zoho.com',
+  'adobe.com',
 ])
 
 // News domains
 const NEWS_DOMAINS = new Set([
-  'reuters.com', 'bbc.com', 'cnn.com', 'nytimes.com', 'washingtonpost.com',
-  'bloomberg.com', 'cnbc.com', 'apnews.com', 'npr.org', 'theguardian.com',
-  'n.news.naver.com', 'yna.co.kr', 'donga.com', 'hankyung.com',
-  '36kr.com', 'people.com.cn', 'xinhuanet.com',
+  'reuters.com',
+  'bbc.com',
+  'cnn.com',
+  'nytimes.com',
+  'washingtonpost.com',
+  'bloomberg.com',
+  'cnbc.com',
+  'apnews.com',
+  'npr.org',
+  'theguardian.com',
+  'n.news.naver.com',
+  'yna.co.kr',
+  'donga.com',
+  'hankyung.com',
+  '36kr.com',
+  'people.com.cn',
+  'xinhuanet.com',
 ])
 
 // Academic domains
 const ACADEMIC_DOMAINS = new Set([
-  'arxiv.org', 'scholar.google.com', 'semanticscholar.org', 'pubmed.ncbi.nlm.nih.gov',
-  'jstor.org', 'researchgate.net', 'acm.org', 'ieee.org', 'springer.com',
-  'nature.com', 'science.org', 'sciencedirect.com',
+  'arxiv.org',
+  'scholar.google.com',
+  'semanticscholar.org',
+  'pubmed.ncbi.nlm.nih.gov',
+  'jstor.org',
+  'researchgate.net',
+  'acm.org',
+  'ieee.org',
+  'springer.com',
+  'nature.com',
+  'science.org',
+  'sciencedirect.com',
 ])
 
 // ============================================================
@@ -197,7 +247,10 @@ function overlapRatio(queryTokens: Set<string>, text: string): number {
 function bm25Score(queryTokens: Set<string>, text: string, avgDocLen: number = 100): number {
   if (!text || queryTokens.size === 0) return 0
 
-  const docTokens = text.toLowerCase().split(/[^\p{L}\p{N}]+/u).filter(t => t.length > 1)
+  const docTokens = text
+    .toLowerCase()
+    .split(/[^\p{L}\p{N}]+/u)
+    .filter((t) => t.length > 1)
   const docLen = docTokens.length
   const docTermCounts = new Map<string, number>()
   for (const t of docTokens) {
@@ -214,7 +267,7 @@ function bm25Score(queryTokens: Set<string>, text: string, avgDocLen: number = 1
 
     // Simplified IDF (assume N=1000000, df=1000 for all terms)
     const idf = Math.log(1 + (1000000 - 1000 + 0.5) / (1000 + 0.5))
-    const norm = tf * (k1 + 1) / (tf + k1 * (1 - b + b * docLen / avgDocLen))
+    const norm = (tf * (k1 + 1)) / (tf + k1 * (1 - b + (b * docLen) / avgDocLen))
     score += idf * norm
   }
 
@@ -333,9 +386,20 @@ export function computeResultFeaturesV2(
 
 function getSourceOrdinal(source: string): number {
   const sources = [
-    'bing', 'brave', 'naver', 'wikipedia', 'github', 'hackernews',
-    'reddit', 'arxiv', 'stackoverflow', 'duckduckgo', 'searxng',
-    'yahoo-finance', 'news-rss', 'self-index',
+    'bing',
+    'brave',
+    'naver',
+    'wikipedia',
+    'github',
+    'hackernews',
+    'reddit',
+    'arxiv',
+    'stackoverflow',
+    'duckduckgo',
+    'searxng',
+    'yahoo-finance',
+    'news-rss',
+    'self-index',
   ]
   const idx = sources.indexOf(source)
   return idx >= 0 ? idx / sources.length : 0.5
@@ -357,14 +421,14 @@ export function v2ToV1(features: number[]): number[] {
   if (features.length === 32) {
     // Map v2 → v1 (16 features)
     return [
-      features[0],  // q_len
-      features[1],  // q_terms
-      features[5],  // title_len
-      features[6],  // content_len
+      features[0], // q_len
+      features[1], // q_terms
+      features[5], // title_len
+      features[6], // content_len
       features[11], // title_overlap
       features[12], // content_overlap
       features[18], // domain_authority
-      features[9],  // recency
+      features[9], // recency
       features[26], // is_news
       features[27], // is_finance
       features[28], // korean

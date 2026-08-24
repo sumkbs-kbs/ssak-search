@@ -131,8 +131,14 @@ describe('council 라우트 e2e — 429 재시도 후 available:true', () => {
     await vi.advanceTimersByTimeAsync(100)
     const res = await resPromise
     expect(res.status).toBe(200)
-    const body = (await res.json()) as { results: Array<{ model: string; available: boolean; response: string; error?: string }> }
-    expect(body.results[0]).toMatchObject({ model: 'openai-gpt4o-mini', available: true, response: 'e2e council answer' })
+    const body = (await res.json()) as {
+      results: Array<{ model: string; available: boolean; response: string; error?: string }>
+    }
+    expect(body.results[0]).toMatchObject({
+      model: 'openai-gpt4o-mini',
+      available: true,
+      response: 'e2e council answer',
+    })
     expect(body.results[0].error).toBeUndefined()
   })
 
@@ -173,11 +179,12 @@ describe('openai callInternalApi — withRetry 429 통일', () => {
   })
 
   it('429 소진 시 status:429를 실은 오류를 던진다 (라우트 429 패스스루용)', async () => {
-    fetchMock.mockImplementation(() =>
-      new Response(JSON.stringify({ detail: 'Rate limit exceeded' }), {
-        status: 429,
-        headers: { 'retry-after': '1' },
-      }),
+    fetchMock.mockImplementation(
+      () =>
+        new Response(JSON.stringify({ detail: 'Rate limit exceeded' }), {
+          status: 429,
+          headers: { 'retry-after': '1' },
+        }),
     )
     const promise = callInternalApi('http://localhost', '/api/search', {}, { query: 'q' }, 'search')
     const rejection = promise.catch((e: unknown) => e)
@@ -233,11 +240,12 @@ describe('openai 라우트 e2e — 내부 search 429 재시도', () => {
   })
 
   it('POST /v1/chat/completions: 내부 search 429 소진 시 429를 클라이언트에 패스스루 (502가 아님)', async () => {
-    fetchMock.mockImplementation(() =>
-      new Response(JSON.stringify({ detail: 'Rate limit exceeded' }), {
-        status: 429,
-        headers: { 'retry-after': '0' },
-      }),
+    fetchMock.mockImplementation(
+      () =>
+        new Response(JSON.stringify({ detail: 'Rate limit exceeded' }), {
+          status: 429,
+          headers: { 'retry-after': '0' },
+        }),
     )
     const app = new Hono()
     app.route('/v1', openaiRoute)

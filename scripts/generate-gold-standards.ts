@@ -556,10 +556,7 @@ for (const [id, domains] of Object.entries(NEW_GOLD)) {
 // ── Validation: every query in EVAL_QUERIES must have gold ─────────────────
 const queriesSrc = readFileSync(join(process.cwd(), 'eval', 'queries.ts'), 'utf-8')
 const expansionSrc = readFileSync(join(process.cwd(), 'eval', 'queries-expansion.ts'), 'utf-8')
-const queryIds = [
-  ...queriesSrc.matchAll(/id: '([^']+)'/g),
-  ...expansionSrc.matchAll(/id: '([^']+)'/g),
-].map((m) => m[1])
+const queryIds = [...queriesSrc.matchAll(/id: '([^']+)'/g), ...expansionSrc.matchAll(/id: '([^']+)'/g)].map((m) => m[1])
 const goldKeys = new Set(Object.keys(gold).filter((k) => !k.startsWith('_')))
 const missing = queryIds.filter((id) => !goldKeys.has(id))
 const orphan = [...goldKeys].filter((id) => !queryIds.includes(id))

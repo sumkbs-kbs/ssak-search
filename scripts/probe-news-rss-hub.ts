@@ -40,7 +40,7 @@ const newsQueries = EVAL_QUERIES.filter((q) => q.id.includes('-news-') || q.topi
 
 function goldDomainsOf(id: string): string[] {
   const v = gold[id]
-  return Array.isArray(v) ? v : (v as { relevantDomains?: string[] } | undefined)?.relevantDomains ?? []
+  return Array.isArray(v) ? v : ((v as { relevantDomains?: string[] } | undefined)?.relevantDomains ?? [])
 }
 
 async function loadHub(): Promise<NewsHubArticle[]> {
@@ -65,7 +65,12 @@ async function loadHub(): Promise<NewsHubArticle[]> {
   console.log(`[hub] 수집 완료: ${articles.length}건`)
   const byOutlet: Record<string, number> = {}
   for (const a of articles) byOutlet[a.domain] = (byOutlet[a.domain] ?? 0) + 1
-  console.log('[hub] 아웃렛별 기사 수:', Object.entries(byOutlet).map(([d, n]) => `${d}=${n}`).join(' '))
+  console.log(
+    '[hub] 아웃렛별 기사 수:',
+    Object.entries(byOutlet)
+      .map(([d, n]) => `${d}=${n}`)
+      .join(' '),
+  )
   return articles
 }
 
@@ -146,7 +151,9 @@ async function main(): Promise<void> {
       }
     }
     const p = ((h / e) * 100).toFixed(1)
-    console.log(`\n파일럿 5개 아웃렛 — news topic 전용: ${h}/${e} = ${p}% ${e > 0 && h / e >= 0.6 ? '✅ 목표 달성' : '❌ 미달'}`)
+    console.log(
+      `\n파일럿 5개 아웃렛 — news topic 전용: ${h}/${e} = ${p}% ${e > 0 && h / e >= 0.6 ? '✅ 목표 달성' : '❌ 미달'}`,
+    )
   }
 
   console.log('\n파일럿 5개 아웃렛 (전체 gold 쿼리, KPI ≥60%):')
@@ -172,7 +179,9 @@ async function main(): Promise<void> {
     const hitDomains = new Set(results.map((r) => r.domain).filter(Boolean))
     if (domains.some((d) => hitDomains.has(d))) qHitAny++
   }
-  console.log(`\n쿼리 단위: gold 보유 ${qWithGold}개 중 ≥1 gold 도메인 회수 ${qHitAny}개 = ${((qHitAny / qWithGold) * 100).toFixed(1)}%`)
+  console.log(
+    `\n쿼리 단위: gold 보유 ${qWithGold}개 중 ≥1 gold 도메인 회수 ${qHitAny}개 = ${((qHitAny / qWithGold) * 100).toFixed(1)}%`,
+  )
 }
 
 main().catch((err) => {

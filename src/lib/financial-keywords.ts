@@ -83,14 +83,7 @@ export const FINANCIAL_KEYWORDS: readonly string[] = [
 ]
 
 // ── planner 의도 + 회사명 추출 제거용 (specialized 금융 감지 제외 — S48) ────────
-export const FINANCIAL_PLANNER_ONLY: readonly string[] = [
-  '환율',
-  '금리',
-  '투자',
-  'etf',
-  '공모',
-  '상장',
-]
+export const FINANCIAL_PLANNER_ONLY: readonly string[] = ['환율', '금리', '투자', 'etf', '공모', '상장']
 
 // ── 정규식 소비처 전용 (planner whole-token 의도에는 안전하지 않음) ──────────────
 export const FINANCIAL_REGEX_ONLY: readonly string[] = [

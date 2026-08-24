@@ -94,10 +94,7 @@ export function startSpan(
  *   3. emits it on the response (x-trace-id)
  */
 export function createTracingMiddleware() {
-  return async (
-    c: Context<{ Bindings: AppBindings; Variables: Record<string, unknown> }>,
-    next: Next,
-  ) => {
+  return async (c: Context<{ Bindings: AppBindings; Variables: Record<string, unknown> }>, next: Next) => {
     const traceId = extractTraceId(c.req.raw.headers)
     c.set('traceId', traceId)
     c.res.headers.set('x-trace-id', traceId)

@@ -21,10 +21,10 @@ describe('TieredFanout relevantFilter (Phase H starvation fix)', () => {
     const organic = [mk('en.wikipedia.org', 'Immune system', 'The immune system protects organisms')]
 
     const fanout = new TieredFanout()
-    const result = await fanout.execute(
-      [task('bing', junk), task('wikipedia', organic)],
-      { ...BASE, relevantFilter: buildRelevanceProbe('how does the immune system work') },
-    )
+    const result = await fanout.execute([task('bing', junk), task('wikipedia', organic)], {
+      ...BASE,
+      relevantFilter: buildRelevanceProbe('how does the immune system work'),
+    })
     expect(result.usedBackends).toContain('wikipedia')
     expect(result.results.some((r) => r.domain === 'en.wikipedia.org')).toBe(true)
   })
@@ -56,10 +56,10 @@ describe('TieredFanout relevantFilter (Phase H starvation fix)', () => {
       mk('example.com', `photosynthesis explained part ${i}`, 'chlorophyll light reactions'),
     )
     const fanout = new TieredFanout()
-    const result = await fanout.execute(
-      [task('bing', organic), task('wikipedia', [])],
-      { ...BASE, relevantFilter: buildRelevanceProbe('how does photosynthesis work') },
-    )
+    const result = await fanout.execute([task('bing', organic), task('wikipedia', [])], {
+      ...BASE,
+      relevantFilter: buildRelevanceProbe('how does photosynthesis work'),
+    })
     expect(result.tierUsed).toBe('tier1')
   })
 })

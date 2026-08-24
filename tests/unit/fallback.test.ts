@@ -77,7 +77,14 @@ describe('emergencyFallback', () => {
 
   it('serves self-index results when index bindings exist', async () => {
     hybridSearchMock.mockResolvedValue([
-      { title: 'idx', url: 'https://idx.example/x', content: 'c', score: 0.9, domain: 'idx.example', publishedDate: '2026-01-01' },
+      {
+        title: 'idx',
+        url: 'https://idx.example/x',
+        content: 'c',
+        score: 0.9,
+        domain: 'idx.example',
+        publishedDate: '2026-01-01',
+      },
     ])
     const out = await emergencyFallback(makeCtx(), [], [])
     expect(out.fallbackUsed).toBe(true)
@@ -96,7 +103,11 @@ describe('emergencyFallback', () => {
 
   it('uses SearXNG directly when index bindings are absent', async () => {
     searxngSearchMock.mockResolvedValue([result('searx only')])
-    const out = await emergencyFallback(makeCtx({ env: makeEnv({ VECTORIZE_INDEX: undefined, SEARCH_INDEX_DB: undefined }) }), [], [])
+    const out = await emergencyFallback(
+      makeCtx({ env: makeEnv({ VECTORIZE_INDEX: undefined, SEARCH_INDEX_DB: undefined }) }),
+      [],
+      [],
+    )
     expect(out.usedBackends).toContain('searxng')
     expect(searxngSearchMock).toHaveBeenCalledWith('test query', expect.objectContaining({ language: undefined }))
   })

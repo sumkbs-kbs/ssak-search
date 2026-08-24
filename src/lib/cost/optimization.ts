@@ -64,35 +64,35 @@ export interface OptimizationRecommendation {
 
 const PRICING: Record<string, Record<string, { unitCost: number; unit: string }>> = {
   workers: {
-    requests: { unitCost: 0.30 / 1_000_000, unit: 'request' },
+    requests: { unitCost: 0.3 / 1_000_000, unit: 'request' },
     cpuTime: { unitCost: 0.02 / 1_000_000, unit: 'ms' },
   },
   kv: {
-    reads: { unitCost: 0.50 / 1_000_000, unit: 'read' },
-    writes: { unitCost: 5.00 / 1_000_000, unit: 'write' },
-    deletes: { unitCost: 0.50 / 1_000_000, unit: 'delete' },
-    list: { unitCost: 0.50 / 1_000, unit: 'list' },
-    storage: { unitCost: 0.50 / 1_000_000, unit: 'GB/month' },
+    reads: { unitCost: 0.5 / 1_000_000, unit: 'read' },
+    writes: { unitCost: 5.0 / 1_000_000, unit: 'write' },
+    deletes: { unitCost: 0.5 / 1_000_000, unit: 'delete' },
+    list: { unitCost: 0.5 / 1_000, unit: 'list' },
+    storage: { unitCost: 0.5 / 1_000_000, unit: 'GB/month' },
   },
   r2: {
     reads: { unitCost: 0.36 / 1_000_000, unit: 'Class A' },
-    writes: { unitCost: 4.50 / 1_000_000, unit: 'Class B' },
+    writes: { unitCost: 4.5 / 1_000_000, unit: 'Class B' },
     storage: { unitCost: 0.015 / 1_000, unit: 'GB/month' },
   },
   d1: {
     reads: { unitCost: 0.75 / 1_000_000, unit: 'read' },
-    writes: { unitCost: 1.50 / 1_000_000, unit: 'write' },
-    storage: { unitCost: 0.20 / 1_000, unit: 'GB/month' },
+    writes: { unitCost: 1.5 / 1_000_000, unit: 'write' },
+    storage: { unitCost: 0.2 / 1_000, unit: 'GB/month' },
   },
   durableObjects: {
-    requests: { unitCost: 15.00 / 1_000_000, unit: 'request' },
-    duration: { unitCost: 12.50 / 1_000_000, unit: 'GB-hour' },
+    requests: { unitCost: 15.0 / 1_000_000, unit: 'request' },
+    duration: { unitCost: 12.5 / 1_000_000, unit: 'GB-hour' },
   },
   ai: {
     inference: { unitCost: 0.01 / 1000, unit: '1000 neurons' },
   },
   analytics: {
-    events: { unitCost: 1.00 / 1_000_000, unit: 'event' },
+    events: { unitCost: 1.0 / 1_000_000, unit: 'event' },
   },
 }
 
@@ -258,9 +258,7 @@ export class CostTracker {
     const dayStart = new Date(targetDate)
     dayStart.setHours(0, 0, 0, 0)
 
-    return this.entries
-      .filter(e => e.timestamp >= dayStart.getTime())
-      .reduce((sum, e) => sum + e.totalCost, 0)
+    return this.entries.filter((e) => e.timestamp >= dayStart.getTime()).reduce((sum, e) => sum + e.totalCost, 0)
   }
 
   /**
@@ -270,9 +268,7 @@ export class CostTracker {
     const targetDate = date ?? new Date()
     const monthStart = new Date(targetDate.getFullYear(), targetDate.getMonth(), 1)
 
-    return this.entries
-      .filter(e => e.timestamp >= monthStart.getTime())
-      .reduce((sum, e) => sum + e.totalCost, 0)
+    return this.entries.filter((e) => e.timestamp >= monthStart.getTime()).reduce((sum, e) => sum + e.totalCost, 0)
   }
 
   /**
@@ -283,7 +279,7 @@ export class CostTracker {
     const dayStart = new Date(targetDate)
     dayStart.setHours(0, 0, 0, 0)
 
-    const filteredEntries = this.entries.filter(e => e.timestamp >= dayStart.getTime())
+    const filteredEntries = this.entries.filter((e) => e.timestamp >= dayStart.getTime())
 
     const byService = new Map<string, CostEntry[]>()
     for (const entry of filteredEntries) {
@@ -328,9 +324,15 @@ export class CostTracker {
     const monthlyPercent = (monthlyCost / this.budget.monthlyLimitUSD) * 100
 
     let alertLevel: 'normal' | 'warning' | 'critical' = 'normal'
-    if (dailyPercent >= this.budget.criticalThresholdPercent || monthlyPercent >= this.budget.criticalThresholdPercent) {
+    if (
+      dailyPercent >= this.budget.criticalThresholdPercent ||
+      monthlyPercent >= this.budget.criticalThresholdPercent
+    ) {
       alertLevel = 'critical'
-    } else if (dailyPercent >= this.budget.alertThresholdPercent || monthlyPercent >= this.budget.alertThresholdPercent) {
+    } else if (
+      dailyPercent >= this.budget.alertThresholdPercent ||
+      monthlyPercent >= this.budget.alertThresholdPercent
+    ) {
       alertLevel = 'warning'
     }
 
@@ -359,9 +361,9 @@ export class CostTracker {
     const breakdown = this.getBreakdown()
 
     // Analyze KV usage
-    const kvBreakdown = breakdown.find(b => b.service === 'kv')
+    const kvBreakdown = breakdown.find((b) => b.service === 'kv')
     if (kvBreakdown) {
-      const reads = kvBreakdown.operations.find(o => o.operation === 'reads')
+      const reads = kvBreakdown.operations.find((o) => o.operation === 'reads')
       if (reads && reads.totalCost > 0.1) {
         recommendations.push({
           service: 'kv',
@@ -374,9 +376,9 @@ export class CostTracker {
     }
 
     // Analyze D1 usage
-    const d1Breakdown = breakdown.find(b => b.service === 'd1')
+    const d1Breakdown = breakdown.find((b) => b.service === 'd1')
     if (d1Breakdown) {
-      const reads = d1Breakdown.operations.find(o => o.operation === 'reads')
+      const reads = d1Breakdown.operations.find((o) => o.operation === 'reads')
       if (reads && reads.quantity > 100000) {
         recommendations.push({
           service: 'd1',
@@ -389,7 +391,7 @@ export class CostTracker {
     }
 
     // Analyze AI usage
-    const aiBreakdown = breakdown.find(b => b.service === 'ai')
+    const aiBreakdown = breakdown.find((b) => b.service === 'ai')
     if (aiBreakdown && aiBreakdown.totalCost > 1) {
       recommendations.push({
         service: 'ai',
@@ -456,7 +458,7 @@ export class CostOptimizationManager {
     const topServices = breakdown
       .sort((a, b) => b.totalCost - a.totalCost)
       .slice(0, 5)
-      .map(b => ({ service: b.service, cost: b.totalCost }))
+      .map((b) => ({ service: b.service, cost: b.totalCost }))
 
     return {
       current,

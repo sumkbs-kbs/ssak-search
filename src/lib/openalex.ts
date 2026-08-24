@@ -19,7 +19,7 @@
  * A mailto= contact can be appended for the polite pool (higher rate limits);
  * pass it via opts.mailto when one is available. Without it OpenAlex still
  * serves ~10 req/s from the shared pool, which is ample for eval pacing.
- */import type { Env, SearchResult } from '../types'
+ */ import type { Env, SearchResult } from '../types'
 import { logger, toError } from './logger'
 import { backendTimeoutMs } from './search/fanout'
 import { computeScore, extractDomain, fetchWithTimeout, isCircuitOpenError } from './util'
@@ -43,10 +43,7 @@ let openalexRateLimitedUntil = 0
  * Is the OpenAlex cooldown window currently active? Checks the local mirror
  * first (fast path), then the shared DO store. EXPORTED FOR TESTS.
  */
-export async function isOpenalexRateLimitedShared(
-  env: Env | undefined,
-  now: number = Date.now(),
-): Promise<boolean> {
+export async function isOpenalexRateLimitedShared(env: Env | undefined, now: number = Date.now()): Promise<boolean> {
   if (openalexRateLimitedUntil > now) return true
   const untilMs = await getSharedCooldown(env, OPENALEX_COOLDOWN_KEY, now)
   if (untilMs > now) {
@@ -265,7 +262,8 @@ export async function openalexSearch(query: string, opts: OpenAlexSearchOptions 
     const params = new URLSearchParams({
       search: query,
       'per-page': String(Math.min(maxResults, 25)),
-      select: 'display_name,publication_date,publication_year,doi,primary_location,best_oa_location,locations,ids,authorships',
+      select:
+        'display_name,publication_date,publication_year,doi,primary_location,best_oa_location,locations,ids,authorships',
     })
     if (mailto) params.set('mailto', mailto)
     const url = `${OPENALEX_BASE}?${params.toString()}`

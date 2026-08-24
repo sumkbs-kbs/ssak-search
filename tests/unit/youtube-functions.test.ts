@@ -197,9 +197,7 @@ describe('buildYouTubeEvidenceText', () => {
     duration: '10:00',
     description: 'A deep dive into qubits.',
     keywords: ['quantum', 'computing'],
-    transcript: [
-      { text: 'Quantum bits can be in superposition.', start: 0, duration: 2 },
-    ],
+    transcript: [{ text: 'Quantum bits can be in superposition.', start: 0, duration: 2 }],
   }
 
   it('combines metadata, description, keywords and transcript', () => {

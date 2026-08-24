@@ -269,7 +269,9 @@ export function getPrometheusMetrics(): string {
   // production behavior (and over-aggressiveness) is observable.
   const defense = getDefenseMetrics()
   lines.push('')
-  lines.push('# HELP pool_coherence_dropped_results_total Results removed for sharing no query signal (anti-bot harvests)')
+  lines.push(
+    '# HELP pool_coherence_dropped_results_total Results removed for sharing no query signal (anti-bot harvests)',
+  )
   lines.push('# TYPE pool_coherence_dropped_results_total counter')
   lines.push(`pool_coherence_dropped_results_total ${defense.coherenceDroppedResults}`)
   lines.push('')
@@ -316,13 +318,21 @@ export function getPrometheusMetrics(): string {
   lines.push('# TYPE agentic_synthesis_regeneration_ratio gauge')
   lines.push(`agentic_synthesis_regeneration_ratio ${agentic.regenerationRatio.toFixed(4)}`)
   lines.push('')
-  lines.push('# HELP agentic_synthesis_regeneration_trigger_confidence_avg Rolling avg of the rejected confidence that triggered regenerations (last 50)')
+  lines.push(
+    '# HELP agentic_synthesis_regeneration_trigger_confidence_avg Rolling avg of the rejected confidence that triggered regenerations (last 50)',
+  )
   lines.push('# TYPE agentic_synthesis_regeneration_trigger_confidence_avg gauge')
-  lines.push(`agentic_synthesis_regeneration_trigger_confidence_avg ${agentic.regenerationTriggerConfidenceAvg.toFixed(4)}`)
+  lines.push(
+    `agentic_synthesis_regeneration_trigger_confidence_avg ${agentic.regenerationTriggerConfidenceAvg.toFixed(4)}`,
+  )
   lines.push('')
-  lines.push('# HELP agentic_synthesis_regeneration_trigger_confidence_samples Trigger-confidence samples in the rolling window')
+  lines.push(
+    '# HELP agentic_synthesis_regeneration_trigger_confidence_samples Trigger-confidence samples in the rolling window',
+  )
   lines.push('# TYPE agentic_synthesis_regeneration_trigger_confidence_samples gauge')
-  lines.push(`agentic_synthesis_regeneration_trigger_confidence_samples ${agentic.regenerationTriggerConfidenceSamples}`)
+  lines.push(
+    `agentic_synthesis_regeneration_trigger_confidence_samples ${agentic.regenerationTriggerConfidenceSamples}`,
+  )
   lines.push('')
   lines.push('# HELP agentic_gap_fill_researches_total Quality-gate gap-fill re-search events')
   lines.push('# TYPE agentic_gap_fill_researches_total counter')
@@ -335,7 +345,9 @@ export function getPrometheusMetrics(): string {
   // CPU Budget / Lightweight Mode metrics
   const cpuBudget = getCpuBudgetMetrics()
   lines.push('')
-  lines.push('# HELP cpu_budget_lightweight_requests_total Requests using lightweight mode (free plan / CPU exhaustion)')
+  lines.push(
+    '# HELP cpu_budget_lightweight_requests_total Requests using lightweight mode (free plan / CPU exhaustion)',
+  )
   lines.push('# TYPE cpu_budget_lightweight_requests_total counter')
   lines.push(`cpu_budget_lightweight_requests_total ${cpuBudget.lightweightRequests}`)
   lines.push('')
@@ -365,15 +377,14 @@ export function getPrometheusMetrics(): string {
   lines.push('# TYPE cpu_budget_subrequests_saved_total counter')
   lines.push(`cpu_budget_subrequests_saved_total ${cpuBudget.subrequestsSaved}`)
 
-
   // CB state (Phase 1.2)
-  for (const n of ['bing','brave','naver','wikipedia']) {
-    lines.push('CB_' + n);
+  for (const n of ['bing', 'brave', 'naver', 'wikipedia']) {
+    lines.push('CB_' + n)
   }
 
   // Quota (Phase 1.3)
-  lines.push('# HELP search_subrequests_total');
-  lines.push('search_subrequests_total ' + totalSubrequests);
+  lines.push('# HELP search_subrequests_total')
+  lines.push('search_subrequests_total ' + totalSubrequests)
 
   return lines.join('\n')
 }
@@ -550,11 +561,7 @@ export function recordCpuBudgetActivation(params: {
     try {
       currentEnv.ANALYTICS.writeDataPoint({
         blobs: ['cpu_budget', params.trigger],
-        doubles: [
-          params.elapsedMs / 1000,
-          params.lightweight ? 1 : 0,
-          params.estimatedSubrequestsSaved ?? 0,
-        ],
+        doubles: [params.elapsedMs / 1000, params.lightweight ? 1 : 0, params.estimatedSubrequestsSaved ?? 0],
         indexes: ['cpu_budget'],
       })
     } catch (_err) {
@@ -592,8 +599,7 @@ export function getCpuBudgetMetrics(): CpuBudgetMetrics {
         : 0,
     triggeredByFreePlan: cpuBudgetTriggeredByFreePlan,
     triggeredByExhaustion: cpuBudgetTriggeredByExhaustion,
-    avgElapsedMs:
-      sorted.length > 0 ? sorted.reduce((a, b) => a + b, 0) / sorted.length : 0,
+    avgElapsedMs: sorted.length > 0 ? sorted.reduce((a, b) => a + b, 0) / sorted.length : 0,
     p50ElapsedMs: percentile(sorted, 50),
     p95ElapsedMs: percentile(sorted, 95),
     subrequestsSaved: cpuBudgetSubrequestsSaved,

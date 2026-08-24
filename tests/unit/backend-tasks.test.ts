@@ -252,7 +252,10 @@ describe('task builders — run() wiring', () => {
     await task.run()
     const [query] = mocks.googleNewsRssSearch.mock.calls[0]
     expect(String(query)).toMatch(/^site:[a-z0-9.-]+ test query$/)
-    expect(mocks.googleNewsRssSearch).toHaveBeenCalledWith(expect.any(String), expect.objectContaining({ maxResults: 4 }))
+    expect(mocks.googleNewsRssSearch).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.objectContaining({ maxResults: 4 }),
+    )
   })
 
   it('buildNewsHubTask reads the hub pool and scores it for the query', async () => {
@@ -276,7 +279,10 @@ describe('task builders — run() wiring', () => {
 
   it('buildBingYouTubeTask and buildYoutubeTask wire their backends', async () => {
     await buildBingYouTubeTask(makeCtx()).run()
-    expect(mocks.bingSearch).toHaveBeenCalledWith('site:youtube.com test query', expect.objectContaining({ maxResults: 10 }))
+    expect(mocks.bingSearch).toHaveBeenCalledWith(
+      'site:youtube.com test query',
+      expect.objectContaining({ maxResults: 10 }),
+    )
     await buildYoutubeTask(makeCtx(), 6).run()
     expect(mocks.youtubeSearch).toHaveBeenCalledWith('test query', 6, false)
   })
@@ -416,13 +422,21 @@ describe('buildBraveTask guards + freshness', () => {
 
   it('maps freshness per time_range and omits it without bingTimeRange', async () => {
     const env = { BRAVE_API_KEY: 'key', ...makeCtx().env } as SearchContext['env']
-    await buildBraveTask(makeCtx({ env, bingTimeRange: 'day', request: { query: 'q', time_range: 'day' } as never }))?.run()
+    await buildBraveTask(
+      makeCtx({ env, bingTimeRange: 'day', request: { query: 'q', time_range: 'day' } as never }),
+    )?.run()
     expect(mocks.braveSearch).toHaveBeenCalledWith('test query', expect.objectContaining({ freshness: 'pd' }))
-    await buildBraveTask(makeCtx({ env, bingTimeRange: 'week', request: { query: 'q', time_range: 'week' } as never }))?.run()
+    await buildBraveTask(
+      makeCtx({ env, bingTimeRange: 'week', request: { query: 'q', time_range: 'week' } as never }),
+    )?.run()
     expect(mocks.braveSearch).toHaveBeenCalledWith('test query', expect.objectContaining({ freshness: 'pw' }))
-    await buildBraveTask(makeCtx({ env, bingTimeRange: 'month', request: { query: 'q', time_range: 'month' } as never }))?.run()
+    await buildBraveTask(
+      makeCtx({ env, bingTimeRange: 'month', request: { query: 'q', time_range: 'month' } as never }),
+    )?.run()
     expect(mocks.braveSearch).toHaveBeenCalledWith('test query', expect.objectContaining({ freshness: 'pm' }))
-    await buildBraveTask(makeCtx({ env, bingTimeRange: 'year', request: { query: 'q', time_range: 'year' } as never }))?.run()
+    await buildBraveTask(
+      makeCtx({ env, bingTimeRange: 'year', request: { query: 'q', time_range: 'year' } as never }),
+    )?.run()
     expect(mocks.braveSearch).toHaveBeenCalledWith('test query', expect.objectContaining({ freshness: 'py' }))
     await buildBraveTask(makeCtx({ env, request: { query: 'q' } as never }))?.run()
     expect(mocks.braveSearch).toHaveBeenCalledWith('test query', expect.objectContaining({ freshness: undefined }))

@@ -169,8 +169,8 @@ export class BackendHealthTracker {
    */
   getHealthyBackends(): string[] {
     return this.getBackendsByHealth()
-      .filter(h => h.isHealthy)
-      .map(h => h.name)
+      .filter((h) => h.isHealthy)
+      .map((h) => h.name)
   }
 
   /**
@@ -337,7 +337,7 @@ export class PredictiveFallbackManager {
             const jitter = Math.random() * baseDelay * 0.5
             const delay = Math.min(baseDelay + jitter, this.config.maxRetryDelayMs)
 
-            await new Promise(resolve => setTimeout(resolve, delay))
+            await new Promise((resolve) => setTimeout(resolve, delay))
 
             attempts[attempts.length - 1].delayMs = delay
           }
@@ -353,7 +353,7 @@ export class PredictiveFallbackManager {
    * Select best backend for a request.
    */
   selectBestBackend(backends: string[]): string | null {
-    const healthyBackends = backends.filter(b => this.healthTracker.isHealthy(b))
+    const healthyBackends = backends.filter((b) => this.healthTracker.isHealthy(b))
 
     if (healthyBackends.length === 0) {
       // All backends unhealthy, try the least unhealthy
@@ -389,11 +389,10 @@ export class PredictiveFallbackManager {
     const allStats = this.healthTracker.getAllStats()
     const backends = Object.values(allStats)
 
-    const healthy = backends.filter(b => b.isHealthy)
-    const unhealthy = backends.filter(b => !b.isHealthy)
-    const avgSuccessRate = backends.length > 0
-      ? backends.reduce((sum, b) => sum + b.successRate, 0) / backends.length
-      : 1
+    const healthy = backends.filter((b) => b.isHealthy)
+    const unhealthy = backends.filter((b) => !b.isHealthy)
+    const avgSuccessRate =
+      backends.length > 0 ? backends.reduce((sum, b) => sum + b.successRate, 0) / backends.length : 1
 
     return {
       healthyBackends: healthy.length,

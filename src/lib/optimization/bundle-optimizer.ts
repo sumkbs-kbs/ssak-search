@@ -161,15 +161,17 @@ export class LazyLoader {
     }
 
     // Start loading
-    const promise = loader().then(module => {
-      this.loadedModules.set(moduleName, module)
-      this.loadingPromises.delete(moduleName)
-      logger.debug('[LazyLoader] Module loaded', { module: moduleName })
-      return module
-    }).catch(err => {
-      this.loadingPromises.delete(moduleName)
-      throw err
-    })
+    const promise = loader()
+      .then((module) => {
+        this.loadedModules.set(moduleName, module)
+        this.loadingPromises.delete(moduleName)
+        logger.debug('[LazyLoader] Module loaded', { module: moduleName })
+        return module
+      })
+      .catch((err) => {
+        this.loadingPromises.delete(moduleName)
+        throw err
+      })
 
     this.loadingPromises.set(moduleName, promise)
     return promise
@@ -227,7 +229,7 @@ export class TreeShakingHelper {
    */
   getUnusedExports(moduleName: string, allExports: string[]): string[] {
     const used = this.usedExports.get(moduleName) ?? new Set()
-    return allExports.filter(exp => !used.has(exp))
+    return allExports.filter((exp) => !used.has(exp))
   }
 
   /**
@@ -272,8 +274,8 @@ export function generateOptimizedViteConfig(): Record<string, unknown> {
             // Feature chunks
             'search-core': ['./src/lib/search/fanout.ts', './src/lib/search/context.ts'],
             'search-ranking': ['./src/lib/search/ranking.ts', './src/lib/ltr/ranker.ts'],
-            'personalization': ['./src/lib/personalization/user-profile-enhanced.ts'],
-            'analytics': ['./src/lib/analytics/advanced-analytics.ts'],
+            personalization: ['./src/lib/personalization/user-profile-enhanced.ts'],
+            analytics: ['./src/lib/analytics/advanced-analytics.ts'],
           },
         },
       },

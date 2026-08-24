@@ -108,8 +108,32 @@ export interface SessionData {
 // ============================================================
 
 const TOPIC_KEYWORDS: Record<string, string[]> = {
-  technology: ['programming', 'software', 'hardware', 'ai', 'machine learning', 'coding', 'developer', 'api', 'javascript', 'python', 'react', 'typescript'],
-  finance: ['stock', 'investment', 'crypto', 'bitcoin', 'trading', 'market', 'portfolio', 'dividend', 'earnings', 'revenue'],
+  technology: [
+    'programming',
+    'software',
+    'hardware',
+    'ai',
+    'machine learning',
+    'coding',
+    'developer',
+    'api',
+    'javascript',
+    'python',
+    'react',
+    'typescript',
+  ],
+  finance: [
+    'stock',
+    'investment',
+    'crypto',
+    'bitcoin',
+    'trading',
+    'market',
+    'portfolio',
+    'dividend',
+    'earnings',
+    'revenue',
+  ],
   news: ['breaking', 'latest', 'today', 'yesterday', 'recent', 'update', 'announcement', 'report'],
   science: ['research', 'study', 'experiment', 'hypothesis', 'theory', 'discovery', 'journal', 'paper'],
   health: ['health', 'medical', 'doctor', 'treatment', 'symptom', 'disease', 'wellness', 'fitness'],
@@ -119,11 +143,11 @@ const TOPIC_KEYWORDS: Record<string, string[]> = {
 }
 
 const _CATEGORY_MAP: Record<string, string[]> = {
-  'tech': ['github.com', 'stackoverflow.com', 'dev.to', 'medium.com', 'hackernews.com'],
-  'news': ['cnn.com', 'bbc.com', 'reuters.com', 'nytimes.com', 'apnews.com'],
-  'finance': ['finance.yahoo.com', 'bloomberg.com', 'investing.com', 'coinmarketcap.com'],
-  'academic': ['arxiv.org', 'scholar.google.com', 'researchgate.net', 'jstor.org'],
-  'social': ['reddit.com', 'twitter.com', 'facebook.com', 'linkedin.com'],
+  tech: ['github.com', 'stackoverflow.com', 'dev.to', 'medium.com', 'hackernews.com'],
+  news: ['cnn.com', 'bbc.com', 'reuters.com', 'nytimes.com', 'apnews.com'],
+  finance: ['finance.yahoo.com', 'bloomberg.com', 'investing.com', 'coinmarketcap.com'],
+  academic: ['arxiv.org', 'scholar.google.com', 'researchgate.net', 'jstor.org'],
+  social: ['reddit.com', 'twitter.com', 'facebook.com', 'linkedin.com'],
 }
 
 // ============================================================
@@ -171,9 +195,9 @@ export class EnhancedProfileManager {
     if (!this.env.SEARCH_INDEX_DB) return null
 
     try {
-      const result = await this.env.SEARCH_INDEX_DB.prepare(
-        'SELECT profile_data FROM user_profiles WHERE user_id = ?'
-      ).bind(userId).first<{ profile_data: string }>()
+      const result = await this.env.SEARCH_INDEX_DB.prepare('SELECT profile_data FROM user_profiles WHERE user_id = ?')
+        .bind(userId)
+        .first<{ profile_data: string }>()
 
       if (!result) return null
       return JSON.parse(result.profile_data) as EnhancedUserProfile
@@ -194,12 +218,10 @@ export class EnhancedProfileManager {
     try {
       await this.env.SEARCH_INDEX_DB.prepare(
         `INSERT OR REPLACE INTO user_profiles (user_id, profile_data, updated_at)
-         VALUES (?, ?, ?)`
-      ).bind(
-        profile.user_id,
-        JSON.stringify(profile),
-        profile.updated_at,
-      ).run()
+         VALUES (?, ?, ?)`,
+      )
+        .bind(profile.user_id, JSON.stringify(profile), profile.updated_at)
+        .run()
     } catch (err) {
       logger.warn('[Profile] Failed to save profile:', { error: toError(err) })
     }
@@ -252,17 +274,14 @@ export class EnhancedProfileManager {
   /**
    * Get personalized search results.
    */
-  async personalizeResults(
-    userId: string,
-    results: SearchResult[],
-  ): Promise<SearchResult[]> {
+  async personalizeResults(userId: string, results: SearchResult[]): Promise<SearchResult[]> {
     const profile = await this.getProfile(userId)
     if (!profile || !profile.personalization_enabled) return results
 
     // Boost results from preferred domains
-    const boosted = results.map(r => {
+    const boosted = results.map((r) => {
       const domain = this.extractDomain(r.url)
-      const pref = profile.domain_preferences.find(d => d.domain === domain)
+      const pref = profile.domain_preferences.find((d) => d.domain === domain)
 
       let boost = 0
       if (pref) {
@@ -290,10 +309,7 @@ export class EnhancedProfileManager {
   /**
    * Get personalized query suggestions.
    */
-  async getPersonalizedSuggestions(
-    userId: string,
-    partialQuery: string,
-  ): Promise<string[]> {
+  async getPersonalizedSuggestions(userId: string, partialQuery: string): Promise<string[]> {
     const profile = await this.getProfile(userId)
     if (!profile) return []
 
@@ -350,17 +366,15 @@ export class EnhancedProfileManager {
     const topDomains = profile.domain_preferences
       .sort((a, b) => b.visit_count - a.visit_count)
       .slice(0, 10)
-      .map(d => ({ domain: d.domain, visits: d.visit_count }))
+      .map((d) => ({ domain: d.domain, visits: d.visit_count }))
 
     // Recent queries
-    const recentQueries = profile.search_history
-      .slice(0, 20)
-      .map(e => e.query)
+    const recentQueries = profile.search_history.slice(0, 20).map((e) => e.query)
 
     // Search patterns
     const now = Date.now()
     const oneDayAgo = now - 24 * 60 * 60 * 1000
-    const recentSearches = profile.search_history.filter(e => e.timestamp > oneDayAgo)
+    const recentSearches = profile.search_history.filter((e) => e.timestamp > oneDayAgo)
 
     const hourCounts = new Array(24).fill(0)
     const langCounts = new Map<string, number>()
@@ -376,7 +390,7 @@ export class EnhancedProfileManager {
       .map((count, hour) => ({ hour, count }))
       .sort((a, b) => b.count - a.count)
       .slice(0, 3)
-      .map(h => h.hour)
+      .map((h) => h.hour)
 
     const preferredLanguages = [...langCounts.entries()]
       .sort(([, a], [, b]) => b - a)
@@ -434,7 +448,7 @@ export class EnhancedProfileManager {
     const now = Date.now()
 
     // Update topic interest
-    const existingTopic = profile.interests.topics.find(t => t.topic === topic)
+    const existingTopic = profile.interests.topics.find((t) => t.topic === topic)
     if (existingTopic) {
       existingTopic.score = Math.min(1, existingTopic.score + 0.1)
       existingTopic.last_seen = now
@@ -449,15 +463,15 @@ export class EnhancedProfileManager {
     }
 
     // Update topic affinities
-    profile.topic_affinities[topic] = Math.min(
-      1,
-      (profile.topic_affinities[topic] ?? 0) + 0.05,
-    )
+    profile.topic_affinities[topic] = Math.min(1, (profile.topic_affinities[topic] ?? 0) + 0.05)
 
     // Extract keywords from query
-    const keywords = query.toLowerCase().split(/\s+/).filter(w => w.length > 2)
+    const keywords = query
+      .toLowerCase()
+      .split(/\s+/)
+      .filter((w) => w.length > 2)
     for (const keyword of keywords) {
-      const existingKeyword = profile.interests.keywords.find(k => k.keyword === keyword)
+      const existingKeyword = profile.interests.keywords.find((k) => k.keyword === keyword)
       if (existingKeyword) {
         existingKeyword.score = Math.min(1, existingKeyword.score + 0.05)
         existingKeyword.last_seen = now
@@ -477,11 +491,7 @@ export class EnhancedProfileManager {
     }
   }
 
-  private updateDomainPreferences(
-    profile: EnhancedUserProfile,
-    results: SearchResult[],
-    clickedUrls: string[],
-  ): void {
+  private updateDomainPreferences(profile: EnhancedUserProfile, results: SearchResult[], clickedUrls: string[]): void {
     const now = Date.now()
 
     // Track impressions
@@ -489,7 +499,7 @@ export class EnhancedProfileManager {
       const domain = this.extractDomain(r.url)
       if (!domain) continue
 
-      let pref = profile.domain_preferences.find(d => d.domain === domain)
+      let pref = profile.domain_preferences.find((d) => d.domain === domain)
       if (!pref) {
         pref = {
           domain,
@@ -503,7 +513,7 @@ export class EnhancedProfileManager {
       }
 
       // Update CTR
-      const wasClicked = clickedUrls.some(u => this.extractDomain(u) === domain)
+      const wasClicked = clickedUrls.some((u) => this.extractDomain(u) === domain)
       if (wasClicked) {
         pref.visit_count++
         pref.click_through_rate = Math.min(1, pref.click_through_rate + 0.1)

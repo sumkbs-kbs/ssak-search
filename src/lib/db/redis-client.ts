@@ -70,11 +70,7 @@ export class RedisClient {
   /**
    * Set a key-value pair.
    */
-  async set(
-    key: string,
-    value: string | object,
-    ttlSeconds?: number,
-  ): Promise<void> {
+  async set(key: string, value: string | object, ttlSeconds?: number): Promise<void> {
     const startTime = Date.now()
     const serialized = typeof value === 'string' ? value : JSON.stringify(value)
     const ttl = ttlSeconds ?? this.config.defaultTtlSeconds
@@ -190,7 +186,7 @@ export class RedisClient {
 
       this.recordCommand(Date.now() - startTime)
 
-      return results.map(r => {
+      return results.map((r) => {
         if (r === null) return null
         try {
           return JSON.parse(r) as T
@@ -299,13 +295,11 @@ export class RedisClient {
       throw new Error(`Redis command failed: ${response.status}`)
     }
 
-    const result = await response.json() as { result: unknown }
+    const result = (await response.json()) as { result: unknown }
     return result.result
   }
 
-  private async executeWithRetry<T>(
-    fn: () => Promise<T>,
-  ): Promise<T> {
+  private async executeWithRetry<T>(fn: () => Promise<T>): Promise<T> {
     let lastError: Error | null = null
 
     for (let attempt = 0; attempt <= (this.config.maxRetries ?? 3); attempt++) {
@@ -315,7 +309,7 @@ export class RedisClient {
         lastError = err as Error
         if (attempt < (this.config.maxRetries ?? 3)) {
           const delay = (this.config.retryDelayMs ?? 100) * Math.pow(2, attempt)
-          await new Promise(resolve => setTimeout(resolve, delay))
+          await new Promise((resolve) => setTimeout(resolve, delay))
         }
       }
     }

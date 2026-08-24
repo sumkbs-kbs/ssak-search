@@ -35,7 +35,7 @@ const SIGNATURE: Record<string, string[]> = {
   'naver.com': ['naver', 'naver-finance'],
   'finance.yahoo.com': ['yahoo-finance'],
   'reddit.com': ['reddit'],
-  'hackernews': ['hackernews'],
+  hackernews: ['hackernews'],
 }
 
 function signatureChain(domain: string): string[] | null {
@@ -52,7 +52,10 @@ function domainOf(url: string): string {
   try {
     return new URL(url).hostname.replace(/^www\./, '').toLowerCase()
   } catch {
-    return url.toLowerCase().replace(/^https?:\/\//, '').split('/')[0]
+    return url
+      .toLowerCase()
+      .replace(/^https?:\/\//, '')
+      .split('/')[0]
   }
 }
 
@@ -149,9 +152,19 @@ const rows = [...stats.entries()].map(([name, s]) => ({
 rows.sort((a, b) => b.goldHit - a.goldHit)
 
 console.log('═ BACKEND COVERAGE vs GOLD CONTRIBUTION (3 runs × 500 queries) ═')
-console.log(`total query-runs (with gold): ${totalRuns} | zero-gold runs: ${zeroGoldRuns} (${(zeroGoldRuns / totalRuns * 100).toFixed(1)}%)`)
+console.log(
+  `total query-runs (with gold): ${totalRuns} | zero-gold runs: ${zeroGoldRuns} (${((zeroGoldRuns / totalRuns) * 100).toFixed(1)}%)`,
+)
 console.log('')
-console.log('name'.padEnd(16), 'used'.padStart(6), 'goldHit'.padStart(8), 'hitRate'.padStart(8), 'missUsed'.padStart(9), 'missAbsent'.padStart(10), 'expected'.padStart(9))
+console.log(
+  'name'.padEnd(16),
+  'used'.padStart(6),
+  'goldHit'.padStart(8),
+  'hitRate'.padStart(8),
+  'missUsed'.padStart(9),
+  'missAbsent'.padStart(10),
+  'expected'.padStart(9),
+)
 for (const r of rows) {
   console.log(
     r.name.padEnd(16),

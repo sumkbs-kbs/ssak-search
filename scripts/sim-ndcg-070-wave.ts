@@ -35,21 +35,21 @@ const NEW_LOW_QUALITY: Record<string, number> = {
 
 /** Korean blog/news penalty (strengthened) */
 const NEW_KR_BLOG_NEWS: Record<string, number> = {
-  'm.blog.naver.com': -0.30,  // was -0.25
-  'blog.naver.com': -0.22,     // was -0.18
-  'm.cafe.naver.com': -0.25,   // was -0.20
-  'cafe.naver.com': -0.18,     // was -0.15
-  'kin.naver.com': -0.30,      // new
+  'm.blog.naver.com': -0.3, // was -0.25
+  'blog.naver.com': -0.22, // was -0.18
+  'm.cafe.naver.com': -0.25, // was -0.20
+  'cafe.naver.com': -0.18, // was -0.15
+  'kin.naver.com': -0.3, // new
 }
 
 /** New EN news gold domains */
 const NEW_EN_NEWS_AUTHORITY: Record<string, number> = {
   'techradar.com': 0.12,
-  'tomsguide.com': 0.10,
+  'tomsguide.com': 0.1,
   'slashdot.org': 0.08,
-  'arstechnica.com': 0.10,
-  'venturebeat.com': 0.10,
-  'scientificamerican.com': 0.10,
+  'arstechnica.com': 0.1,
+  'venturebeat.com': 0.1,
+  'scientificamerican.com': 0.1,
   'sciencedaily.com': 0.08,
 }
 
@@ -63,15 +63,15 @@ const NEW_EN_FINANCE_AUTHORITY: Record<string, number> = {
   'reuters.com': 0.12,
   'cnbc.com': 0.12,
   'investopedia.com': 0.12,
-  'macrotrends.net': 0.10,
+  'macrotrends.net': 0.1,
 }
 
 /** New EN reference/academic gold domains */
 const NEW_EN_REFERENCE_AUTHORITY: Record<string, number> = {
   'healthline.com': 0.12,
-  'webmd.com': 0.10,
+  'webmd.com': 0.1,
   'arxiv.org': 0.12,
-  'paperswithcode.com': 0.10,
+  'paperswithcode.com': 0.1,
   'quora.com': 0.08,
   'reddit.com': 0.08,
 }
@@ -81,20 +81,20 @@ const NEW_ZH_TECH_AUTHORITY: Record<string, number> = {
   'blog.csdn.net': 0.15,
   'baike.baidu.com': 0.15,
   'juejin.cn': 0.12,
-  'zhuanlan.zhihu.com': 0.10,
-  'zhihu.com': 0.10,
+  'zhuanlan.zhihu.com': 0.1,
+  'zhihu.com': 0.1,
   'ithome.com': 0.12,
-  'sina.com.cn': 0.10,
+  'sina.com.cn': 0.1,
 }
 
 /** New Japanese news gold domains */
 const NEW_JA_NEWS_AUTHORITY: Record<string, number> = {
   'news.yahoo.co.jp': 0.12,
-  'ja.google.com': 0.10,
-  'gigazine.net': 0.10,
-  'press.jiji.com': 0.10,
-  'sankei.com': 0.10,
-  'toyokeizai.net': 0.10,
+  'ja.google.com': 0.1,
+  'gigazine.net': 0.1,
+  'press.jiji.com': 0.1,
+  'sankei.com': 0.1,
+  'toyokeizai.net': 0.1,
 }
 
 interface EvalResult {
@@ -121,11 +121,7 @@ function matchInMap(domain: string, map: Record<string, number>): number {
   return 0
 }
 
-function simulateAuthorityBonus(
-  domain: string,
-  tags: string[],
-  topic: string,
-): { oldBonus: number; newBonus: number } {
+function simulateAuthorityBonus(domain: string, tags: string[], topic: string): { oldBonus: number; newBonus: number } {
   const isKorean = tags.includes('korean')
   const isChinese = tags.includes('chinese')
   const isJapanese = tags.includes('japanese')
@@ -137,21 +133,30 @@ function simulateAuthorityBonus(
 
   // OLD bonus: current system (before changes)
   let oldBonus = matchInMap(domain, {
-    'finance.naver.com': 0.15, 'm.stock.naver.com': 0.12, 'm.finance.naver.com': 0.12,
-    'krx.co.kr': 0.1, 'dart.fss.or.kr': 0.08,
+    'finance.naver.com': 0.15,
+    'm.stock.naver.com': 0.12,
+    'm.finance.naver.com': 0.12,
+    'krx.co.kr': 0.1,
+    'dart.fss.or.kr': 0.08,
     'news.google.com': -0.35,
     'msn.com': -0.2,
   })
   oldBonus += matchInMap(domain, {
-    'm.blog.naver.com': -0.25, 'blog.naver.com': -0.18,
-    'm.cafe.naver.com': -0.2, 'cafe.naver.com': -0.15,
-    'tistory.com': -0.12, 'velog.io': -0.12,
+    'm.blog.naver.com': -0.25,
+    'blog.naver.com': -0.18,
+    'm.cafe.naver.com': -0.2,
+    'cafe.naver.com': -0.15,
+    'tistory.com': -0.12,
+    'velog.io': -0.12,
   })
 
   // NEW bonus: with our changes
   let newBonus = matchInMap(domain, {
-    'finance.naver.com': 0.15, 'm.stock.naver.com': 0.12, 'm.finance.naver.com': 0.12,
-    'krx.co.kr': 0.1, 'dart.fss.or.kr': 0.08,
+    'finance.naver.com': 0.15,
+    'm.stock.naver.com': 0.12,
+    'm.finance.naver.com': 0.12,
+    'krx.co.kr': 0.1,
+    'dart.fss.or.kr': 0.08,
     'news.google.com': -0.35,
     ...NEW_LOW_QUALITY,
   })
@@ -159,15 +164,27 @@ function simulateAuthorityBonus(
   // Korean blog/news penalty (strengthened)
   if (isNews && isKorean) {
     newBonus += matchInMap(domain, NEW_KR_BLOG_NEWS)
-    oldBonus += matchInMap(domain, { 'm.blog.naver.com': -0.25, 'blog.naver.com': -0.18, 'm.cafe.naver.com': -0.2, 'cafe.naver.com': -0.15, 'tistory.com': -0.12, 'velog.io': -0.12 })
+    oldBonus += matchInMap(domain, {
+      'm.blog.naver.com': -0.25,
+      'blog.naver.com': -0.18,
+      'm.cafe.naver.com': -0.2,
+      'cafe.naver.com': -0.15,
+      'tistory.com': -0.12,
+      'velog.io': -0.12,
+    })
   }
 
   // KR news authority
   if (isNews && isKorean) {
     const krNewsBoost = matchInMap(domain, {
-      'n.news.naver.com': 0.18, 'yna.co.kr': 0.15, 'hani.co.kr': 0.13,
-      'namu.wiki': 0.08, 'ko.wikipedia.org': 0.10, 'terms.naver.com': 0.10, 'naver.com': 0.08,
-      'koreaherald.com': 0.10,
+      'n.news.naver.com': 0.18,
+      'yna.co.kr': 0.15,
+      'hani.co.kr': 0.13,
+      'namu.wiki': 0.08,
+      'ko.wikipedia.org': 0.1,
+      'terms.naver.com': 0.1,
+      'naver.com': 0.08,
+      'koreaherald.com': 0.1,
     })
     newBonus += krNewsBoost
   }
@@ -175,11 +192,24 @@ function simulateAuthorityBonus(
   // EN news authority (old had some, new adds more)
   if (isNews && isEnglish) {
     const oldEnNews = matchInMap(domain, {
-      'reuters.com': 0.13, 'bbc.com': 0.12, 'bloomberg.com': 0.12, 'cnbc.com': 0.12,
-      'apnews.com': 0.12, 'npr.org': 0.1,      'theverge.com': 0.12, 'cnet.com': 0.08,
-      'techcrunch.com': 0.10, 'nature.com': 0.12,
-      'nytimes.com': 0.12, 'cnn.com': 0.12, 'theguardian.com': 0.12, 'wired.com': 0.1,
-      'wsj.com': 0.12, 'ft.com': 0.12, 'economist.com': 0.1, 'theatlantic.com': 0.1,
+      'reuters.com': 0.13,
+      'bbc.com': 0.12,
+      'bloomberg.com': 0.12,
+      'cnbc.com': 0.12,
+      'apnews.com': 0.12,
+      'npr.org': 0.1,
+      'theverge.com': 0.12,
+      'cnet.com': 0.08,
+      'techcrunch.com': 0.1,
+      'nature.com': 0.12,
+      'nytimes.com': 0.12,
+      'cnn.com': 0.12,
+      'theguardian.com': 0.12,
+      'wired.com': 0.1,
+      'wsj.com': 0.12,
+      'ft.com': 0.12,
+      'economist.com': 0.1,
+      'theatlantic.com': 0.1,
       'bbc.co.uk': 0.12,
     })
     const newEnNews = oldEnNews + matchInMap(domain, NEW_EN_NEWS_AUTHORITY)
@@ -190,11 +220,22 @@ function simulateAuthorityBonus(
   // EN finance authority
   if (isFinance && isEnglish) {
     const oldEnFin = matchInMap(domain, {
-      'finance.yahoo.com': 0.3, 'nasdaq.com': 0.26, 'investing.com': 0.24,
-      'stockanalysis.com': 0.24, 'marketwatch.com': 0.22, 'coinmarketcap.com': 0.26,
-      'coindesk.com': 0.2, 'sec.gov': 0.2, 'spglobal.com': 0.16,
-      'apple.com': 0.12, 'tesla.com': 0.12, 'nvidia.com': 0.12,
-      'microsoft.com': 0.12, 'amazon.com': 0.12, 'netflix.com': 0.1, 'abc.xyz': 0.1,
+      'finance.yahoo.com': 0.3,
+      'nasdaq.com': 0.26,
+      'investing.com': 0.24,
+      'stockanalysis.com': 0.24,
+      'marketwatch.com': 0.22,
+      'coinmarketcap.com': 0.26,
+      'coindesk.com': 0.2,
+      'sec.gov': 0.2,
+      'spglobal.com': 0.16,
+      'apple.com': 0.12,
+      'tesla.com': 0.12,
+      'nvidia.com': 0.12,
+      'microsoft.com': 0.12,
+      'amazon.com': 0.12,
+      'netflix.com': 0.1,
+      'abc.xyz': 0.1,
     })
     newBonus += oldEnFin + matchInMap(domain, NEW_EN_FINANCE_AUTHORITY)
     oldBonus += oldEnFin
@@ -203,10 +244,17 @@ function simulateAuthorityBonus(
   // EN reference/academic
   if (isEnglish && (isFactual || tags.includes('academic'))) {
     const oldEnRef = matchInMap(domain, {
-      'britannica.com': 0.12, 'howstuffworks.com': 0.1, 'nasa.gov': 0.1,
-      'mayoclinic.org': 0.1, 'nih.gov': 0.1, 'cdc.gov': 0.1,
-      'scholar.google.com': 0.1, 'pubmed.ncbi.nlm.nih.gov': 0.1,
-      'semanticscholar.org': 0.08, 'nature.com': 0.1, 'science.org': 0.1,
+      'britannica.com': 0.12,
+      'howstuffworks.com': 0.1,
+      'nasa.gov': 0.1,
+      'mayoclinic.org': 0.1,
+      'nih.gov': 0.1,
+      'cdc.gov': 0.1,
+      'scholar.google.com': 0.1,
+      'pubmed.ncbi.nlm.nih.gov': 0.1,
+      'semanticscholar.org': 0.08,
+      'nature.com': 0.1,
+      'science.org': 0.1,
     })
     newBonus += oldEnRef + matchInMap(domain, NEW_EN_REFERENCE_AUTHORITY)
     oldBonus += oldEnRef
@@ -220,8 +268,11 @@ function simulateAuthorityBonus(
   // Japanese news
   if (isNews && isJapanese) {
     const oldJaNews = matchInMap(domain, {
-      'nhk.or.jp': 0.15, 'nikkei.com': 0.13, 'itmedia.co.jp': 0.12,
-      'asahi.com': 0.12, 'mainichi.jp': 0.1,
+      'nhk.or.jp': 0.15,
+      'nikkei.com': 0.13,
+      'itmedia.co.jp': 0.12,
+      'asahi.com': 0.12,
+      'mainichi.jp': 0.1,
     })
     newBonus += oldJaNews + matchInMap(domain, NEW_JA_NEWS_AUTHORITY)
     oldBonus += oldJaNews
@@ -360,5 +411,5 @@ const currentTotal = results.reduce((s, r) => s + (r.ranking?.ndcgAt10 ?? 0), 0)
 const simulatedTotal = currentTotal + (totalNew - totalOld)
 console.log(`  현재 총합: ${currentTotal.toFixed(2)} (평균 ${(currentTotal / 180).toFixed(4)})`)
 console.log(`  시뮬 총합: ${simulatedTotal.toFixed(2)} (평균 ${(simulatedTotal / 180).toFixed(4)})`)
-console.log(`  목표 총합: ${(0.70 * 180).toFixed(2)} (평균 0.7000)`)
-console.log(`  남은 Gap: ${((0.70 * 180 - simulatedTotal) / 180).toFixed(4)} per query`)
+console.log(`  목표 총합: ${(0.7 * 180).toFixed(2)} (평균 0.7000)`)
+console.log(`  남은 Gap: ${((0.7 * 180 - simulatedTotal) / 180).toFixed(4)} per query`)

@@ -32,10 +32,34 @@ export interface TierConfig {
  * by auth.ts resolveTenant() / getTenantRateLimit().
  */
 export const RATE_TIERS: Record<RateTierName, TierConfig> = {
-  free:     { name: 'free', rateLimitPerMinute: 30, perIpRateLimit: 10, maxDailyRequests: 500,   maxBytesPerDay: 50 * 1024 * 1024 },
-  basic:    { name: 'basic', rateLimitPerMinute: 60, perIpRateLimit: 30, maxDailyRequests: 5_000,  maxBytesPerDay: 500 * 1024 * 1024 },
-  pro:      { name: 'pro', rateLimitPerMinute: 120, perIpRateLimit: 60, maxDailyRequests: 20_000, maxBytesPerDay: 5 * 1024 * 1024 * 1024 },
-  enterprise: { name: 'enterprise', rateLimitPerMinute: 300, perIpRateLimit: 150, maxDailyRequests: 100_000, maxBytesPerDay: 50 * 1024 * 1024 * 1024 },
+  free: {
+    name: 'free',
+    rateLimitPerMinute: 30,
+    perIpRateLimit: 10,
+    maxDailyRequests: 500,
+    maxBytesPerDay: 50 * 1024 * 1024,
+  },
+  basic: {
+    name: 'basic',
+    rateLimitPerMinute: 60,
+    perIpRateLimit: 30,
+    maxDailyRequests: 5_000,
+    maxBytesPerDay: 500 * 1024 * 1024,
+  },
+  pro: {
+    name: 'pro',
+    rateLimitPerMinute: 120,
+    perIpRateLimit: 60,
+    maxDailyRequests: 20_000,
+    maxBytesPerDay: 5 * 1024 * 1024 * 1024,
+  },
+  enterprise: {
+    name: 'enterprise',
+    rateLimitPerMinute: 300,
+    perIpRateLimit: 150,
+    maxDailyRequests: 100_000,
+    maxBytesPerDay: 50 * 1024 * 1024 * 1024,
+  },
 }
 
 /** Per-tenant status persisted in the DO. */
@@ -310,7 +334,10 @@ export class TenancyDO extends DurableObject<Env> {
   }
 
   /** Add to deny-list (domain or IP); returns null on duplicate. */
-  async addDenyItem(identifier: string, opts: { type: 'domain' | 'ip'; addedBy: string; reason?: string }): Promise<DenyEntry | null> {
+  async addDenyItem(
+    identifier: string,
+    opts: { type: 'domain' | 'ip'; addedBy: string; reason?: string },
+  ): Promise<DenyEntry | null> {
     if (this.store.denyList.find((d) => d.identifier === identifier)) return null // duplicate
 
     const entry: DenyEntry = {
@@ -351,7 +378,9 @@ export class TenancyDO extends DurableObject<Env> {
   }
 
   /** Get effective rate limits for a tenant (for auth.ts middleware to use). */
-  async getEffectiveLimits(tenantId: string): Promise<{ rateLimitPerMinute: number; perIpRateLimit: number; maxDailyRequests: number; maxBytesPerDay: number }> {
+  async getEffectiveLimits(
+    tenantId: string,
+  ): Promise<{ rateLimitPerMinute: number; perIpRateLimit: number; maxDailyRequests: number; maxBytesPerDay: number }> {
     const status = this.store.tenants[tenantId]
     if (!status) return RATE_TIERS.free
 
@@ -384,11 +413,19 @@ export interface TenancyRPC {
   checkQuota(tenantId: string): Promise<QuotaCheckResult>
   suspendTenant(tenantId: string, reason: string, by?: string): Promise<TenantStatusEntry>
   resumeTenant(tenantId: string, by?: string): Promise<TenantStatusEntry>
-  addDenyItem(identifier: string, opts: { type: 'domain' | 'ip'; addedBy: string; reason?: string }): Promise<DenyEntry | null>
+  addDenyItem(
+    identifier: string,
+    opts: { type: 'domain' | 'ip'; addedBy: string; reason?: string },
+  ): Promise<DenyEntry | null>
   removeDenyItem(identifier: string): Promise<boolean>
   getDenyList(): Promise<DenyEntry[]>
   isDenied(identifier: string): Promise<boolean>
-  getEffectiveLimits(tenantId: string): { rateLimitPerMinute: number; perIpRateLimit: number; maxDailyRequests: number; maxBytesPerDay: number }
+  getEffectiveLimits(tenantId: string): {
+    rateLimitPerMinute: number
+    perIpRateLimit: number
+    maxDailyRequests: number
+    maxBytesPerDay: number
+  }
 }
 
 /** Get a TenancyDO stub \u2014 single instance named "tenancy-hub". */

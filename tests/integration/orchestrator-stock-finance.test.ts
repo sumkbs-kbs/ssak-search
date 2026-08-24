@@ -60,26 +60,29 @@ describe('Orchestrator + Stock Finance Integration', () => {
     // Mock Naver Finance API poll endpoint with valid stock data
     mockFetch.mockImplementation(async (url: string) => {
       if (url.includes('polling.finance.naver.com')) {
-        return new Response(JSON.stringify({
-          datas: [
-            {
-              itemCode: '005930',
-              stockName: '삼성전자',
-              closePrice: '45,900',
-              compareToPreviousClosePrice: '-500',
-              fluctuationsRatio: '-1.08',
-              openPrice: '46,200',
-              highPrice: '46,500',
-              lowPrice: '45,500',
-              accumulatedTradingVolume: '130,000',
-              accumulatedTradingValue: '5,967,000,000',
-              marketValueFull: '300,000,000,000,000',
-              marketStatus: 'OPEN',
-              previousClose: '46,400',
-            },
-          ],
-          dateTime: '20260722153000',
-        }), { status: 200, headers: { 'content-type': 'application/json' } })
+        return new Response(
+          JSON.stringify({
+            datas: [
+              {
+                itemCode: '005930',
+                stockName: '삼성전자',
+                closePrice: '45,900',
+                compareToPreviousClosePrice: '-500',
+                fluctuationsRatio: '-1.08',
+                openPrice: '46,200',
+                highPrice: '46,500',
+                lowPrice: '45,500',
+                accumulatedTradingVolume: '130,000',
+                accumulatedTradingValue: '5,967,000,000',
+                marketValueFull: '300,000,000,000,000',
+                marketStatus: 'OPEN',
+                previousClose: '46,400',
+              },
+            ],
+            dateTime: '20260722153000',
+          }),
+          { status: 200, headers: { 'content-type': 'application/json' } },
+        )
       }
       // Mock ALL other backends to return empty — isolate naver-finance path
       return new Response('', { status: 404 })

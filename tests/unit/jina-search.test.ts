@@ -116,7 +116,11 @@ Just a URL line and some text.
   })
 
   it('caps results at maxResults', async () => {
-    const big = { code: 200, status: 200, data: Array.from({ length: 15 }, (_, i) => ({ title: `T${i}`, url: `https://e.com/${i}`, content: 'c' })) }
+    const big = {
+      code: 200,
+      status: 200,
+      data: Array.from({ length: 15 }, (_, i) => ({ title: `T${i}`, url: `https://e.com/${i}`, content: 'c' })),
+    }
     mockFetchWithTimeout.mockResolvedValueOnce(jsonResponse(big))
     const results = await jinaSearch('q', { maxResults: 3 })
     expect(results).toHaveLength(3)
@@ -129,7 +133,13 @@ describe('jinaExtract (reader)', () => {
       jsonResponse({
         code: 200,
         status: 200,
-        data: { title: 'Page Title', description: 'd', url: 'https://x.com', content: 'Body content here', images: ['https://x.com/i.png'] },
+        data: {
+          title: 'Page Title',
+          description: 'd',
+          url: 'https://x.com',
+          content: 'Body content here',
+          images: ['https://x.com/i.png'],
+        },
       }),
     )
     const out = await jinaExtract('https://x.com/page', { includeImages: true })
@@ -139,14 +149,18 @@ describe('jinaExtract (reader)', () => {
   })
 
   it('sets X-Retain-Images: none when includeImages is false', async () => {
-    mockFetchWithTimeout.mockResolvedValueOnce(jsonResponse({ code: 200, status: 200, data: { title: '', content: '' } }))
+    mockFetchWithTimeout.mockResolvedValueOnce(
+      jsonResponse({ code: 200, status: 200, data: { title: '', content: '' } }),
+    )
     await jinaExtract('https://x.com', {})
     const init = mockFetchWithTimeout.mock.calls[0][2] as { headers: Record<string, string> }
     expect(init.headers['X-Retain-Images']).toBe('none')
   })
 
   it('falls back to domain title when JSON title is missing', async () => {
-    mockFetchWithTimeout.mockResolvedValueOnce(jsonResponse({ code: 200, status: 200, data: { title: '', content: 'body' } }))
+    mockFetchWithTimeout.mockResolvedValueOnce(
+      jsonResponse({ code: 200, status: 200, data: { title: '', content: 'body' } }),
+    )
     const out = await jinaExtract('https://deep.example.com/a')
     expect(out.title).toBe('deep.example.com')
     expect(out.images).toBeUndefined()
@@ -154,7 +168,9 @@ describe('jinaExtract (reader)', () => {
 
   it('parses the text fallback format (Title: / Markdown Content:)', async () => {
     const text = 'Title: A Text Page\n\nMarkdown Content: **Bold** body text here.\n'
-    mockFetchWithTimeout.mockResolvedValueOnce(new Response(text, { status: 200, headers: { 'Content-Type': 'text/plain' } }))
+    mockFetchWithTimeout.mockResolvedValueOnce(
+      new Response(text, { status: 200, headers: { 'Content-Type': 'text/plain' } }),
+    )
     const out = await jinaExtract('https://x.com', {})
     expect(out.title).toBe('A Text Page')
     expect(out.content).toContain('Bold')

@@ -100,21 +100,14 @@ export class SLAManager {
   /**
    * Record a metric.
    */
-  recordMetric(
-    slaId: string,
-    commitmentType: string,
-    value: number,
-    period: string,
-  ): SLAMetric {
+  recordMetric(slaId: string, commitmentType: string, value: number, period: string): SLAMetric {
     const sla = this.slas.get(slaId)
     if (!sla) throw new Error(`SLA not found: ${slaId}`)
 
-    const commitment = sla.commitments.find(c => c.type === commitmentType)
+    const commitment = sla.commitments.find((c) => c.type === commitmentType)
     if (!commitment) throw new Error(`Commitment not found: ${commitmentType}`)
 
-    const met = commitmentType === 'error_rate'
-      ? value <= commitment.target
-      : value >= commitment.target
+    const met = commitmentType === 'error_rate' ? value <= commitment.target : value >= commitment.target
 
     const metric: SLAMetric = {
       metricId: this.generateId(),
@@ -140,32 +133,28 @@ export class SLAManager {
   /**
    * Get SLA report.
    */
-  getReport(
-    slaId: string,
-    startDate: number,
-    endDate: number,
-  ): SLAReport {
+  getReport(slaId: string, startDate: number, endDate: number): SLAReport {
     const sla = this.slas.get(slaId)
     if (!sla) throw new Error(`SLA not found: ${slaId}`)
 
     // Get metrics for period
     const periodMetrics = this.metrics.filter(
-      m => m.slaId === slaId && m.timestamp >= startDate && m.timestamp <= endDate
+      (m) => m.slaId === slaId && m.timestamp >= startDate && m.timestamp <= endDate,
     )
 
     // Calculate compliance
     const totalMetrics = periodMetrics.length
-    const metMetrics = periodMetrics.filter(m => m.met).length
+    const metMetrics = periodMetrics.filter((m) => m.met).length
     const overallCompliance = totalMetrics > 0 ? metMetrics / totalMetrics : 1
 
     // Get breaches for period
     const periodBreaches = this.breaches.filter(
-      b => b.slaId === slaId && b.startTime >= startDate && b.startTime <= endDate
+      (b) => b.slaId === slaId && b.startTime >= startDate && b.startTime <= endDate,
     )
 
     // Get credits for period
     const periodCredits = this.credits.filter(
-      c => c.breachId && periodBreaches.some(b => b.breachId === c.breachId)
+      (c) => c.breachId && periodBreaches.some((b) => b.breachId === c.breachId),
     )
 
     return {
@@ -231,11 +220,8 @@ export class SLAManager {
   /**
    * Get metrics for SLA.
    */
-  getMetrics(
-    slaId: string,
-    timeRange?: { start: number; end: number },
-  ): SLAMetric[] {
-    return this.metrics.filter(m => {
+  getMetrics(slaId: string, timeRange?: { start: number; end: number }): SLAMetric[] {
+    return this.metrics.filter((m) => {
       if (m.slaId !== slaId) return false
       if (timeRange) {
         if (m.timestamp < timeRange.start || m.timestamp > timeRange.end) return false
@@ -247,11 +233,8 @@ export class SLAManager {
   /**
    * Get breaches for SLA.
    */
-  getBreaches(
-    slaId: string,
-    timeRange?: { start: number; end: number },
-  ): SLABreach[] {
-    return this.breaches.filter(b => {
+  getBreaches(slaId: string, timeRange?: { start: number; end: number }): SLABreach[] {
+    return this.breaches.filter((b) => {
       if (b.slaId !== slaId) return false
       if (timeRange) {
         if (b.startTime < timeRange.start || b.startTime > timeRange.end) return false
@@ -264,12 +247,7 @@ export class SLAManager {
   // Private methods
   // ============================================================
 
-  private recordBreach(
-    slaId: string,
-    commitmentType: string,
-    target: number,
-    actual: number,
-  ): void {
+  private recordBreach(slaId: string, commitmentType: string, target: number, actual: number): void {
     const breach: SLABreach = {
       breachId: this.generateId(),
       slaId,
@@ -353,7 +331,7 @@ export class UptimeMonitor {
 
     // Trim old results (keep last 30 days)
     const cutoff = Date.now() - 30 * 24 * 60 * 60 * 1000
-    this.results = this.results.filter(r => r.timestamp > cutoff)
+    this.results = this.results.filter((r) => r.timestamp > cutoff)
   }
 
   /**
@@ -368,7 +346,7 @@ export class UptimeMonitor {
     uptimePercent: number
     incidents: UptimeResult[]
   } {
-    const results = this.results.filter(r => {
+    const results = this.results.filter((r) => {
       if (r.checkId !== checkId) return false
       if (timeRange) {
         if (r.timestamp < timeRange.start || r.timestamp > timeRange.end) return false
@@ -376,15 +354,15 @@ export class UptimeMonitor {
       return true
     })
 
-    const uptime = results.filter(r => r.status === 'up').length
-    const downtime = results.filter(r => r.status === 'down').length
+    const uptime = results.filter((r) => r.status === 'up').length
+    const downtime = results.filter((r) => r.status === 'down').length
     const total = uptime + downtime
 
     return {
       uptime,
       downtime,
       uptimePercent: total > 0 ? uptime / total : 1,
-      incidents: results.filter(r => r.status === 'down'),
+      incidents: results.filter((r) => r.status === 'down'),
     }
   }
 
@@ -420,11 +398,11 @@ export class UptimeMonitor {
       })
     }
 
-    const overallStatus = services.every(s => s.status === 'operational')
+    const overallStatus = services.every((s) => s.status === 'operational')
       ? 'operational'
-      : services.some(s => s.status === 'major_outage')
+      : services.some((s) => s.status === 'major_outage')
         ? 'major_outage'
-        : services.some(s => s.status === 'partial_outage')
+        : services.some((s) => s.status === 'partial_outage')
           ? 'partial_outage'
           : 'degraded'
 

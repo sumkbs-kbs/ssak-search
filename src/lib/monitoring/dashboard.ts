@@ -11,7 +11,6 @@
  * Exports metrics in Prometheus format for Grafana visualization.
  */
 
-
 // ============================================================
 // Types
 // ============================================================
@@ -50,11 +49,14 @@ export interface DashboardMetrics {
     misses: number
     hitRate: number
   }
-  backends: Record<string, {
-    requests: number
-    errors: number
-    avgLatency: number
-  }>
+  backends: Record<
+    string,
+    {
+      requests: number
+      errors: number
+      avgLatency: number
+    }
+  >
 }
 
 // ============================================================
@@ -70,20 +72,19 @@ export class MetricsCollector {
   private errorCounts = new Map<string, number>()
   private cacheHits = 0
   private cacheMisses = 0
-  private backendMetrics = new Map<string, {
-    requests: number
-    errors: number
-    totalLatency: number
-  }>()
+  private backendMetrics = new Map<
+    string,
+    {
+      requests: number
+      errors: number
+      totalLatency: number
+    }
+  >()
 
   /**
    * Record a request.
    */
-  recordRequest(
-    endpoint: string,
-    statusCode: number,
-    latencyMs: number,
-  ): void {
+  recordRequest(endpoint: string, statusCode: number, latencyMs: number): void {
     this.requestCount++
     this.latencySum += latencyMs
     this.latencies.push(latencyMs)
@@ -121,11 +122,7 @@ export class MetricsCollector {
   /**
    * Record backend metrics.
    */
-  recordBackend(
-    backend: string,
-    latencyMs: number,
-    isError: boolean,
-  ): void {
+  recordBackend(backend: string, latencyMs: number, isError: boolean): void {
     const metrics = this.backendMetrics.get(backend) ?? {
       requests: 0,
       errors: 0,
@@ -168,11 +165,14 @@ export class MetricsCollector {
     }
 
     // Backend metrics
-    const backends: Record<string, {
-      requests: number
-      errors: number
-      avgLatency: number
-    }> = {}
+    const backends: Record<
+      string,
+      {
+        requests: number
+        errors: number
+        avgLatency: number
+      }
+    > = {}
     for (const [backend, metrics] of this.backendMetrics) {
       backends[backend] = {
         requests: metrics.requests,
@@ -197,9 +197,7 @@ export class MetricsCollector {
         avg: this.requestCount > 0 ? this.latencySum / this.requestCount : 0,
       },
       errors: {
-        total: this.errorCounts.size > 0
-          ? [...this.errorCounts.values()].reduce((a, b) => a + b, 0)
-          : 0,
+        total: this.errorCounts.size > 0 ? [...this.errorCounts.values()].reduce((a, b) => a + b, 0) : 0,
         byType,
       },
       cache: {
@@ -229,7 +227,7 @@ export class MetricsCollector {
     lines.push(`search_latency_seconds{quantile="0.5"} ${metrics.latency.p50 / 1000}`)
     lines.push(`search_latency_seconds{quantile="0.95"} ${metrics.latency.p95 / 1000}`)
     lines.push(`search_latency_seconds{quantile="0.99"} ${metrics.latency.p99 / 1000}`)
-    lines.push(`search_latency_seconds_sum ${metrics.latency.avg * metrics.requests.total / 1000}`)
+    lines.push(`search_latency_seconds_sum ${(metrics.latency.avg * metrics.requests.total) / 1000}`)
     lines.push(`search_latency_seconds_count ${metrics.requests.total}`)
 
     // Errors

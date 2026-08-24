@@ -26,7 +26,9 @@ function extractDomainFromResult(r: SearchResult): string {
   try {
     const host = new URL(r.url).hostname.replace(/^www\./, '').toLowerCase()
     if (host && host !== 'news.google.com') return host
-  } catch { /* fall through */ }
+  } catch {
+    /* fall through */
+  }
   const d = (r.domain ?? '').toLowerCase().replace(/^www\./, '')
   return d !== 'news.google.com' ? d : ''
 }
@@ -236,8 +238,8 @@ const ENGLISH_FINANCE_AUTHORITY: Record<string, number> = {
   'reuters.com': 0.12, // Reuters — en-stock gold (4 queries)
   'cnbc.com': 0.12, // CNBC — en-stock gold (4 queries)
   'investopedia.com': 0.12, // Investopedia — en-fact finance gold (3 queries)
-  'macrotrends.net': 0.10, // Macrotrends — financial data gold (3 queries)
-  'wisesheets.io': 0.10, // Wisesheets — financial data gold (2 queries)
+  'macrotrends.net': 0.1, // Macrotrends — financial data gold (3 queries)
+  'wisesheets.io': 0.1, // Wisesheets — financial data gold (2 queries)
 }
 
 /**
@@ -255,7 +257,7 @@ const ENGLISH_NEWS_AUTHORITY: Record<string, number> = {
   'npr.org': 0.1,
   'theverge.com': 0.12,
   'cnet.com': 0.08,
-  'techcrunch.com': 0.10,
+  'techcrunch.com': 0.1,
   'nature.com': 0.12,
   'gov.uk': 0.1,
   'europa.eu': 0.1,
@@ -300,11 +302,11 @@ const ENGLISH_NEWS_AUTHORITY: Record<string, number> = {
   // These appeared in 5+ gold standards but had no authority boost, so keyword-
   // matched MSN aggregates and low-quality outlets outranked them.
   'techradar.com': 0.12, // TechRadar — en-news-02/04 gold (5+ queries)
-  'tomsguide.com': 0.10, // Tom's Guide — en-news gold (3+ queries)
+  'tomsguide.com': 0.1, // Tom's Guide — en-news gold (3+ queries)
   'slashdot.org': 0.08, // Slashdot — en-tech/adv gold (4 queries)
-  'arstechnica.com': 0.10, // Ars Technica — en-news-05 gold (6 queries)
-  'venturebeat.com': 0.10, // VentureBeat — en-news-01 gold (4 queries)
-  'scientificamerican.com': 0.10, // SciAm — en-fact-12/gk-07 gold
+  'arstechnica.com': 0.1, // Ars Technica — en-news-05 gold (6 queries)
+  'venturebeat.com': 0.1, // VentureBeat — en-news-01 gold (4 queries)
+  'scientificamerican.com': 0.1, // SciAm — en-fact-12/gk-07 gold
   'sciencedaily.com': 0.08, // ScienceDaily — en-fact gold (3 queries)
 }
 
@@ -360,10 +362,10 @@ const KOREAN_NEWS_AUTHORITY: Record<string, number> = {
   // These appeared in 5+ gold standards but had no authority boost — keyword-
   // matched blog/cafe posts outranked them in KR news pools.
   'namu.wiki': 0.08, // Korean wiki — reliable reference for KR queries
-  'ko.wikipedia.org': 0.10, // Korean wikipedia — gold in 109 queries
-  'terms.naver.com': 0.10, // 네이버 지식백과 — authoritative KR reference
+  'ko.wikipedia.org': 0.1, // Korean wikipedia — gold in 109 queries
+  'terms.naver.com': 0.1, // 네이버 지식백과 — authoritative KR reference
   'naver.com': 0.08, // naver.com main — news aggregation gold
-  'koreaherald.com': 0.10, // Korea Herald — EN outlet for KR news gold
+  'koreaherald.com': 0.1, // Korea Herald — EN outlet for KR news gold
 }
 
 /**
@@ -376,9 +378,9 @@ const KOREAN_BLOG_PENALTY_NEWS: Record<string, number> = {
   // kept moderate — m.blog.naver.com is gold in KR general queries, and too
   // aggressive a news penalty can bleed into general context via shared map.
   'm.blog.naver.com': -0.28,
-  'blog.naver.com': -0.20,
+  'blog.naver.com': -0.2,
   'm.cafe.naver.com': -0.28,
-  'cafe.naver.com': -0.20,
+  'cafe.naver.com': -0.2,
   'tistory.com': -0.15,
   'velog.io': -0.15,
   'kin.naver.com': -0.32, // 지식iN Q&A — low-quality health/finance answers
@@ -445,11 +447,11 @@ const CHINESE_NEWS_AUTHORITY: Record<string, number> = {
   '163.com': 0.05,
   // NDCG-0.70 wave (2026-08-21): additional Chinese news gold domains.
   'ithome.com': 0.12, // IT之家 — zh-tech/zh-news gold (14 queries)
-  'sina.com.cn': 0.10, // 新浪 — zh-news gold (11 queries)
-  'ifeng.com': 0.10, // 凤凰网 — zh-news gold (5 queries)
+  'sina.com.cn': 0.1, // 新浪 — zh-news gold (11 queries)
+  'ifeng.com': 0.1, // 凤凰网 — zh-news gold (5 queries)
   'toutiao.com': 0.08, // 今日头条 — zh-news gold (4 queries)
   'bjnews.com.cn': 0.08, // 新京报 — zh-news gold (3 queries)
-  'caixin.com': 0.10, // 财新 — zh-news finance gold (4 queries)
+  'caixin.com': 0.1, // 财新 — zh-news finance gold (4 queries)
   'cls.cn': 0.08, // 财联社 — zh-news finance gold (3 queries)
 }
 
@@ -487,13 +489,13 @@ const CHINESE_TECH_AUTHORITY: Record<string, number> = {
   'blog.csdn.net': 0.15, // CSDN — zh-tech gold (137 queries)
   'juejin.cn': 0.12, // 掘金 — zh-tech gold (18 queries)
   'baike.baidu.com': 0.15, // 百度百科 — zh-fact gold (121 queries)
-  'zhuanlan.zhihu.com': 0.10, // 知乎专栏 — zh-tech gold (112 queries)
-  'zhihu.com': 0.10, // 知乎 — zh-general/fact gold (24 queries)
+  'zhuanlan.zhihu.com': 0.1, // 知乎专栏 — zh-tech gold (112 queries)
+  'zhihu.com': 0.1, // 知乎 — zh-general/fact gold (24 queries)
   'csdn.net': 0.12, // CSDN main — zh-tech gold (10 queries)
   'gitee.com': 0.12, // Gitee — Chinese GitHub equivalent (5 queries)
-  'infoq.cn': 0.10, // InfoQ中国 — zh-tech gold (4 queries)
-  'segmentfault.com': 0.10, // SegmentFault — zh-tech Q&A gold (4 queries)
-  'oschina.net': 0.10, // 开源中国 — zh-tech gold (3 queries)
+  'infoq.cn': 0.1, // InfoQ中国 — zh-tech gold (4 queries)
+  'segmentfault.com': 0.1, // SegmentFault — zh-tech Q&A gold (4 queries)
+  'oschina.net': 0.1, // 开源中国 — zh-tech gold (3 queries)
 }
 
 /**
@@ -520,13 +522,13 @@ const JAPANESE_NEWS_AUTHORITY: Record<string, number> = {
   'k-tai.watch.impress.co.jp': 0.1,
   // NDCG-0.70 wave (2026-08-21): additional ja-news gold domains from eval.
   'news.yahoo.co.jp': 0.12, // Yahoo Japan News — ja-news gold (122 queries)
-  'ja.google.com': 0.10, // Google Japan — ja-news gold (121 queries, but redirect)
-  'gigazine.net': 0.10, // GIGAZINE — ja-news gold (5 queries)
-  'press.jiji.com': 0.10, // 時事通信 — ja-news gold (4 queries)
-  'sankei.com': 0.10, // 産経新聞 — ja-news gold (5 queries)
-  'toyokeizai.net': 0.10, // 東洋経済 — ja-news finance gold (4 queries)
-  'diamond.jp': 0.10, // ダイヤモンド — ja-news gold (3 queries)
-  'response.jp': 0.10, // レスポンス — ja-tech gold (3 queries)
+  'ja.google.com': 0.1, // Google Japan — ja-news gold (121 queries, but redirect)
+  'gigazine.net': 0.1, // GIGAZINE — ja-news gold (5 queries)
+  'press.jiji.com': 0.1, // 時事通信 — ja-news gold (4 queries)
+  'sankei.com': 0.1, // 産経新聞 — ja-news gold (5 queries)
+  'toyokeizai.net': 0.1, // 東洋経済 — ja-news finance gold (4 queries)
+  'diamond.jp': 0.1, // ダイヤモンド — ja-news gold (3 queries)
+  'response.jp': 0.1, // レスポンス — ja-tech gold (3 queries)
 }
 
 /**
@@ -654,20 +656,20 @@ const ENGLISH_REFERENCE_AUTHORITY: Record<string, number> = {
   // matched HN links, random blogs, and arxiv papers outranked them.
   'healthline.com': 0.12, // health gold (32 queries) — was dead code comment, now
   //  active since bing sometimes surfaces healthline in en-health pools
-  'webmd.com': 0.10, // health gold (22 queries)
-  'mayo.edu': 0.10, // Mayo Clinic education — health gold (3 queries)
+  'webmd.com': 0.1, // health gold (22 queries)
+  'mayo.edu': 0.1, // Mayo Clinic education — health gold (3 queries)
   'psychologytoday.com': 0.08, // psychology gold (4 queries)
   'thoughtco.com': 0.08, // educational reference (3 queries)
-  'khanacademy.org': 0.10, // Khan Academy — educational gold (4 queries)
+  'khanacademy.org': 0.1, // Khan Academy — educational gold (4 queries)
   'coursera.org': 0.08, // Coursera — educational gold (3 queries)
   'slideshare.net': 0.08, // SlideShare — presentation gold (3 queries)
   'slides.com': 0.08, // Slides.com — presentation gold (3 queries)
   // Academic gold domains — these appeared in 5+ gold standards but had no
   // authority boost, so arxiv papers and HN links outranked them.
   'arxiv.org': 0.12, // arXiv — academic gold (45 queries)
-  'paperswithcode.com': 0.10, // Papers With Code — academic gold (10 queries)
+  'paperswithcode.com': 0.1, // Papers With Code — academic gold (10 queries)
   'ssrn.com': 0.08, // SSRN — social science papers (4 queries)
-  'springer.com': 0.10, // Springer — academic gold (4 queries)
+  'springer.com': 0.1, // Springer — academic gold (4 queries)
   'wiley.com': 0.08, // Wiley — academic gold (3 queries)
   'researchgate.net': 0.08, // ResearchGate — academic gold (3 queries)
   // Q&A platforms — gold in factual queries but outranked by keyword blogs

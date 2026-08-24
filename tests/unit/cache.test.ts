@@ -25,7 +25,14 @@ vi.mock('../../src/lib/metrics', () => ({
   recordCacheMiss: metricsMock.miss,
 }))
 
-import { cacheKey, cacheParamsSignature, getCached, setCached, invalidateCache, type CacheKeyRequest } from '../../src/lib/cache'
+import {
+  cacheKey,
+  cacheParamsSignature,
+  getCached,
+  setCached,
+  invalidateCache,
+  type CacheKeyRequest,
+} from '../../src/lib/cache'
 
 function kvMock() {
   const store = new Map<string, unknown>()

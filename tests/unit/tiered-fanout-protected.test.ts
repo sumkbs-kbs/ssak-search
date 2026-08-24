@@ -16,7 +16,7 @@ function task(name: string, results: SearchResult[], delayMs = 0) {
   return {
     name,
     run: async () => {
-      if (delayMs > 0) await new Promise(r => setTimeout(r, delayMs))
+      if (delayMs > 0) await new Promise((r) => setTimeout(r, delayMs))
       return results
     },
   }
@@ -67,10 +67,7 @@ describe('TieredFanout protectedBackends', () => {
 
   it('보호 대상이 태스크 플랜에 없으면 동작이 변하지 않는다 (no-op)', async () => {
     const fanout = new TieredFanout()
-    const tasks = [
-      task('bing', makeResult('bing', 6)),
-      task('hackernews', makeResult('hn', 2)),
-    ]
+    const tasks = [task('bing', makeResult('bing', 6)), task('hackernews', makeResult('hn', 2))]
 
     const result = await fanout.execute(tasks, {
       ...BASE_OPTIONS,
@@ -89,10 +86,7 @@ describe('TieredFanout protectedBackends', () => {
         throw new Error('github down')
       },
     }
-    const tasks = [
-      task('bing', makeResult('bing', 8)),
-      failingProtected,
-    ]
+    const tasks = [task('bing', makeResult('bing', 8)), failingProtected]
 
     const result = await fanout.execute(tasks, {
       ...BASE_OPTIONS,

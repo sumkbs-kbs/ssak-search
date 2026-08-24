@@ -15,12 +15,28 @@ import { extractDomain } from '../src/lib/util'
 export {}
 
 const QUERIES: Array<{ id: string; query: string; gold: string[] }> = [
-  { id: 'zh-travel-01', query: '张家界旅游攻略', gold: ['ctrip.com', 'mafengwo.cn', 'xiaohongshu.com', 'trip.com', 'qunar.com'] },
+  {
+    id: 'zh-travel-01',
+    query: '张家界旅游攻略',
+    gold: ['ctrip.com', 'mafengwo.cn', 'xiaohongshu.com', 'trip.com', 'qunar.com'],
+  },
   { id: 'zh-general-01', query: '北京旅游攻略', gold: ['ctrip.com', 'mafengwo.cn'] },
   { id: 'zh-general-02', query: '上海美食推荐', gold: ['dianping.com', 'mafengwo.cn'] },
-  { id: 'zh-general-06', query: '成都美食攻略', gold: ['ctrip.com', 'mafengwo.cn', 'dianping.com', 'xiaohongshu.com', 'trip.com'] },
-  { id: 'zh-general-08', query: '三亚旅游攻略', gold: ['ctrip.com', 'mafengwo.cn', 'dianping.com', 'xiaohongshu.com', 'trip.com'] },
-  { id: 'zh-general-15', query: '智能手表推荐', gold: ['ctrip.com', 'mafengwo.cn', 'dianping.com', 'xiaohongshu.com', 'trip.com'] },
+  {
+    id: 'zh-general-06',
+    query: '成都美食攻略',
+    gold: ['ctrip.com', 'mafengwo.cn', 'dianping.com', 'xiaohongshu.com', 'trip.com'],
+  },
+  {
+    id: 'zh-general-08',
+    query: '三亚旅游攻略',
+    gold: ['ctrip.com', 'mafengwo.cn', 'dianping.com', 'xiaohongshu.com', 'trip.com'],
+  },
+  {
+    id: 'zh-general-15',
+    query: '智能手表推荐',
+    gold: ['ctrip.com', 'mafengwo.cn', 'dianping.com', 'xiaohongshu.com', 'trip.com'],
+  },
 ]
 
 const REGIONS: Array<{ label: string; region: string | undefined }> = [
@@ -51,7 +67,9 @@ async function main(): Promise<void> {
       const row = { id: q.id, region: r.label, n: res.length, goldInTop10: inTop10, domains: top }
       rows.push(row)
       if (!json) {
-        console.log(`${q.id.padEnd(14)} ${r.label.padEnd(16)} → ${String(res.length).padStart(2)}건  gold@10=${inTop10}  [${top.map(([d, n]) => `${d}×${n}`).join(' ')}]`)
+        console.log(
+          `${q.id.padEnd(14)} ${r.label.padEnd(16)} → ${String(res.length).padStart(2)}건  gold@10=${inTop10}  [${top.map(([d, n]) => `${d}×${n}`).join(' ')}]`,
+        )
       }
     }
   }

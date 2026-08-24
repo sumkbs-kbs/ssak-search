@@ -27,7 +27,11 @@ function vecEnv(overrides: Partial<Record<string, unknown>> = {}): Env {
           {
             id: 'doc-hash_chunk_0',
             score: 0.92,
-            metadata: { content: 'Cloudflare Workers documentation content', embeddingProvider: 'workers-ai', chunkIndex: 0 },
+            metadata: {
+              content: 'Cloudflare Workers documentation content',
+              embeddingProvider: 'workers-ai',
+              chunkIndex: 0,
+            },
           },
           {
             id: 'doc-hash_chunk_1',
@@ -111,7 +115,12 @@ describe('searchIndex', () => {
     const topicFiltered = await searchIndex(env, { query: 'workers', topic: 'finance' })
     expect(topicFiltered).toHaveLength(0)
     // matching filters pass through
-    const ok = await searchIndex(env, { query: 'workers', language: 'en', domain: 'developers.cloudflare.com', topic: 'workers' })
+    const ok = await searchIndex(env, {
+      query: 'workers',
+      language: 'en',
+      domain: 'developers.cloudflare.com',
+      topic: 'workers',
+    })
     expect(ok).toHaveLength(2)
   })
 
@@ -139,9 +148,7 @@ describe('searchIndex', () => {
     embedMock.mockResolvedValue({ embeddings: [[0.1]], text: [] })
     const env = vecEnv()
     ;(env.VECTORIZE_INDEX as unknown as { query: ReturnType<typeof vi.fn> }).query = vi.fn().mockResolvedValue({
-      matches: [
-        { id: 'doc-hash_chunk_0', score: 0.05, metadata: { content: 'low score content' } },
-      ],
+      matches: [{ id: 'doc-hash_chunk_0', score: 0.05, metadata: { content: 'low score content' } }],
     })
     ;(env.SEARCH_INDEX_DB as unknown as { prepare: ReturnType<typeof vi.fn> }).prepare = vi.fn(() => ({
       bind: vi.fn(() => ({

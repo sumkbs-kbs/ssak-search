@@ -52,15 +52,35 @@ export const BACKEND_TIERS: BackendTier[] = [
     latencyMs: 2000,
     reliability: 0.95,
     priority: 2,
-    backends: ['wikipedia', 'github', 'github-issues', 'hackernews', 'csdn', 'juejin', 'qiita', 'baidu', 'yahoo-finance'],
+    backends: [
+      'wikipedia',
+      'github',
+      'github-issues',
+      'hackernews',
+      'csdn',
+      'juejin',
+      'qiita',
+      'baidu',
+      'yahoo-finance',
+    ],
   },
   {
     id: 'tier3',
     name: 'Extended',
     latencyMs: 2000,
-    reliability: 0.90,
+    reliability: 0.9,
     priority: 3,
-    backends: ['reddit', 'arxiv', 'openalex', 'stackoverflow', 'duckduckgo', 'bing-news-rss', 'google-news-rss', 'bing-news', 'ddg-site-reddit'],
+    backends: [
+      'reddit',
+      'arxiv',
+      'openalex',
+      'stackoverflow',
+      'duckduckgo',
+      'bing-news-rss',
+      'google-news-rss',
+      'bing-news',
+      'ddg-site-reddit',
+    ],
   },
 ]
 
@@ -94,7 +114,7 @@ export class TierManager {
    * Get backends for a specific tier.
    */
   getBackendsForTier(tierId: string): string[] {
-    const tier = this.tiers.find(t => t.id === tierId)
+    const tier = this.tiers.find((t) => t.id === tierId)
     return tier?.backends ?? []
   }
 
@@ -102,7 +122,7 @@ export class TierManager {
    * Get backends up to a specific tier.
    */
   getBackendsUpToTier(maxTierId: string): string[] {
-    const maxTierIndex = this.tiers.findIndex(t => t.id === maxTierId)
+    const maxTierIndex = this.tiers.findIndex((t) => t.id === maxTierId)
     if (maxTierIndex === -1) return []
 
     const backends: string[] = []
@@ -116,7 +136,7 @@ export class TierManager {
    * Get max latency for a tier.
    */
   getTierLatency(tierId: string): number {
-    const tier = this.tiers.find(t => t.id === tierId)
+    const tier = this.tiers.find((t) => t.id === tierId)
     return tier?.latencyMs ?? 2000
   }
 

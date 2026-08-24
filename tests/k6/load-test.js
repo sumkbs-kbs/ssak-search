@@ -91,10 +91,7 @@ const INDEX_SEARCH_QUERIES = [
   'PostgreSQL query optimization',
 ]
 
-const EXTRACT_URLS = [
-  ['https://example.com'],
-  ['https://httpbin.org/html'],
-]
+const EXTRACT_URLS = [['https://example.com'], ['https://httpbin.org/html']]
 
 // ============================================================
 // Test Options
@@ -110,14 +107,14 @@ export const options = {
     { duration: '30s', target: 0 },
   ],
   thresholds: {
-    http_req_duration: ['p(95)<5000'],      // 95% of requests under 5s
-    health_latency: ['p(95)<3000'],          // health check
-    search_latency: ['p(95)<8000'],          // basic search
-    search_answer_latency: ['p(95)<15000'],  // search+answer (includes AI generation)
-    index_search_latency: ['p(95)<8000'],    // index/search threshold
-    search_failures: ['rate<0.1'],           // <10% failure rate on searches
-    index_search_failures: ['rate<0.1'],     // <10% failure rate on index searches
-    http_req_failed: ['rate<0.05'],          // <5% overall failure rate
+    http_req_duration: ['p(95)<5000'], // 95% of requests under 5s
+    health_latency: ['p(95)<3000'], // health check
+    search_latency: ['p(95)<8000'], // basic search
+    search_answer_latency: ['p(95)<15000'], // search+answer (includes AI generation)
+    index_search_latency: ['p(95)<8000'], // index/search threshold
+    search_failures: ['rate<0.1'], // <10% failure rate on searches
+    index_search_failures: ['rate<0.1'], // <10% failure rate on index searches
+    http_req_failed: ['rate<0.05'], // <5% overall failure rate
   },
   noConnectionReuse: true,
   userAgent: 'k6-load-test/1.0',
@@ -153,7 +150,12 @@ export default function () {
     check(res, {
       'health status is 200': (r) => r.status === 200,
       'health returns valid JSON': (r) => {
-        try { JSON.parse(r.body); return true } catch { return false }
+        try {
+          JSON.parse(r.body)
+          return true
+        } catch {
+          return false
+        }
       },
     })
   })
@@ -184,18 +186,24 @@ export default function () {
           try {
             const body = JSON.parse(r.body)
             return Array.isArray(body.results)
-          } catch { return false }
+          } catch {
+            return false
+          }
         },
         'search has expected fields': (r) => {
           try {
             const body = JSON.parse(r.body)
-            return body.query !== undefined &&
-              body.response_time_ms !== undefined &&
-              body.backend !== undefined
-          } catch { return false }
+            return body.query !== undefined && body.response_time_ms !== undefined && body.backend !== undefined
+          } catch {
+            return false
+          }
         },
         'search returns >0 results': (r) => {
-          try { return JSON.parse(r.body).results?.length > 0 } catch { return false }
+          try {
+            return JSON.parse(r.body).results?.length > 0
+          } catch {
+            return false
+          }
         },
       })
       searchFailureRate.add(!passed)
@@ -225,7 +233,11 @@ export default function () {
       const passed = check(res, {
         'search+answer status is 200': (r) => r.status === 200,
         'search+answer returns results': (r) => {
-          try { return Array.isArray(JSON.parse(r.body).results) } catch { return false }
+          try {
+            return Array.isArray(JSON.parse(r.body).results)
+          } catch {
+            return false
+          }
         },
       })
       searchFailureRate.add(!passed)
@@ -249,13 +261,25 @@ export default function () {
       const passed = check(res, {
         'index/search status is 200': (r) => r.status === 200,
         'index/search returns valid JSON': (r) => {
-          try { return typeof JSON.parse(r.body) === 'object' } catch { return false }
+          try {
+            return typeof JSON.parse(r.body) === 'object'
+          } catch {
+            return false
+          }
         },
         'index/search returns results_count': (r) => {
-          try { return JSON.parse(r.body).results_count !== undefined } catch { return false }
+          try {
+            return JSON.parse(r.body).results_count !== undefined
+          } catch {
+            return false
+          }
         },
         'index/search latency reported': (r) => {
-          try { return JSON.parse(r.body).latency_ms !== undefined } catch { return false }
+          try {
+            return JSON.parse(r.body).latency_ms !== undefined
+          } catch {
+            return false
+          }
         },
       })
       indexSearchFailureRate.add(!passed)
@@ -265,13 +289,13 @@ export default function () {
         try {
           const body = JSON.parse(res.body)
           // Track QPS: record success with result count and latency
-          const qpsMetric = body.results_count > 0
-            ? (1 / (body.latency_ms / 1000))
-            : 0
+          const qpsMetric = body.results_count > 0 ? 1 / (body.latency_ms / 1000) : 0
           if (qpsMetric > 0) {
             requestsPerSecond.add(qpsMetric)
           }
-        } catch { /* ignore parse errors in metric tracking */ }
+        } catch {
+          /* ignore parse errors in metric tracking */
+        }
       }
     })
   }
@@ -293,7 +317,11 @@ export default function () {
       const passed = check(res, {
         'extract status is 200': (r) => r.status === 200,
         'extract returns results': (r) => {
-          try { return Array.isArray(JSON.parse(r.body).results) } catch { return false }
+          try {
+            return Array.isArray(JSON.parse(r.body).results)
+          } catch {
+            return false
+          }
         },
       })
       extractFailureRate.add(!passed)
@@ -328,7 +356,7 @@ function trackIteration(scenario, latencyMs) {
 
   // Clean up old timestamps (keep last 5 seconds for sliding window QPS calc)
   const cutoff = now - 5000
-  requestTimestamps = requestTimestamps.filter(t => t.ts > cutoff)
+  requestTimestamps = requestTimestamps.filter((t) => t.ts > cutoff)
 }
 
 // ============================================================
@@ -336,9 +364,7 @@ function trackIteration(scenario, latencyMs) {
 // ============================================================
 
 export function teardown() {
-  const totalDurationMs = __ENV.TEST_DURATION_MS
-    ? parseInt(__ENV.TEST_DURATION_MS, 10)
-    : 120000 // default 120s
+  const totalDurationMs = __ENV.TEST_DURATION_MS ? parseInt(__ENV.TEST_DURATION_MS, 10) : 120000 // default 120s
 
   const totalSeconds = Math.max(totalDurationMs / 1000, 0.001)
 

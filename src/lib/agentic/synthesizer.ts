@@ -343,9 +343,12 @@ export class AnswerSynthesizer {
           return waitMs === undefined ? undefined : clampRetryAfterMs(waitMs, this.retryAfterRangeMs)
         },
         onErrorRetry: (attempt, delayMs, err) =>
-          this.log.warn(`[Synthesizer] AI rate-limited (429), retrying in ${delayMs}ms (${attempt}/${this.maxRetries})`, {
-            error: toError(err),
-          }),
+          this.log.warn(
+            `[Synthesizer] AI rate-limited (429), retrying in ${delayMs}ms (${attempt}/${this.maxRetries})`,
+            {
+              error: toError(err),
+            },
+          ),
         // Structured failure reason (rejected confidence + quality warnings)
         // surfaced through withResultRetry's onRetry third argument.
         reasonFor: (candidate) => ({

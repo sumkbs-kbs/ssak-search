@@ -1,9 +1,9 @@
 #!/usr/bin/env -S npx tsx
 /**
  * 로컬 → Cloudflare 동기화 스크립트
- * 
+ *
  * 로컬 ChromaDB의 인덱스를 Cloudflare Vectorize + D1로 동기화
- * 
+ *
  * 사용법:
  *   npx tsx scripts/sync-to-cloudflare.ts --api-url=https://search-engine-api.pages.dev
  *   npx tsx scripts/sync-to-cloudflare.ts --api-url=https://search-engine-api.pages.dev --dry-run
@@ -94,7 +94,7 @@ async function syncToCloudflare(args: SyncArgs) {
   console.log('Cloudflare 인덱스 상태 확인 중...')
   try {
     const response = await fetch(`${args.apiUrl}/api/index/stats`)
-    const stats = await response.json() as { totalDocuments?: number }
+    const stats = (await response.json()) as { totalDocuments?: number }
     console.log(`  Cloudflare 문서 수: ${stats.totalDocuments ?? 0}`)
   } catch (err) {
     console.warn('⚠️ Cloudflare 상태 확인 실패:', err)
@@ -150,7 +150,7 @@ async function syncToCloudflare(args: SyncArgs) {
       })
 
       if (response.ok) {
-        const result = await response.json() as { stats?: { succeeded: number; failed: number } }
+        const result = (await response.json()) as { stats?: { succeeded: number; failed: number } }
         successCount += result.stats?.succeeded ?? 0
         failCount += result.stats?.failed ?? 0
         console.log(`✅ ${result.stats?.succeeded ?? 0} 성공`)

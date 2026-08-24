@@ -139,9 +139,9 @@ describe('cryptoPriceSearch — skip contract & micro-cache', () => {
   })
 
   it('reuses cached prices within the TTL window (no second upstream call)', async () => {
-    const fetchMock = vi.fn().mockResolvedValue(
-      jsonResponse([{ market: 'KRW-BTC', trade_price: 105581000, change_rate: 0.01 }]),
-    )
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(jsonResponse([{ market: 'KRW-BTC', trade_price: 105581000, change_rate: 0.01 }]))
     vi.stubGlobal('fetch', fetchMock)
 
     await cryptoPriceSearch('비트코인 얼마야')

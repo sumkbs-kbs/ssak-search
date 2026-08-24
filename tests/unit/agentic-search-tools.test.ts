@@ -62,7 +62,13 @@ beforeEach(() => {
     { title: 'Naver result', url: 'https://naver.com/1', content: 'Naver content', score: 0.8, domain: 'naver.com' },
   ])
   wikipediaSearchMock.mockResolvedValue([
-    { title: 'Wiki result', url: 'https://en.wikipedia.org/wiki/X', content: 'Wiki content', score: 0.9, domain: 'en.wikipedia.org' },
+    {
+      title: 'Wiki result',
+      url: 'https://en.wikipedia.org/wiki/X',
+      content: 'Wiki content',
+      score: 0.9,
+      domain: 'en.wikipedia.org',
+    },
   ])
   hackerNewsSearchMock.mockResolvedValue([])
   yahooFinanceSearchMock.mockResolvedValue([])
@@ -115,10 +121,7 @@ describe('searchWeb — fallbackSearch fan-out', () => {
 
   it('keeps the wikipedia default timeout when timeoutMs is not set', async () => {
     await searchWeb({ query: 'cloudflare workers', maxResults: 5, topic: 'general' })
-    expect(wikipediaSearchMock).toHaveBeenCalledWith(
-      'cloudflare workers',
-      expect.objectContaining({ timeoutMs: 8000 }),
-    )
+    expect(wikipediaSearchMock).toHaveBeenCalledWith('cloudflare workers', expect.objectContaining({ timeoutMs: 8000 }))
   })
 
   it('maps recencyDays to time_range windows', async () => {
@@ -139,10 +142,22 @@ describe('searchWeb — fallbackSearch fan-out', () => {
 describe('searchWeb — finance topic: FinanceStrategy 정합 병합 규칙', () => {
   it('트래킹 파라미터만 다른 동일 URL을 중복 제거하고 최고 점수를 유지한다', async () => {
     bingSearchMock.mockResolvedValue([
-      { title: 'A', url: 'https://example.com/page?utm_source=google', content: 'low', score: 0.6, domain: 'example.com' },
+      {
+        title: 'A',
+        url: 'https://example.com/page?utm_source=google',
+        content: 'low',
+        score: 0.6,
+        domain: 'example.com',
+      },
     ])
     yahooFinanceSearchMock.mockResolvedValue([
-      { title: 'A', url: 'https://example.com/page?utm_source=facebook', content: 'high', score: 0.8, domain: 'example.com' },
+      {
+        title: 'A',
+        url: 'https://example.com/page?utm_source=facebook',
+        content: 'high',
+        score: 0.8,
+        domain: 'example.com',
+      },
     ])
     const results = await searchWeb({ query: 'AAPL stock', maxResults: 5, topic: 'finance' })
     const hits = results.filter((r) => r.url.includes('example.com'))
@@ -213,10 +228,7 @@ describe('fetchUrl', () => {
 
   it('throws when the direct fetch also fails', async () => {
     extractContentMock.mockRejectedValue(new Error('extract down'))
-    vi.stubGlobal(
-      'fetch',
-      vi.fn().mockResolvedValue({ ok: false, status: 403, text: async () => '' }),
-    )
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false, status: 403, text: async () => '' }))
     try {
       await expect(fetchUrl({ url: 'https://a.com' })).rejects.toThrow(/Fetch failed: 403/)
     } finally {

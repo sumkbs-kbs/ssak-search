@@ -44,7 +44,9 @@ async function main(): Promise<void> {
     const topDomains = res.slice(0, 5).map((r) => r.domain ?? '')
     rows.push({ id: t.id, n: res.length, goldInTop5: gold, topDomains })
     if (!json) {
-      console.log(`${t.id.padEnd(12)} → ${String(res.length).padStart(2)}건  gold@top5=${gold}/5  [${topDomains.join(' ')}]`)
+      console.log(
+        `${t.id.padEnd(12)} → ${String(res.length).padStart(2)}건  gold@top5=${gold}/5  [${topDomains.join(' ')}]`,
+      )
     }
     // google cse 버스트 감지 회피 — 쿼리 간 3s (마지막 쿼리 제외)
     if (i < TESTS.length - 1) {

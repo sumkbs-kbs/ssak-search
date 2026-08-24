@@ -131,7 +131,12 @@ async function invokeWorkersAI(query: string, ai: Ai, systemPrompt?: string): Pr
   return text || ''
 }
 
-export async function invokeOpenAI(query: string, apiKey: string, model: string, systemPrompt?: string): Promise<string> {
+export async function invokeOpenAI(
+  query: string,
+  apiKey: string,
+  model: string,
+  systemPrompt?: string,
+): Promise<string> {
   return withRetry(
     async () => {
       const resp = await fetch('https://api.openai.com/v1/chat/completions', {

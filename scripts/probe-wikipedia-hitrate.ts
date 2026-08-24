@@ -186,7 +186,9 @@ for (const [lang, s] of [...byLang.entries()].sort((a, b) => b[1].expected - a[1
 }
 console.log('')
 if (zeroList.length > 0) {
-  console.log(`미커버 쿼리 (${zeroList.length}개, 언어별: ${[...zeroByLang.entries()].map(([l, n]) => `${l} ${n}`).join(', ')}):`)
+  console.log(
+    `미커버 쿼리 (${zeroList.length}개, 언어별: ${[...zeroByLang.entries()].map(([l, n]) => `${l} ${n}`).join(', ')}):`,
+  )
   console.log(`  ${zeroList.join(', ')}`)
 } else {
   console.log('미커버 쿼리: 없음')

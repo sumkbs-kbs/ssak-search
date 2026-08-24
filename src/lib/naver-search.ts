@@ -43,7 +43,7 @@ interface NaverCacheEntry {
 }
 
 const NAVER_CACHE = new Map<string, NaverCacheEntry>()
-const NAVER_CACHE_MAX = 200       // max cached queries
+const NAVER_CACHE_MAX = 200 // max cached queries
 const NAVER_CACHE_TTL_MS = 300_000 // 5 minutes
 
 function naverCacheKey(query: string, maxResults: number): string {

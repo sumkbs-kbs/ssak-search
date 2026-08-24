@@ -265,8 +265,7 @@ searchRoute.post('/', async (c) => {
     // Topic news/finance always bypassed (freshness > speed).
     const hasUsableResults = result.results && result.results.length > 0
     const notFailed = result.backend !== 'failed' && !result.fallback_used
-    const skipForTopic =
-      request.topic === 'news' || request.topic === 'finance' || isCryptoQuery(request.query)
+    const skipForTopic = request.topic === 'news' || request.topic === 'finance' || isCryptoQuery(request.query)
     if (hasUsableResults && notFailed && !skipForTopic) {
       c.executionCtx.waitUntil(setCached(key, result, request.topic, c.env))
     }
@@ -461,8 +460,7 @@ searchRoute.get('/', async (c) => {
     subrequestEstimate = (result as SearchResponse & { subrequest_estimate?: number }).subrequest_estimate ?? 0
     const hasUsableResults = result.results && result.results.length > 0
     const notFailed = result.backend !== 'failed' && !result.fallback_used
-    const skipForTopic =
-      request.topic === 'news' || request.topic === 'finance' || isCryptoQuery(request.query)
+    const skipForTopic = request.topic === 'news' || request.topic === 'finance' || isCryptoQuery(request.query)
     if (hasUsableResults && notFailed && !skipForTopic) {
       c.executionCtx.waitUntil(setCached(key, result, request.topic, c.env))
     }

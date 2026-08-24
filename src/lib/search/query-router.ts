@@ -58,10 +58,10 @@ export interface QueryFeatures {
 
 /** Backend selection result */
 export interface BackendSelection {
-  primary: string[]      // Must-run backends
-  secondary: string[]    // Run if budget allows
-  tertiary: string[]     // Run only if plenty of time
-  timeout: number        // Target latency (ms)
+  primary: string[] // Must-run backends
+  secondary: string[] // Run if budget allows
+  tertiary: string[] // Run only if plenty of time
+  timeout: number // Target latency (ms)
   strategy: 'fast' | 'balanced' | 'thorough'
 }
 
@@ -80,44 +80,183 @@ export interface RoutingDecision {
 /** Technology keywords for detection */
 const TECH_KEYWORDS = new Set([
   // Languages
-  'javascript', 'typescript', 'python', 'java', 'rust', 'go', 'golang', 'ruby', 'php', 'swift', 'kotlin', 'c++', 'c#', 'scala', 'haskell', 'elixir',
+  'javascript',
+  'typescript',
+  'python',
+  'java',
+  'rust',
+  'go',
+  'golang',
+  'ruby',
+  'php',
+  'swift',
+  'kotlin',
+  'c++',
+  'c#',
+  'scala',
+  'haskell',
+  'elixir',
   // Frameworks
-  'react', 'vue', 'angular', 'svelte', 'nextjs', 'nuxt', 'remix', 'astro', 'express', 'fastapi', 'django', 'flask', 'rails', 'laravel', 'spring',
+  'react',
+  'vue',
+  'angular',
+  'svelte',
+  'nextjs',
+  'nuxt',
+  'remix',
+  'astro',
+  'express',
+  'fastapi',
+  'django',
+  'flask',
+  'rails',
+  'laravel',
+  'spring',
   // Libraries
-  'lodash', 'axios', 'zod', 'prisma', 'tailwind', 'bootstrap', 'mui', 'chakra',
+  'lodash',
+  'axios',
+  'zod',
+  'prisma',
+  'tailwind',
+  'bootstrap',
+  'mui',
+  'chakra',
   // Tools
-  'docker', 'kubernetes', 'terraform', 'ansible', 'jenkins', 'github', 'gitlab', 'webpack', 'vite', 'esbuild',
+  'docker',
+  'kubernetes',
+  'terraform',
+  'ansible',
+  'jenkins',
+  'github',
+  'gitlab',
+  'webpack',
+  'vite',
+  'esbuild',
   // Cloud
-  'aws', 'azure', 'gcp', 'cloudflare', 'vercel', 'netlify', 'heroku', 'digitalocean',
+  'aws',
+  'azure',
+  'gcp',
+  'cloudflare',
+  'vercel',
+  'netlify',
+  'heroku',
+  'digitalocean',
   // AI/ML
-  'tensorflow', 'pytorch', 'scikit-learn', 'langchain', 'openai', 'anthropic', 'ollama', 'huggingface',
+  'tensorflow',
+  'pytorch',
+  'scikit-learn',
+  'langchain',
+  'openai',
+  'anthropic',
+  'ollama',
+  'huggingface',
   // Databases
-  'postgresql', 'mysql', 'mongodb', 'redis', 'elasticsearch', 'sqlite', 'dynamodb', 'firebase',
+  'postgresql',
+  'mysql',
+  'mongodb',
+  'redis',
+  'elasticsearch',
+  'sqlite',
+  'dynamodb',
+  'firebase',
   // Concepts
-  'api', 'rest', 'graphql', 'websocket', 'oauth', 'jwt', 'cors', 'ssr', 'csr', 'spa', 'pwa',
-  'microservices', 'serverless', 'devops', 'ci/cd', 'git', 'npm', 'yarn', 'pnpm',
+  'api',
+  'rest',
+  'graphql',
+  'websocket',
+  'oauth',
+  'jwt',
+  'cors',
+  'ssr',
+  'csr',
+  'spa',
+  'pwa',
+  'microservices',
+  'serverless',
+  'devops',
+  'ci/cd',
+  'git',
+  'npm',
+  'yarn',
+  'pnpm',
 ])
 
 /** News keywords */
 const NEWS_KEYWORDS = new Set([
-  'news', 'latest', 'breaking', 'update', 'today', 'yesterday', 'recent', 'new',
-  'announcement', 'launch', 'release', 'shutdown', 'outage', 'breach', 'vulnerability',
-  'startup', 'funding', 'acquisition', 'ipo', 'partnership', 'merger',
+  'news',
+  'latest',
+  'breaking',
+  'update',
+  'today',
+  'yesterday',
+  'recent',
+  'new',
+  'announcement',
+  'launch',
+  'release',
+  'shutdown',
+  'outage',
+  'breach',
+  'vulnerability',
+  'startup',
+  'funding',
+  'acquisition',
+  'ipo',
+  'partnership',
+  'merger',
 ])
 
 /** Finance keywords */
 const FINANCE_KEYWORDS = new Set([
-  'stock', 'price', 'market', 'trading', 'invest', 'portfolio', 'dividend',
-  'earnings', 'revenue', 'profit', 'loss', 'crypto', 'bitcoin', 'ethereum',
-  'forex', 'currency', 'interest rate', 'inflation', 'gdp', 'recession',
-  'share', 'equity', 'bond', 'fund', 'etf', 'mutual fund', 'hedge fund',
+  'stock',
+  'price',
+  'market',
+  'trading',
+  'invest',
+  'portfolio',
+  'dividend',
+  'earnings',
+  'revenue',
+  'profit',
+  'loss',
+  'crypto',
+  'bitcoin',
+  'ethereum',
+  'forex',
+  'currency',
+  'interest rate',
+  'inflation',
+  'gdp',
+  'recession',
+  'share',
+  'equity',
+  'bond',
+  'fund',
+  'etf',
+  'mutual fund',
+  'hedge fund',
 ])
 
 /** Academic keywords */
 const ACADEMIC_KEYWORDS = new Set([
-  'paper', 'research', 'study', 'journal', 'arxiv', 'doi', 'citation',
-  'methodology', 'experiment', 'hypothesis', 'thesis', 'dissertation',
-  'algorithm', 'theorem', 'proof', 'analysis', 'survey', 'review',
+  'paper',
+  'research',
+  'study',
+  'journal',
+  'arxiv',
+  'doi',
+  'citation',
+  'methodology',
+  'experiment',
+  'hypothesis',
+  'thesis',
+  'dissertation',
+  'algorithm',
+  'theorem',
+  'proof',
+  'analysis',
+  'survey',
+  'review',
 ])
 
 /** Intent patterns */
@@ -244,19 +383,31 @@ function detectTopic(query: string, words: string[]): QueryFeatures['topic'] {
     if (TECH_KEYWORDS.has(word)) scores.tech += 2
   }
   // Check multi-word tech terms
-  if (/\b(machine learning|deep learning|neural network|artificial intelligence|blockchain|cloud computing)\b/.test(query)) {
+  if (
+    /\b(machine learning|deep learning|neural network|artificial intelligence|blockchain|cloud computing)\b/.test(query)
+  ) {
     scores.tech += 3
   }
   // Additional tech indicators
-  if (/\b(tutorial|guide|documentation|docs|api|sdk|library|framework|component|hook|state|props|render)\b/.test(query)) {
+  if (
+    /\b(tutorial|guide|documentation|docs|api|sdk|library|framework|component|hook|state|props|render)\b/.test(query)
+  ) {
     scores.tech += 2
   }
   // Korean tech terms
-  if (/반도체|소프트웨어|하드웨어|프로그래밍|개발|코딩|기술|컴퓨터|인터넷|네트워크|서버|데이터베이스|클라우드|인공지능|머신러닝|딥러닝/.test(query)) {
+  if (
+    /반도체|소프트웨어|하드웨어|프로그래밍|개발|코딩|기술|컴퓨터|인터넷|네트워크|서버|데이터베이스|클라우드|인공지능|머신러닝|딥러닝/.test(
+      query,
+    )
+  ) {
     scores.tech += 3
   }
   // Japanese tech terms
-  if (/プログラミング|開発|コーディング|技術|コンピュータ|インターネット|ネットワーク|サーバー|データベース|クラウド|人工知能|機械学習|深層学習/.test(query)) {
+  if (
+    /プログラミング|開発|コーディング|技術|コンピュータ|インターネット|ネットワーク|サーバー|データベース|クラウド|人工知能|機械学習|深層学習/.test(
+      query,
+    )
+  ) {
     scores.tech += 3
   }
   // Chinese tech terms
@@ -281,7 +432,9 @@ function detectTopic(query: string, words: string[]): QueryFeatures['topic'] {
     scores.news += 3
   }
   // Japanese news terms
-  if (/ニュース|最新|速報|記事|報道|取材|インタビュー|社説|コラム|事件|事故|政治|経済|社会|文化|スポーツ|芸能/.test(query)) {
+  if (
+    /ニュース|最新|速報|記事|報道|取材|インタビュー|社説|コラム|事件|事故|政治|経済|社会|文化|スポーツ|芸能/.test(query)
+  ) {
     scores.news += 3
   }
 
@@ -363,11 +516,13 @@ function analyzeComplexity(query: string, words: string[]): { level: QueryFeatur
 
   // Technical terms
   // Reduced weight: 3+ tech terms gets max 0.15
-  const techCount = words.filter(w => TECH_KEYWORDS.has(w)).length
+  const techCount = words.filter((w) => TECH_KEYWORDS.has(w)).length
   score += Math.min(techCount / 3, 0.15)
 
   // Multi-word concepts
-  if (/\b(machine learning|deep learning|distributed system|microservices architecture|cloud computing)\b/.test(query)) {
+  if (
+    /\b(machine learning|deep learning|distributed system|microservices architecture|cloud computing)\b/.test(query)
+  ) {
     score += 0.15
   }
 
@@ -417,7 +572,21 @@ function extractEntities(query: string, words: string[]): QueryFeatures['entitie
   }
 
   // Known organizations
-  const knownOrgs = ['google', 'microsoft', 'apple', 'amazon', 'meta', 'openai', 'anthropic', 'nvidia', 'tesla', 'spacex', 'netflix', 'uber', 'airbnb']
+  const knownOrgs = [
+    'google',
+    'microsoft',
+    'apple',
+    'amazon',
+    'meta',
+    'openai',
+    'anthropic',
+    'nvidia',
+    'tesla',
+    'spacex',
+    'netflix',
+    'uber',
+    'airbnb',
+  ]
   for (const word of words) {
     if (knownOrgs.includes(word)) organizations.push(word)
   }
@@ -463,7 +632,7 @@ function detectTimeSensitivity(query: string, topic: QueryFeatures['topic']): bo
 
 function detectDomainPreferences(
   query: string,
-  entities: QueryFeatures['entities']
+  entities: QueryFeatures['entities'],
 ): { preferred: string[]; excluded: string[] } {
   const preferred: string[] = []
   const excluded: string[] = []
@@ -491,27 +660,42 @@ function detectDomainPreferences(
 // ============================================================
 
 /** Backend definitions with metadata */
-const BACKEND_META: Record<string, {
-  latency: number      // avg latency (ms)
-  quality: number      // avg quality score (0-1)
-  cost: number         // subrequest cost
-  topics: string[]     // best topics
-  languages: string[]  // supported languages
-}> = {
+const BACKEND_META: Record<
+  string,
+  {
+    latency: number // avg latency (ms)
+    quality: number // avg quality score (0-1)
+    cost: number // subrequest cost
+    topics: string[] // best topics
+    languages: string[] // supported languages
+  }
+> = {
   'self-index': { latency: 40, quality: 0.85, cost: 0, topics: ['tech', 'general'], languages: ['en', 'ko'] },
-  'bing': { latency: 800, quality: 0.75, cost: 2, topics: ['general', 'news', 'finance'], languages: ['en', 'ko', 'zh', 'ja'] },
-  'wikipedia': { latency: 1200, quality: 0.9, cost: 1, topics: ['academic', 'general'], languages: ['en', 'ko', 'zh', 'ja'] },
-  'github': { latency: 600, quality: 0.85, cost: 1, topics: ['tech'], languages: ['en'] },
-  'hackernews': { latency: 400, quality: 0.7, cost: 1, topics: ['tech', 'news'], languages: ['en'] },
-  'arxiv': { latency: 1000, quality: 0.85, cost: 1, topics: ['academic'], languages: ['en'] },
-  'reddit': { latency: 800, quality: 0.7, cost: 1, topics: ['general', 'tech'], languages: ['en'] },
-  'naver': { latency: 900, quality: 0.8, cost: 2, topics: ['general', 'news'], languages: ['ko'] },
-  'duckduckgo': { latency: 700, quality: 0.65, cost: 1, topics: ['general'], languages: ['en'] },
+  bing: {
+    latency: 800,
+    quality: 0.75,
+    cost: 2,
+    topics: ['general', 'news', 'finance'],
+    languages: ['en', 'ko', 'zh', 'ja'],
+  },
+  wikipedia: {
+    latency: 1200,
+    quality: 0.9,
+    cost: 1,
+    topics: ['academic', 'general'],
+    languages: ['en', 'ko', 'zh', 'ja'],
+  },
+  github: { latency: 600, quality: 0.85, cost: 1, topics: ['tech'], languages: ['en'] },
+  hackernews: { latency: 400, quality: 0.7, cost: 1, topics: ['tech', 'news'], languages: ['en'] },
+  arxiv: { latency: 1000, quality: 0.85, cost: 1, topics: ['academic'], languages: ['en'] },
+  reddit: { latency: 800, quality: 0.7, cost: 1, topics: ['general', 'tech'], languages: ['en'] },
+  naver: { latency: 900, quality: 0.8, cost: 2, topics: ['general', 'news'], languages: ['ko'] },
+  duckduckgo: { latency: 700, quality: 0.65, cost: 1, topics: ['general'], languages: ['en'] },
   'yahoo-finance': { latency: 1000, quality: 0.9, cost: 1, topics: ['finance'], languages: ['en'] },
   'naver-news': { latency: 1200, quality: 0.85, cost: 2, topics: ['news'], languages: ['ko'] },
   'bing-news': { latency: 900, quality: 0.75, cost: 2, topics: ['news'], languages: ['en'] },
-  'openalex': { latency: 1100, quality: 0.8, cost: 1, topics: ['academic'], languages: ['en'] },
-  'stackexchange': { latency: 700, quality: 0.75, cost: 1, topics: ['tech', 'general'], languages: ['en'] },
+  openalex: { latency: 1100, quality: 0.8, cost: 1, topics: ['academic'], languages: ['en'] },
+  stackexchange: { latency: 700, quality: 0.75, cost: 1, topics: ['tech', 'general'], languages: ['en'] },
 }
 
 export function selectBackends(features: QueryFeatures): BackendSelection {
@@ -541,7 +725,7 @@ export function selectBackends(features: QueryFeatures): BackendSelection {
     if (features.isTimeSensitive && meta.latency > 1000) score -= 15
 
     // Domain preference bonus
-    if (features.preferredDomains.some(d => name.includes(d.split('.')[0]))) {
+    if (features.preferredDomains.some((d) => name.includes(d.split('.')[0]))) {
       score += 20
     }
 
@@ -552,24 +736,20 @@ export function selectBackends(features: QueryFeatures): BackendSelection {
   scored.sort((a, b) => b.score - a.score)
 
   // Select backends based on complexity
-  const maxBackends = features.complexity === 'simple' ? 3 :
-                      features.complexity === 'moderate' ? 5 : 7
+  const maxBackends = features.complexity === 'simple' ? 3 : features.complexity === 'moderate' ? 5 : 7
 
-  const primary = scored.slice(0, Math.min(2, maxBackends)).map(b => b.name)
-  const secondary = scored.slice(2, Math.min(4, maxBackends)).map(b => b.name)
-  const tertiary = scored.slice(4, maxBackends).map(b => b.name)
+  const primary = scored.slice(0, Math.min(2, maxBackends)).map((b) => b.name)
+  const secondary = scored.slice(2, Math.min(4, maxBackends)).map((b) => b.name)
+  const tertiary = scored.slice(4, maxBackends).map((b) => b.name)
 
   // Determine strategy
-  const strategy = features.complexityScore < 0.3 ? 'fast' :
-                   features.complexityScore < 0.6 ? 'balanced' : 'thorough'
+  const strategy = features.complexityScore < 0.3 ? 'fast' : features.complexityScore < 0.6 ? 'balanced' : 'thorough'
 
   // Set timeout based on strategy
-  const timeout = strategy === 'fast' ? 1500 :
-                  strategy === 'balanced' ? 3000 : 5000
+  const timeout = strategy === 'fast' ? 1500 : strategy === 'balanced' ? 3000 : 5000
 
   // Limit total backends based on complexity
-  const maxTotal = features.complexity === 'simple' ? 3 :
-                   features.complexity === 'moderate' ? 5 : 7
+  const maxTotal = features.complexity === 'simple' ? 3 : features.complexity === 'moderate' ? 5 : 7
 
   // Trim to fit within limit
   while (primary.length + secondary.length + tertiary.length > maxTotal) {
@@ -589,7 +769,7 @@ export function selectBackends(features: QueryFeatures): BackendSelection {
 export function optimizeRouting(
   features: QueryFeatures,
   selection: BackendSelection,
-  env?: { VECTORIZE_INDEX?: unknown; SEARCH_INDEX_DB?: unknown }
+  env?: { VECTORIZE_INDEX?: unknown; SEARCH_INDEX_DB?: unknown },
 ): BackendSelection {
   const optimized = { ...selection }
 
@@ -648,9 +828,9 @@ export function optimizeRouting(
   optimized.tertiary = [...new Set(optimized.tertiary)]
 
   // Remove secondary/tertiary that are already in primary
-  optimized.secondary = optimized.secondary.filter(b => !optimized.primary.includes(b))
-  optimized.tertiary = optimized.tertiary.filter(b =>
-    !optimized.primary.includes(b) && !optimized.secondary.includes(b)
+  optimized.secondary = optimized.secondary.filter((b) => !optimized.primary.includes(b))
+  optimized.tertiary = optimized.tertiary.filter(
+    (b) => !optimized.primary.includes(b) && !optimized.secondary.includes(b),
   )
 
   return optimized
@@ -663,7 +843,7 @@ export function optimizeRouting(
 export function routeQuery(
   query: string,
   ctx?: SearchContext,
-  env?: { VECTORIZE_INDEX?: unknown; SEARCH_INDEX_DB?: unknown }
+  env?: { VECTORIZE_INDEX?: unknown; SEARCH_INDEX_DB?: unknown },
 ): RoutingDecision {
   // Analyze query
   const features = analyzeQuery(query)
@@ -740,10 +920,7 @@ function calculateConfidence(features: QueryFeatures, selection: BackendSelectio
  * Build backend tasks based on routing decision.
  * This integrates with the existing orchestrator.
  */
-export function buildRoutingTasks(
-  decision: RoutingDecision,
-  ctx: SearchContext
-): BackendTask[] {
+export function buildRoutingTasks(decision: RoutingDecision, ctx: SearchContext): BackendTask[] {
   const tasks: BackendTask[] = []
 
   // Map backend names to actual task implementations

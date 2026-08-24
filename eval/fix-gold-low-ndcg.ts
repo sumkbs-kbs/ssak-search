@@ -21,15 +21,23 @@ function loadAllResults() {
     try {
       const data = JSON.parse(fs.readFileSync(f, 'utf-8'))
       results.push(...(data.report.results || []))
-    } catch { /* ignore invalid URL */ }
+    } catch {
+      /* ignore invalid URL */
+    }
   }
   return results
 }
 
 function extractDomains(results: SearchResult[]): string[] {
-  return results.map((r: SearchResult) => {
-    try { return new URL(r.url).hostname.replace(/^www\./, '') } catch { return '' }
-  }).filter(Boolean)
+  return results
+    .map((r: SearchResult) => {
+      try {
+        return new URL(r.url).hostname.replace(/^www\./, '')
+      } catch {
+        return ''
+      }
+    })
+    .filter(Boolean)
 }
 
 function dcg(rels: number[]): number {
@@ -41,16 +49,28 @@ const idealDcg10 = dcg(Array(10).fill(1))
 
 // Domains that are legitimate for various query types
 const TECH_AGGREGATORS = new Set([
-  'stackoverflow.com', 'reddit.com', 'news.ycombinator.com', 'medium.com',
-  'dev.to', 'github.com', 'blog.pragmaticengineer.com', 'hackernoon.com',
+  'stackoverflow.com',
+  'reddit.com',
+  'news.ycombinator.com',
+  'medium.com',
+  'dev.to',
+  'github.com',
+  'blog.pragmaticengineer.com',
+  'hackernoon.com',
 ])
-const NEWS_AGGREGATORS = new Set([
-  'news.google.com', 'news.yahoo.com', 'news.yahoo.co.jp',
-])
+const NEWS_AGGREGATORS = new Set(['news.google.com', 'news.yahoo.com', 'news.yahoo.co.jp'])
 const ZH_CONTENT = new Set([
-  'blog.csdn.net', 'zhuanlan.zhihu.com', 'zhihu.com', 'juejin.cn',
-  'segmentfault.com', 'oschina.net', 'baike.baidu.com', 'sohu.com',
-  'news.sina.com.cn', '36kr.com', 'sspai.com',
+  'blog.csdn.net',
+  'zhuanlan.zhihu.com',
+  'zhihu.com',
+  'juejin.cn',
+  'segmentfault.com',
+  'oschina.net',
+  'baike.baidu.com',
+  'sohu.com',
+  'news.sina.com.cn',
+  '36kr.com',
+  'sspai.com',
 ])
 
 const gs = JSON.parse(fs.readFileSync(GS_PATH, 'utf-8'))
@@ -112,7 +132,7 @@ for (const [queryId, gold] of Object.entries(gs) as [string, { relevantDomains?:
     }
   }
 
-  const added = [...newDomains].filter(d => !gold.relevantDomains?.includes(d))
+  const added = [...newDomains].filter((d) => !gold.relevantDomains?.includes(d))
   if (added.length > 0) {
     gold.relevantDomains = [...newDomains]
     console.log(`${queryId}: +${added.slice(0, 5).join(', ')}${added.length > 5 ? '...' : ''}`)

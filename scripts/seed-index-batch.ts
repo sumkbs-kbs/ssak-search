@@ -1,16 +1,15 @@
 #!/usr/bin/env npx tsx
 /**
  * Self-Index Batch Seeder
- * 
- * 기술 문서, 뉴스, 학술 자료를 배치로 인덱싱하여 
+ *
+ * 기술 문서, 뉴스, 학술 자료를 배치로 인덱싱하여
  * 자체 인덱스를 403 → 10,000+ docs로 확대합니다.
- * 
+ *
  * 사용법:
  *   npx tsx scripts/seed-index-batch.ts --api-url=https://search-engine-api.pages.dev
  *   npx tsx scripts/seed-index-batch.ts --api-url=https://search-engine-api.pages.dev --category=tech
  *   npx tsx scripts/seed-index-batch.ts --api-url=https://search-engine-api.pages.dev --dry-run
  */
-
 
 // ============================================================
 // Seed URLs by Category
@@ -26,70 +25,70 @@ const TECH_DOCS = [
   'https://developers.cloudflare.com/r2/',
   'https://developers.cloudflare.com/kv/',
   'https://developers.cloudflare.com/durable-objects/',
-  
+
   // React/Vue/Angular
   'https://react.dev/learn',
   'https://react.dev/reference/react',
   'https://vuejs.org/guide/introduction.html',
   'https://vuejs.org/api/',
   'https://angular.dev/overview',
-  
+
   // Next.js/Nuxt
   'https://nextjs.org/docs',
   'https://nextjs.org/app',
   'https://nuxt.com/docs',
-  
+
   // TypeScript/JavaScript
   'https://www.typescriptlang.org/docs/',
   'https://developer.mozilla.org/en-US/docs/Web/JavaScript',
   'https://developer.mozilla.org/en-US/docs/Web/API',
-  
+
   // Python
   'https://docs.python.org/3/',
   'https://docs.python.org/3/tutorial/index.html',
   'https://fastapi.tiangolo.com/',
   'https://docs.sqlalchemy.org/',
-  
+
   // Node.js
   'https://nodejs.org/docs/latest/api/',
   'https://expressjs.com/',
   'https://nestjs.com/',
-  
+
   // Go
   'https://go.dev/doc/',
   'https://go.dev/tour/',
   'https://gin-gonic.com/docs/',
-  
+
   // Rust
   'https://doc.rust-lang.org/book/',
   'https://docs.rs/',
-  
+
   // Docker/Kubernetes
   'https://docs.docker.com/',
   'https://docs.docker.com/get-started/',
   'https://kubernetes.io/docs/',
-  
+
   // AWS
   'https://docs.aws.amazon.com/',
   'https://docs.aws.amazon.com/lambda/',
   'https://docs.aws.amazon.com/s3/',
-  
+
   // Database
   'https://www.postgresql.org/docs/',
   'https://dev.mysql.com/doc/',
   'https://docs.mongodb.com/',
   'https://redis.io/docs/',
-  
+
   // AI/ML
   'https://docs.pytorch.org/',
   'https://www.tensorflow.org/guide',
   'https://huggingface.co/docs/transformers/',
   'https://platform.openai.com/docs/',
-  
+
   // Git
   'https://git-scm.com/doc',
   'https://docs.github.com/',
-  
+
   // Linux
   'https://man7.org/linux/man-pages/',
   'https://tldp.org/LDP/Bash-Beginners-Guide/html/',
@@ -107,7 +106,7 @@ const NEWS_SITES = [
   'https://www.cnn.com/',
   'https://www.npr.org/',
   'https://www.time.com/',
-  
+
   // 기술 뉴스
   'https://www.theverge.com/',
   'https://techcrunch.com/',
@@ -117,7 +116,7 @@ const NEWS_SITES = [
   'https://www.zdnet.com/',
   'https://www.cnet.com/',
   'https://venturebeat.com/',
-  
+
   // 비즈니스/금융
   'https://www.bloomberg.com/',
   'https://www.cnbc.com/',
@@ -125,7 +124,7 @@ const NEWS_SITES = [
   'https://www.wsj.com/',
   'https://finance.yahoo.com/',
   'https://www.marketwatch.com/',
-  
+
   // 한국 뉴스
   'https://www.yna.co.kr/',
   'https://www.donga.com/',
@@ -133,12 +132,12 @@ const NEWS_SITES = [
   'https://www.chosun.com/',
   'https://www.joongang.co.kr/',
   'https://www.hankyung.com/',
-  
+
   // 일본 뉴스
   'https://www.japantimes.co.jp/',
   'https://www.asahi.com/',
   'https://www.nikkei.com/',
-  
+
   // 중국 뉴스
   'https://www.people.com.cn/',
   'https://www.xinhuanet.com/',
@@ -152,7 +151,7 @@ const ACADEMIC_SOURCES = [
   'https://arxiv.org/abs/2303.00001',
   'https://arxiv.org/abs/2304.00001',
   'https://arxiv.org/abs/2305.00001',
-  
+
   // Wikipedia (가장 많이 인용되는 문서)
   'https://en.wikipedia.org/wiki/Machine_learning',
   'https://en.wikipedia.org/wiki/Artificial_intelligence',
@@ -219,7 +218,7 @@ interface SeedOptions {
 
 async function seedUrls(options: SeedOptions): Promise<void> {
   const { apiUrl, category, dryRun = false, batchSize = 5, delayMs = 1000 } = options
-  
+
   // Select URLs based on category
   let urls: string[] = []
   switch (category) {
@@ -238,28 +237,28 @@ async function seedUrls(options: SeedOptions): Promise<void> {
     default:
       urls = [...TECH_DOCS, ...NEWS_SITES, ...ACADEMIC_SOURCES, ...GITHUB_REPOS]
   }
-  
+
   console.log(`\n📊 Self-Index Batch Seeder`)
   console.log(`   API URL: ${apiUrl}`)
   console.log(`   Category: ${category || 'all'}`)
   console.log(`   Total URLs: ${urls.length}`)
   console.log(`   Batch size: ${batchSize}`)
   console.log(`   Dry run: ${dryRun}\n`)
-  
+
   if (dryRun) {
     console.log('🔍 Dry run mode - URLs to be indexed:')
     urls.forEach((url, i) => console.log(`   ${i + 1}. ${url}`))
     return
   }
-  
+
   // Process in batches
   let successCount = 0
   let failCount = 0
-  
+
   for (let i = 0; i < urls.length; i += batchSize) {
     const batch = urls.slice(i, i + batchSize)
     console.log(`\n📥 Processing batch ${Math.floor(i / batchSize) + 1}/${Math.ceil(urls.length / batchSize)}...`)
-    
+
     try {
       const response = await fetch(`${apiUrl}/api/index`, {
         method: 'POST',
@@ -269,15 +268,18 @@ async function seedUrls(options: SeedOptions): Promise<void> {
         },
         body: JSON.stringify({ urls: batch }),
       })
-      
-      const result = await response.json() as { stats?: { succeeded: number; failed: number }; results?: Array<{ success: boolean; url: string; error?: string }> }
-      
+
+      const result = (await response.json()) as {
+        stats?: { succeeded: number; failed: number }
+        results?: Array<{ success: boolean; url: string; error?: string }>
+      }
+
       if (result.stats) {
         successCount += result.stats.succeeded
         failCount += result.stats.failed
         console.log(`   ✅ ${result.stats.succeeded} succeeded, ❌ ${result.stats.failed} failed`)
       }
-      
+
       // Log failed URLs
       if (result.results) {
         for (const r of result.results) {
@@ -290,13 +292,13 @@ async function seedUrls(options: SeedOptions): Promise<void> {
       console.error(`   ❌ Batch failed:`, error)
       failCount += batch.length
     }
-    
+
     // Delay between batches
     if (i + batchSize < urls.length) {
-      await new Promise(resolve => setTimeout(resolve, delayMs))
+      await new Promise((resolve) => setTimeout(resolve, delayMs))
     }
   }
-  
+
   // Summary
   console.log('\n📊 Summary:')
   console.log(`   ✅ Success: ${successCount}`)
@@ -313,7 +315,7 @@ function parseArgs(): SeedOptions {
   const options: SeedOptions = {
     apiUrl: 'https://search-engine-api.pages.dev',
   }
-  
+
   for (const arg of args) {
     if (arg.startsWith('--api-url=')) {
       options.apiUrl = arg.split('=')[1]
@@ -327,7 +329,7 @@ function parseArgs(): SeedOptions {
       options.delayMs = parseInt(arg.split('=')[1], 10)
     }
   }
-  
+
   return options
 }
 

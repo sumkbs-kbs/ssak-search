@@ -17,7 +17,6 @@
  *   HEALTH_URLS  — comma-separated health endpoint URLs (default: http://localhost:8787/api/health)
  */
 
-
 interface RegionConfig {
   id: string
   name: string
@@ -105,7 +104,7 @@ async function checkRegion(config: RegionConfig): Promise<RegionHealth> {
       region?: { id?: string; country?: string }
       backends?: Record<string, { status?: string }>
     }
-    const data = await res.json() as HealthPayload
+    const data = (await res.json()) as HealthPayload
 
     // Count backends
     const backends: Record<string, { status?: string }> = data.backends ?? {}
@@ -143,7 +142,7 @@ async function main() {
 
   let configs = DEFAULT_REGIONS
   if (filterRegions.length > 0) {
-    configs = DEFAULT_REGIONS.filter(r => filterRegions.includes(r.id))
+    configs = DEFAULT_REGIONS.filter((r) => filterRegions.includes(r.id))
   }
 
   // Probe all regions in parallel
@@ -175,8 +174,8 @@ async function main() {
   }
 
   // Consistency check
-  const versions = new Set(results.map(r => r.version).filter(Boolean))
-  const builds = new Set(results.map(r => r.buildCommit).filter(Boolean))
+  const versions = new Set(results.map((r) => r.version).filter(Boolean))
+  const builds = new Set(results.map((r) => r.buildCommit).filter(Boolean))
 
   if (versions.size > 1) {
     console.log(`⚠️ VERSION MISMATCH: ${[...versions].join(' vs ')}`)
@@ -188,8 +187,8 @@ async function main() {
   }
 
   // Failover check
-  const failoverRegion = results.find(r => {
-    const config = configs.find(c => c.id === r.id)
+  const failoverRegion = results.find((r) => {
+    const config = configs.find((c) => c.id === r.id)
     return config && r.colo && !config.expectedColos.includes(r.colo)
   })
   if (failoverRegion) {

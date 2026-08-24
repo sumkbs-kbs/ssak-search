@@ -85,5 +85,7 @@ console.log(`풀에 reddit.com 존재                  : ${pct(poolHit, expected
 console.log('')
 console.log('판정 (docs/20 P1-5 목표): 사용 0→30+건 (51 query-run 기준 30건+ = 58.8%+)')
 const proj = Math.round((used / Math.max(expected, 1)) * (redditQueries.length * 3))
-console.log(`  ${runs}-run 실측 사용 ${used}/${expected} → 3-run 전체 투영 ≈ ${proj}건 (${redditQueries.length} × 3 = ${redditQueries.length * 3} 기준)`)
+console.log(
+  `  ${runs}-run 실측 사용 ${used}/${expected} → 3-run 전체 투영 ≈ ${proj}건 (${redditQueries.length} × 3 = ${redditQueries.length * 3} 기준)`,
+)
 console.log(proj >= 30 ? '✅ 3-run 투영 ≥ 30건 달성' : '⚠️ 3-run 투영 < 30건')

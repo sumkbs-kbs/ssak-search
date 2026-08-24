@@ -26,55 +26,140 @@ const GS_PATH = path.join(EVAL_DIR, 'gold-standards.json')
 const HIGH_QUALITY_DOMAINS: Record<string, Set<string>> = {
   en: new Set([
     // Tech
-    'github.com', 'stackoverflow.com', 'medium.com', 'dev.to', 'hackernoon.com',
-    'arstechnica.com', 'techcrunch.com', 'theverge.com', 'wired.com', 'arstechnica.com',
-    'zdnet.com', 'infoworld.com', 'thenewstack.io', 'blog.pragmaticengineer.com',
+    'github.com',
+    'stackoverflow.com',
+    'medium.com',
+    'dev.to',
+    'hackernoon.com',
+    'arstechnica.com',
+    'techcrunch.com',
+    'theverge.com',
+    'wired.com',
+    'arstechnica.com',
+    'zdnet.com',
+    'infoworld.com',
+    'thenewstack.io',
+    'blog.pragmaticengineer.com',
     // News
-    'nytimes.com', 'bbc.com', 'theguardian.com', 'reuters.com', 'apnews.com',
-    'washingtonpost.com', 'bloomberg.com', 'ft.com', 'economist.com',
+    'nytimes.com',
+    'bbc.com',
+    'theguardian.com',
+    'reuters.com',
+    'apnews.com',
+    'washingtonpost.com',
+    'bloomberg.com',
+    'ft.com',
+    'economist.com',
     // Knowledge
-    'en.wikipedia.org', 'britannica.com', 'stanford.edu', 'mit.edu', 'harvard.edu',
+    'en.wikipedia.org',
+    'britannica.com',
+    'stanford.edu',
+    'mit.edu',
+    'harvard.edu',
     // Finance
-    'investopedia.com', 'nerdwallet.com', 'finance.yahoo.com', 'morningstar.com',
+    'investopedia.com',
+    'nerdwallet.com',
+    'finance.yahoo.com',
+    'morningstar.com',
     // Health
-    'healthline.com', 'webmd.com', 'mayoclinic.org', 'nih.gov', 'cdc.gov',
-    'health.harvard.edu', 'medicalnewstoday.com', 'apa.org',
+    'healthline.com',
+    'webmd.com',
+    'mayoclinic.org',
+    'nih.gov',
+    'cdc.gov',
+    'health.harvard.edu',
+    'medicalnewstoday.com',
+    'apa.org',
     // Travel
-    'lonelyplanet.com', 'tripadvisor.com', 'timeout.com', 'ricksteves.com',
-    'cntraveler.com', 'japan-guide.com',
+    'lonelyplanet.com',
+    'tripadvisor.com',
+    'timeout.com',
+    'ricksteves.com',
+    'cntraveler.com',
+    'japan-guide.com',
     // Shopping/Reviews
-    'rtings.com', 'pcmag.com', 'cnet.com', 'tomshardware.com', 'techradar.com',
+    'rtings.com',
+    'pcmag.com',
+    'cnet.com',
+    'tomshardware.com',
+    'techradar.com',
     'wirecutter.com',
     // Lifestyle
-    'lifehacker.com', 'apartmenttherapy.com', 'thespruce.com', 'realsimple.com',
-    'allrecipes.com', 'eatingwell.com', 'bonappetit.com', 'budgetbytes.com',
+    'lifehacker.com',
+    'apartmenttherapy.com',
+    'thespruce.com',
+    'realsimple.com',
+    'allrecipes.com',
+    'eatingwell.com',
+    'bonappetit.com',
+    'budgetbytes.com',
     // Productivity
-    'hbr.org', 'forbes.com', 'inc.com', 'fastcompany.com', 'signalvnoise.com',
+    'hbr.org',
+    'forbes.com',
+    'inc.com',
+    'fastcompany.com',
+    'signalvnoise.com',
     // Books
-    'goodreads.com', 'nytimes.com',
+    'goodreads.com',
+    'nytimes.com',
     // Career
-    'indeed.com', 'glassdoor.com', 'zety.com', 'theladders.com',
+    'indeed.com',
+    'glassdoor.com',
+    'zety.com',
+    'theladders.com',
     // Community
-    'reddit.com', 'news.ycombinator.com',
+    'reddit.com',
+    'news.ycombinator.com',
     // General
-    'wikihow.com', 'quora.com', 'medium.com',
+    'wikihow.com',
+    'quora.com',
+    'medium.com',
   ]),
   ko: new Set([
-    'ko.wikipedia.org', 'namu.wiki', 'blog.naver.com', 'terms.naver.com',
-    'n.news.naver.com', 'finance.naver.com', 'news.naver.com',
-    'techneedle.com', 'platum.kr', 'venturesquare.net', 'brunch.co.kr',
-    'tistory.com', 'velog.io', 'github.com',
+    'ko.wikipedia.org',
+    'namu.wiki',
+    'blog.naver.com',
+    'terms.naver.com',
+    'n.news.naver.com',
+    'finance.naver.com',
+    'news.naver.com',
+    'techneedle.com',
+    'platum.kr',
+    'venturesquare.net',
+    'brunch.co.kr',
+    'tistory.com',
+    'velog.io',
+    'github.com',
   ]),
   zh: new Set([
-    'zh.wikipedia.org', 'baike.baidu.com', 'zhuanlan.zhihu.com', 'zhihu.com',
-    'blog.csdn.net', 'juejin.cn', 'segmentfault.com', 'oschina.net',
-    'sohu.com', 'news.sina.com.cn', '36kr.com', 'sspai.com',
-    'baijiahao.baidu.com', 'news.qq.com', 'thepaper.cn',
+    'zh.wikipedia.org',
+    'baike.baidu.com',
+    'zhuanlan.zhihu.com',
+    'zhihu.com',
+    'blog.csdn.net',
+    'juejin.cn',
+    'segmentfault.com',
+    'oschina.net',
+    'sohu.com',
+    'news.sina.com.cn',
+    '36kr.com',
+    'sspai.com',
+    'baijiahao.baidu.com',
+    'news.qq.com',
+    'thepaper.cn',
   ]),
   ja: new Set([
-    'ja.wikipedia.org', 'qiita.com', 'zenn.dev', 'gigazine.net',
-    'hatena.ne.jp', 'atmarkit.co.jp', 'techplay.jp', 'note.com',
-    'media.goo.ne.jp', 'tkg-str.net', 'mynavi-agent.co.jp',
+    'ja.wikipedia.org',
+    'qiita.com',
+    'zenn.dev',
+    'gigazine.net',
+    'hatena.ne.jp',
+    'atmarkit.co.jp',
+    'techplay.jp',
+    'note.com',
+    'media.goo.ne.jp',
+    'tkg-str.net',
+    'mynavi-agent.co.jp',
   ]),
 }
 
@@ -85,15 +170,23 @@ function loadAllResults() {
     try {
       const data = JSON.parse(fs.readFileSync(f, 'utf-8'))
       results.push(...(data.report.results || []))
-    } catch { /* ignore invalid URL */ }
+    } catch {
+      /* ignore invalid URL */
+    }
   }
   return results
 }
 
 function extractDomains(results: SearchResult[]): string[] {
-  return results.map((r: SearchResult) => {
-    try { return new URL(r.url).hostname.replace(/^www\./, '') } catch { return '' }
-  }).filter(Boolean)
+  return results
+    .map((r: SearchResult) => {
+      try {
+        return new URL(r.url).hostname.replace(/^www\./, '')
+      } catch {
+        return ''
+      }
+    })
+    .filter(Boolean)
 }
 
 function detectLanguage(queryId: string): string {
@@ -195,7 +288,9 @@ function main() {
     }
   }
 
-  console.log(`\n${dryRun ? 'DRY RUN' : 'Updated'}: ${updated} queries updated, ${skipped} skipped (already hitting gold)`)
+  console.log(
+    `\n${dryRun ? 'DRY RUN' : 'Updated'}: ${updated} queries updated, ${skipped} skipped (already hitting gold)`,
+  )
 
   if (!dryRun) {
     fs.writeFileSync(GS_PATH, JSON.stringify(gs, null, 2), 'utf-8')

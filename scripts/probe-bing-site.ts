@@ -32,10 +32,18 @@ interface ProbeCase {
 }
 
 const GOLD_QUERIES: Array<{ id: string; query: string; gold: string[] }> = [
-  { id: 'zh-travel-01', query: '张家界旅游攻略', gold: ['ctrip.com', 'mafengwo.cn', 'xiaohongshu.com', 'trip.com', 'qunar.com'] },
+  {
+    id: 'zh-travel-01',
+    query: '张家界旅游攻略',
+    gold: ['ctrip.com', 'mafengwo.cn', 'xiaohongshu.com', 'trip.com', 'qunar.com'],
+  },
   { id: 'zh-general-01', query: '北京旅游攻略', gold: ['ctrip.com', 'mafengwo.cn', 'zh.wikipedia.org'] },
   { id: 'zh-general-02', query: '上海美食推荐', gold: ['dianping.com', 'mafengwo.cn'] },
-  { id: 'zh-general-06', query: '上海迪士尼攻略', gold: ['ctrip.com', 'mafengwo.cn', 'dianping.com', 'xiaohongshu.com', 'zhihu.com', 'trip.com'] },
+  {
+    id: 'zh-general-06',
+    query: '上海迪士尼攻略',
+    gold: ['ctrip.com', 'mafengwo.cn', 'dianping.com', 'xiaohongshu.com', 'zhihu.com', 'trip.com'],
+  },
 ]
 
 const BING_SITE_DOMAINS = ['mafengwo.cn', 'ctrip.com', 'dianping.com', 'xiaohongshu.com', 'trip.com', 'qunar.com']
@@ -58,7 +66,11 @@ function domainCounts(results: Array<{ domain?: string; url: string }>): Record<
     const d = (r.domain || extractDomain(r.url)).replace(/^www\./, '')
     counts[d] = (counts[d] ?? 0) + 1
   }
-  return Object.fromEntries(Object.entries(counts).sort((a, b) => b[1] - a[1]).slice(0, 8))
+  return Object.fromEntries(
+    Object.entries(counts)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 8),
+  )
 }
 
 function fmtDomains(counts: Record<string, number>): string {
@@ -69,7 +81,10 @@ function fmtDomains(counts: Record<string, number>): string {
 
 async function runCase(c: ProbeCase): Promise<{ label: string; total: number; domains: Record<string, number> }> {
   const opts = { maxResults: 10, env: undefined as never, region: 'zh-CN' } as const
-  const results = c.engine === 'bing' ? await bingSearch(c.query, opts) : await duckDuckGoSearch(c.query, { maxResults: 10, region: 'wt-wt' })
+  const results =
+    c.engine === 'bing'
+      ? await bingSearch(c.query, opts)
+      : await duckDuckGoSearch(c.query, { maxResults: 10, region: 'wt-wt' })
   return { label: c.label, total: results.length, domains: domainCounts(results) }
 }
 
@@ -83,7 +98,8 @@ async function main(): Promise<void> {
   for (const c of cases) {
     const row = await runCase(c)
     rows.push(row)
-    if (!json) console.log(`  ${row.label.padEnd(46)} → ${String(row.total).padStart(3)}건  [${fmtDomains(row.domains)}]`)
+    if (!json)
+      console.log(`  ${row.label.padEnd(46)} → ${String(row.total).padStart(3)}건  [${fmtDomains(row.domains)}]`)
   }
   if (json) console.log(JSON.stringify(rows, null, 2))
 }

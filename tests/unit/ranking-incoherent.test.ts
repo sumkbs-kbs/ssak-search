@@ -64,10 +64,7 @@ describe('filterIncoherentResults', () => {
       mk('InfraStaking - LinkedIn', 'company page', 'linkedin.com'),
     ]
     const out = filterIncoherentResults(results, '리액트 훅 사용법')
-    expect(out.map((r) => r.title)).toEqual([
-      'usehooks-ts - React hooks library',
-      'Photosynthesis - Wikipedia',
-    ])
+    expect(out.map((r) => r.title)).toEqual(['usehooks-ts - React hooks library', 'Photosynthesis - Wikipedia'])
   })
 
   it('returns empty for an all-junk pool so the fallback chain can trigger', () => {

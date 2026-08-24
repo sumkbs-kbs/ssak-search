@@ -213,16 +213,7 @@ export class AuditLogDO extends DurableObject<Env> {
    * List audit events matching the filter. Most-recent first.
    */
   async getEvents(filter: GetEventsFilter): Promise<AuditEvent[]> {
-    const {
-      tenantId,
-      eventType,
-      severity,
-      outcome,
-      sinceMs,
-      untilMs,
-      limit = 100,
-      offset = 0,
-    } = filter
+    const { tenantId, eventType, severity, outcome, sinceMs, untilMs, limit = 100, offset = 0 } = filter
 
     // Collect matching event IDs
     let targetIds: string[] = []
@@ -396,7 +387,12 @@ export class AuditLogDO extends DurableObject<Env> {
 export interface AuditLogRPC {
   createEvent(event: Omit<AuditEvent, 'eventId' | 'timestamp'>): Promise<AuditEvent>
   getEvents(filter: GetEventsFilter): Promise<AuditEvent[]>
-  getAggregation(filter: { sinceMs?: number; untilMs?: number; tenantId?: string; eventType?: AuditEventType }): Promise<AggregationResult>
+  getAggregation(filter: {
+    sinceMs?: number
+    untilMs?: number
+    tenantId?: string
+    eventType?: AuditEventType
+  }): Promise<AggregationResult>
   archiveToR2(): Promise<{ uploaded: boolean; key?: string }>
   deleteOlderThan(days?: number): Promise<{ deleted: number }>
   getTenantIds(): Promise<string[]>

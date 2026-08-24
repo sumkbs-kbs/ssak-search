@@ -64,7 +64,7 @@ const gold = loadGoldStandards()
 
 function goldDomainsOf(id: string): string[] {
   const v = gold[id]
-  return Array.isArray(v) ? v : (v as { relevantDomains?: string[] } | undefined)?.relevantDomains ?? []
+  return Array.isArray(v) ? v : ((v as { relevantDomains?: string[] } | undefined)?.relevantDomains ?? [])
 }
 
 const newsQueries = EVAL_QUERIES.filter((q) => q.id.includes('-news-') || q.topic === 'news')
@@ -137,7 +137,9 @@ interface PassRow {
 }
 
 /** 한 패스(전체 쿼리 1회 순회)를 측정한다. */
-async function runPass(_passIndex: number): Promise<{ rows: PassRow[]; failed: Array<{ id: string; reason: string }> }> {
+async function runPass(
+  _passIndex: number,
+): Promise<{ rows: PassRow[]; failed: Array<{ id: string; reason: string }> }> {
   const rows: PassRow[] = []
   const failed: Array<{ id: string; reason: string }> = []
   for (let i = 0; i < newsQueries.length; i++) {
@@ -170,7 +172,12 @@ async function runPass(_passIndex: number): Promise<{ rows: PassRow[]; failed: A
   return { rows, failed }
 }
 
-function summarize(rows: PassRow[]): { overall: number; zero: number; hubUsed: number; byLang: Record<string, { n: number; c: number; zero: number }> } {
+function summarize(rows: PassRow[]): {
+  overall: number
+  zero: number
+  hubUsed: number
+  byLang: Record<string, { n: number; c: number; zero: number }>
+} {
   const byLang: Record<string, { n: number; c: number; zero: number }> = {}
   for (const r of rows) {
     const lang = r.id.split('-')[0]
@@ -180,14 +187,26 @@ function summarize(rows: PassRow[]): { overall: number; zero: number; hubUsed: n
     if (r.ndcg === 0) b.zero++
   }
   const overall = rows.reduce((s, r) => s + r.ndcg, 0) / Math.max(rows.length, 1)
-  return { overall, zero: rows.filter((r) => r.ndcg === 0).length, hubUsed: rows.filter((r) => r.hubUsed).length, byLang }
+  return {
+    overall,
+    zero: rows.filter((r) => r.ndcg === 0).length,
+    hubUsed: rows.filter((r) => r.hubUsed).length,
+    byLang,
+  }
 }
 
 async function main(): Promise<void> {
   console.log(
     `뉴스 쿼리 ${newsQueries.length}개 × ${runs}회 → ${base} 측정 (delay ${delayMs}ms, lang=${langFilter ?? 'all'}, single-attempt=${singleAttempt})`,
   )
-  const passSummaries: Array<{ pass: number; overall: number; zero: number; count: number; failed: number; hubUsed: number }> = []
+  const passSummaries: Array<{
+    pass: number
+    overall: number
+    zero: number
+    count: number
+    failed: number
+    hubUsed: number
+  }> = []
   const perQuery: Record<string, { ndcgs: number[]; hubUsedAny: boolean; hubGoldTotal: number }> = {}
   const failedAll: Array<{ id: string; reason: string }> = []
 
@@ -195,8 +214,17 @@ async function main(): Promise<void> {
     console.log(`\n━━━ PASS ${pass + 1}/${runs} ━━━`)
     const { rows, failed } = await runPass(pass)
     const s = summarize(rows)
-    passSummaries.push({ pass: pass + 1, overall: s.overall, zero: s.zero, count: rows.length, failed: failed.length, hubUsed: s.hubUsed })
-    console.log(`  PASS ${pass + 1} 결과: 전체 ${s.overall.toFixed(4)} (${rows.length}건, zero ${s.zero}, 실패 ${failed.length})`)
+    passSummaries.push({
+      pass: pass + 1,
+      overall: s.overall,
+      zero: s.zero,
+      count: rows.length,
+      failed: failed.length,
+      hubUsed: s.hubUsed,
+    })
+    console.log(
+      `  PASS ${pass + 1} 결과: 전체 ${s.overall.toFixed(4)} (${rows.length}건, zero ${s.zero}, 실패 ${failed.length})`,
+    )
     for (const r of rows) {
       const p = (perQuery[r.id] ??= { ndcgs: [], hubUsedAny: false, hubGoldTotal: 0 })
       p.ndcgs.push(r.ndcg)
@@ -219,16 +247,25 @@ async function main(): Promise<void> {
       noData.push({ id: q.id, reason: failedAll.find((f) => f.id === q.id)?.reason ?? '전 패스 실패' })
       continue
     }
-    rows.push({ id: q.id, ndcg: medianOfNumbers(p.ndcgs), hubUsed: p.hubUsedAny, hubGold: p.hubGoldTotal / p.ndcgs.length })
+    rows.push({
+      id: q.id,
+      ndcg: medianOfNumbers(p.ndcgs),
+      hubUsed: p.hubUsedAny,
+      hubGold: p.hubGoldTotal / p.ndcgs.length,
+    })
   }
   const s = summarize(rows)
 
   console.log('\n━━━ 프로덕션 뉴스 NDCG@10 (median-of-' + runs + ') ━━━')
-  console.log(`전체: ${s.overall.toFixed(4)} (${rows.length}건, zero ${s.zero}건, hub 사용 ${s.hubUsed}쿼리, 측정불가 ${noData.length}건)`)
+  console.log(
+    `전체: ${s.overall.toFixed(4)} (${rows.length}건, zero ${s.zero}건, hub 사용 ${s.hubUsed}쿼리, 측정불가 ${noData.length}건)`,
+  )
   for (const [l, b] of Object.entries(s.byLang)) {
     console.log(`  ${l.padEnd(4)}: ${(b.n / b.c).toFixed(4)} (${b.c}건, zero ${b.zero})`)
   }
-  console.log(`허브 아웃렛 gold 기여(근사, 패스 평균): gold 도메인 ${rows.reduce((t, r) => t + r.hubGold, 0).toFixed(1)}건`)
+  console.log(
+    `허브 아웃렛 gold 기여(근사, 패스 평균): gold 도메인 ${rows.reduce((t, r) => t + r.hubGold, 0).toFixed(1)}건`,
+  )
   const worst = [...rows].sort((a, b) => a.ndcg - b.ndcg).slice(0, 12)
   console.log('최저 NDCG 12:', worst.map((r) => `${r.id}=${r.ndcg.toFixed(3)}`).join(' '))
   if (noData.length > 0) {

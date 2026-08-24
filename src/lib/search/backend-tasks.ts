@@ -644,9 +644,7 @@ export function buildNaverParallelTask(ctx: SearchContext, maxResults?: number):
       }
 
       // Sort by score and cap
-      const merged = [...byUrl.values()]
-        .sort((a, b) => b.score - a.score)
-        .slice(0, naverMax)
+      const merged = [...byUrl.values()].sort((a, b) => b.score - a.score).slice(0, naverMax)
 
       return merged
     },

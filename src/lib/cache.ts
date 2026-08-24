@@ -52,8 +52,8 @@ export interface CacheKeyRequest {
   include_answer?: boolean
   include_raw_content?: boolean
   include_fact_check?: boolean
-  max_tokens?: number            // result content length cap (affects fetch depth)
-  chunks_per_source?: number     // chunked mode: only applicable for advanced search
+  max_tokens?: number // result content length cap (affects fetch depth)
+  chunks_per_source?: number // chunked mode: only applicable for advanced search
   country?: string
   language?: string
   location?: string

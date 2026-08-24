@@ -22,15 +22,23 @@ function loadAllResults() {
     try {
       const data = JSON.parse(fs.readFileSync(f, 'utf-8'))
       results.push(...(data.report.results || []))
-    } catch { /* ignore invalid URL */ }
+    } catch {
+      /* ignore invalid URL */
+    }
   }
   return results
 }
 
 function extractDomains(results: SearchResult[]): string[] {
-  return results.map((r: SearchResult) => {
-    try { return new URL(r.url).hostname.replace(/^www\./, '') } catch { return '' }
-  }).filter(Boolean)
+  return results
+    .map((r: SearchResult) => {
+      try {
+        return new URL(r.url).hostname.replace(/^www\./, '')
+      } catch {
+        return ''
+      }
+    })
+    .filter(Boolean)
 }
 
 function dcg(rels: number[]): number {
@@ -88,13 +96,28 @@ for (const [queryId, gold] of Object.entries(gs) as [string, { relevantDomains?:
     if (ndcg < 0.3) {
       // Add high-frequency domains that appear in results
       const factualExtras = [
-        'en.wikipedia.org', 'arxiv.org', 'reddit.com', 'medium.com',
-        'stackoverflow.com', 'github.com', 'news.ycombinator.com',
-        'scientificamerican.com', 'nature.com', 'quantamagazine.org',
-        'phys.org', 'space.com', 'livescience.com', 'newscientist.com',
-        'bbc.com', 'nytimes.com', 'wired.com', 'arstechnica.com',
-        'smithsonianmag.com', 'nationalgeographic.com',
-        'britannica.com', 'howstuffworks.com',
+        'en.wikipedia.org',
+        'arxiv.org',
+        'reddit.com',
+        'medium.com',
+        'stackoverflow.com',
+        'github.com',
+        'news.ycombinator.com',
+        'scientificamerican.com',
+        'nature.com',
+        'quantamagazine.org',
+        'phys.org',
+        'space.com',
+        'livescience.com',
+        'newscientist.com',
+        'bbc.com',
+        'nytimes.com',
+        'wired.com',
+        'arstechnica.com',
+        'smithsonianmag.com',
+        'nationalgeographic.com',
+        'britannica.com',
+        'howstuffworks.com',
       ]
       for (const d of factualExtras) {
         if ((domainFreq.get(d) ?? 0) >= 2) {
@@ -104,7 +127,7 @@ for (const [queryId, gold] of Object.entries(gs) as [string, { relevantDomains?:
     }
   }
 
-  const added = [...newDomains].filter(d => !gold.relevantDomains?.includes(d))
+  const added = [...newDomains].filter((d) => !gold.relevantDomains?.includes(d))
   if (added.length > 0) {
     gold.relevantDomains = [...newDomains]
     if (tags.includes('news') || tags.includes('financial')) newsUpdated++

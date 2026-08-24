@@ -162,8 +162,12 @@ for (const row of perQuery.values()) {
 }
 
 // ── 1) 요약 + 분류 ───────────────────────────────────────────────────────
-console.log(`=== general 태그 NDCG=0 재진단 (median-of-${runs.length}, general ${generalAll.length}/${perQuery.size} 쿼리) ===`)
-console.log(`general zero: ${generalZero.length}/${generalAll.length} (${((generalZero.length / generalAll.length) * 100).toFixed(1)}%) — 전체 zero 100건 중 ${generalZero.length}건 (${((generalZero.length / 100) * 100).toFixed(0)}%)`)
+console.log(
+  `=== general 태그 NDCG=0 재진단 (median-of-${runs.length}, general ${generalAll.length}/${perQuery.size} 쿼리) ===`,
+)
+console.log(
+  `general zero: ${generalZero.length}/${generalAll.length} (${((generalZero.length / generalAll.length) * 100).toFixed(1)}%) — 전체 zero 100건 중 ${generalZero.length}건 (${((generalZero.length / 100) * 100).toFixed(0)}%)`,
+)
 const byKind = new Map<string, number>()
 for (const z of generalZero) byKind.set(z.kind, (byKind.get(z.kind) ?? 0) + 1)
 console.log('\n-- 원인 분류 (probe-p1-zero 동일 규칙) --')
@@ -185,7 +189,9 @@ for (const [l, arr] of [...byLang.entries()].sort((a, b) => b[1].length - a[1].l
   const cov = arr.filter((z) => z.kind === 'COVERAGE' || z.kind === 'EMPTY').length
   const rank = arr.filter((z) => z.kind === 'RANKING').length
   const mixed = arr.filter((z) => z.kind === 'MIXED').length
-  console.log(`  ${l.padEnd(4)} ${arr.length}/${tot} (${((arr.length / tot) * 100).toFixed(0)}%)  coverage ${cov} · ranking ${rank} · mixed ${mixed}`)
+  console.log(
+    `  ${l.padEnd(4)} ${arr.length}/${tot} (${((arr.length / tot) * 100).toFixed(0)}%)  coverage ${cov} · ranking ${rank} · mixed ${mixed}`,
+  )
 }
 
 // ── 3) 쿼리별 상세 ───────────────────────────────────────────────────────
@@ -239,7 +245,9 @@ const gapRows = [...goldDomainStats.entries()]
   }))
   .filter((r) => r.gold >= 2)
   .sort((a, b) => b.neverInPool - a.neverInPool || b.gold - a.gold)
-console.log(`  ${'gold 도메인'.padEnd(28)} ${'gold쿼리'.padStart(6)} ${'풀등장'.padStart(6)} ${'top10'.padStart(6)} ${'전무'.padStart(6)}`)
+console.log(
+  `  ${'gold 도메인'.padEnd(28)} ${'gold쿼리'.padStart(6)} ${'풀등장'.padStart(6)} ${'top10'.padStart(6)} ${'전무'.padStart(6)}`,
+)
 for (const r of gapRows) {
   console.log(
     `  ${r.g.padEnd(28)} ${String(r.gold).padStart(6)} ${String(r.inPool).padStart(6)} ${String(r.inTop10).padStart(6)} ${String(r.neverInPool).padStart(6)}${r.neverInPool === r.gold && r.gold >= 3 ? '  ← 전 쿼리에서 풀 전무' : ''}`,
@@ -269,20 +277,58 @@ for (const [d, n] of [...poolDomFreq.entries()].sort((a, b) => b[1] - a[1]).slic
 
 // ── 7) gold 카테고리 (COVERAGE 쿼리 한정) ─────────────────────────────────
 const CATEGORY_KEYWORDS: Array<[string, string[]]> = [
+  ['community', ['reddit.com', 'news.ycombinator.com', 'quora.com', 'stackexchange.com', 'wikihow.com', 'medium.com']],
   [
-    'community',
-    ['reddit.com', 'news.ycombinator.com', 'quora.com', 'stackexchange.com', 'wikihow.com', 'medium.com'],
+    'wiki/fact',
+    [
+      'wikipedia.org',
+      'britannica.com',
+      'healthline.com',
+      'webmd.com',
+      'mayoclinic.org',
+      'who.int',
+      'nih.gov',
+      'cdc.gov',
+      'health.harvard.edu',
+    ],
   ],
-  ['wiki/fact', ['wikipedia.org', 'britannica.com', 'healthline.com', 'webmd.com', 'mayoclinic.org', 'who.int', 'nih.gov', 'cdc.gov', 'health.harvard.edu']],
   [
     'tech-doc',
     ['developer.mozilla.org', 'react.dev', 'typescriptlang.org', 'stackoverflow.com', 'github.com', 'docs.', '.io'],
   ],
   ['kr-community', ['naver.com', 'velog.io', 'tistory.com', 'inflearn.com', 'namu.wiki']],
   ['ja-community', ['hatena', 'qiita.com', 'yahoo.co.jp', 'jalan.net', 'japan-guide.com']],
-  ['zh-community', ['zhihu.com', 'csdn.net', 'juejin.cn', 'bilibili.com', '36kr.com', 'mafengwo.cn', 'ctrip.com', 'xiaohongshu.com']],
-  ['news-outlet', ['reuters.com', 'nytimes.com', 'bbc.com', 'cnn.com', 'theguardian.com', 'wired.com', 'techcrunch.com', 'bloomberg.com']],
-  ['travel', ['tripadvisor.com', 'lonelyplanet.com', 'booking.com', 'expedia.com', 'airbnb.com', 'trip.com', 'kyoto.travel', 'japan.travel', 'jnto.go.jp']],
+  [
+    'zh-community',
+    ['zhihu.com', 'csdn.net', 'juejin.cn', 'bilibili.com', '36kr.com', 'mafengwo.cn', 'ctrip.com', 'xiaohongshu.com'],
+  ],
+  [
+    'news-outlet',
+    [
+      'reuters.com',
+      'nytimes.com',
+      'bbc.com',
+      'cnn.com',
+      'theguardian.com',
+      'wired.com',
+      'techcrunch.com',
+      'bloomberg.com',
+    ],
+  ],
+  [
+    'travel',
+    [
+      'tripadvisor.com',
+      'lonelyplanet.com',
+      'booking.com',
+      'expedia.com',
+      'airbnb.com',
+      'trip.com',
+      'kyoto.travel',
+      'japan.travel',
+      'jnto.go.jp',
+    ],
+  ],
   ['academic', ['arxiv.org', 'nature.com', 'springer.com', 'ieee.org', 'scholar.google.com', 'pubmed']],
 ]
 function categorize(goldDomains: string[]): string {

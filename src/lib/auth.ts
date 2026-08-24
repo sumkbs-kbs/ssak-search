@@ -213,7 +213,10 @@ export function validateApiKeyWithTenant(
     if (openModeEnabled) {
       return { valid: true, tenant: { id: '__default__', config: DEFAULT_TENANT } }
     }
-    return { valid: false, reason: 'API key required. Set SEARCH_API_KEY or TENANTS_CONFIG, or enable AUTH_OPEN_MODE=1 for development.' }
+    return {
+      valid: false,
+      reason: 'API key required. Set SEARCH_API_KEY or TENANTS_CONFIG, or enable AUTH_OPEN_MODE=1 for development.',
+    }
   }
 
   const token = extractApiKeyToken(headers)
@@ -248,7 +251,10 @@ export async function validateApiKeyAsync(headers: Headers, env: AppBindings): P
     if (openModeEnabled) {
       return { valid: true, tenant: { id: '__default__', config: DEFAULT_TENANT } }
     }
-    return { valid: false, reason: 'API key required. Set SEARCH_API_KEY or TENANTS_CONFIG, or enable AUTH_OPEN_MODE=1 for development.' }
+    return {
+      valid: false,
+      reason: 'API key required. Set SEARCH_API_KEY or TENANTS_CONFIG, or enable AUTH_OPEN_MODE=1 for development.',
+    }
   }
 
   const token = extractApiKeyToken(headers)

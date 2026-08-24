@@ -68,12 +68,15 @@ export interface TieredFanoutResult {
 
 export class TieredFanout {
   private tierManager: TierManager
-  private taskState: Map<string, {
-    task: BackendTask
-    results: SearchResult[]
-    resolved: boolean
-    rejected: boolean
-  }>
+  private taskState: Map<
+    string,
+    {
+      task: BackendTask
+      results: SearchResult[]
+      resolved: boolean
+      rejected: boolean
+    }
+  >
 
   constructor(tierManager?: TierManager) {
     this.tierManager = tierManager ?? new TierManager()
@@ -83,10 +86,7 @@ export class TieredFanout {
   /**
    * Execute tiered fanout.
    */
-  async execute(
-    tasks: BackendTask[],
-    options: TieredFanoutOptions,
-  ): Promise<TieredFanoutResult> {
+  async execute(tasks: BackendTask[], options: TieredFanoutOptions): Promise<TieredFanoutResult> {
     const startTime = Date.now()
     const { targetLatencyMs, minResults, maxResults } = options
 
@@ -126,16 +126,12 @@ export class TieredFanout {
 
     for (const tier of BACKEND_TIERS) {
       // Skip tiers with higher latency than target
-      if (
-        tier.latencyMs > targetLatencyMs &&
-        relevantCount >= minResults &&
-        !anyPendingProtected()
-      ) {
+      if (tier.latencyMs > targetLatencyMs && relevantCount >= minResults && !anyPendingProtected()) {
         break
       }
 
       // Get tasks for this tier
-      const tierTasks = tasks.filter(t => {
+      const tierTasks = tasks.filter((t) => {
         const taskTier = this.tierManager.getTier(t.name)
         if (taskTier?.id !== tier.id) return false
         // Past minResults only protected gold-domain backends still run
@@ -152,11 +148,7 @@ export class TieredFanout {
       })
 
       // Execute tier with timeout
-      const tierResults = await this.executeTier(
-        tierTasks,
-        tier.latencyMs,
-        options.breakerMap,
-      )
+      const tierResults = await this.executeTier(tierTasks, tier.latencyMs, options.breakerMap)
 
       // Collect results
       for (const result of tierResults) {
@@ -222,12 +214,14 @@ export class TieredFanout {
     tasks: BackendTask[],
     timeoutMs: number,
     breakerMap?: Record<string, CircuitBreaker>,
-  ): Promise<Array<{
-    backend: string
-    results: SearchResult[]
-    rejected: boolean
-  }>> {
-    const promises = tasks.map(task => this.executeTask(task, timeoutMs, breakerMap))
+  ): Promise<
+    Array<{
+      backend: string
+      results: SearchResult[]
+      rejected: boolean
+    }>
+  > {
+    const promises = tasks.map((task) => this.executeTask(task, timeoutMs, breakerMap))
     return Promise.all(promises)
   }
 
@@ -261,9 +255,7 @@ export class TieredFanout {
     try {
       const results = await Promise.race([
         task.run(),
-        new Promise<never>((_, reject) =>
-          setTimeout(() => reject(new Error('Timeout')), effectiveTimeout)
-        ),
+        new Promise<never>((_, reject) => setTimeout(() => reject(new Error('Timeout')), effectiveTimeout)),
       ])
 
       state.results = results

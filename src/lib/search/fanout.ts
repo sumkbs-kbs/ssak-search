@@ -278,7 +278,7 @@ export async function fanoutBackends(
     const baseTimeout = BACKEND_TIMEOUT_MS[tasks[idx].name] ?? DEFAULT_BACKEND_TIMEOUT_MS
     // Free plan: apply reduced timeouts for unreliable backends (production data tuned)
     const backendTimeout = options.freePlan
-      ? FREE_PLAN_TIMEOUT_OVERRIDES[tasks[idx].name] ?? baseTimeout
+      ? (FREE_PLAN_TIMEOUT_OVERRIDES[tasks[idx].name] ?? baseTimeout)
       : baseTimeout
     const task = tasks[idx]
     const state = taskState[idx]
@@ -302,7 +302,7 @@ export async function fanoutBackends(
         settled = true
         clearTimeout(timer)
         state.resolved = true
-        state.rejected = true  // mark as rejected, not just empty
+        state.rejected = true // mark as rejected, not just empty
         resolve()
         return
       }

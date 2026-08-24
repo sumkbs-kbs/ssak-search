@@ -50,7 +50,13 @@ function makeStub() {
   }
 }
 
-async function call(app: typeof spacesRoute, method: string, path: string, env: unknown, body?: unknown): Promise<Response> {
+async function call(
+  app: typeof spacesRoute,
+  method: string,
+  path: string,
+  env: unknown,
+  body?: unknown,
+): Promise<Response> {
   const req = new Request(`http://localhost${path}`, {
     method,
     headers: { 'Content-Type': 'application/json', 'X-User-Id': 'user-1' },
@@ -104,16 +110,22 @@ describe('spacesRoute', () => {
   it('PUT /:id updates a space', async () => {
     const res = await call(spacesRoute, 'PUT', '/sp-1', envWithStub, { name: 'Renamed' })
     expect(res.status).toBe(200)
-    expect((await res.json() as { space: { name: string } }).space.name).toBe('Research')
+    expect(((await res.json()) as { space: { name: string } }).space.name).toBe('Research')
     expect(stub.updateSpace).toHaveBeenCalledWith('sp-1', { name: 'Renamed' })
   })
 
   it('PUT /:id returns 400 for invalid update and 404 for missing', async () => {
     const bad = await call(spacesRoute, 'PUT', '/sp-1', envWithStub, { name: 123 })
     expect(bad.status).toBe(400)
-    const miss = await call(spacesRoute, 'PUT', '/nope', {
-      SPACE_DO: { idFromName: () => 'id', get: () => stub.missing },
-    }, { name: 'x' })
+    const miss = await call(
+      spacesRoute,
+      'PUT',
+      '/nope',
+      {
+        SPACE_DO: { idFromName: () => 'id', get: () => stub.missing },
+      },
+      { name: 'x' },
+    )
     expect(miss.status).toBe(404)
   })
 
@@ -141,9 +153,15 @@ describe('spacesRoute', () => {
   it('POST /:id/files returns 400 for a missing field and 404 for missing space', async () => {
     const bad = await call(spacesRoute, 'POST', '/sp-1/files', envWithStub, { name: 'x' })
     expect(bad.status).toBe(400)
-    const miss = await call(spacesRoute, 'POST', '/nope/files', {
-      SPACE_DO: { idFromName: () => 'id', get: () => stub.missing },
-    }, { name: 'x', file_key: 'k', mime_type: 't', size: 1 })
+    const miss = await call(
+      spacesRoute,
+      'POST',
+      '/nope/files',
+      {
+        SPACE_DO: { idFromName: () => 'id', get: () => stub.missing },
+      },
+      { name: 'x', file_key: 'k', mime_type: 't', size: 1 },
+    )
     expect(miss.status).toBe(404)
   })
 

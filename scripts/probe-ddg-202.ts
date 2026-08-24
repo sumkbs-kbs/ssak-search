@@ -104,7 +104,9 @@ export function classifyDdgChallenge(data: DdgProbeData): DdgChallengeVerdict {
     return { kind: 'lite-mismatch', liteStatus: data.liteAttempt.status }
   }
 
-  const recoveredInHtml = data.htmlAttempts.some((a, i) => a.status === 202 && data.htmlAttempts.slice(i + 1).some((b) => b.status === 200))
+  const recoveredInHtml = data.htmlAttempts.some(
+    (a, i) => a.status === 202 && data.htmlAttempts.slice(i + 1).some((b) => b.status === 200),
+  )
   if (recoveredInHtml) return { kind: 'transient-challenge', recoveredAfter: 'html' }
   if (data.retryAfterProbe?.status === 200) return { kind: 'transient-challenge', recoveredAfter: 'retry-after' }
 
@@ -131,7 +133,15 @@ interface CliOptions {
 }
 
 function parseCli(argv: string[]): CliOptions {
-  const opts: CliOptions = { attempts: 3, delayMs: 1000, retryWaitMs: 3000, honorRetryAfter: false, query: 'hello world', json: false, strict: false }
+  const opts: CliOptions = {
+    attempts: 3,
+    delayMs: 1000,
+    retryWaitMs: 3000,
+    honorRetryAfter: false,
+    query: 'hello world',
+    json: false,
+    strict: false,
+  }
   for (let i = 0; i < argv.length; i++) {
     switch (argv[i]) {
       case '--attempts':
@@ -193,7 +203,10 @@ async function fetchWithAbort(url: string, init: RequestInit, timeoutMs = 8000):
 function extractTitle(html: string): string | undefined {
   const m = html.match(/<title[^>]*>([\s\S]*?)<\/title>/i)
   if (!m) return undefined
-  return m[1].replace(/<[^>]+>/g, '').trim().slice(0, 80)
+  return m[1]
+    .replace(/<[^>]+>/g, '')
+    .trim()
+    .slice(0, 80)
 }
 
 async function probeHtml(query: string): Promise<DdgProbeAttempt> {
@@ -204,20 +217,17 @@ async function probeHtml(query: string): Promise<DdgProbeAttempt> {
   params.append('b', '')
   const start = Date.now()
   try {
-    const res = await fetchWithAbort(
-      DDG_HTML_URL,
-      {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8',
-          'User-Agent': BROWSER_UA,
-          Accept: 'text/html,application/xhtml+xml',
-          'Accept-Language': 'en-US,en;q=0.9,ko;q=0.8',
-          Referer: 'https://html.duckduckgo.com/',
-        },
-        body: params.toString(),
+    const res = await fetchWithAbort(DDG_HTML_URL, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8',
+        'User-Agent': BROWSER_UA,
+        Accept: 'text/html,application/xhtml+xml',
+        'Accept-Language': 'en-US,en;q=0.9,ko;q=0.8',
+        Referer: 'https://html.duckduckgo.com/',
       },
-    )
+      body: params.toString(),
+    })
     const latencyMs = Date.now() - start
     if (res.status === 202) {
       const body = await res.text()
@@ -249,18 +259,15 @@ async function probeLite(query: string): Promise<DdgProbeAttempt> {
   params.append('df', '')
   const start = Date.now()
   try {
-    const res = await fetchWithAbort(
-      `${DDG_LITE_URL}?${params.toString()}`,
-      {
-        method: 'GET',
-        headers: {
-          'User-Agent': BROWSER_UA,
-          Accept: 'text/html,application/xhtml+xml',
-          'Accept-Language': 'en-US,en;q=0.9,ko;q=0.8',
-          Referer: 'https://lite.duckduckgo.com/',
-        },
+    const res = await fetchWithAbort(`${DDG_LITE_URL}?${params.toString()}`, {
+      method: 'GET',
+      headers: {
+        'User-Agent': BROWSER_UA,
+        Accept: 'text/html,application/xhtml+xml',
+        'Accept-Language': 'en-US,en;q=0.9,ko;q=0.8',
+        Referer: 'https://lite.duckduckgo.com/',
       },
-    )
+    })
     const latencyMs = Date.now() - start
     if (res.status === 202) {
       const body = await res.text()
@@ -287,7 +294,11 @@ async function probeLite(query: string): Promise<DdgProbeAttempt> {
 
 async function fetchEgressIdentity(): Promise<Record<string, string>> {
   try {
-    const res = await fetchWithAbort('https://www.cloudflare.com/cdn-cgi/trace', { headers: { 'User-Agent': 'curl/8' } }, 5000)
+    const res = await fetchWithAbort(
+      'https://www.cloudflare.com/cdn-cgi/trace',
+      { headers: { 'User-Agent': 'curl/8' } },
+      5000,
+    )
     const text = await res.text()
     const kv: Record<string, string> = {}
     for (const line of text.split('\n')) {
@@ -328,8 +339,12 @@ async function main(): Promise<void> {
   const egress = await fetchEgressIdentity()
 
   console.log('=== DDG 202 IP-persistence probe ===')
-  console.log(`egress: ip=${egress['ip'] ?? '?'} loc=${egress['loc'] ?? '?'} colo=${egress['colo'] ?? '?'} warp=${egress['warp'] ?? '?'}`)
-  console.log(`query="${opts.query}" attempts=${opts.attempts} delay=${opts.delayMs}ms retry-wait=${opts.retryWaitMs}ms honor-retry-after=${opts.honorRetryAfter}`)
+  console.log(
+    `egress: ip=${egress['ip'] ?? '?'} loc=${egress['loc'] ?? '?'} colo=${egress['colo'] ?? '?'} warp=${egress['warp'] ?? '?'}`,
+  )
+  console.log(
+    `query="${opts.query}" attempts=${opts.attempts} delay=${opts.delayMs}ms retry-wait=${opts.retryWaitMs}ms honor-retry-after=${opts.honorRetryAfter}`,
+  )
 
   // Phase 1 — html 연속 재요청 (동일 IP)
   console.log('\n[Phase 1] html 엔드포인트 연속 재요청:')
@@ -340,7 +355,15 @@ async function main(): Promise<void> {
     htmlAttempts.push(a)
     console.log(fmtAttempt(a, `html #${i + 1}`))
     if (a.challengeHeaders) {
-      const interesting = ['retry-after', 'set-cookie', 'location', 'server', 'content-type', 'cache-control', 'expires']
+      const interesting = [
+        'retry-after',
+        'set-cookie',
+        'location',
+        'server',
+        'content-type',
+        'cache-control',
+        'expires',
+      ]
       for (const h of interesting) {
         if (a.challengeHeaders[h]) console.log(`    header ${h}: ${a.challengeHeaders[h].slice(0, 160)}`)
       }
@@ -361,7 +384,8 @@ async function main(): Promise<void> {
   let retryAfterProbe: DdgProbeAttempt | undefined
   if (anyHtml202) {
     const firstRa = htmlAttempts.find((a) => a.retryAfterSec !== undefined)?.retryAfterSec
-    const waitMs = opts.honorRetryAfter && firstRa !== undefined ? Math.max(firstRa * 1000, opts.retryWaitMs) : opts.retryWaitMs
+    const waitMs =
+      opts.honorRetryAfter && firstRa !== undefined ? Math.max(firstRa * 1000, opts.retryWaitMs) : opts.retryWaitMs
     console.log(`\n[Phase 3] ${waitMs}ms 대기 후 html 재요청 (Retry-After=${firstRa ?? '없음'}):`)
     await sleep(waitMs)
     retryAfterProbe = await probeHtml(opts.query)

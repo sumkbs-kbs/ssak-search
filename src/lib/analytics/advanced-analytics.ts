@@ -16,7 +16,6 @@
  * - Export to external analytics tools
  */
 
-
 // ============================================================
 // Types
 // ============================================================
@@ -142,11 +141,8 @@ export class AnalyticsCollector {
   /**
    * Get events by name.
    */
-  getEventsByName(
-    eventName: string,
-    timeRange?: { start: number; end: number },
-  ): AnalyticsEvent[] {
-    return this.events.filter(e => {
+  getEventsByName(eventName: string, timeRange?: { start: number; end: number }): AnalyticsEvent[] {
+    return this.events.filter((e) => {
       if (e.eventName !== eventName) return false
       if (timeRange) {
         if (e.timestamp < timeRange.start || e.timestamp > timeRange.end) return false
@@ -158,11 +154,8 @@ export class AnalyticsCollector {
   /**
    * Get user events.
    */
-  getUserEvents(
-    userId: string,
-    timeRange?: { start: number; end: number },
-  ): AnalyticsEvent[] {
-    return this.events.filter(e => {
+  getUserEvents(userId: string, timeRange?: { start: number; end: number }): AnalyticsEvent[] {
+    return this.events.filter((e) => {
       if (e.userId !== userId) return false
       if (timeRange) {
         if (e.timestamp < timeRange.start || e.timestamp > timeRange.end) return false
@@ -175,7 +168,7 @@ export class AnalyticsCollector {
    * Get session events.
    */
   getSessionEvents(sessionId: string): AnalyticsEvent[] {
-    return this.events.filter(e => e.sessionId === sessionId)
+    return this.events.filter((e) => e.sessionId === sessionId)
   }
 
   /**
@@ -184,7 +177,7 @@ export class AnalyticsCollector {
   clearOldEvents(olderThanMs: number): number {
     const cutoff = Date.now() - olderThanMs
     const initialCount = this.events.length
-    this.events = this.events.filter(e => e.timestamp > cutoff)
+    this.events = this.events.filter((e) => e.timestamp > cutoff)
     return initialCount - this.events.length
   }
 
@@ -201,10 +194,7 @@ export class FunnelAnalyzer {
   /**
    * Analyze a conversion funnel.
    */
-  analyze(
-    steps: FunnelStep[],
-    events: AnalyticsEvent[],
-  ): FunnelResult {
+  analyze(steps: FunnelStep[], events: AnalyticsEvent[]): FunnelResult {
     const usersByStep: Map<string, Set<string>> = new Map()
 
     // Initialize step counters
@@ -266,10 +256,7 @@ export class CohortAnalyzer {
   /**
    * Analyze user retention by cohort.
    */
-  analyzeRetention(
-    events: AnalyticsEvent[],
-    cohortPeriod: 'day' | 'week' | 'month' = 'week',
-  ): CohortData[] {
+  analyzeRetention(events: AnalyticsEvent[], cohortPeriod: 'day' | 'week' | 'month' = 'week'): CohortData[] {
     // Group users by first seen date
     const userFirstSeen = new Map<string, number>()
     const userEvents = new Map<string, AnalyticsEvent[]>()
@@ -316,9 +303,7 @@ export class CohortAnalyzer {
         let returnedUsers = 0
         for (const userId of users) {
           const userEvts = userEvents.get(userId) ?? []
-          const hasActivity = userEvts.some(
-            e => e.timestamp >= periodStart && e.timestamp < periodEnd
-          )
+          const hasActivity = userEvts.some((e) => e.timestamp >= periodStart && e.timestamp < periodEnd)
           if (hasActivity) returnedUsers++
         }
 
@@ -370,15 +355,15 @@ export class AnalyticsDashboard {
       : this.collector.getEventsByName('page_view')
 
     // Calculate active users
-    const _uniqueUsers = new Set(events.map(e => e.userId ?? e.sessionId))
+    const _uniqueUsers = new Set(events.map((e) => e.userId ?? e.sessionId))
     const now = Date.now()
     const dayAgo = now - 24 * 60 * 60 * 1000
     const weekAgo = now - 7 * 24 * 60 * 60 * 1000
     const monthAgo = now - 30 * 24 * 60 * 60 * 1000
 
-    const dailyUsers = new Set(events.filter(e => e.timestamp > dayAgo).map(e => e.userId ?? e.sessionId))
-    const weeklyUsers = new Set(events.filter(e => e.timestamp > weekAgo).map(e => e.userId ?? e.sessionId))
-    const monthlyUsers = new Set(events.filter(e => e.timestamp > monthAgo).map(e => e.userId ?? e.sessionId))
+    const dailyUsers = new Set(events.filter((e) => e.timestamp > dayAgo).map((e) => e.userId ?? e.sessionId))
+    const weeklyUsers = new Set(events.filter((e) => e.timestamp > weekAgo).map((e) => e.userId ?? e.sessionId))
+    const monthlyUsers = new Set(events.filter((e) => e.timestamp > monthAgo).map((e) => e.userId ?? e.sessionId))
 
     // Calculate engagement metrics
     const sessions = new Map<string, AnalyticsEvent[]>()
@@ -447,13 +432,8 @@ export class AnalyticsDashboard {
   /**
    * Analyze a funnel.
    */
-  analyzeFunnel(
-    steps: FunnelStep[],
-    timeRange?: { start: number; end: number },
-  ): FunnelResult {
-    const events = timeRange
-      ? this.collector.getEventsByName('*', timeRange)
-      : this.collector.getEventsByName('*')
+  analyzeFunnel(steps: FunnelStep[], timeRange?: { start: number; end: number }): FunnelResult {
+    const events = timeRange ? this.collector.getEventsByName('*', timeRange) : this.collector.getEventsByName('*')
 
     return this.funnelAnalyzer.analyze(steps, events)
   }
@@ -461,12 +441,8 @@ export class AnalyticsDashboard {
   /**
    * Get retention analysis.
    */
-  getRetentionAnalysis(
-    timeRange?: { start: number; end: number },
-  ): CohortData[] {
-    const events = timeRange
-      ? this.collector.getEventsByName('*', timeRange)
-      : this.collector.getEventsByName('*')
+  getRetentionAnalysis(timeRange?: { start: number; end: number }): CohortData[] {
+    const events = timeRange ? this.collector.getEventsByName('*', timeRange) : this.collector.getEventsByName('*')
 
     return this.cohortAnalyzer.analyzeRetention(events)
   }
@@ -518,7 +494,7 @@ export class AnalyticsDashboard {
       }
     }
 
-    const intersection = [...usersWhoStarted].filter(u => usersWhoReturned.has(u))
+    const intersection = [...usersWhoStarted].filter((u) => usersWhoReturned.has(u))
     return usersWhoStarted.size > 0 ? intersection.length / usersWhoStarted.size : 0
   }
 }

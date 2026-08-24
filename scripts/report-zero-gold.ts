@@ -100,7 +100,14 @@ for (const art of artifacts) {
   for (const row of art.results) {
     let p = perQuery.get(row.id)
     if (!p) {
-      p = { id: row.id, query: row.query, tags: row.tags, goldDomains: gold[row.id] ?? [], checks: [], backends: new Set() }
+      p = {
+        id: row.id,
+        query: row.query,
+        tags: row.tags,
+        goldDomains: gold[row.id] ?? [],
+        checks: [],
+        backends: new Set(),
+      }
       perQuery.set(row.id, p)
     }
     for (const b of row.backends) p.backends.add(b)
@@ -186,7 +193,9 @@ out(`| 항목 | 값 |`)
 out(`|---|---|`)
 out(`| 평가 쿼리 | ${total} |`)
 out(`| **zero-gold (NDCG=0)** | **${zeros.length} (${((zeros.length / Math.max(total, 1)) * 100).toFixed(1)}%)** |`)
-out(`| COVERAGE+EMPTY (커버리지) | ${covLike.length} (${((covLike.length / Math.max(zeros.length, 1)) * 100).toFixed(1)}% of zero) |`)
+out(
+  `| COVERAGE+EMPTY (커버리지) | ${covLike.length} (${((covLike.length / Math.max(zeros.length, 1)) * 100).toFixed(1)}% of zero) |`,
+)
 out()
 out(`## 원인 (kind) 분류`)
 out()
@@ -276,7 +285,9 @@ out()
 out(`| id | kind | lang | tags | gold 도메인 | 풀 크기 |`)
 out(`|---|---|---|---|---|---|`)
 for (const z of [...zeros].sort((a, b) => a.id.localeCompare(b.id))) {
-  out(`| ${z.id} | ${z.kind} | ${z.lang} | ${z.tags.join('/')} | ${z.goldDomains.join('|')} | ${z.poolSizes.join('/')} |`)
+  out(
+    `| ${z.id} | ${z.kind} | ${z.lang} | ${z.tags.join('/')} | ${z.goldDomains.join('|')} | ${z.poolSizes.join('/')} |`,
+  )
 }
 out()
 out(`## COVERAGE/EMPTY 쿼리의 백엔드 구성 (상위 12)`)

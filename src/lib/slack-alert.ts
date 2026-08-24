@@ -312,7 +312,8 @@ export function resetAgenticAlertCooldowns(): void {
  * request path (the sender swallows its own failures).
  */
 export async function maybeAlertHighRegenerationRate(
-  env: { SLACK_WEBHOOK?: string; ALERT_SLACK_WEBHOOK?: string; CACHE_KV?: Pick<KVNamespace, 'get' | 'put'> } | undefined,
+  env:
+    { SLACK_WEBHOOK?: string; ALERT_SLACK_WEBHOOK?: string; CACHE_KV?: Pick<KVNamespace, 'get' | 'put'> } | undefined,
   metrics: {
     synthesisAttempts: number
     synthesisRegenerations: number

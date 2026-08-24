@@ -38,8 +38,22 @@ const VALID_PLAN_JSON = {
   complexity: 'moderate',
   estimated_steps: 2,
   steps: [
-    { id: 1, question: 'React details', tool: 'web_search', params: { query: 'React' }, output_role: 'evidence', depends_on: [] },
-    { id: 2, question: 'Vue details', tool: 'web_search', params: { query: 'Vue' }, output_role: 'evidence', depends_on: [] },
+    {
+      id: 1,
+      question: 'React details',
+      tool: 'web_search',
+      params: { query: 'React' },
+      output_role: 'evidence',
+      depends_on: [],
+    },
+    {
+      id: 2,
+      question: 'Vue details',
+      tool: 'web_search',
+      params: { query: 'Vue' },
+      output_role: 'evidence',
+      depends_on: [],
+    },
   ],
   synthesis_instruction: 'Synthesize both frameworks into a detailed comparison.',
   confidence: 0.9,
@@ -132,7 +146,10 @@ describe('QueryPlanner — heuristic planning (no AI)', () => {
     for (const q of cases) {
       const plan = await createPlan(q)
       const webSteps = plan.steps.filter((s) => s.tool === 'web_search')
-      expect(webSteps.some((s) => s.params.query?.toString().includes('실적 주가 재무')), q).toBe(true)
+      expect(
+        webSteps.some((s) => s.params.query?.toString().includes('실적 주가 재무')),
+        q,
+      ).toBe(true)
     }
   })
 
@@ -156,11 +173,19 @@ describe('QueryPlanner — heuristic planning (no AI)', () => {
   it('classifies Korean comparison queries ahead of financial intent (priority)', async () => {
     // Every query below ALSO matches a financial keyword (연금저축펀드/KOSPI/코스닥/ETF/배당주)
     // — comparison must win because isComparison is checked first in the else-if chain.
-    const comparisonQueries = ['연금저축펀드 비교', 'KOSPI와 코스닥 차이', 'ETF와 펀드 대비', '배당주와 성장주 어느 것이 좋을까']
+    const comparisonQueries = [
+      '연금저축펀드 비교',
+      'KOSPI와 코스닥 차이',
+      'ETF와 펀드 대비',
+      '배당주와 성장주 어느 것이 좋을까',
+    ]
     for (const q of comparisonQueries) {
       const plan = await createPlan(q)
       const webSteps = plan.steps.filter((s) => s.tool === 'web_search')
-      expect(webSteps.some((s) => s.params.query?.toString().includes('실적 주가 재무')), q).toBe(false)
+      expect(
+        webSteps.some((s) => s.params.query?.toString().includes('실적 주가 재무')),
+        q,
+      ).toBe(false)
       // Comparison marker: a compute step (2+ entities) or a '비교'-appended search
       const hasCompute = plan.steps.some((s) => s.tool === 'compute')
       const hasComparisonSearch = webSteps.some((s) => s.params.query?.toString().endsWith('비교'))
@@ -174,7 +199,10 @@ describe('QueryPlanner — heuristic planning (no AI)', () => {
       const plan = await createPlan(q)
       const webSteps = plan.steps.filter((s) => s.tool === 'web_search')
       // Must not fall through to the general branch (2-step 'what is definition' template)
-      expect(webSteps.some((s) => s.params.query?.toString().includes('what is definition')), q).toBe(false)
+      expect(
+        webSteps.some((s) => s.params.query?.toString().includes('what is definition')),
+        q,
+      ).toBe(false)
       expect(
         plan.steps.some((s) => s.tool === 'compute') ||
           webSteps.some((s) => s.params.query?.toString().endsWith('비교')),
@@ -193,7 +221,10 @@ describe('QueryPlanner — heuristic planning (no AI)', () => {
     for (const q of nonFinancial) {
       const plan = await createPlan(q)
       const webSteps = plan.steps.filter((s) => s.tool === 'web_search')
-      expect(webSteps.some((s) => s.params.query?.toString().includes('실적 주가 재무')), q).toBe(false)
+      expect(
+        webSteps.some((s) => s.params.query?.toString().includes('실적 주가 재무')),
+        q,
+      ).toBe(false)
     }
   })
 
@@ -278,7 +309,10 @@ describe('QueryPlanner — AI path', () => {
   })
 
   it('falls back to heuristic when the AI plan fails schema validation', async () => {
-    const badPlan = { ...VALID_PLAN_JSON, steps: [{ id: 1, question: 'x', tool: 'not_a_tool', params: {}, output_role: 'evidence', depends_on: [] }] }
+    const badPlan = {
+      ...VALID_PLAN_JSON,
+      steps: [{ id: 1, question: 'x', tool: 'not_a_tool', params: {}, output_role: 'evidence', depends_on: [] }],
+    }
     const ai = mockAi({ response: [{ content: JSON.stringify(badPlan) }] })
     const planner = new QueryPlanner({ ai })
     const plan = await planner.plan('React vs Vue')
@@ -557,8 +591,22 @@ describe('PlanExecutor — executePlan with mocked tools', () => {
     const plan = {
       ...basePlan,
       steps: [
-        { id: 1, question: 'q1', tool: 'web_search', params: { query: 'hello world', max_results: 5 }, output_role: 'evidence', depends_on: [] },
-        { id: 2, question: 'q2', tool: 'compute', params: { formula: '1 + 2' }, output_role: 'verification', depends_on: [1] },
+        {
+          id: 1,
+          question: 'q1',
+          tool: 'web_search',
+          params: { query: 'hello world', max_results: 5 },
+          output_role: 'evidence',
+          depends_on: [],
+        },
+        {
+          id: 2,
+          question: 'q2',
+          tool: 'compute',
+          params: { formula: '1 + 2' },
+          output_role: 'verification',
+          depends_on: [1],
+        },
       ],
     }
     const result = await executePlan(plan as never)
@@ -584,8 +632,22 @@ describe('PlanExecutor — executePlan with mocked tools', () => {
     const plan = {
       ...basePlan,
       steps: [
-        { id: 1, question: 'q1', tool: 'web_search', params: { query: 'first search' }, output_role: 'evidence', depends_on: [] },
-        { id: 2, question: 'q2', tool: 'web_search', params: { query: '{{step_1.0.title}} second' }, output_role: 'evidence', depends_on: [1] },
+        {
+          id: 1,
+          question: 'q1',
+          tool: 'web_search',
+          params: { query: 'first search' },
+          output_role: 'evidence',
+          depends_on: [],
+        },
+        {
+          id: 2,
+          question: 'q2',
+          tool: 'web_search',
+          params: { query: '{{step_1.0.title}} second' },
+          output_role: 'evidence',
+          depends_on: [1],
+        },
       ],
     }
     await executePlan(plan as never)
@@ -597,7 +659,14 @@ describe('PlanExecutor — executePlan with mocked tools', () => {
     const plan = {
       ...basePlan,
       steps: [
-        { id: 1, question: 'q1', tool: 'fetch_url', params: { url: 'https://example.com/doc' }, output_role: 'fact', depends_on: [] },
+        {
+          id: 1,
+          question: 'q1',
+          tool: 'fetch_url',
+          params: { url: 'https://example.com/doc' },
+          output_role: 'fact',
+          depends_on: [],
+        },
       ],
     }
     const result = await executePlan(plan as never)
@@ -626,7 +695,14 @@ describe('PlanExecutor — executePlan with mocked tools', () => {
     const plan = {
       ...basePlan,
       steps: [
-        { id: 1, question: 'q1', tool: 'web_search', params: { query: 'x' }, output_role: 'evidence', depends_on: [99] },
+        {
+          id: 1,
+          question: 'q1',
+          tool: 'web_search',
+          params: { query: 'x' },
+          output_role: 'evidence',
+          depends_on: [99],
+        },
       ],
     }
     const result = await executePlan(plan as never)
@@ -640,7 +716,14 @@ describe('PlanExecutor — executePlan with mocked tools', () => {
       steps: [
         { id: 1, question: 'q1', tool: 'web_search', params: { query: 'a' }, output_role: 'evidence', depends_on: [] },
         { id: 2, question: 'q2', tool: 'web_search', params: { query: 'b' }, output_role: 'evidence', depends_on: [] },
-        { id: 3, question: 'q3', tool: 'web_search', params: { query: 'c' }, output_role: 'evidence', depends_on: [1, 2] },
+        {
+          id: 3,
+          question: 'q3',
+          tool: 'web_search',
+          params: { query: 'c' },
+          output_role: 'evidence',
+          depends_on: [1, 2],
+        },
       ],
     }
     const result = await executePlan(plan as never)

@@ -156,7 +156,7 @@ export class LoadTestRunner {
     delayMs: number,
   ): Promise<void> {
     // Wait for ramp-up
-    await new Promise(resolve => setTimeout(resolve, delayMs))
+    await new Promise((resolve) => setTimeout(resolve, delayMs))
 
     const vu: VirtualUser = {
       id: vuId,
@@ -173,7 +173,7 @@ export class LoadTestRunner {
         const result = await Promise.race([
           testFn(vuId),
           new Promise<never>((_, reject) =>
-            setTimeout(() => reject(new Error('Request timeout')), this.config.timeoutMs)
+            setTimeout(() => reject(new Error('Request timeout')), this.config.timeoutMs),
           ),
         ])
 
@@ -193,9 +193,7 @@ export class LoadTestRunner {
       }
 
       // Think time
-      await new Promise(resolve =>
-        setTimeout(resolve, this.config.thinkTimeMs + Math.random() * 500)
-      )
+      await new Promise((resolve) => setTimeout(resolve, this.config.thinkTimeMs + Math.random() * 500))
     }
 
     this.results.push(vu)
@@ -203,9 +201,9 @@ export class LoadTestRunner {
 
   private generateResults(): LoadTestResult {
     // Collect all requests
-    const allRequests = this.results.flatMap(vu => vu.requests)
+    const allRequests = this.results.flatMap((vu) => vu.requests)
     const totalRequests = allRequests.length
-    const successfulRequests = allRequests.filter(r => r.success).length
+    const successfulRequests = allRequests.filter((r) => r.success).length
     const failedRequests = totalRequests - successfulRequests
 
     // Calculate RPS
@@ -213,10 +211,8 @@ export class LoadTestRunner {
     const requestsPerSecond = totalRequests / (durationMs / 1000)
 
     // Calculate latency stats
-    const latencies = allRequests.map(r => r.latencyMs).sort((a, b) => a - b)
-    const avgLatency = latencies.length > 0
-      ? latencies.reduce((a, b) => a + b, 0) / latencies.length
-      : 0
+    const latencies = allRequests.map((r) => r.latencyMs).sort((a, b) => a - b)
+    const avgLatency = latencies.length > 0 ? latencies.reduce((a, b) => a + b, 0) / latencies.length : 0
 
     const p50 = this.getPercentile(latencies, 50)
     const p95 = this.getPercentile(latencies, 95)
@@ -244,7 +240,7 @@ export class LoadTestRunner {
     const buckets = [10, 50, 100, 200, 500, 1000, 2000, 5000, 10000]
     const latencyDistribution = buckets.map((bucket, i) => {
       const prevBucket = i === 0 ? 0 : buckets[i - 1]
-      const count = latencies.filter(l => l > prevBucket && l <= bucket).length
+      const count = latencies.filter((l) => l > prevBucket && l <= bucket).length
       return {
         bucket: `${prevBucket}-${bucket}ms`,
         count,
@@ -255,7 +251,7 @@ export class LoadTestRunner {
     // SLO validation (typical targets)
     const sloValidation = {
       latencyP95Met: p95 <= 2000, // 95th percentile under 2s
-      errorRateMet: (failedRequests / totalRequests) <= 0.01, // Error rate under 1%
+      errorRateMet: failedRequests / totalRequests <= 0.01, // Error rate under 1%
       throughputMet: requestsPerSecond >= this.config.targetRps * 0.9, // 90% of target RPS
     }
 

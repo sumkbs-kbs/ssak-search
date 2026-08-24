@@ -45,27 +45,27 @@ describe('LLMCache', () => {
 
   it('should respect TTL expiration', async () => {
     cache.set('test query', 'test response', 'model')
-    
+
     // Wait for TTL to expire
-    await new Promise(resolve => setTimeout(resolve, 1100))
-    
+    await new Promise((resolve) => setTimeout(resolve, 1100))
+
     const result = cache.get('test query')
     expect(result).toBeNull()
   })
 
   it('should normalize queries', () => {
     cache.set('  Test Query  ', 'response', 'model')
-    
+
     expect(cache.get('test query')).not.toBeNull()
     expect(cache.get('TEST QUERY')).not.toBeNull()
   })
 
   it('should track hit count', () => {
     cache.set('test query', 'response', 'model')
-    
+
     cache.get('test query')
     cache.get('test query')
-    
+
     const stats = cache.getStats()
     expect(stats.avgHitCount).toBeGreaterThan(0)
   })
@@ -73,7 +73,7 @@ describe('LLMCache', () => {
   it('should return stats', () => {
     cache.set('query1', 'response1', 'model')
     cache.set('query2', 'response2', 'model')
-    
+
     const stats = cache.getStats()
     expect(stats.size).toBe(2)
   })
@@ -141,7 +141,7 @@ describe('StreamingResponseHandler', () => {
   it('should complete and return full text', () => {
     handler.onChunk('Hello ')
     handler.onChunk('World')
-    
+
     const text = handler.complete()
     expect(text).toBe('Hello World')
   })
@@ -150,17 +150,19 @@ describe('StreamingResponseHandler', () => {
     handler.onChunk('Hello')
     handler.complete()
     handler.onChunk('World')
-    
+
     expect(handler.getCurrentText()).toBe('World')
   })
 
   it('should call onComplete callback', () => {
     let completedText = ''
-    handler.setOnComplete((text) => { completedText = text })
-    
+    handler.setOnComplete((text) => {
+      completedText = text
+    })
+
     handler.onChunk('Hello')
     handler.complete()
-    
+
     expect(completedText).toBe('Hello')
   })
 })

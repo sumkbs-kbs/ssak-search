@@ -29,7 +29,13 @@ import {
   type WaitForEvalContext,
 } from '../../scripts/sim-fanout-latency'
 
-const outcome = (name: string, settleMs: number, produced: boolean, resultCount = 0, waitFor = false): BackendOutcome => ({
+const outcome = (
+  name: string,
+  settleMs: number,
+  produced: boolean,
+  resultCount = 0,
+  waitFor = false,
+): BackendOutcome => ({
   name,
   settleMs,
   produced,
@@ -117,10 +123,7 @@ describe('computeFanoutWallTime — waitFor', () => {
   })
 
   it('빨리 정착한 waitFor(break 이전)는 await 대상이 아니다', () => {
-    const outcomes = [
-      outcome('bing', 400, true, 10),
-      outcome('wikipedia', 700, true, 5, true),
-    ]
+    const outcomes = [outcome('bing', 400, true, 10), outcome('wikipedia', 700, true, 5, true)]
     const r = computeFanoutWallTime(outcomes, 10)
     expect(r.wallMs).toBe(800) // wikipedia는 break 전 정착 → 연장 없음
     expect(r.collected).toContain('wikipedia')
@@ -136,9 +139,7 @@ describe('모델 ↔ 프로덕션 상수 동기화', () => {
     for (const cfg of BACKEND_MODEL) {
       // 부하 모델은 ceilingMs를 backendTimeoutMs(name, 이전값)로 직접 유도하므로,
       // BACKEND_TIMEOUT_MS 테이블 변경 시 모델이 자동 추종한다.
-      expect(cfg.ceilingMs, `${cfg.name} ceiling must match backendTimeoutMs`).toBe(
-        backendTimeoutMs(cfg.name, 4000),
-      )
+      expect(cfg.ceilingMs, `${cfg.name} ceiling must match backendTimeoutMs`).toBe(backendTimeoutMs(cfg.name, 4000))
     }
   })
 
@@ -287,7 +288,11 @@ describe('drawFailureScenario — 조건부 실패 시나리오 드로우', () =
   })
 
   it('backend-down은 해당 백엔드를 skipSet에 넣고 rng를 소모한다', () => {
-    const scenario: FailureScenario = { wikipediaWindowProb: 0, wikipediaMirrorSuccess: 0.8, downBackends: ['bing', 'arxiv'] }
+    const scenario: FailureScenario = {
+      wikipediaWindowProb: 0,
+      wikipediaMirrorSuccess: 0.8,
+      downBackends: ['bing', 'arxiv'],
+    }
     const rng1 = mulberry32(3)
     const rng2 = mulberry32(3)
     const draw = drawFailureScenario(scenario, BACKEND_MODEL, rng1)

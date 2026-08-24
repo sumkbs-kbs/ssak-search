@@ -370,9 +370,7 @@ describe('duckDuckGoSearch — network path', () => {
   })
 
   it('returns [] when the html fetch keeps throwing (retried once, no lite fallback)', async () => {
-    mockFetchWithTimeout
-      .mockRejectedValueOnce(new Error('timeout'))
-      .mockRejectedValueOnce(new Error('still down'))
+    mockFetchWithTimeout.mockRejectedValueOnce(new Error('timeout')).mockRejectedValueOnce(new Error('still down'))
     const results = await duckDuckGoSearch('hello', { env: {} as never })
     // Network blips are transient → B안 retries once; exhausted → [] with no lite.
     expect(mockFetchWithTimeout).toHaveBeenCalledTimes(2)
@@ -452,9 +450,7 @@ describe('duckDuckGoInstantAnswer — network path', () => {
   })
 
   it('returns null for a short abstract', async () => {
-    mockFetchWithTimeout.mockResolvedValueOnce(
-      new Response(JSON.stringify({ AbstractText: 'short' }), { status: 200 }),
-    )
+    mockFetchWithTimeout.mockResolvedValueOnce(new Response(JSON.stringify({ AbstractText: 'short' }), { status: 200 }))
     expect(await duckDuckGoInstantAnswer('q', 5000, {} as never)).toBeNull()
   })
 

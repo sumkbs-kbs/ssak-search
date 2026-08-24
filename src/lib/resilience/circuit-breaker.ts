@@ -73,9 +73,13 @@ export class CircuitBreaker {
 
   // ------------------------------------------------------------------ state ---
 
-  get state(): CircuitState { return this._state }
+  get state(): CircuitState {
+    return this._state
+  }
 
-  get failures(): number { return this._failures }
+  get failures(): number {
+    return this._failures
+  }
 
   get tripped(): boolean {
     return this._state === 'open' || this._consecutiveFailures >= this.failureThreshold
@@ -113,10 +117,7 @@ export class CircuitBreaker {
 
     if (this._state === 'half_open') {
       // Probe failed → back to Open with exponential backoff.
-      this._resetTimeoutMs = Math.min(
-        this._resetTimeoutMs * 2,
-        this._maxResetTimeoutMs,
-      )
+      this._resetTimeoutMs = Math.min(this._resetTimeoutMs * 2, this._maxResetTimeoutMs)
       this._openedFromHalfOpen = true
     }
 

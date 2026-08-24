@@ -43,9 +43,7 @@ const PLAN = {
   original_query: 'What is the capital of France',
   complexity: 'simple',
   estimated_steps: 1,
-  steps: [
-    { id: 1, question: 'q', tool: 'web_search', params: {}, output_role: 'evidence', depends_on: [] },
-  ],
+  steps: [{ id: 1, question: 'q', tool: 'web_search', params: {}, output_role: 'evidence', depends_on: [] }],
   synthesis_instruction: 'Answer the original query using the evidence from all steps.',
   confidence: 0.8,
 }
@@ -57,7 +55,13 @@ function stepResults(overrides: Array<Record<string, unknown>> = []) {
       success: true,
       tool: 'web_search',
       evidence: [
-        { title: 'Paris', url: 'https://en.wikipedia.org/wiki/Paris', content: 'Paris is the capital city of France. It is the largest city in the country.', score: 0.9, domain: 'en.wikipedia.org' },
+        {
+          title: 'Paris',
+          url: 'https://en.wikipedia.org/wiki/Paris',
+          content: 'Paris is the capital city of France. It is the largest city in the country.',
+          score: 0.9,
+          domain: 'en.wikipedia.org',
+        },
       ],
       citations: [],
       durationMs: 100,
@@ -88,7 +92,13 @@ describe('assembleSynthesizerPrompt', () => {
       success: true,
       tool: 'web_search',
       evidence: [
-        { title: 'Lyon', url: 'https://en.wikipedia.org/wiki/Lyon', content: 'Lyon is a major French city located in the east of the country.', score: 0.8, domain: 'en.wikipedia.org' },
+        {
+          title: 'Lyon',
+          url: 'https://en.wikipedia.org/wiki/Lyon',
+          content: 'Lyon is a major French city located in the east of the country.',
+          score: 0.8,
+          domain: 'en.wikipedia.org',
+        },
       ],
       citations: [],
       durationMs: 100,
@@ -109,8 +119,20 @@ describe('assembleSynthesizerPrompt', () => {
     rich[0] = {
       ...rich[0],
       evidence: [
-        { title: 'A', url: 'https://a.com', content: 'Sentence one about the capital of France and its history.', score: 0.9, domain: 'a.com' },
-        { title: 'B', url: 'https://b.com', content: 'Sentence two about the population of Paris and the region.', score: 0.8, domain: 'b.com' },
+        {
+          title: 'A',
+          url: 'https://a.com',
+          content: 'Sentence one about the capital of France and its history.',
+          score: 0.9,
+          domain: 'a.com',
+        },
+        {
+          title: 'B',
+          url: 'https://b.com',
+          content: 'Sentence two about the population of Paris and the region.',
+          score: 0.8,
+          domain: 'b.com',
+        },
       ],
     }
     const { evidenceMap } = assembleSynthesizerPrompt('test', rich as never, PLAN as never, { maxSnippetsPerStep: 1 })
@@ -140,7 +162,10 @@ describe('AnswerSynthesizer', () => {
 
   it('falls back to an insufficiency message when there is no usable evidence', async () => {
     const synthesizer = new AnswerSynthesizer({ ai: undefined })
-    const answer = await synthesizer.synthesize(PLAN as never, [{ stepId: 1, success: false, error: 'boom', citations: [], durationMs: 100 }] as never)
+    const answer = await synthesizer.synthesize(
+      PLAN as never,
+      [{ stepId: 1, success: false, error: 'boom', citations: [], durationMs: 100 }] as never,
+    )
     expect(answer.text).toContain('do not provide sufficient information')
   })
 
@@ -197,9 +222,7 @@ describe('AnswerSynthesizer', () => {
     try {
       const run = vi
         .fn()
-        .mockRejectedValueOnce(
-          Object.assign(new Error('API error 429: rate limit'), { status: 429, retryAfterMs: 50 }),
-        )
+        .mockRejectedValueOnce(Object.assign(new Error('API error 429: rate limit'), { status: 429, retryAfterMs: 50 }))
         .mockResolvedValueOnce({ response: [{ content: 'The capital is Paris [1].' }] })
       const ai = { run } as unknown as MockAi
       const synthesizer = new AnswerSynthesizer({ ai, maxRetries: 1, rateLimitDelaysMs: [1] })
@@ -292,10 +315,9 @@ describe('AnswerSynthesizer', () => {
       [1, [{ stepId: 1, sourceId: 1, title: 'A', url: 'https://a.com', snippet: '', timestamp: '' }]],
       [2, [{ stepId: 2, sourceId: 2, title: 'B', url: 'https://b.com', snippet: '', timestamp: '' }]],
     ])
-    const used = (synthesizer as unknown as { extractUsedCitations(a: string, m: Map<number, unknown[]>): unknown[] }).extractUsedCitations(
-      'See [2] and [1].',
-      evidenceMap as never,
-    )
+    const used = (
+      synthesizer as unknown as { extractUsedCitations(a: string, m: Map<number, unknown[]>): unknown[] }
+    ).extractUsedCitations('See [2] and [1].', evidenceMap as never)
     expect(used).toHaveLength(2)
     expect((used[0] as { sourceId: number }).sourceId).toBe(1)
     expect((used[1] as { sourceId: number }).sourceId).toBe(2)
@@ -307,7 +329,9 @@ describe('AnswerSynthesizer', () => {
       { stepId: 1, sourceId: 1, title: 'Good', url: 'https://valid.com', snippet: '', timestamp: '' },
       { stepId: 1, sourceId: 2, title: 'Bad', url: '', snippet: '', timestamp: '' },
     ]
-    const warnings = (synthesizer as unknown as { validateAnswer(a: string, u: unknown[], s: unknown[]): string[] }).validateAnswer(
+    const warnings = (
+      synthesizer as unknown as { validateAnswer(a: string, u: unknown[], s: unknown[]): string[] }
+    ).validateAnswer(
       'A claim without any citation at all. Another one referencing [5]. And [2] has no url.',
       used as never,
       stepResults() as never,
@@ -320,7 +344,9 @@ describe('AnswerSynthesizer', () => {
   it('calculateConfidence scales with citation count and warnings', () => {
     const synthesizer = new AnswerSynthesizer({ ai: undefined })
     const calc = (cites: number, warnings: number) =>
-      (synthesizer as unknown as { calculateConfidence(u: unknown[], s: unknown[], w: number): number }).calculateConfidence(
+      (
+        synthesizer as unknown as { calculateConfidence(u: unknown[], s: unknown[], w: number): number }
+      ).calculateConfidence(
         Array.from({ length: cites }, (_, i) => ({ sourceId: i + 1 })),
         stepResults() as never,
         warnings,
@@ -338,7 +364,13 @@ describe('AnswerSynthesizer', () => {
 describe('Quality Gate', () => {
   it('evaluateStepEvidence passes when the average score meets the threshold', () => {
     const r = evaluateStepEvidence([
-      { stepId: 1, success: true, evidence: [{ title: 'a', url: 'https://a.com', content: 'c', score: 0.8, domain: 'a.com' }], citations: [], durationMs: 100 },
+      {
+        stepId: 1,
+        success: true,
+        evidence: [{ title: 'a', url: 'https://a.com', content: 'c', score: 0.8, domain: 'a.com' }],
+        citations: [],
+        durationMs: 100,
+      },
     ] as never)
     expect(r.passed).toBe(true)
     expect(r.avgScore).toBe(0.8)
@@ -347,7 +379,13 @@ describe('Quality Gate', () => {
 
   it('evaluateStepEvidence fails when evidence scores are low or empty', () => {
     const low = evaluateStepEvidence([
-      { stepId: 1, success: true, evidence: [{ title: 'a', url: 'https://a.com', content: 'c', score: 0.1, domain: 'a.com' }], citations: [], durationMs: 100 },
+      {
+        stepId: 1,
+        success: true,
+        evidence: [{ title: 'a', url: 'https://a.com', content: 'c', score: 0.1, domain: 'a.com' }],
+        citations: [],
+        durationMs: 100,
+      },
     ] as never)
     expect(low.passed).toBe(false)
 
@@ -398,7 +436,13 @@ describe('Quality Gate', () => {
 
   it('runQualityGate passes clean evidence without reformulation', async () => {
     const r = await runQualityGate('test query', [
-      { stepId: 1, success: true, evidence: [{ title: 'a', url: 'https://a.com', content: 'c 2024', score: 0.9, domain: 'a.com' }], citations: [], durationMs: 100 },
+      {
+        stepId: 1,
+        success: true,
+        evidence: [{ title: 'a', url: 'https://a.com', content: 'c 2024', score: 0.9, domain: 'a.com' }],
+        citations: [],
+        durationMs: 100,
+      },
     ] as never)
     expect(r.passed).toBe(true)
     expect(r.reQueried).toBe(false)
@@ -407,7 +451,13 @@ describe('Quality Gate', () => {
 
   it('runQualityGate builds a re-query plan when evidence fails', async () => {
     const r = await runQualityGate('api integration test', [
-      { stepId: 1, success: true, evidence: [{ title: 'a', url: 'https://a.com', content: 'c', score: 0.1, domain: 'a.com' }], citations: [], durationMs: 100 },
+      {
+        stepId: 1,
+        success: true,
+        evidence: [{ title: 'a', url: 'https://a.com', content: 'c', score: 0.1, domain: 'a.com' }],
+        citations: [],
+        durationMs: 100,
+      },
     ] as never)
     expect(r.passed).toBe(false)
     expect(r.reQueried).toBe(true)
@@ -419,7 +469,15 @@ describe('Quality Gate', () => {
   it('runQualityGate skips reformulation when maxRetries is 0', async () => {
     const r = await runQualityGate(
       'test query',
-      [{ stepId: 1, success: true, evidence: [{ title: 'a', url: 'https://a.com', content: 'c', score: 0.1, domain: 'a.com' }], citations: [], durationMs: 100 }] as never,
+      [
+        {
+          stepId: 1,
+          success: true,
+          evidence: [{ title: 'a', url: 'https://a.com', content: 'c', score: 0.1, domain: 'a.com' }],
+          citations: [],
+          durationMs: 100,
+        },
+      ] as never,
       { ...DEFAULT_QUALITY_CONFIG, maxRetries: 0 },
     )
     expect(r.reQueried).toBe(false)
@@ -548,10 +606,7 @@ describe('Quality Gate', () => {
     // Year strategy fires before the comparison strategy
     expect(await reformulateQuery('how to build a rocket engine', [])).toMatch(/2025/)
     expect(await reformulateQuery('best laptop 2024', [])).toContain('comparison review')
-    const simplified = await reformulateQuery(
-      'this is a very long query with many words inside it 2024 today',
-      [],
-    )
+    const simplified = await reformulateQuery('this is a very long query with many words inside it 2024 today', [])
     expect(simplified.split(' ').length).toBeLessThan(13)
     // Comprehensive fallback fires only when no earlier strategy applied
     // (a year present blocks the year strategy; a short query skips simplify)
@@ -593,8 +648,22 @@ describe('search-tools — compute', () => {
 
 describe('search-tools — filterEvidence / rerankResults / assemblePrompt', () => {
   const results = [
-    { title: 'Cloudflare Workers docs', url: 'https://developers.cloudflare.com', content: 'cloudflare workers performance guide', score: 0.9, domain: 'developers.cloudflare.com', published_date: '2026-08-01' },
-    { title: 'Unrelated post', url: 'https://blog.example.com', content: 'my cat likes fish', score: 0.95, domain: 'blog.example.com', published_date: '2019-01-01' },
+    {
+      title: 'Cloudflare Workers docs',
+      url: 'https://developers.cloudflare.com',
+      content: 'cloudflare workers performance guide',
+      score: 0.9,
+      domain: 'developers.cloudflare.com',
+      published_date: '2026-08-01',
+    },
+    {
+      title: 'Unrelated post',
+      url: 'https://blog.example.com',
+      content: 'my cat likes fish',
+      score: 0.95,
+      domain: 'blog.example.com',
+      published_date: '2019-01-01',
+    },
   ]
 
   it('filterEvidence applies score thresholds, citation requirement, and age caps', () => {
@@ -614,8 +683,20 @@ describe('search-tools — filterEvidence / rerankResults / assemblePrompt', () 
   })
 
   it('rerankResults applies domain authority boosts as a tiebreaker', () => {
-    const wiki = { title: 'wikipedia page', url: 'https://en.wikipedia.org/wiki/X', content: 'x', score: 0.9, domain: 'en.wikipedia.org' }
-    const blog = { title: 'blog', url: 'https://blog.example.com/x', content: 'x', score: 0.9, domain: 'blog.example.com' }
+    const wiki = {
+      title: 'wikipedia page',
+      url: 'https://en.wikipedia.org/wiki/X',
+      content: 'x',
+      score: 0.9,
+      domain: 'en.wikipedia.org',
+    }
+    const blog = {
+      title: 'blog',
+      url: 'https://blog.example.com/x',
+      content: 'x',
+      score: 0.9,
+      domain: 'blog.example.com',
+    }
     const reranked = rerankResults([blog, wiki], { query: 'zzzqqq unrelated' })
     // Equal scores + equal term overlap → the wikipedia authority boost wins
     expect(reranked[0].title).toBe('wikipedia page')

@@ -68,7 +68,9 @@ describe('queueRoute', () => {
   })
 
   it('GET /stats returns 500 when the DB query throws', async () => {
-    const db = { prepare: vi.fn(() => ({ bind: vi.fn(() => ({ first: vi.fn().mockRejectedValue(new Error('db down')) })) })) }
+    const db = {
+      prepare: vi.fn(() => ({ bind: vi.fn(() => ({ first: vi.fn().mockRejectedValue(new Error('db down')) })) })),
+    }
     const res = await call(queueRoute, '/stats', { SEARCH_INDEX_DB: db })
     expect(res.status).toBe(500)
     const body = await res.json()

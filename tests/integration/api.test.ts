@@ -45,8 +45,7 @@ const BING_HTML = `
 `
 
 // Jina Reader — /api/extract's Strategy 1 (raw content extraction).
-const JINA_CONTENT =
-  'Deterministic article body served by the mocked Jina reader for /api/extract.'
+const JINA_CONTENT = 'Deterministic article body served by the mocked Jina reader for /api/extract.'
 
 const mockFetch = vi.fn(async (input: string | URL | Request, _init?: RequestInit): Promise<Response> => {
   const url = typeof input === 'string' ? input : input instanceof URL ? input.toString() : input.url

@@ -17,11 +17,7 @@ import {
   applyScale,
   type EvalReportShape,
 } from '../../scripts/sim-calibrate'
-import {
-  BACKEND_MODEL,
-  PRODUCTION_WAIT_FOR,
-  type FailureScenario,
-} from '../../scripts/sim-fanout-latency'
+import { BACKEND_MODEL, PRODUCTION_WAIT_FOR, type FailureScenario } from '../../scripts/sim-fanout-latency'
 
 describe('observedFromReports / statsFromWallTimes', () => {
   it('extracts responseTimeMs samples and merges backendCoverage across reports', () => {
@@ -100,7 +96,7 @@ describe('simulateStats — 조건부 실패 시나리오 (p95/p99 악화 정량
     const base = simulateStats(BACKEND_MODEL, 2000, 5, 10)
     const windowed = simulateStats(BACKEND_MODEL, 2000, 5, 10, undefined, wikipediaWindow)
     expect(windowed.collectedRate['wikipedia'] ?? 0).toBe(0) // 체인 항상 스킵
-    expect((windowed.collectedRate['wikipedia-mirror'] ?? 0)).toBeGreaterThan(0.5) // 미러가 일부 회수
+    expect(windowed.collectedRate['wikipedia-mirror'] ?? 0).toBeGreaterThan(0.5) // 미러가 일부 회수
     // 미러(~1.4s 중앙값)가 팬아웃 벽시간을 연장 → 중앙값이 명확히 악화
     expect(windowed.p50).toBeGreaterThan(base.p50 + 200)
   })
@@ -131,7 +127,7 @@ describe('simulateStats — waitFor 대안 정책 (조건부 await) 비교', () 
     const staticWiki = staticRun.collectedRate['wikipedia'] ?? 0
     expect(evRun.collectedRate['wikipedia'] ?? 0).toBeGreaterThan(staticWiki * 0.9)
     // 저가치 waitFor 백엔드(qiita ≈0.5)는 drop되어 수집률이 떨어진다.
-    expect((evRun.collectedRate['qiita'] ?? 0)).toBeLessThan((staticRun.collectedRate['qiita'] ?? 0))
+    expect(evRun.collectedRate['qiita'] ?? 0).toBeLessThan(staticRun.collectedRate['qiita'] ?? 0)
   })
 
   it('none 정책은 waitFor 연장을 완전히 제거해 지연이 가장 낮다', () => {

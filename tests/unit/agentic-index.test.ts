@@ -12,7 +12,16 @@ import { executeAgenticSearch } from '../../src/lib/agentic/index'
 
 // vi.hoisted: the mock factories run during module evaluation (before the
 // const initializers below), so the spies must be created first.
-const { classifyQueryMock, classifyWithAIMock, createPlanMock, executePlanMock, runQualityGateMock, synthesizeAnswerMock, searchWebMock, recordAgenticGapFillResearchesMock } = vi.hoisted(() => ({
+const {
+  classifyQueryMock,
+  classifyWithAIMock,
+  createPlanMock,
+  executePlanMock,
+  runQualityGateMock,
+  synthesizeAnswerMock,
+  searchWebMock,
+  recordAgenticGapFillResearchesMock,
+} = vi.hoisted(() => ({
   classifyQueryMock: vi.fn(),
   classifyWithAIMock: vi.fn(),
   createPlanMock: vi.fn(),
@@ -86,7 +95,9 @@ const PLAN = {
   original_query: 'test query',
   complexity: 'moderate',
   estimated_steps: 1,
-  steps: [{ id: 1, question: 'q', tool: 'web_search', params: { query: 'x' }, output_role: 'evidence', depends_on: [] }],
+  steps: [
+    { id: 1, question: 'q', tool: 'web_search', params: { query: 'x' }, output_role: 'evidence', depends_on: [] },
+  ],
   synthesis_instruction: 'Synthesize the evidence into a final answer.',
   confidence: 0.8,
 }
@@ -95,7 +106,15 @@ const EXECUTION = {
   context: { completedSteps: new Set([1]), failedSteps: new Set<number>() },
   allCitations: [CITATION],
   stepResults: [
-    { stepId: 1, question: 'q', tool: 'web_search', success: true, evidence: [], citations: [CITATION], durationMs: 50 },
+    {
+      stepId: 1,
+      question: 'q',
+      tool: 'web_search',
+      success: true,
+      evidence: [],
+      citations: [CITATION],
+      durationMs: 50,
+    },
   ],
   success: true,
   failedSteps: [],
@@ -116,7 +135,14 @@ beforeEach(() => {
   // later test's gap-fill path with a stale result).
   vi.resetAllMocks()
   searchWebMock.mockResolvedValue([
-    { title: 'Result', url: 'https://example.com', content: 'Content', score: 0.8, domain: 'example.com', published_date: '2026-01-01' },
+    {
+      title: 'Result',
+      url: 'https://example.com',
+      content: 'Content',
+      score: 0.8,
+      domain: 'example.com',
+      published_date: '2026-01-01',
+    },
   ])
   executePlanMock.mockResolvedValue(EXECUTION)
   runQualityGateMock.mockResolvedValue(PASSING_GATE)
@@ -193,7 +219,16 @@ describe('executeAgenticSearch — pro pipeline', () => {
           original_query: 'reformulated',
           complexity: 'simple',
           estimated_steps: 1,
-          steps: [{ id: 1, question: 'rq', tool: 'web_search', params: { query: 'rq' }, output_role: 'evidence', depends_on: [] }],
+          steps: [
+            {
+              id: 1,
+              question: 'rq',
+              tool: 'web_search',
+              params: { query: 'rq' },
+              output_role: 'evidence',
+              depends_on: [],
+            },
+          ],
           synthesis_instruction: 'Supplement the original answer with the reformulated findings.',
           confidence: 0.5,
         },
@@ -206,7 +241,15 @@ describe('executeAgenticSearch — pro pipeline', () => {
       context: { completedSteps: new Set([2]), failedSteps: new Set<number>() },
       allCitations: [{ ...CITATION, stepId: 2, sourceId: 2, url: 'https://example.com/gap' }],
       stepResults: [
-        { stepId: 2, question: 'rq', tool: 'web_search', success: true, evidence: [], citations: [{ ...CITATION, stepId: 2, sourceId: 2, url: 'https://example.com/gap' }], durationMs: 40 },
+        {
+          stepId: 2,
+          question: 'rq',
+          tool: 'web_search',
+          success: true,
+          evidence: [],
+          citations: [{ ...CITATION, stepId: 2, sourceId: 2, url: 'https://example.com/gap' }],
+          durationMs: 40,
+        },
       ],
       success: true,
       failedSteps: [],
@@ -235,7 +278,16 @@ describe('executeAgenticSearch — pro pipeline', () => {
           original_query: 'reformulated',
           complexity: 'simple',
           estimated_steps: 1,
-          steps: [{ id: 1, question: 'rq', tool: 'web_search', params: { query: 'rq' }, output_role: 'evidence', depends_on: [] }],
+          steps: [
+            {
+              id: 1,
+              question: 'rq',
+              tool: 'web_search',
+              params: { query: 'rq' },
+              output_role: 'evidence',
+              depends_on: [],
+            },
+          ],
           synthesis_instruction: 'Supplement the original answer with the reformulated findings.',
           confidence: 0.5,
         },
@@ -245,7 +297,15 @@ describe('executeAgenticSearch — pro pipeline', () => {
       context: { completedSteps: new Set([2]), failedSteps: new Set<number>() },
       allCitations: [{ ...CITATION, stepId: 2, sourceId: 2, url: 'https://example.com/gap' }],
       stepResults: [
-        { stepId: 2, question: 'rq', tool: 'web_search', success: true, evidence: [], citations: [{ ...CITATION, stepId: 2, sourceId: 2, url: 'https://example.com/gap' }], durationMs: 40 },
+        {
+          stepId: 2,
+          question: 'rq',
+          tool: 'web_search',
+          success: true,
+          evidence: [],
+          citations: [{ ...CITATION, stepId: 2, sourceId: 2, url: 'https://example.com/gap' }],
+          durationMs: 40,
+        },
       ],
       success: true,
       failedSteps: [],
@@ -285,7 +345,16 @@ describe('executeAgenticSearch — pro pipeline', () => {
           original_query: 'reformulated',
           complexity: 'simple',
           estimated_steps: 1,
-          steps: [{ id: 1, question: 'rq', tool: 'web_search', params: { query: 'rq' }, output_role: 'evidence', depends_on: [] }],
+          steps: [
+            {
+              id: 1,
+              question: 'rq',
+              tool: 'web_search',
+              params: { query: 'rq' },
+              output_role: 'evidence',
+              depends_on: [],
+            },
+          ],
           synthesis_instruction: 'Supplement the original answer with the reformulated findings.',
           confidence: 0.5,
         },
@@ -312,7 +381,16 @@ describe('executeAgenticSearch — pro pipeline', () => {
         original_query: 'reformulated',
         complexity: 'simple',
         estimated_steps: 1,
-        steps: [{ id: 1, question: 'rq', tool: 'web_search', params: { query: 'rq' }, output_role: 'evidence', depends_on: [] }],
+        steps: [
+          {
+            id: 1,
+            question: 'rq',
+            tool: 'web_search',
+            params: { query: 'rq' },
+            output_role: 'evidence',
+            depends_on: [],
+          },
+        ],
         synthesis_instruction: 'Supplement the original answer with the reformulated findings.',
         confidence: 0.5,
       },
@@ -322,7 +400,15 @@ describe('executeAgenticSearch — pro pipeline', () => {
       context: { completedSteps: new Set([2]), failedSteps: new Set<number>() },
       allCitations: [{ ...CITATION, stepId: 2, sourceId: 2 }],
       stepResults: [
-        { stepId: 2, question: 'rq', tool: 'web_search', success: true, evidence: [], citations: [{ ...CITATION, stepId: 2, sourceId: 2 }], durationMs: 40 },
+        {
+          stepId: 2,
+          question: 'rq',
+          tool: 'web_search',
+          success: true,
+          evidence: [],
+          citations: [{ ...CITATION, stepId: 2, sourceId: 2 }],
+          durationMs: 40,
+        },
       ],
       success: true,
       failedSteps: [],

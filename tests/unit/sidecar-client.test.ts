@@ -88,7 +88,9 @@ describe('sidecarScrape', () => {
   })
 
   it('honors override options (adaptive, css_selector, timeoutMs)', async () => {
-    fetchMock.mockResolvedValueOnce(jsonOk({ success: true, status_code: 200, elements: [], response_time_ms: 1, scraping_method: 'x' }))
+    fetchMock.mockResolvedValueOnce(
+      jsonOk({ success: true, status_code: 200, elements: [], response_time_ms: 1, scraping_method: 'x' }),
+    )
     await sidecarScrape('https://x.com', {
       env: { SIDECAR_URL: 'http://side:8000' } as never,
       css_selector: '.main',
@@ -122,7 +124,9 @@ describe('sidecarExtract', () => {
   })
 
   it('POSTs an extract request with default options', async () => {
-    fetchMock.mockResolvedValueOnce(jsonOk({ url: 'https://x.com', content: 'text', text_length: 4, success: true, response_time_ms: 5 }))
+    fetchMock.mockResolvedValueOnce(
+      jsonOk({ url: 'https://x.com', content: 'text', text_length: 4, success: true, response_time_ms: 5 }),
+    )
     const out = await sidecarExtract('https://x.com', { env: { SIDECAR_URL: 'http://side' } as never })
     expect(String(fetchMock.mock.calls[0][0])).toBe('http://side/extract')
     const body = JSON.parse((fetchMock.mock.calls[0][1] as RequestInit).body as string)
@@ -170,7 +174,10 @@ describe('sidecarStock', () => {
         response_time_ms: 3,
       }),
     )
-    const out = await sidecarStock('삼성전자 주가', { env: { SIDECAR_URL: 'http://side' } as never, includeChart: true })
+    const out = await sidecarStock('삼성전자 주가', {
+      env: { SIDECAR_URL: 'http://side' } as never,
+      includeChart: true,
+    })
     expect(String(fetchMock.mock.calls[0][0])).toBe('http://side/stock/naver')
     const body = JSON.parse((fetchMock.mock.calls[0][1] as RequestInit).body as string)
     expect(body.query).toBe('삼성전자 주가')
@@ -221,7 +228,10 @@ describe('indexFromSearchResults', () => {
   })
 
   it('no-ops when index bindings are missing', async () => {
-    await indexFromSearchResults([{ url: 'https://a.com', title: 'A', content: 'x'.repeat(500), raw_content: 'y'.repeat(500) }] as never, undefined)
+    await indexFromSearchResults(
+      [{ url: 'https://a.com', title: 'A', content: 'x'.repeat(500), raw_content: 'y'.repeat(500) }] as never,
+      undefined,
+    )
     expect(mockProcessIndexJob).not.toHaveBeenCalled()
   })
 
@@ -237,10 +247,7 @@ describe('indexFromSearchResults', () => {
       content: 'c',
       raw_content: 'z'.repeat(300 + i),
     })
-    await indexFromSearchResults(
-      [mk(0), mk(1), mk(2), mk(3), mk(4)] as never,
-      envWithBindings(),
-    )
+    await indexFromSearchResults([mk(0), mk(1), mk(2), mk(3), mk(4)] as never, envWithBindings())
     expect(mockProcessIndexJob).toHaveBeenCalledTimes(3)
     expect(mockProcessIndexJob.mock.calls[0][0]).toBe('https://a.com/0')
     expect(mockProcessIndexJob.mock.calls[0][2]).toBe('z'.repeat(300))

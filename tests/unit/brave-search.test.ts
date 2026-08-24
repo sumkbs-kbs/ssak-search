@@ -23,12 +23,7 @@ afterEach(() => {
   vi.unstubAllGlobals()
 })
 
-import {
-  braveSearch,
-  braveLLMContextSearch,
-  braveHealthCheck,
-  isBraveAvailable,
-} from '../../src/lib/brave-search'
+import { braveSearch, braveLLMContextSearch, braveHealthCheck, isBraveAvailable } from '../../src/lib/brave-search'
 
 function jsonOk(body: unknown): Response {
   return new Response(JSON.stringify(body), { status: 200, headers: { 'Content-Type': 'application/json' } })
@@ -132,7 +127,9 @@ describe('braveSearch', () => {
     fetchMock.mockResolvedValueOnce(
       jsonOk({
         web: {
-          results: [{ title: 'Img', url: 'https://a.com', description: 'd', thumbnail: { src: 'https://a.com/t.png' } }],
+          results: [
+            { title: 'Img', url: 'https://a.com', description: 'd', thumbnail: { src: 'https://a.com/t.png' } },
+          ],
         },
       }),
     )
@@ -172,9 +169,9 @@ describe('braveSearch', () => {
   })
 
   it('retries a network error once and succeeds on the second attempt', async () => {
-    fetchMock.mockRejectedValueOnce(new Error('socket hang up')).mockResolvedValueOnce(
-      jsonOk({ web: { results: webResults(1) } }),
-    )
+    fetchMock
+      .mockRejectedValueOnce(new Error('socket hang up'))
+      .mockResolvedValueOnce(jsonOk({ web: { results: webResults(1) } }))
     const results = await braveSearch('network retry', { apiKey: 'k' })
     expect(fetchMock).toHaveBeenCalledTimes(2)
     expect(results).toHaveLength(1)

@@ -1,5 +1,9 @@
 import { describe, it, expect, beforeEach } from 'vitest'
-import { BackendHealthTracker, PredictiveFallbackManager, resetPredictiveFallbackManager } from '../../src/lib/resilience/predictive-fallback'
+import {
+  BackendHealthTracker,
+  PredictiveFallbackManager,
+  resetPredictiveFallbackManager,
+} from '../../src/lib/resilience/predictive-fallback'
 
 describe('BackendHealthTracker', () => {
   let tracker: BackendHealthTracker
@@ -15,7 +19,7 @@ describe('BackendHealthTracker', () => {
   it('should record success', () => {
     tracker.recordSuccess('backend1', 100)
     const health = tracker.getHealth('backend1')
-    
+
     expect(health).not.toBeNull()
     expect(health?.successRate).toBeGreaterThan(0.9)
     expect(health?.consecutiveFailures).toBe(0)
@@ -25,7 +29,7 @@ describe('BackendHealthTracker', () => {
   it('should record failure', () => {
     tracker.recordFailure('backend1', 'Connection timeout')
     const health = tracker.getHealth('backend1')
-    
+
     expect(health).not.toBeNull()
     expect(health?.consecutiveFailures).toBe(1)
     expect(health?.lastError).toBe('Connection timeout')
@@ -35,7 +39,7 @@ describe('BackendHealthTracker', () => {
     for (let i = 0; i < 3; i++) {
       tracker.recordFailure('backend1', `Error ${i}`)
     }
-    
+
     expect(tracker.isHealthy('backend1')).toBe(false)
   })
 
@@ -43,7 +47,7 @@ describe('BackendHealthTracker', () => {
     tracker.recordFailure('backend1', 'Error 1')
     tracker.recordFailure('backend1', 'Error 2')
     tracker.recordSuccess('backend1', 100)
-    
+
     const health = tracker.getHealth('backend1')
     expect(health?.consecutiveFailures).toBe(0)
   })
@@ -51,7 +55,7 @@ describe('BackendHealthTracker', () => {
   it('should predict failure probability', () => {
     // Initially low probability
     expect(tracker.getFailureProbability('backend1')).toBe(0)
-    
+
     // After failures, probability increases
     tracker.recordFailure('backend1', 'Error')
     const prob = tracker.getFailureProbability('backend1')
@@ -61,10 +65,10 @@ describe('BackendHealthTracker', () => {
   it('should sort backends by health', () => {
     tracker.recordSuccess('good-backend', 50)
     tracker.recordSuccess('good-backend', 50)
-    
+
     tracker.recordFailure('bad-backend', 'Error')
     tracker.recordFailure('bad-backend', 'Error')
-    
+
     const sorted = tracker.getBackendsByHealth()
     expect(sorted[0].name).toBe('good-backend')
     expect(sorted[sorted.length - 1].name).toBe('bad-backend')
@@ -75,7 +79,7 @@ describe('BackendHealthTracker', () => {
     tracker.recordFailure('unhealthy', 'Error')
     tracker.recordFailure('unhealthy', 'Error')
     tracker.recordFailure('unhealthy', 'Error')
-    
+
     const healthy = tracker.getHealthyBackends()
     expect(healthy).toContain('healthy')
     expect(healthy).not.toContain('unhealthy')
@@ -84,7 +88,7 @@ describe('BackendHealthTracker', () => {
   it('should reset health', () => {
     tracker.recordFailure('backend1', 'Error')
     expect(tracker.isHealthy('backend1')).toBe(true) // 1 failure is below threshold
-    
+
     tracker.resetHealth('backend1')
     expect(tracker.getHealth('backend1')).toBeNull()
   })
@@ -102,29 +106,23 @@ describe('PredictiveFallbackManager', () => {
   })
 
   it('should execute with fallback', async () => {
-    const result = await manager.executeWithFallback(
-      ['backend1', 'backend2'],
-      async (backend) => {
-        if (backend === 'backend1') throw new Error('Failed')
-        return 'success'
-      },
-    )
-    
+    const result = await manager.executeWithFallback(['backend1', 'backend2'], async (backend) => {
+      if (backend === 'backend1') throw new Error('Failed')
+      return 'success'
+    })
+
     expect(result.results).toContain('success')
     expect(result.backend).toBe('backend2')
   })
 
   it('should retry on failure', async () => {
     let attempts = 0
-    const result = await manager.executeWithFallback(
-      ['backend1'],
-      async () => {
-        attempts++
-        if (attempts < 3) throw new Error('Failed')
-        return 'success'
-      },
-    )
-    
+    const result = await manager.executeWithFallback(['backend1'], async () => {
+      attempts++
+      if (attempts < 3) throw new Error('Failed')
+      return 'success'
+    })
+
     expect(result.results).toContain('success')
     expect(attempts).toBe(3)
   })
@@ -134,19 +132,19 @@ describe('PredictiveFallbackManager', () => {
     manager.getHealthTracker().recordFailure('backend1', 'Error')
     manager.getHealthTracker().recordFailure('backend1', 'Error')
     manager.getHealthTracker().recordFailure('backend1', 'Error')
-    
+
     const result = await manager.executeWithFallback(
       ['backend1', 'backend2'],
       async (backend) => `result from ${backend}`,
     )
-    
+
     expect(result.results).toContain('result from backend2')
   })
 
   it('should select best backend', () => {
     manager.getHealthTracker().recordSuccess('good', 50)
     manager.getHealthTracker().recordFailure('bad', 'Error')
-    
+
     const best = manager.selectBestBackend(['good', 'bad'])
     expect(best).toBe('good')
   })

@@ -28,15 +28,23 @@ function loadAllResults() {
     try {
       const data = JSON.parse(fs.readFileSync(f, 'utf-8'))
       results.push(...(data.report.results || []))
-    } catch { /* ignore invalid URL */ }
+    } catch {
+      /* ignore invalid URL */
+    }
   }
   return results
 }
 
 function extractDomains(results: SearchResult[]): string[] {
-  return results.map((r: SearchResult) => {
-    try { return new URL(r.url).hostname.replace(/^www\./, '') } catch { return '' }
-  }).filter(Boolean)
+  return results
+    .map((r: SearchResult) => {
+      try {
+        return new URL(r.url).hostname.replace(/^www\./, '')
+      } catch {
+        return ''
+      }
+    })
+    .filter(Boolean)
 }
 
 const gs = JSON.parse(fs.readFileSync(GS_PATH, 'utf-8'))
@@ -80,10 +88,21 @@ for (const [queryId, gold] of Object.entries(gs) as [string, { relevantDomains?:
   if (isFactual) {
     // Add factual-relevant domains that appear in results
     const factualExtras = [
-      'arxiv.org', 'reddit.com', 'medium.com', 'stackoverflow.com',
-      'github.com', 'news.ycombinator.com', 'scientificamerican.com',
-      'quantamagazine.org', 'phys.org', 'space.com', 'sciencealert.com',
-      'nytimes.com', 'bbc.com', 'wired.com', 'arstechnica.com',
+      'arxiv.org',
+      'reddit.com',
+      'medium.com',
+      'stackoverflow.com',
+      'github.com',
+      'news.ycombinator.com',
+      'scientificamerican.com',
+      'quantamagazine.org',
+      'phys.org',
+      'space.com',
+      'sciencealert.com',
+      'nytimes.com',
+      'bbc.com',
+      'wired.com',
+      'arstechnica.com',
     ]
     for (const d of factualExtras) {
       if ((domainFreq.get(d) ?? 0) >= 2) {
@@ -95,11 +114,22 @@ for (const [queryId, gold] of Object.entries(gs) as [string, { relevantDomains?:
   if (isFinancial) {
     // Add financial-relevant domains that appear in results
     const financialExtras = [
-      'm.stock.naver.com', 'news.google.com', 'stockanalysis.com',
-      'marketwatch.com', 'reuters.com', 'fool.com', 'seekingalpha.com',
-      'kr.investing.com', 'kitco.com', 'goldprice.org', 'coinmarketcap.com',
-      'coingecko.com', 'tradingview.com', 'tipranks.com',
-      'm.blog.naver.com', 'namu.wiki',
+      'm.stock.naver.com',
+      'news.google.com',
+      'stockanalysis.com',
+      'marketwatch.com',
+      'reuters.com',
+      'fool.com',
+      'seekingalpha.com',
+      'kr.investing.com',
+      'kitco.com',
+      'goldprice.org',
+      'coinmarketcap.com',
+      'coingecko.com',
+      'tradingview.com',
+      'tipranks.com',
+      'm.blog.naver.com',
+      'namu.wiki',
     ]
     for (const d of financialExtras) {
       if ((domainFreq.get(d) ?? 0) >= 2) {
@@ -117,7 +147,7 @@ for (const [queryId, gold] of Object.entries(gs) as [string, { relevantDomains?:
     }
   }
 
-  const added = [...newDomains].filter(d => !gold.relevantDomains?.includes(d))
+  const added = [...newDomains].filter((d) => !gold.relevantDomains?.includes(d))
   if (added.length > 0) {
     gold.relevantDomains = [...newDomains]
     console.log(`${queryId}: +${added.join(', ')}`)

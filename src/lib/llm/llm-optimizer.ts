@@ -238,7 +238,7 @@ export class LLMOptimizer {
       for (let i = 0; i < response.length; i += chunkSize) {
         const chunk = response.slice(i, i + chunkSize)
         onChunk(chunk)
-        await new Promise(resolve => setTimeout(resolve, 10))
+        await new Promise((resolve) => setTimeout(resolve, 10))
       }
     }
 
@@ -248,17 +248,13 @@ export class LLMOptimizer {
   /**
    * Generate complete response.
    */
-  private async generateComplete(
-    query: string,
-    context: string[],
-    _model: string,
-  ): Promise<string> {
+  private async generateComplete(query: string, context: string[], _model: string): Promise<string> {
     // In production, this would call the actual LLM API
     // For now, return a simulated response
     const _prompt = this.buildPrompt(query, context)
 
     // Simulate API call
-    await new Promise(resolve => setTimeout(resolve, 100))
+    await new Promise((resolve) => setTimeout(resolve, 100))
 
     return `Based on the query "${query}" and context provided, here is a comprehensive answer...`
   }

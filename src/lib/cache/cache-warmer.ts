@@ -86,7 +86,7 @@ export class CacheWarmer {
    */
   getPopularQueries(): QueryStats[] {
     return [...this.queryStats.values()]
-      .filter(q => q.count >= this.config.minQueryCount)
+      .filter((q) => q.count >= this.config.minQueryCount)
       .sort((a, b) => {
         // Score = count * recency * latency_weight
         const scoreA = a.count * this.recencyScore(a.lastSeen) * this.latencyWeight(a.avgLatency)
@@ -184,10 +184,8 @@ export class CacheWarmer {
     lastWarmingTime: number
   } {
     const queries = [...this.queryStats.values()]
-    const popular = queries.filter(q => q.count >= this.config.minQueryCount)
-    const avgLatency = queries.length > 0
-      ? queries.reduce((sum, q) => sum + q.avgLatency, 0) / queries.length
-      : 0
+    const popular = queries.filter((q) => q.count >= this.config.minQueryCount)
+    const avgLatency = queries.length > 0 ? queries.reduce((sum, q) => sum + q.avgLatency, 0) / queries.length : 0
 
     return {
       trackedQueries: queries.length,
@@ -227,9 +225,7 @@ export class CacheWarmer {
 
     // Keep only top 1000 queries
     if (this.queryStats.size > 1000) {
-      const sorted = [...this.queryStats.entries()]
-        .sort(([, a], [, b]) => b.count - a.count)
-        .slice(0, 1000)
+      const sorted = [...this.queryStats.entries()].sort(([, a], [, b]) => b.count - a.count).slice(0, 1000)
 
       this.queryStats.clear()
       for (const [key, value] of sorted) {

@@ -38,12 +38,8 @@ import { generateFallbackSelectors } from '../../src/lib/html-rewriter'
 
 describe('fetch 기반 게이트웨이 429 → Retry-After 오류 변환', () => {
   it('generateOpenRouterAnswer가 429 응답의 Retry-After 헤더를 retryAfterMs로 실어 던진다', async () => {
-    fetchMock.mockResolvedValue(
-      new Response('Rate limit exceeded', { status: 429, headers: { 'retry-after': '2' } }),
-    )
-    await expect(
-      generateOpenRouterAnswer('sk-test', 'prompt', 'system', 'deepseek-r1:free'),
-    ).rejects.toMatchObject({
+    fetchMock.mockResolvedValue(new Response('Rate limit exceeded', { status: 429, headers: { 'retry-after': '2' } }))
+    await expect(generateOpenRouterAnswer('sk-test', 'prompt', 'system', 'deepseek-r1:free')).rejects.toMatchObject({
       message: expect.stringContaining('429'),
       status: 429,
       retryAfterMs: 2000,
@@ -144,7 +140,18 @@ describe('selectBestModel', () => {
 
 describe('estimateCost / estimateTokenCount', () => {
   it('computes cost from per-1K rates', () => {
-    const model: ModelConfig = { costPer1KInput: 1, costPer1KOutput: 2, id: 'x', label: 'X', provider: 'openai', tier: 'standard', quality: 0.8, supportsStreaming: true, latencyP50Ms: 100, maxTokens: 1000 } as ModelConfig
+    const model: ModelConfig = {
+      costPer1KInput: 1,
+      costPer1KOutput: 2,
+      id: 'x',
+      label: 'X',
+      provider: 'openai',
+      tier: 'standard',
+      quality: 0.8,
+      supportsStreaming: true,
+      latencyP50Ms: 100,
+      maxTokens: 1000,
+    } as ModelConfig
     expect(estimateCost(model, 1000, 500)).toBe(2) // 1 + 1
   })
 

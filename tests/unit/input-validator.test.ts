@@ -48,25 +48,25 @@ describe('validateQuery', () => {
     const longQuery = 'a'.repeat(600)
     const result = validateQuery(longQuery)
     expect(result.success).toBe(false)
-    expect(result.errors?.some(e => e.includes('maximum length'))).toBe(true)
+    expect(result.errors?.some((e) => e.includes('maximum length'))).toBe(true)
   })
 
   it('should detect SQL injection', () => {
     const result = validateQuery("'; DROP TABLE users; --")
     expect(result.success).toBe(false)
-    expect(result.errors?.some(e => e.includes('malicious'))).toBe(true)
+    expect(result.errors?.some((e) => e.includes('malicious'))).toBe(true)
   })
 
   it('should detect XSS injection', () => {
     const result = validateQuery('<script>alert("xss")</script>')
     expect(result.success).toBe(false)
-    expect(result.errors?.some(e => e.includes('malicious'))).toBe(true)
+    expect(result.errors?.some((e) => e.includes('malicious'))).toBe(true)
   })
 
   it('should detect path traversal', () => {
     const result = validateQuery('../../../etc/passwd')
     expect(result.success).toBe(false)
-    expect(result.errors?.some(e => e.includes('malicious'))).toBe(true)
+    expect(result.errors?.some((e) => e.includes('malicious'))).toBe(true)
   })
 
   it('should respect custom config', () => {
@@ -106,7 +106,7 @@ describe('validateResultsCount', () => {
   it('should reject count exceeding max', () => {
     const result = validateResultsCount(100)
     expect(result.success).toBe(false)
-    expect(result.errors?.some(e => e.includes('cannot exceed'))).toBe(true)
+    expect(result.errors?.some((e) => e.includes('cannot exceed'))).toBe(true)
   })
 
   it('should reject NaN', () => {
@@ -201,19 +201,13 @@ describe('validateCsrfToken', () => {
 
 describe('validateBatch', () => {
   it('should validate array of items', () => {
-    const result = validateBatch(
-      ['hello', 'world'],
-      (item) => validateQuery(item),
-    )
+    const result = validateBatch(['hello', 'world'], (item) => validateQuery(item))
     expect(result.success).toBe(true)
     expect(result.data).toEqual(['hello', 'world'])
   })
 
   it('should report errors for invalid items', () => {
-    const result = validateBatch(
-      ['hello', 123, 'world'],
-      (item) => validateQuery(item),
-    )
+    const result = validateBatch(['hello', 123, 'world'], (item) => validateQuery(item))
     expect(result.success).toBe(false)
     expect(result.errors?.length).toBe(1)
   })

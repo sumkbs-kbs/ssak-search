@@ -39,11 +39,14 @@ export interface MemoryStats {
   totalCaches: number
   totalEntries: number
   totalMemoryEstimate: number
-  cacheStats: Record<string, {
-    size: number
-    maxSize: number
-    hitRate: number
-  }>
+  cacheStats: Record<
+    string,
+    {
+      size: number
+      maxSize: number
+      hitRate: number
+    }
+  >
 }
 
 // ============================================================

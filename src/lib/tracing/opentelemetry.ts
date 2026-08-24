@@ -66,10 +66,7 @@ export function extractTraceContext(headers: Headers): TraceContext | null {
   }
 }
 
-export function injectTraceContext(
-  context: TraceContext,
-  headers: Headers,
-): void {
+export function injectTraceContext(context: TraceContext, headers: Headers): void {
   headers.set(
     'traceparent',
     `00-${context.traceId}-${context.spanId}-${context.traceFlags.toString(16).padStart(2, '0')}`,
@@ -136,7 +133,7 @@ export class TraceProvider {
 
     // Export if endpoint configured
     if (this.exportEndpoint) {
-      this.exportSpan(span).catch(err => {
+      this.exportSpan(span).catch((err) => {
         logger.debug('[Trace] Export failed', { error: toError(err) })
       })
     }
@@ -150,11 +147,7 @@ export class TraceProvider {
   /**
    * Add an event to a span.
    */
-  addEvent(
-    spanId: string,
-    name: string,
-    attributes: Record<string, string | number | boolean> = {},
-  ): void {
+  addEvent(spanId: string, name: string, attributes: Record<string, string | number | boolean> = {}): void {
     const span = this.spans.get(spanId)
     if (!span) return
 
@@ -176,7 +169,7 @@ export class TraceProvider {
    * Get all active spans for a trace.
    */
   getTraceSpans(traceId: string): TraceSpan[] {
-    return [...this.spans.values()].filter(s => s.traceId === traceId)
+    return [...this.spans.values()].filter((s) => s.traceId === traceId)
   }
 
   /**
@@ -186,8 +179,8 @@ export class TraceProvider {
     const spans = this.getTraceSpans(traceId)
     if (spans.length === 0) return 0
 
-    const start = Math.min(...spans.map(s => s.startTime))
-    const end = Math.max(...spans.map(s => s.endTime ?? Date.now()))
+    const start = Math.min(...spans.map((s) => s.startTime))
+    const end = Math.max(...spans.map((s) => s.endTime ?? Date.now()))
     return end - start
   }
 
@@ -200,12 +193,13 @@ export class TraceProvider {
     avgDuration: number
   } {
     const spans = [...this.spans.values()]
-    const traces = new Set(spans.map(s => s.traceId))
-    const completedSpans = spans.filter(s => s.endTime)
+    const traces = new Set(spans.map((s) => s.traceId))
+    const completedSpans = spans.filter((s) => s.endTime)
 
-    const avgDuration = completedSpans.length > 0
-      ? completedSpans.reduce((sum, s) => sum + ((s.endTime ?? 0) - s.startTime), 0) / completedSpans.length
-      : 0
+    const avgDuration =
+      completedSpans.length > 0
+        ? completedSpans.reduce((sum, s) => sum + ((s.endTime ?? 0) - s.startTime), 0) / completedSpans.length
+        : 0
 
     return {
       activeSpans: spans.length,
@@ -234,7 +228,7 @@ export class TraceProvider {
     const bytes = new Uint8Array(16)
     crypto.getRandomValues(bytes)
     return Array.from(bytes)
-      .map(b => b.toString(16).padStart(2, '0'))
+      .map((b) => b.toString(16).padStart(2, '0'))
       .join('')
   }
 
@@ -253,7 +247,7 @@ export class TraceProvider {
           startTime: span.startTime * 1000, // microseconds
           duration: span.endTime ? (span.endTime - span.startTime) * 1000 : 0,
           tags: span.attributes,
-          logs: span.events.map(e => ({
+          logs: span.events.map((e) => ({
             timestamp: e.timestamp * 1000,
             fields: e.attributes,
           })),
@@ -272,7 +266,10 @@ export class TraceProvider {
 export function createTracingMiddleware(provider?: TraceProvider) {
   const traceProvider = provider ?? new TraceProvider()
 
-  return async (c: { req: { raw: Request }; set: (key: string, value: unknown) => void; get: (key: string) => unknown }, next: () => Promise<void>) => {
+  return async (
+    c: { req: { raw: Request }; set: (key: string, value: unknown) => void; get: (key: string) => unknown },
+    next: () => Promise<void>,
+  ) => {
     const requestId = c.req.raw.headers.get('x-request-id') ?? traceProvider.generateId()
 
     // Extract or create trace context
@@ -280,15 +277,11 @@ export function createTracingMiddleware(provider?: TraceProvider) {
     const traceContext = parentContext ?? traceProvider.generateTraceContext()
 
     // Start root span
-    const span = traceProvider.startSpan(
-      `${c.req.raw.method} ${new URL(c.req.raw.url).pathname}`,
-      traceContext,
-      {
-        'http.method': c.req.raw.method,
-        'http.url': c.req.raw.url,
-        'http.request_id': requestId,
-      },
-    )
+    const span = traceProvider.startSpan(`${c.req.raw.method} ${new URL(c.req.raw.url).pathname}`, traceContext, {
+      'http.method': c.req.raw.method,
+      'http.url': c.req.raw.url,
+      'http.request_id': requestId,
+    })
 
     // Inject trace context into response headers
     const responseHeaders = new Headers()

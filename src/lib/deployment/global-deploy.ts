@@ -93,8 +93,7 @@ export class GlobalDeploymentManager {
    * Get the best region for a user based on latency.
    */
   getBestRegion(userLocation?: { lat: number; lng: number }): Region | null {
-    const activeRegions = [...this.regions.values()]
-      .filter(r => r.status === 'active' && r.health)
+    const activeRegions = [...this.regions.values()].filter((r) => r.status === 'active' && r.health)
 
     if (activeRegions.length === 0) return null
 
@@ -114,23 +113,21 @@ export class GlobalDeploymentManager {
     }
 
     // Default to primary region
-    return activeRegions.find(r => r.id === this.config.primaryRegion) ?? activeRegions[0]
+    return activeRegions.find((r) => r.id === this.config.primaryRegion) ?? activeRegions[0]
   }
 
   /**
    * Get traffic distribution.
    */
   getTrafficDistribution(): TrafficRoute[] {
-    return [...this.trafficRoutes.values()]
-      .sort((a, b) => b.weight - a.weight)
+    return [...this.trafficRoutes.values()].sort((a, b) => b.weight - a.weight)
   }
 
   /**
    * Update traffic weights based on latency.
    */
   updateTrafficByLatency(): void {
-    const activeRegions = [...this.regions.values()]
-      .filter(r => r.status === 'active' && r.health)
+    const activeRegions = [...this.regions.values()].filter((r) => r.status === 'active' && r.health)
 
     if (activeRegions.length === 0) return
 
@@ -138,7 +135,7 @@ export class GlobalDeploymentManager {
     const totalInverseLatency = activeRegions.reduce((sum, r) => sum + 1 / r.latencyMs, 0)
 
     for (const region of activeRegions) {
-      const weight = (1 / region.latencyMs) / totalInverseLatency * 100
+      const weight = (1 / region.latencyMs / totalInverseLatency) * 100
       const route = this.trafficRoutes.get(region.id)
       if (route) {
         route.weight = weight
@@ -176,7 +173,7 @@ export class GlobalDeploymentManager {
       lastHealthCheck: number
     }>
   } {
-    const regionStatuses = [...this.regions.values()].map(r => ({
+    const regionStatuses = [...this.regions.values()].map((r) => ({
       id: r.id,
       name: r.name,
       status: r.status,
@@ -185,7 +182,7 @@ export class GlobalDeploymentManager {
       lastHealthCheck: r.lastHealthCheck,
     }))
 
-    const healthyCount = regionStatuses.filter(r => r.health).length
+    const healthyCount = regionStatuses.filter((r) => r.health).length
     const totalCount = regionStatuses.length
 
     let overall: 'healthy' | 'degraded' | 'down' = 'healthy'
@@ -210,7 +207,7 @@ export class GlobalDeploymentManager {
 
     // Find best secondary region
     const secondaryRegion = [...this.regions.values()]
-      .filter(r => r.id !== failedRegionId && r.status === 'active' && r.health)
+      .filter((r) => r.id !== failedRegionId && r.status === 'active' && r.health)
       .sort((a, b) => a.priority - b.priority)[0]
 
     if (!secondaryRegion) {
@@ -239,18 +236,14 @@ export class GlobalDeploymentManager {
   // Private methods
   // ============================================================
 
-  private calculateDistance(
-    point1: { lat: number; lng: number },
-    point2: { lat: number; lng: number },
-  ): number {
+  private calculateDistance(point1: { lat: number; lng: number }, point2: { lat: number; lng: number }): number {
     // Haversine formula
     const R = 6371 // Earth's radius in km
     const dLat = this.toRad(point2.lat - point1.lat)
     const dLng = this.toRad(point2.lng - point1.lng)
     const a =
       Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-      Math.cos(this.toRad(point1.lat)) * Math.cos(this.toRad(point2.lat)) *
-      Math.sin(dLng / 2) * Math.sin(dLng / 2)
+      Math.cos(this.toRad(point1.lat)) * Math.cos(this.toRad(point2.lat)) * Math.sin(dLng / 2) * Math.sin(dLng / 2)
     const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
     return R * c
   }

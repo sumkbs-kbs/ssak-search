@@ -7,7 +7,12 @@
  * design in duckduckgo.ts (docs/15).
  */
 import { describe, it, expect } from 'vitest'
-import { classifyDdgChallenge, parseRetryAfter, type DdgProbeAttempt, type DdgProbeData } from '../../scripts/probe-ddg-202'
+import {
+  classifyDdgChallenge,
+  parseRetryAfter,
+  type DdgProbeAttempt,
+  type DdgProbeData,
+} from '../../scripts/probe-ddg-202'
 
 function html(status: number | null, overrides: Partial<DdgProbeAttempt> = {}): DdgProbeAttempt {
   return { endpoint: 'html', status, latencyMs: 100, ...overrides }

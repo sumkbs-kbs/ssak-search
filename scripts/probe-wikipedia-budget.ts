@@ -175,7 +175,10 @@ export function evaluateWikipediaBudget(m: WikipediaBudgetMeasured): WikipediaBu
   }
 
   const restPerAttemptMs = Math.max(Math.floor((restBudget - restDelay) / REST_ATTEMPTS), REST_MIN_PER_ATTEMPT)
-  const actionPerAttemptMs = Math.max(Math.floor((actionBudget - actionDelay) / ACTION_ATTEMPTS), ACTION_MIN_PER_ATTEMPT)
+  const actionPerAttemptMs = Math.max(
+    Math.floor((actionBudget - actionDelay) / ACTION_ATTEMPTS),
+    ACTION_MIN_PER_ATTEMPT,
+  )
   const restChainWorstMs = REST_ATTEMPTS * restPerAttemptMs + restDelay
   const actionChainWorstMs = ACTION_ATTEMPTS * actionPerAttemptMs + actionDelay
 
@@ -219,7 +222,14 @@ interface CliOptions {
 }
 
 function parseCli(argv: string[]): CliOptions {
-  const opts: CliOptions = { requests: 10, fire: 0, delayMs: 250, query: 'Cloudflare Workers D1', json: false, strict: false }
+  const opts: CliOptions = {
+    requests: 10,
+    fire: 0,
+    delayMs: 250,
+    query: 'Cloudflare Workers D1',
+    json: false,
+    strict: false,
+  }
   for (let i = 0; i < argv.length; i++) {
     switch (argv[i]) {
       case '--requests':
@@ -337,12 +347,27 @@ async function main(): Promise<void> {
   const actionP50 = quantile(actionLat200, 0.5)
   const restMax = restLat200.length > 0 ? Math.max(...restLat200) : 0
   const actionMax = actionLat200.length > 0 ? Math.max(...actionLat200) : 0
-  console.log(`  REST  : p50 ${fmt(restP50)}  p95 ${fmt(restP95)}  max ${fmt(restMax)}  (200×${restLat200.length}/${restTotal}, 429×${rest429})`)
-  console.log(`  Action: p50 ${fmt(actionP50)}  p95 ${fmt(actionP95)}  max ${fmt(actionMax)}  (200×${actionLat200.length}/${actionTotal}, 429×${action429})`)
+  console.log(
+    `  REST  : p50 ${fmt(restP50)}  p95 ${fmt(restP95)}  max ${fmt(restMax)}  (200×${restLat200.length}/${restTotal}, 429×${rest429})`,
+  )
+  console.log(
+    `  Action: p50 ${fmt(actionP50)}  p95 ${fmt(actionP95)}  max ${fmt(actionMax)}  (200×${actionLat200.length}/${actionTotal}, 429×${action429})`,
+  )
   if (restLat200.length < 3) {
     console.log('  ⚠ 200 응답이 3건 미만 — 이 egress가 429 윈도우 상태. p95는 신뢰도 낮음 (체인 실측이 주 신호).')
   }
-  out.phaseA = { restLat200, actionLat200, restP50, restP95, restMax, actionP50, actionP95, actionMax, rest429, action429 }
+  out.phaseA = {
+    restLat200,
+    actionLat200,
+    restP50,
+    restP95,
+    restMax,
+    actionP50,
+    actionP95,
+    actionMax,
+    rest429,
+    action429,
+  }
 
   // ── Phase B: 429 체인 시나리오 ──
   let restChainTotalMs: number | undefined
@@ -366,7 +391,12 @@ async function main(): Promise<void> {
         `  REST chain: ${restChain.samples.map((s) => `${s.status}(${s.latencyMs}ms)`).join(' → ')} = ${fmt(restChain.totalMs)} (budget ${REST_BUDGET_MS}ms)`,
       )
       // Action 체인: 프로덕션 per-attempt
-      const actionChain = await runChain(ACTION_URL(opts.query), ACTION_ATTEMPTS, ACTION_DELAYS_MS, ACTION_PER_ATTEMPT_MS)
+      const actionChain = await runChain(
+        ACTION_URL(opts.query),
+        ACTION_ATTEMPTS,
+        ACTION_DELAYS_MS,
+        ACTION_PER_ATTEMPT_MS,
+      )
       actionChainTotalMs = actionChain.totalMs
       console.log(
         `  Action chain: ${actionChain.samples.map((s) => `${s.status}(${s.latencyMs}ms)`).join(' → ')} = ${fmt(actionChain.totalMs)} (budget ${ACTION_BUDGET_MS}ms)`,
@@ -399,12 +429,18 @@ async function main(): Promise<void> {
     `  current split     : REST ${REST_BUDGET_MS}ms (3×${REST_PER_ATTEMPT_MS}+900) / Action ${ACTION_BUDGET_MS}ms (2×${ACTION_PER_ATTEMPT_MS}+500)`,
   )
   if (verdict.ok) {
-    console.log(`  verdict: OK — 실측 max/p95와 429 체인이 예약 예산 안에 들어옴 (REST ${REST_BUDGET_MS}/Action ${ACTION_BUDGET_MS} 유지)`)
+    console.log(
+      `  verdict: OK — 실측 max/p95와 429 체인이 예약 예산 안에 들어옴 (REST ${REST_BUDGET_MS}/Action ${ACTION_BUDGET_MS} 유지)`,
+    )
   } else {
     console.log(`  verdict: ADJUST — 권장 재분할 REST ${verdict.restBudgetMs}ms / Action ${verdict.actionBudgetMs}ms`)
-    console.log(`    worst ${fmt(verdict.restChainWorstMs)} + ${fmt(verdict.actionChainWorstMs)} = ${fmt(verdict.totalWorstMs)} ≤ ceiling ${verdict.ceilingMs}ms`)
+    console.log(
+      `    worst ${fmt(verdict.restChainWorstMs)} + ${fmt(verdict.actionChainWorstMs)} = ${fmt(verdict.totalWorstMs)} ≤ ceiling ${verdict.ceilingMs}ms`,
+    )
     if (verdict.recommendedCeilingMs > verdict.ceilingMs) {
-      console.log(`    경고: 두 요구치를 모두 담으려면 ceiling ${verdict.recommendedCeilingMs}ms 필요 (> 현재 ${verdict.ceilingMs}ms)`)
+      console.log(
+        `    경고: 두 요구치를 모두 담으려면 ceiling ${verdict.recommendedCeilingMs}ms 필요 (> 현재 ${verdict.ceilingMs}ms)`,
+      )
     }
   }
   for (const issue of verdict.issues) console.log(`  - ${issue}`)

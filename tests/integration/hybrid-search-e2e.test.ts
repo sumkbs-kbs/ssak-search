@@ -68,7 +68,7 @@ function makeSearchResult(overrides: Record<string, unknown> = {}) {
 function mockLocalQuery(ids: string[][], metadatas: object[][], distances: number[][]) {
   mockQuery.mockResolvedValueOnce({
     ids,
-    documents: ids.map(group => group.map(() => 'mock content')),
+    documents: ids.map((group) => group.map(() => 'mock content')),
     metadatas,
     distances,
   })
@@ -102,10 +102,12 @@ describe('하이브리드 검색 E2E', () => {
     setupOllama()
     mockLocalQuery(
       [['local-1', 'local-2']],
-      [[
-        { url: 'https://local.com/1', title: 'Local Result 1' },
-        { url: 'https://local.com/2', title: 'Local Result 2' },
-      ]],
+      [
+        [
+          { url: 'https://local.com/1', title: 'Local Result 1' },
+          { url: 'https://local.com/2', title: 'Local Result 2' },
+        ],
+      ],
       [[0.2, 0.4]],
     )
 
@@ -166,18 +168,22 @@ describe('로컬 인덱스 검색 E2E', () => {
     setupOllama()
     mockLocalQuery(
       [['doc-1', 'doc-2', 'doc-3']],
-      [[
-        { url: 'https://react.dev/learn', title: 'React Hooks' },
-        { url: 'https://react.dev/reference', title: 'Hooks Reference' },
-        { url: 'https://example.com/custom', title: 'Custom Hooks' },
-      ]],
+      [
+        [
+          { url: 'https://react.dev/learn', title: 'React Hooks' },
+          { url: 'https://react.dev/reference', title: 'Hooks Reference' },
+          { url: 'https://example.com/custom', title: 'Custom Hooks' },
+        ],
+      ],
       [[0.15, 0.32, 0.45]],
     )
 
-    const embedding = await import('ollama').then(m => m.default.embeddings({
-      model: 'nomic-embed-text',
-      prompt: 'react hooks tutorial',
-    }))
+    const embedding = await import('ollama').then((m) =>
+      m.default.embeddings({
+        model: 'nomic-embed-text',
+        prompt: 'react hooks tutorial',
+      }),
+    )
     expect(embedding.embedding).toHaveLength(768)
 
     const searchResults = await mockCollection.query()
@@ -193,11 +199,7 @@ describe('로컬 인덱스 검색 E2E', () => {
   })
 
   it('다중 컬렉션 검색이 동작한다', async () => {
-    mockListCollections.mockReturnValue([
-      { name: 'tech-docs' },
-      { name: 'news-rss' },
-      { name: 'bulk-index' },
-    ])
+    mockListCollections.mockReturnValue([{ name: 'tech-docs' }, { name: 'news-rss' }, { name: 'bulk-index' }])
 
     const collections = await mockListCollections()
     expect(collections).toHaveLength(3)
@@ -218,11 +220,13 @@ describe('로컬 인덱스 검색 E2E', () => {
   it('검색 결과가 거리순으로 정렬된다', async () => {
     mockLocalQuery(
       [['doc-1', 'doc-2', 'doc-3']],
-      [[
-        { url: 'https://a.com/1', title: 'Close' },
-        { url: 'https://a.com/2', title: 'Medium' },
-        { url: 'https://a.com/3', title: 'Far' },
-      ]],
+      [
+        [
+          { url: 'https://a.com/1', title: 'Close' },
+          { url: 'https://a.com/2', title: 'Medium' },
+          { url: 'https://a.com/3', title: 'Far' },
+        ],
+      ],
       [[0.1, 0.5, 0.9]],
     )
 
@@ -264,10 +268,12 @@ describe('뉴스 RSS E2E', () => {
     setupOllama()
     mockUpsert.mockResolvedValueOnce(undefined)
 
-    const embedding = await import('ollama').then(m => m.default.embeddings({
-      model: 'nomic-embed-text',
-      prompt: 'AI Startup Funding Reaches $50B',
-    }))
+    const embedding = await import('ollama').then((m) =>
+      m.default.embeddings({
+        model: 'nomic-embed-text',
+        prompt: 'AI Startup Funding Reaches $50B',
+      }),
+    )
 
     await mockCollection.upsert({
       ids: ['news-1'],
@@ -283,10 +289,12 @@ describe('뉴스 RSS E2E', () => {
     setupOllama()
     mockLocalQuery(
       [['news-1', 'news-2']],
-      [[
-        { url: 'https://techcrunch.com/ai', title: 'AI Funding', lang: 'en' },
-        { url: 'https://bbc.com/climate', title: 'Climate', lang: 'en' },
-      ]],
+      [
+        [
+          { url: 'https://techcrunch.com/ai', title: 'AI Funding', lang: 'en' },
+          { url: 'https://bbc.com/climate', title: 'Climate', lang: 'en' },
+        ],
+      ],
       [[0.2, 0.4]],
     )
 
@@ -303,11 +311,11 @@ describe('뉴스 RSS E2E', () => {
       { title: 'Chinese 1', lang: 'zh', domain: 'nature.com' },
     ]
 
-    const korean = articles.filter(a => a.lang === 'ko')
+    const korean = articles.filter((a) => a.lang === 'ko')
     expect(korean).toHaveLength(1)
     expect(korean[0].domain).toBe('mk.co.kr')
 
-    const english = articles.filter(a => a.lang === 'en')
+    const english = articles.filter((a) => a.lang === 'en')
     expect(english).toHaveLength(2)
   })
 
@@ -318,7 +326,7 @@ describe('뉴스 RSS E2E', () => {
       { title: 'Article 2', url: 'https://example.com/2' },
     ]
 
-    const uniqueUrls = [...new Set(articles.map(a => a.url))]
+    const uniqueUrls = [...new Set(articles.map((a) => a.url))]
     expect(uniqueUrls).toHaveLength(2)
   })
 })
@@ -367,22 +375,28 @@ describe('통합 검색 품질 E2E', () => {
   it('다국어 쿼리가 처리된다', async () => {
     setupOllama()
 
-    const korean = await import('ollama').then(m => m.default.embeddings({
-      model: 'nomic-embed-text',
-      prompt: '삼성전자 주가',
-    }))
+    const korean = await import('ollama').then((m) =>
+      m.default.embeddings({
+        model: 'nomic-embed-text',
+        prompt: '삼성전자 주가',
+      }),
+    )
     expect(korean.embedding).toHaveLength(768)
 
-    const chinese = await import('ollama').then(m => m.default.embeddings({
-      model: 'nomic-embed-text',
-      prompt: '什么是人工智能',
-    }))
+    const chinese = await import('ollama').then((m) =>
+      m.default.embeddings({
+        model: 'nomic-embed-text',
+        prompt: '什么是人工智能',
+      }),
+    )
     expect(chinese.embedding).toHaveLength(768)
 
-    const japanese = await import('ollama').then(m => m.default.embeddings({
-      model: 'nomic-embed-text',
-      prompt: '人工知能とは',
-    }))
+    const japanese = await import('ollama').then((m) =>
+      m.default.embeddings({
+        model: 'nomic-embed-text',
+        prompt: '人工知能とは',
+      }),
+    )
     expect(japanese.embedding).toHaveLength(768)
   })
 })
@@ -412,10 +426,12 @@ describe('에러 복구 E2E', () => {
     mockOllamaEmbeddings.mockRejectedValueOnce(new Error('Connection refused'))
 
     try {
-      await import('ollama').then(m => m.default.embeddings({
-        model: 'nomic-embed-text',
-        prompt: 'test',
-      }))
+      await import('ollama').then((m) =>
+        m.default.embeddings({
+          model: 'nomic-embed-text',
+          prompt: 'test',
+        }),
+      )
     } catch (e) {
       expect((e as Error).message).toContain('Connection refused')
     }

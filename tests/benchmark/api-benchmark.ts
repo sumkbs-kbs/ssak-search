@@ -100,7 +100,10 @@ interface JsonBody {
   [key: string]: unknown
 }
 
-async function fetchJson(url: string, init?: RequestInit): Promise<{ status: number; body: JsonBody; latencyMs: number }> {
+async function fetchJson(
+  url: string,
+  init?: RequestInit,
+): Promise<{ status: number; body: JsonBody; latencyMs: number }> {
   const start = performance.now()
   try {
     const res = await fetch(url, { ...init, signal: AbortSignal.timeout(30_000) })
@@ -112,7 +115,7 @@ async function fetchJson(url: string, init?: RequestInit): Promise<{ status: num
 }
 
 function sleep(ms: number): Promise<void> {
-  return new Promise(resolve => setTimeout(resolve, ms))
+  return new Promise((resolve) => setTimeout(resolve, ms))
 }
 
 function formatMs(ms: number): string {
@@ -134,7 +137,16 @@ async function benchmarkEndpointLatency(): Promise<BenchmarkResult> {
     { name: 'search_basic', method: 'POST', path: '/api/search', body: { query: 'React hooks', max_results: 5 } },
     { name: 'search_kr', method: 'POST', path: '/api/search', body: { query: '삼성전자 주가 전망', max_results: 5 } },
     { name: 'search_zh', method: 'POST', path: '/api/search', body: { query: '量子计算最新进展', max_results: 5 } },
-    { name: 'search_complex', method: 'POST', path: '/api/search', body: { query: 'Compare React vs Vue vs Angular for enterprise applications in 2026', max_results: 10, include_answer: true } },
+    {
+      name: 'search_complex',
+      method: 'POST',
+      path: '/api/search',
+      body: {
+        query: 'Compare React vs Vue vs Angular for enterprise applications in 2026',
+        max_results: 10,
+        include_answer: true,
+      },
+    },
   ]
 
   console.log('  ┌────────────────────┬───────┬────────┬────────┬────────┬────────┬───────┐')
@@ -212,8 +224,8 @@ async function benchmarkThroughput(): Promise<{ results: ThroughputResult[] }> {
     const allResults = await Promise.all(promises)
     const totalDuration = performance.now() - start
 
-    const latencies = allResults.map(r => r.latencyMs).sort((a, b) => a - b)
-    const successes = allResults.filter(r => r.status >= 200 && r.status < 400).length
+    const latencies = allResults.map((r) => r.latencyMs).sort((a, b) => a - b)
+    const successes = allResults.filter((r) => r.status >= 200 && r.status < 400).length
     const rps = (allResults.length / totalDuration) * 1000
 
     const row: ThroughputResult = {
@@ -252,7 +264,11 @@ async function benchmarkCache(): Promise<BenchmarkResult> {
 
   // First request (miss)
   for (let i = 0; i < 5; i++) {
-    const { status: _status, body, latencyMs } = await fetchJson(`${BASE_URL}/api/search`, {
+    const {
+      status: _status,
+      body,
+      latencyMs,
+    } = await fetchJson(`${BASE_URL}/api/search`, {
       method: 'POST',
       headers: headers(),
       body: JSON.stringify({ query: `${query} ${i}`, max_results: 3 }),
@@ -265,7 +281,11 @@ async function benchmarkCache(): Promise<BenchmarkResult> {
 
   // Repeat same queries (should hit cache)
   for (let i = 0; i < 5; i++) {
-    const { status: _status, body, latencyMs } = await fetchJson(`${BASE_URL}/api/search`, {
+    const {
+      status: _status,
+      body,
+      latencyMs,
+    } = await fetchJson(`${BASE_URL}/api/search`, {
       method: 'POST',
       headers: headers(),
       body: JSON.stringify({ query: `${query} ${i}`, max_results: 3 }),
@@ -354,7 +374,11 @@ async function benchmarkSearchQuality(): Promise<void> {
   let successCount = 0
 
   for (const { q, expectMin } of queries) {
-    const { status: _status, body, latencyMs } = await fetchJson(`${BASE_URL}/api/search`, {
+    const {
+      status: _status,
+      body,
+      latencyMs,
+    } = await fetchJson(`${BASE_URL}/api/search`, {
       method: 'POST',
       headers: headers(),
       body: JSON.stringify({ query: q, max_results: 5 }),
@@ -433,7 +457,7 @@ async function main() {
   console.log('═══════════════════════════════════════════════════════════════')
 }
 
-main().catch(err => {
+main().catch((err) => {
   console.error('Benchmark failed:', err)
   process.exit(1)
 })

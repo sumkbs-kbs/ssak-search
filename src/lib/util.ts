@@ -101,11 +101,11 @@ function tickSubrequestTracker(): void {
 /** Domain authority scores (0.0-0.15) for known high-quality sources */
 const DOMAIN_AUTHORITY: Record<string, number> = {
   // Tier 1:百科/학술 (최고 품질 — position1에 올라야 함)
-  'wikipedia.org': 0.20,
-  'en.wikipedia.org': 0.20,
-  'ko.wikipedia.org': 0.20,
-  'zh.wikipedia.org': 0.20,
-  'ja.wikipedia.org': 0.20,
+  'wikipedia.org': 0.2,
+  'en.wikipedia.org': 0.2,
+  'ko.wikipedia.org': 0.2,
+  'zh.wikipedia.org': 0.2,
+  'ja.wikipedia.org': 0.2,
   // Tier 2: 기술 문서/커뮤니티
   'github.com': 0.18,
   'stackoverflow.com': 0.18,
@@ -121,13 +121,13 @@ const DOMAIN_AUTHORITY: Record<string, number> = {
   'wsj.com': 0.12,
   'ft.com': 0.12,
   // Tier 4: 한국 도메인
-  'naver.com': 0.10,
+  'naver.com': 0.1,
   'm.stock.naver.com': 0.12,
   'finance.naver.com': 0.14,
-  'namu.wiki': 0.10,
+  'namu.wiki': 0.1,
   'daum.net': 0.08,
   // Tier 5: 금융
-  'investing.com': 0.10,
+  'investing.com': 0.1,
   'finance.yahoo.com': 0.14,
   'nasdaq.com': 0.12,
 }

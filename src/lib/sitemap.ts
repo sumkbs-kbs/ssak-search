@@ -174,8 +174,11 @@ export async function discoverAndParseSitemaps(
           for (const sub of parsed.subSitemaps) {
             if (!visitedSitemaps.has(sub)) {
               // SSRF guard (DNS rebinding): 모든 discovered URL 검증
-              try { await assertSafeFetchUrl(sub) }
-              catch { continue }
+              try {
+                await assertSafeFetchUrl(sub)
+              } catch {
+                continue
+              }
               queue.push({ url: sub, depth: depth + 1 })
             }
           }

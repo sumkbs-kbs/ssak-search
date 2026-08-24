@@ -122,7 +122,9 @@ console.log(`  Gold 도메인 Top10 미존재: ${goldMissing}건`)
 
 if (Object.keys(missingDomains).length > 0) {
   console.log('\n  ── 빈번히 누락되는 Gold 도메인 ──')
-  for (const [d, c] of Object.entries(missingDomains).sort((a, b) => b[1] - a[1]).slice(0, 15)) {
+  for (const [d, c] of Object.entries(missingDomains)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 15)) {
     console.log(`    ${d.padEnd(35)} ${c}건 누락`)
   }
 }
@@ -168,7 +170,7 @@ for (const [domain, info] of topOutrankers) {
 // Detailed per-query analysis for lowest NDCG in the band
 console.log('\n─── 최하위 NDCG 쿼리 상세 (0.40~0.50) ───')
 const lowest = midBand
-  .filter((r) => (r.ranking?.ndcgAt10 ?? 0) <= 0.50)
+  .filter((r) => (r.ranking?.ndcgAt10 ?? 0) <= 0.5)
   .sort((a, b) => (a.ranking?.ndcgAt10 ?? 0) - (b.ranking?.ndcgAt10 ?? 0))
 
 for (const r of lowest.slice(0, 20)) {
@@ -186,7 +188,11 @@ for (const r of lowest.slice(0, 20)) {
   const pool = r.response?.results || []
   for (const res of pool.slice(0, 5)) {
     let domain = ''
-    try { domain = new URL(res.url).hostname.replace(/^www\./, '') } catch { domain = res.domain || '?' }
+    try {
+      domain = new URL(res.url).hostname.replace(/^www\./, '')
+    } catch {
+      domain = res.domain || '?'
+    }
     const isGold = goldDomains.some((gd) => domain === gd || domain.endsWith(`.${gd}`))
     console.log(`      ${isGold ? '✓' : '✗'} ${domain} (score=${res.score.toFixed(3)}) ${res.title.slice(0, 60)}`)
   }
@@ -221,7 +227,7 @@ console.log(`  현재 전체 평균: ${currentAvg.toFixed(4)}`)
 
 // Summary
 const avgMid = midBand.reduce((s, r) => s + (r.ranking?.ndcgAt10 ?? 0), 0) / midBand.length
-const totalNeeded = 0.70 * results.length
+const totalNeeded = 0.7 * results.length
 const currentTotal = allNdcg.reduce((s, v) => s + v, 0)
 
 console.log('\n═══════════════════════════════════════════════════════════')

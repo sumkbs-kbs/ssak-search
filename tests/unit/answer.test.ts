@@ -277,7 +277,8 @@ describe('attachFactCheckToAnswer', () => {
       }),
       makeResult({
         title: 'Another Guide',
-        content: 'React hooks are functions that let you use state. The React team recommends using them in all new code.',
+        content:
+          'React hooks are functions that let you use state. The React team recommends using them in all new code.',
         url: 'https://another.dev/hooks',
         domain: 'another.dev',
       }),

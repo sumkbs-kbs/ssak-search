@@ -227,7 +227,12 @@ export const FEW_SHOT_EXAMPLES = [
           id: 1,
           question: '삼성전자 2024년 연간 실적 (매출, 영업이익, 순이익)',
           tool: 'web_search',
-          params: { query: '삼성전자 2024년 연간 실적 매출 영업이익', recency_days: 90, max_results: 5, topic: 'finance' },
+          params: {
+            query: '삼성전자 2024년 연간 실적 매출 영업이익',
+            recency_days: 90,
+            max_results: 5,
+            topic: 'finance',
+          },
           output_role: 'evidence',
           depends_on: [],
         },
@@ -235,7 +240,12 @@ export const FEW_SHOT_EXAMPLES = [
           id: 2,
           question: '삼성전자 2024년 분기별 실적 추이',
           tool: 'web_search',
-          params: { query: '삼성전자 2024년 1분기 2분기 3분기 4분기 실적', recency_days: 180, max_results: 5, topic: 'finance' },
+          params: {
+            query: '삼성전자 2024년 1분기 2분기 3분기 4분기 실적',
+            recency_days: 180,
+            max_results: 5,
+            topic: 'finance',
+          },
           output_role: 'evidence',
           depends_on: [],
         },
@@ -243,7 +253,12 @@ export const FEW_SHOT_EXAMPLES = [
           id: 3,
           question: '삼성전자 2025년 전망 및 증권가 목표주가',
           tool: 'web_search',
-          params: { query: '삼성전자 2025년 전망 목표주가 증권사 리포트', recency_days: 90, max_results: 5, topic: 'finance' },
+          params: {
+            query: '삼성전자 2025년 전망 목표주가 증권사 리포트',
+            recency_days: 90,
+            max_results: 5,
+            topic: 'finance',
+          },
           output_role: 'evidence',
           depends_on: [],
         },
@@ -251,7 +266,12 @@ export const FEW_SHOT_EXAMPLES = [
           id: 4,
           question: '반도체 업황 및 메모리 가격 전망 2025년',
           tool: 'web_search',
-          params: { query: '2025년 메모리 반도체 가격 전망 D램 낸드플래시', recency_days: 90, max_results: 5, topic: 'finance' },
+          params: {
+            query: '2025년 메모리 반도체 가격 전망 D램 낸드플래시',
+            recency_days: 90,
+            max_results: 5,
+            topic: 'finance',
+          },
           output_role: 'evidence',
           depends_on: [],
         },
@@ -630,7 +650,8 @@ export const FEW_SHOT_EXAMPLES = [
           depends_on: [1, 2],
         },
       ],
-      synthesis_instruction: '추천 순위와 수수료·세제 혜택을 표로 정리하고 상품별 장단점을 비교한다. 모든 수치는 [step_number]로 인용한다.',
+      synthesis_instruction:
+        '추천 순위와 수수료·세제 혜택을 표로 정리하고 상품별 장단점을 비교한다. 모든 수치는 [step_number]로 인용한다.',
       confidence: 0.86,
     },
   },
@@ -709,7 +730,10 @@ export class QueryPlanner {
           // Attempt-index-based prompt strengthening (synthesizer STRICT
           // REMINDER pattern): on retry, demand bare JSON so the parser has a
           // second chance at a well-formed plan.
-          const prompt = attempt > 0 ? `${basePrompt}\n\nSTRICT REMINDER: Reply with ONLY valid JSON matching the plan schema — no prose, no code fences.` : basePrompt
+          const prompt =
+            attempt > 0
+              ? `${basePrompt}\n\nSTRICT REMINDER: Reply with ONLY valid JSON matching the plan schema — no prose, no code fences.`
+              : basePrompt
           const response = await ai.run(this.model, {
             messages: [
               { role: 'system', content: PLANNER_SYSTEM_PROMPT },

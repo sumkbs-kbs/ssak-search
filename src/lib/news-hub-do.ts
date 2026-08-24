@@ -114,7 +114,12 @@ export class NewsHubDO extends DurableObject<Env> {
 
       if (this.env.CACHE_KV) {
         await this.env.CACHE_KV.put(KV_ARTICLES_KEY, JSON.stringify(articles), { expirationTtl: KV_TTL_S })
-        const meta = { fetchedAt: Date.now(), articleCount: articles.length, outletCount: Object.keys(perOutlet).length, perOutlet }
+        const meta = {
+          fetchedAt: Date.now(),
+          articleCount: articles.length,
+          outletCount: Object.keys(perOutlet).length,
+          perOutlet,
+        }
         await this.env.CACHE_KV.put(KV_META_KEY, JSON.stringify(meta), { expirationTtl: KV_TTL_S })
       } else {
         logger.warn('[news-hub-do] CACHE_KV binding missing — articles not persisted', {})

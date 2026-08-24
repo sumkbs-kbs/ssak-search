@@ -95,10 +95,7 @@ export function createCpuBudget(
  * when neither env var is set, assume free plan (the common case).
  * Paid plan operators should set FREE_PLAN_CPU_GUARD=0 to opt out.
  */
-export function isFreePlan(env?: {
-  SUBREQUEST_QUOTA_PER_REQUEST?: string
-  FREE_PLAN_CPU_GUARD?: string
-}): boolean {
+export function isFreePlan(env?: { SUBREQUEST_QUOTA_PER_REQUEST?: string; FREE_PLAN_CPU_GUARD?: string }): boolean {
   // Explicit opt-out for paid plans — highest priority
   if (env?.FREE_PLAN_CPU_GUARD === '0' || env?.FREE_PLAN_CPU_GUARD === 'false') {
     return false

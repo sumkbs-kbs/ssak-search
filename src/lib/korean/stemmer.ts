@@ -112,10 +112,7 @@ const PARTICLES: readonly string[] = [
  * Checked BEFORE any stripping. Small curated list — extend only with
  * dictionary-verified entries.
  */
-const FALSE_POSITIVE_STEMS: ReadonlySet<string> = new Set([
-  '마을',
-  '금은',
-])
+const FALSE_POSITIVE_STEMS: ReadonlySet<string> = new Set(['마을', '금은'])
 
 /** Minimum surviving stem length — guards against single-syllable collapse. */
 const MIN_STEM_LEN = 2
@@ -216,11 +213,7 @@ export function stripKoreanSuffix(token: string): string {
   const endsInProtectedMorpheme = isDeniedForm(candidate)
 
   for (const p of PARTICLES) {
-    if (
-      p.length < candidate.length &&
-      candidate.length - p.length >= MIN_STEM_LEN &&
-      candidate.endsWith(p)
-    ) {
+    if (p.length < candidate.length && candidate.length - p.length >= MIN_STEM_LEN && candidate.endsWith(p)) {
       if (endsInProtectedMorpheme && protectedMorphemeEndsWith(p)) continue
       return candidate.slice(0, candidate.length - p.length)
     }

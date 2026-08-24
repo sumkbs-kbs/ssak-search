@@ -11,12 +11,7 @@
  */
 
 import { describe, it, expect } from 'vitest'
-import {
-  analyzeQuery,
-  selectBackends,
-  optimizeRouting,
-  routeQuery,
-} from '../../src/lib/search/query-router'
+import { analyzeQuery, selectBackends, optimizeRouting, routeQuery } from '../../src/lib/search/query-router'
 
 describe('Query Router', () => {
   // ============================================================
@@ -120,7 +115,9 @@ describe('Query Router', () => {
   describe('Complexity Analysis', () => {
     it('assigns complexity scores', () => {
       const simple = analyzeQuery('python')
-      const complex = analyzeQuery('compare distributed systems architecture patterns microservices vs monolith for enterprise applications')
+      const complex = analyzeQuery(
+        'compare distributed systems architecture patterns microservices vs monolith for enterprise applications',
+      )
 
       // Simple queries should have lower scores than complex ones
       expect(simple.complexityScore).toBeLessThan(complex.complexityScore)

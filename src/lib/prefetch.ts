@@ -95,7 +95,7 @@ class QueryTracker {
    */
   getPopularQueries(n: number): QueryStats[] {
     return [...this.queries.values()]
-      .filter(q => q.impressions >= this.config.minImpressions)
+      .filter((q) => q.impressions >= this.config.minImpressions)
       .sort((a, b) => {
         // Score = impressions * recency * latency_weight
         const scoreA = a.impressions * this.recencyScore(a.lastSeen) * this.latencyWeight(a.avgLatency)
@@ -110,7 +110,7 @@ class QueryTracker {
    */
   getHighLatencyQueries(n: number): QueryStats[] {
     return [...this.queries.values()]
-      .filter(q => q.impressions >= this.config.minImpressions && q.avgLatency > 2000)
+      .filter((q) => q.impressions >= this.config.minImpressions && q.avgLatency > 2000)
       .sort((a, b) => b.avgLatency - a.avgLatency)
       .slice(0, n)
   }
@@ -125,10 +125,8 @@ class QueryTracker {
     topQueries: Array<{ query: string; impressions: number; avgLatency: number }>
   } {
     const queries = [...this.queries.values()]
-    const popular = queries.filter(q => q.impressions >= this.config.minImpressions)
-    const avgLatency = queries.length > 0
-      ? queries.reduce((sum, q) => sum + q.avgLatency, 0) / queries.length
-      : 0
+    const popular = queries.filter((q) => q.impressions >= this.config.minImpressions)
+    const avgLatency = queries.length > 0 ? queries.reduce((sum, q) => sum + q.avgLatency, 0) / queries.length : 0
 
     return {
       trackedQueries: queries.length,
@@ -137,7 +135,7 @@ class QueryTracker {
       topQueries: popular
         .sort((a, b) => b.impressions - a.impressions)
         .slice(0, 10)
-        .map(q => ({ query: q.query, impressions: q.impressions, avgLatency: q.avgLatency })),
+        .map((q) => ({ query: q.query, impressions: q.impressions, avgLatency: q.avgLatency })),
     }
   }
 

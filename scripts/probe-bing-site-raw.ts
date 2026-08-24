@@ -11,7 +11,10 @@ async function fetchHtml(url: string, ua: string): Promise<string> {
   const ctrl = new AbortController()
   const t = setTimeout(() => ctrl.abort(), 8000)
   try {
-    const res = await fetch(url, { headers: { 'User-Agent': ua, 'Accept-Language': 'zh-CN,zh;q=0.9,en;q=0.8' }, signal: ctrl.signal })
+    const res = await fetch(url, {
+      headers: { 'User-Agent': ua, 'Accept-Language': 'zh-CN,zh;q=0.9,en;q=0.8' },
+      signal: ctrl.signal,
+    })
     return await res.text()
   } finally {
     clearTimeout(t)
@@ -37,7 +40,12 @@ function extractDomains(html: string): string[] {
 }
 
 async function main(): Promise<void> {
-  const queries = ['site:mafengwo.cn 张家界旅游攻略', '张家界旅游攻略', 'site:youtube.com how to make pasta', 'how to make pasta']
+  const queries = [
+    'site:mafengwo.cn 张家界旅游攻略',
+    '张家界旅游攻略',
+    'site:youtube.com how to make pasta',
+    'how to make pasta',
+  ]
   for (const q of queries) {
     const params = new URLSearchParams({ q, count: '20' })
     for (const [label, ua] of [
@@ -50,7 +58,9 @@ async function main(): Promise<void> {
         const counts = new Map<string, number>()
         for (const d of doms) counts.set(d, (counts.get(d) ?? 0) + 1)
         const top = [...counts.entries()].sort((a, b) => b[1] - a[1]).slice(0, 8)
-        console.log(`[${label}] "${q.slice(0, 40)}" → ${doms.length}건  [${top.map(([d, n]) => `${d}×${n}`).join(' ') || '(b_algo 없음 / 캡차)'}]`)
+        console.log(
+          `[${label}] "${q.slice(0, 40)}" → ${doms.length}건  [${top.map(([d, n]) => `${d}×${n}`).join(' ') || '(b_algo 없음 / 캡차)'}]`,
+        )
       } catch (e) {
         console.log(`[${label}] "${q.slice(0, 40)}" → NET-ERR ${String(e).slice(0, 80)}`)
       }

@@ -291,8 +291,19 @@ describe('SpaceDO', () => {
   })
 
   it('builds file context and instructions for query augmentation', async () => {
-    const s = await space.createSpace('u1', { name: 'S', description: '', instructions: 'Be concise', focus_mode: 'all' })
-    await space.addFile(s.id, { file_key: 'k1', name: 'report.pdf', mime_type: 'application/pdf', size: 102400, uploaded_at: Date.now() })
+    const s = await space.createSpace('u1', {
+      name: 'S',
+      description: '',
+      instructions: 'Be concise',
+      focus_mode: 'all',
+    })
+    await space.addFile(s.id, {
+      file_key: 'k1',
+      name: 'report.pdf',
+      mime_type: 'application/pdf',
+      size: 102400,
+      uploaded_at: Date.now(),
+    })
     const ctx = await space.getSpaceContext(s.id)
     expect(ctx!.instructions).toBe('Be concise')
     expect(ctx!.fileContext).toContain('report.pdf')

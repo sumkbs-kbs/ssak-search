@@ -215,16 +215,11 @@ export class ConversationManager {
   /**
    * Record user feedback on a turn.
    */
-  recordFeedback(
-    conversationId: string,
-    turnId: number,
-    selectedResult: string,
-    satisfactionScore?: number,
-  ): void {
+  recordFeedback(conversationId: string, turnId: number, selectedResult: string, satisfactionScore?: number): void {
     const conversation = this.conversations.get(conversationId)
     if (!conversation) return
 
-    const turn = conversation.turns.find(t => t.turn_id === turnId)
+    const turn = conversation.turns.find((t) => t.turn_id === turnId)
     if (turn) {
       turn.selected_result = selectedResult
     }
@@ -291,15 +286,12 @@ export class ConversationManager {
     const now = Date.now()
 
     // Only count conversations active in last hour
-    const active = conversations.filter(c => now - c.last_active_at < 60 * 60 * 1000)
+    const active = conversations.filter((c) => now - c.last_active_at < 60 * 60 * 1000)
 
-    const avgTurns = active.length > 0
-      ? active.reduce((sum, c) => sum + c.turns.length, 0) / active.length
-      : 0
+    const avgTurns = active.length > 0 ? active.reduce((sum, c) => sum + c.turns.length, 0) / active.length : 0
 
-    const avgDuration = active.length > 0
-      ? active.reduce((sum, c) => sum + (c.last_active_at - c.started_at), 0) / active.length
-      : 0
+    const avgDuration =
+      active.length > 0 ? active.reduce((sum, c) => sum + (c.last_active_at - c.started_at), 0) / active.length : 0
 
     // Count topics
     const topicCounts = new Map<string, number>()
@@ -336,18 +328,12 @@ export class ConversationManager {
 
     // Resolve subject pronouns
     if (PRONOUN_PATTERNS.subject.test(query) && context.last_mentioned.subject) {
-      resolved = resolved.replace(
-        PRONOUN_PATTERNS.subject,
-        context.last_mentioned.subject,
-      )
+      resolved = resolved.replace(PRONOUN_PATTERNS.subject, context.last_mentioned.subject)
     }
 
     // Resolve possessive pronouns
     if (PRONOUN_PATTERNS.possessive.test(query) && context.last_mentioned.topic) {
-      resolved = resolved.replace(
-        PRONOUN_PATTERNS.possessive,
-        `${context.last_mentioned.topic}'s`,
-      )
+      resolved = resolved.replace(PRONOUN_PATTERNS.possessive, `${context.last_mentioned.topic}'s`)
     }
 
     return resolved
@@ -369,9 +355,23 @@ export class ConversationManager {
 
     // Known product/brand names
     const knownEntities = [
-      'React', 'Vue', 'Angular', 'Python', 'JavaScript', 'TypeScript',
-      'Google', 'Microsoft', 'Apple', 'Amazon', 'Meta', 'OpenAI',
-      'iPhone', 'Galaxy', 'MacBook', 'Windows', 'Linux',
+      'React',
+      'Vue',
+      'Angular',
+      'Python',
+      'JavaScript',
+      'TypeScript',
+      'Google',
+      'Microsoft',
+      'Apple',
+      'Amazon',
+      'Meta',
+      'OpenAI',
+      'iPhone',
+      'Galaxy',
+      'MacBook',
+      'Windows',
+      'Linux',
     ]
 
     for (const entity of knownEntities) {
@@ -531,9 +531,7 @@ export class ConversationManager {
     }
 
     if (context.entities.size > 0) {
-      const entityNames = [...context.entities.values()]
-        .filter(e => e.mention_count > 1)
-        .map(e => e.name)
+      const entityNames = [...context.entities.values()].filter((e) => e.mention_count > 1).map((e) => e.name)
       if (entityNames.length > 0) {
         parts.push(`Key entities: ${entityNames.join(', ')}`)
       }
@@ -549,8 +547,16 @@ export class ConversationManager {
   private extractTopic(query: string): string {
     const lower = query.toLowerCase()
     const topics = [
-      'technology', 'finance', 'health', 'education', 'entertainment',
-      'science', 'news', 'travel', 'food', 'sports',
+      'technology',
+      'finance',
+      'health',
+      'education',
+      'entertainment',
+      'science',
+      'news',
+      'travel',
+      'food',
+      'sports',
     ]
 
     for (const topic of topics) {
@@ -558,7 +564,9 @@ export class ConversationManager {
     }
 
     // Try to extract topic from question words
-    const questionTopic = lower.match(/(?:what|who|how|why|when|where)\s+(?:is|are|was|were|do|does|did|can|could|will|would|should)\s+(.+?)(?:\?|$)/)
+    const questionTopic = lower.match(
+      /(?:what|who|how|why|when|where)\s+(?:is|are|was|were|do|does|did|can|could|will|would|should)\s+(.+?)(?:\?|$)/,
+    )
     if (questionTopic) {
       return questionTopic[1].trim().split(/\s+/).slice(0, 2).join(' ')
     }

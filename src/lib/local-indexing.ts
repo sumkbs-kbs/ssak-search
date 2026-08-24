@@ -1,15 +1,15 @@
 /**
  * 로컬 인덱싱 서비스
- * 
+ *
  * ChromaDB + Ollama를 사용한 완전 로컬 인덱싱 파이프라인
  * Cloudflare 없이 로컬에서 인덱싱/검색 가능
- * 
+ *
  * 장점:
  * - 인터넷 불필요 (오프라인 가능)
  * - 비용 $0
  * - 빠른 인덱싱 (API 호출 없음)
  * - 데이터 완전 로컬 보관
- * 
+ *
  * 단점:
  * - 로컬 리소스 사용 (CPU/메모리)
  * - Cloudflare와 동기화 필요
@@ -193,7 +193,7 @@ export class LocalIndexingService {
       try {
         const response = await fetch(`${this.config.chromaUrl}/api/v1/collections/${this.config.collectionName}`)
         if (response.ok) {
-          const collection = await response.json() as { count?: number }
+          const collection = (await response.json()) as { count?: number }
           totalChunks = collection.count ?? 0
         }
       } catch {
@@ -240,9 +240,7 @@ export class LocalIndexingService {
 
     for (let i = 0; i < texts.length; i += this.config.batchSize) {
       const batch = texts.slice(i, i + this.config.batchSize)
-      const batchEmbeddings = await Promise.all(
-        batch.map(text => this.generateEmbedding(text))
-      )
+      const batchEmbeddings = await Promise.all(batch.map((text) => this.generateEmbedding(text)))
       embeddings.push(...batchEmbeddings)
     }
 
@@ -266,18 +264,14 @@ export class LocalIndexingService {
       throw new Error(`Ollama embedding 실패: ${response.status}`)
     }
 
-    const data = await response.json() as { embedding: number[] }
+    const data = (await response.json()) as { embedding: number[] }
     return data.embedding
   }
 
   /**
    * ChromaDB에 저장
    */
-  private async saveToChroma(
-    doc: LocalDocument,
-    chunks: string[],
-    embeddings: number[][]
-  ): Promise<void> {
+  private async saveToChroma(doc: LocalDocument, chunks: string[], embeddings: number[][]): Promise<void> {
     const ids = chunks.map((_, i) => `${doc.id}_chunk_${i}`)
     const metadatas = chunks.map(() => ({
       url: doc.url,
@@ -287,19 +281,16 @@ export class LocalIndexingService {
       publishedDate: doc.publishedDate || '',
     }))
 
-    const response = await fetch(
-      `${this.config.chromaUrl}/api/v1/collections/${this.config.collectionName}/add`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          ids,
-          documents: chunks,
-          embeddings,
-          metadatas,
-        }),
-      }
-    )
+    const response = await fetch(`${this.config.chromaUrl}/api/v1/collections/${this.config.collectionName}/add`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        ids,
+        documents: chunks,
+        embeddings,
+        metadatas,
+      }),
+    })
 
     if (!response.ok) {
       throw new Error(`ChromaDB 저장 실패: ${response.status}`)
@@ -309,28 +300,22 @@ export class LocalIndexingService {
   /**
    * ChromaDB 검색
    */
-  private async searchChroma(
-    queryEmbedding: number[],
-    topK: number
-  ): Promise<LocalSearchResult[]> {
-    const response = await fetch(
-      `${this.config.chromaUrl}/api/v1/collections/${this.config.collectionName}/query`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          query_embeddings: [queryEmbedding],
-          n_results: topK,
-          include: ['documents', 'metadatas', 'distances'],
-        }),
-      }
-    )
+  private async searchChroma(queryEmbedding: number[], topK: number): Promise<LocalSearchResult[]> {
+    const response = await fetch(`${this.config.chromaUrl}/api/v1/collections/${this.config.collectionName}/query`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        query_embeddings: [queryEmbedding],
+        n_results: topK,
+        include: ['documents', 'metadatas', 'distances'],
+      }),
+    })
 
     if (!response.ok) {
       throw new Error(`ChromaDB 검색 실패: ${response.status}`)
     }
 
-    const data = await response.json() as {
+    const data = (await response.json()) as {
       ids: string[][]
       documents: string[][]
       metadatas: Record<string, unknown>[][]
@@ -340,7 +325,7 @@ export class LocalIndexingService {
     const results: LocalSearchResult[] = []
     if (data.ids?.[0]) {
       for (let i = 0; i < data.ids[0].length; i++) {
-        const metadata = data.metadatas?.[0]?.[i] as Record<string, unknown> || {}
+        const metadata = (data.metadatas?.[0]?.[i] as Record<string, unknown>) || {}
         results.push({
           id: data.ids[0][i],
           url: (metadata.url as string) || '',

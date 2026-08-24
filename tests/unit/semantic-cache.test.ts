@@ -7,7 +7,13 @@
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { djb2, semanticVectorId, semanticCacheLookup, semanticCacheStore, lexicalDice } from '../../src/lib/semantic-cache'
+import {
+  djb2,
+  semanticVectorId,
+  semanticCacheLookup,
+  semanticCacheStore,
+  lexicalDice,
+} from '../../src/lib/semantic-cache'
 import type { Env, SearchResponse } from '../../src/types'
 
 /** Fake Ollama /v1/embeddings response (768-dim, matching nomic-embed-text). */

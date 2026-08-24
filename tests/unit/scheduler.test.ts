@@ -129,8 +129,24 @@ describe('RefreshScheduler', () => {
     const now = Date.now()
     const { d1 } = makeD1({
       candidates: [
-        { id: 'd1', url: 'https://a.com', domain: 'a.com', importance: 0.8, last_indexed: now - 2 * 3600 * 1000, next_index_at: now - 1000, status: 'indexed' },
-        { id: 'd2', url: 'https://b.com', domain: 'b.com', importance: 0.3, last_indexed: now - 2 * 3600 * 1000, next_index_at: now - 1000, status: 'stale' },
+        {
+          id: 'd1',
+          url: 'https://a.com',
+          domain: 'a.com',
+          importance: 0.8,
+          last_indexed: now - 2 * 3600 * 1000,
+          next_index_at: now - 1000,
+          status: 'indexed',
+        },
+        {
+          id: 'd2',
+          url: 'https://b.com',
+          domain: 'b.com',
+          importance: 0.3,
+          last_indexed: now - 2 * 3600 * 1000,
+          next_index_at: now - 1000,
+          status: 'stale',
+        },
       ],
     })
     const scheduler = new RefreshScheduler({ minRefreshIntervalMs: 1000 }, { SEARCH_INDEX_DB: d1 } as never)
@@ -145,7 +161,15 @@ describe('RefreshScheduler', () => {
     const now = Date.now()
     const { d1 } = makeD1({
       candidates: [
-        { id: 'd1', url: 'https://a.com', domain: 'a.com', importance: 0.8, last_indexed: now - 100, next_index_at: now - 1000, status: 'indexed' },
+        {
+          id: 'd1',
+          url: 'https://a.com',
+          domain: 'a.com',
+          importance: 0.8,
+          last_indexed: now - 100,
+          next_index_at: now - 1000,
+          status: 'indexed',
+        },
       ],
     })
     const scheduler = new RefreshScheduler({ minRefreshIntervalMs: 3600 * 1000 }, { SEARCH_INDEX_DB: d1 } as never)

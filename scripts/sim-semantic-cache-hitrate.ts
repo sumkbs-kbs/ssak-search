@@ -43,10 +43,7 @@ function parseArgs(): { ollamaUrl: string } {
   return { ollamaUrl }
 }
 
-async function embedBatch(
-  ollamaUrl: string,
-  texts: string[],
-): Promise<number[][]> {
+async function embedBatch(ollamaUrl: string, texts: string[]): Promise<number[][]> {
   const res = await fetch(`${ollamaUrl}/api/embed`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -70,10 +67,7 @@ function cosine(a: number[], b: number[]): number {
 
 function loadGoldDomains(): Map<string, Set<string>> {
   const goldPath = resolve(process.cwd(), 'eval', 'gold-standards.json')
-  const raw = JSON.parse(readFileSync(goldPath, 'utf8')) as Record<
-    string,
-    { relevantDomains?: string[] }
-  >
+  const raw = JSON.parse(readFileSync(goldPath, 'utf8')) as Record<string, { relevantDomains?: string[] }>
   const map = new Map<string, Set<string>>()
   for (const [id, entry] of Object.entries(raw)) {
     if (id.startsWith('_')) continue
@@ -150,7 +144,7 @@ async function main(): Promise<void> {
     const batch = queries.slice(start, start + BATCH).map((q) => q.query)
     const embs = await embedBatch(ollamaUrl, batch)
     for (const e of embs) vectors.push(normalize(e))
-    if ((start % (BATCH * 8)) === 0) process.stdout.write(`  ${start + batch.length}/${queries.length}\n`)
+    if (start % (BATCH * 8) === 0) process.stdout.write(`  ${start + batch.length}/${queries.length}\n`)
   }
   console.log('Embeddings ready. Computing pairwise similarities...')
 
@@ -213,7 +207,9 @@ async function main(): Promise<void> {
   console.log('\n=== Semantic Cache Hit-Rate Simulation ===')
   console.log(`queries (deduped): ${n} / ${queries.length}`)
   console.log(`max-similarity-to-nearest-distinct-query percentiles:`)
-  console.log(`  p10=${pct(0.1).toFixed(4)} p25=${pct(0.25).toFixed(4)} p50=${pct(0.5).toFixed(4)} p75=${pct(0.75).toFixed(4)} p90=${pct(0.9).toFixed(4)} p99=${pct(0.99).toFixed(4)} max=${maxSims[maxSims.length - 1].toFixed(4)}`)
+  console.log(
+    `  p10=${pct(0.1).toFixed(4)} p25=${pct(0.25).toFixed(4)} p50=${pct(0.5).toFixed(4)} p75=${pct(0.75).toFixed(4)} p90=${pct(0.9).toFixed(4)} p99=${pct(0.99).toFixed(4)} max=${maxSims[maxSims.length - 1].toFixed(4)}`,
+  )
 
   console.log('\npairs above threshold (distinct queries only):')
   for (const t of [...THRESHOLDS].reverse()) {
@@ -226,7 +222,9 @@ async function main(): Promise<void> {
     const judgable = above.filter((p) => p.sameIntent !== undefined)
     const correct = judgable.filter((p) => p.sameIntent === true)
     const prec = judgable.length > 0 ? `${((100 * correct.length) / judgable.length).toFixed(1)}%` : 'n/a'
-    console.log(`  >=${t.toFixed(2)}: ${above.length} pairs, judgable=${judgable.length}, same-intent=${correct.length} (precision ${prec})`)
+    console.log(
+      `  >=${t.toFixed(2)}: ${above.length} pairs, judgable=${judgable.length}, same-intent=${correct.length} (precision ${prec})`,
+    )
   }
 
   console.log('\nLEXICAL GATE effect at cosine >= 0.92 (dice >= gate):')
@@ -236,7 +234,9 @@ async function main(): Promise<void> {
     const judgable = pass.filter((p) => p.sameIntent !== undefined)
     const correct = judgable.filter((p) => p.sameIntent === true)
     const prec = judgable.length > 0 ? `${((100 * correct.length) / judgable.length).toFixed(1)}%` : 'n/a'
-    console.log(`  dice>=${gate.toFixed(2)}: kept ${pass.length}/${pairs092.length} pairs, same-intent=${correct.length}/${judgable.length} (precision ${prec})`)
+    console.log(
+      `  dice>=${gate.toFixed(2)}: kept ${pass.length}/${pairs092.length} pairs, same-intent=${correct.length}/${judgable.length} (precision ${prec})`,
+    )
   }
 
   console.log('\nwrong-intent pairs the lexical gate would block (dice < 0.3, first 15):')

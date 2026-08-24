@@ -172,28 +172,188 @@ export interface BackendSimConfig {
  */
 export const BACKEND_MODEL: BackendSimConfig[] = [
   // 보편 백엔드 — 거의 모든 쿼리에 존재.
-  { name: 'bing', attempts: 1, delaysMs: [], ceilingMs: backendTimeoutMs('bing', 2000), waitFor: false, medianMs: 300, sigma: 0.5, failProb: 0.05, presenceProb: 1.0 },
-  { name: 'brave', attempts: 2, delaysMs: [150], ceilingMs: backendTimeoutMs('brave', 2000), waitFor: false, medianMs: 300, sigma: 0.5, failProb: 0.08, presenceProb: 0.9 },
-  { name: 'hackernews', attempts: 1, delaysMs: [], ceilingMs: backendTimeoutMs('hackernews', 1800), waitFor: false, medianMs: 250, sigma: 0.4, failProb: 0.05, presenceProb: 0.8 },
-  { name: 'reddit', attempts: 2, delaysMs: [150], ceilingMs: backendTimeoutMs('reddit', 2000), waitFor: false, medianMs: 350, sigma: 0.5, failProb: 0.15, presenceProb: 0.8 },
-  { name: 'wikipedia', attempts: 3, delaysMs: [300, 600], ceilingMs: backendTimeoutMs('wikipedia', 4500), waitFor: true, medianMs: 400, sigma: 0.6, failProb: 0.35, presenceProb: 0.95 },
+  {
+    name: 'bing',
+    attempts: 1,
+    delaysMs: [],
+    ceilingMs: backendTimeoutMs('bing', 2000),
+    waitFor: false,
+    medianMs: 300,
+    sigma: 0.5,
+    failProb: 0.05,
+    presenceProb: 1.0,
+  },
+  {
+    name: 'brave',
+    attempts: 2,
+    delaysMs: [150],
+    ceilingMs: backendTimeoutMs('brave', 2000),
+    waitFor: false,
+    medianMs: 300,
+    sigma: 0.5,
+    failProb: 0.08,
+    presenceProb: 0.9,
+  },
+  {
+    name: 'hackernews',
+    attempts: 1,
+    delaysMs: [],
+    ceilingMs: backendTimeoutMs('hackernews', 1800),
+    waitFor: false,
+    medianMs: 250,
+    sigma: 0.4,
+    failProb: 0.05,
+    presenceProb: 0.8,
+  },
+  {
+    name: 'reddit',
+    attempts: 2,
+    delaysMs: [150],
+    ceilingMs: backendTimeoutMs('reddit', 2000),
+    waitFor: false,
+    medianMs: 350,
+    sigma: 0.5,
+    failProb: 0.15,
+    presenceProb: 0.8,
+  },
+  {
+    name: 'wikipedia',
+    attempts: 3,
+    delaysMs: [300, 600],
+    ceilingMs: backendTimeoutMs('wikipedia', 4500),
+    waitFor: true,
+    medianMs: 400,
+    sigma: 0.6,
+    failProb: 0.35,
+    presenceProb: 0.95,
+  },
   // 한국어 쿼리 전용 (eval kr계열 ≈ 40%).
-  { name: 'naver', attempts: 2, delaysMs: [600], ceilingMs: backendTimeoutMs('naver', 2500), waitFor: false, medianMs: 350, sigma: 0.5, failProb: 0.1, presenceProb: 0.45 },
-  { name: 'naver-news', attempts: 2, delaysMs: [1200], ceilingMs: backendTimeoutMs('naver-news', 4000), waitFor: true, medianMs: 500, sigma: 0.6, failProb: 0.12, presenceProb: 0.2 },
+  {
+    name: 'naver',
+    attempts: 2,
+    delaysMs: [600],
+    ceilingMs: backendTimeoutMs('naver', 2500),
+    waitFor: false,
+    medianMs: 350,
+    sigma: 0.5,
+    failProb: 0.1,
+    presenceProb: 0.45,
+  },
+  {
+    name: 'naver-news',
+    attempts: 2,
+    delaysMs: [1200],
+    ceilingMs: backendTimeoutMs('naver-news', 4000),
+    waitFor: true,
+    medianMs: 500,
+    sigma: 0.6,
+    failProb: 0.12,
+    presenceProb: 0.2,
+  },
   // 뉴스 + en 금융 (RSS feed).
-  { name: 'bing-news-rss', attempts: 2, delaysMs: [300], ceilingMs: backendTimeoutMs('bing-news-rss', 2500), waitFor: true, medianMs: 400, sigma: 0.5, failProb: 0.08, presenceProb: 0.3 },
-  { name: 'google-news-rss', attempts: 2, delaysMs: [300], ceilingMs: backendTimeoutMs('google-news-rss', 2500), waitFor: true, medianMs: 400, sigma: 0.5, failProb: 0.08, presenceProb: 0.35 },
+  {
+    name: 'bing-news-rss',
+    attempts: 2,
+    delaysMs: [300],
+    ceilingMs: backendTimeoutMs('bing-news-rss', 2500),
+    waitFor: true,
+    medianMs: 400,
+    sigma: 0.5,
+    failProb: 0.08,
+    presenceProb: 0.3,
+  },
+  {
+    name: 'google-news-rss',
+    attempts: 2,
+    delaysMs: [300],
+    ceilingMs: backendTimeoutMs('google-news-rss', 2500),
+    waitFor: true,
+    medianMs: 400,
+    sigma: 0.5,
+    failProb: 0.08,
+    presenceProb: 0.35,
+  },
   // 429-취약 권위 백엔드 — 실패 확률 높음, 긴 체인 + waitFor.
-  { name: 'yahoo-finance', attempts: 3, delaysMs: [150, 350], ceilingMs: backendTimeoutMs('yahoo-finance', 4500), waitFor: true, medianMs: 500, sigma: 0.5, failProb: 0.15, presenceProb: 0.12 },
+  {
+    name: 'yahoo-finance',
+    attempts: 3,
+    delaysMs: [150, 350],
+    ceilingMs: backendTimeoutMs('yahoo-finance', 4500),
+    waitFor: true,
+    medianMs: 500,
+    sigma: 0.5,
+    failProb: 0.15,
+    presenceProb: 0.12,
+  },
   // 느린 학술 백엔드 — 긴 단일 시도, ceiling 4500 (P1-G 패턴).
-  { name: 'arxiv', attempts: 2, delaysMs: [150], ceilingMs: backendTimeoutMs('arxiv', 4500), waitFor: true, medianMs: 800, sigma: 0.7, failProb: 0.2, presenceProb: 0.25 },
-  { name: 'openalex', attempts: 2, delaysMs: [150], ceilingMs: backendTimeoutMs('openalex', 4500), waitFor: false, medianMs: 600, sigma: 0.6, failProb: 0.15, presenceProb: 0.12 },
+  {
+    name: 'arxiv',
+    attempts: 2,
+    delaysMs: [150],
+    ceilingMs: backendTimeoutMs('arxiv', 4500),
+    waitFor: true,
+    medianMs: 800,
+    sigma: 0.7,
+    failProb: 0.2,
+    presenceProb: 0.25,
+  },
+  {
+    name: 'openalex',
+    attempts: 2,
+    delaysMs: [150],
+    ceilingMs: backendTimeoutMs('openalex', 4500),
+    waitFor: false,
+    medianMs: 600,
+    sigma: 0.6,
+    failProb: 0.15,
+    presenceProb: 0.12,
+  },
   // 기술 쿼리 전용.
-  { name: 'github', attempts: 1, delaysMs: [], ceilingMs: backendTimeoutMs('github', 2000), waitFor: false, medianMs: 400, sigma: 0.5, failProb: 0.1, presenceProb: 0.5 },
-  { name: 'qiita', attempts: 1, delaysMs: [], ceilingMs: backendTimeoutMs('qiita', 4000), waitFor: true, medianMs: 600, sigma: 0.5, failProb: 0.1, presenceProb: 0.08 },
-  { name: 'juejin', attempts: 1, delaysMs: [], ceilingMs: backendTimeoutMs('juejin', 4000), waitFor: true, medianMs: 600, sigma: 0.5, failProb: 0.1, presenceProb: 0.1 },
+  {
+    name: 'github',
+    attempts: 1,
+    delaysMs: [],
+    ceilingMs: backendTimeoutMs('github', 2000),
+    waitFor: false,
+    medianMs: 400,
+    sigma: 0.5,
+    failProb: 0.1,
+    presenceProb: 0.5,
+  },
+  {
+    name: 'qiita',
+    attempts: 1,
+    delaysMs: [],
+    ceilingMs: backendTimeoutMs('qiita', 4000),
+    waitFor: true,
+    medianMs: 600,
+    sigma: 0.5,
+    failProb: 0.1,
+    presenceProb: 0.08,
+  },
+  {
+    name: 'juejin',
+    attempts: 1,
+    delaysMs: [],
+    ceilingMs: backendTimeoutMs('juejin', 4000),
+    waitFor: true,
+    medianMs: 600,
+    sigma: 0.5,
+    failProb: 0.1,
+    presenceProb: 0.1,
+  },
   // 비한국어·비뉴스 일반 (searxng 미설정 시 폴백).
-  { name: 'duckduckgo', attempts: 2, delaysMs: [150], ceilingMs: backendTimeoutMs('duckduckgo', 2000), waitFor: false, medianMs: 400, sigma: 0.5, failProb: 0.1, presenceProb: 0.4 },
+  {
+    name: 'duckduckgo',
+    attempts: 2,
+    delaysMs: [150],
+    ceilingMs: backendTimeoutMs('duckduckgo', 2000),
+    waitFor: false,
+    medianMs: 400,
+    sigma: 0.5,
+    failProb: 0.1,
+    presenceProb: 0.4,
+  },
 ]
 
 /** 프로덕션 waitFor 목록 (orchestrator.ts fanoutBackends 호출과 동일). */
@@ -451,7 +611,12 @@ function buildScenarios(): Scenario[] {
   return [
     { id: 'A', label: 'production (phases 800/1800/3500 + waitFor 8)', phases: prodPhases, waitFor: prodWait },
     { id: 'B', label: 'no waitFor (phases 800/1800/3500)', phases: prodPhases, waitFor: new Set<string>() },
-    { id: 'C', label: 'tight phases 600/1200/2500, no waitFor (aggressive)', phases: tightPhases, waitFor: new Set<string>() },
+    {
+      id: 'C',
+      label: 'tight phases 600/1200/2500, no waitFor (aggressive)',
+      phases: tightPhases,
+      waitFor: new Set<string>(),
+    },
   ]
 }
 
@@ -545,7 +710,11 @@ export function parseFailureScenario(scenario: string | undefined, windowProb: n
     return { wikipediaWindowProb: windowProb, wikipediaMirrorSuccess: 0.8, downBackends: [] }
   }
   if (scenario.startsWith('backend-down:')) {
-    const names = scenario.slice('backend-down:'.length).split(',').map((s) => s.trim()).filter(Boolean)
+    const names = scenario
+      .slice('backend-down:'.length)
+      .split(',')
+      .map((s) => s.trim())
+      .filter(Boolean)
     if (names.length === 0) {
       throw new Error(`[sim-fanout-latency] invalid --scenario: ${scenario} (no backends after 'backend-down:')`)
     }
@@ -615,8 +784,16 @@ function fmtPct(n: number): string {
 }
 
 function main(): void {
-  const { iterations, seed, maxResults, json, modelPath, scenario: scenarioArg, windowProb, waitForPolicySpec } =
-    parseCli(process.argv.slice(2))
+  const {
+    iterations,
+    seed,
+    maxResults,
+    json,
+    modelPath,
+    scenario: scenarioArg,
+    windowProb,
+    waitForPolicySpec,
+  } = parseCli(process.argv.slice(2))
   const failure = parseFailureScenario(scenarioArg, windowProb)
   const waitForPolicy = parseWaitForPolicy(waitForPolicySpec)
   const calibrated = modelPath ? loadCalibratedModel(modelPath) : undefined
@@ -729,7 +906,9 @@ function main(): void {
   // 시나리오 A의 백엔드별 통계
   const runA = runs[0]
   console.log('\nPer-backend (scenario A — production):')
-  console.log(`  ${'backend'.padEnd(16)} ${'produced'.padStart(9)} ${'collected'.padStart(10)} ${'settle p50'.padStart(9)} ${'settle p95'.padStart(9)} ${'waitFor'.padStart(8)}`)
+  console.log(
+    `  ${'backend'.padEnd(16)} ${'produced'.padStart(9)} ${'collected'.padStart(10)} ${'settle p50'.padStart(9)} ${'settle p95'.padStart(9)} ${'waitFor'.padStart(8)}`,
+  )
   const rngA = mulberry32(seed)
   const producedCount: Record<string, number> = {}
   const presentCount: Record<string, number> = {}
@@ -777,14 +956,18 @@ function main(): void {
     }
   }
   const recoveryRate = lateArrivals > 0 ? rescued / lateArrivals : 0
-  console.log(`  late-arriving waitFor results: ${lateArrivals} (${fmtPct(lateArrivals / (iterations * model.filter((c) => c.waitFor).length))} per waitFor backend)`)
+  console.log(
+    `  late-arriving waitFor results: ${lateArrivals} (${fmtPct(lateArrivals / (iterations * model.filter((c) => c.waitFor).length))} per waitFor backend)`,
+  )
   console.log(`  rescued by the waitFor await: ${fmtPct(recoveryRate)} of late arrivals`)
 
   if (waitForComparison) {
     const pct = (r: RunStats, p: number) => percentiles(r.walls, [p])[0]
     console.log('\n=== waitFor policy experiment (scenario A — production) ===')
     console.log(`policy: ${waitForPolicySpec} — static(프로덕션) 대비 동일 쿼리 비교 (await 제거만 → 지연 단조 비증가)`)
-    console.log(`  ${'percentile'.padEnd(12)} ${'static'.padStart(8)} ${'policy'.padStart(8)} ${'Δms'.padStart(8)} ${'Δ%'.padStart(8)}`)
+    console.log(
+      `  ${'percentile'.padEnd(12)} ${'static'.padStart(8)} ${'policy'.padStart(8)} ${'Δms'.padStart(8)} ${'Δ%'.padStart(8)}`,
+    )
     for (const p of [50, 95, 99]) {
       const b = pct(waitForComparison.base, p)
       const f = pct(waitForComparison.policy, p)
@@ -793,12 +976,17 @@ function main(): void {
       )
     }
     console.log('\n  collected rates (per query) — static → policy:')
-    const allNames = new Set([...Object.keys(waitForComparison.base.collectedRate), ...Object.keys(waitForComparison.policy.collectedRate)])
+    const allNames = new Set([
+      ...Object.keys(waitForComparison.base.collectedRate),
+      ...Object.keys(waitForComparison.policy.collectedRate),
+    ])
     for (const name of allNames) {
       const b = waitForComparison.base.collectedRate[name] ?? 0
       const f = waitForComparison.policy.collectedRate[name] ?? 0
       if (b === 0 && f === 0) continue
-      console.log(`    ${name.padEnd(18)} ${fmtPct(b / iterations).padStart(7)} → ${fmtPct(f / iterations).padStart(7)}`)
+      console.log(
+        `    ${name.padEnd(18)} ${fmtPct(b / iterations).padStart(7)} → ${fmtPct(f / iterations).padStart(7)}`,
+      )
     }
   }
 
@@ -806,7 +994,9 @@ function main(): void {
     const pct = (r: RunStats, p: number) => percentiles(r.walls, [p])[0]
     console.log('\n=== Conditional failure degradation (scenario A — production) ===')
     console.log(`scenario: ${scenarioArg} (windowProb=${windowProb}) — baseline과 동일 쿼리(같은 시드) 비교`)
-    console.log(`  ${'percentile'.padEnd(12)} ${'baseline'.padStart(8)} ${'failed'.padStart(8)} ${'Δms'.padStart(8)} ${'Δ%'.padStart(8)}`)
+    console.log(
+      `  ${'percentile'.padEnd(12)} ${'baseline'.padStart(8)} ${'failed'.padStart(8)} ${'Δms'.padStart(8)} ${'Δ%'.padStart(8)}`,
+    )
     for (const p of [50, 95, 99]) {
       const b = pct(degradation.base, p)
       const f = pct(degradation.failed, p)
@@ -820,14 +1010,18 @@ function main(): void {
       const b = degradation.base.collectedRate[name] ?? 0
       const f = degradation.failed.collectedRate[name] ?? 0
       if (b === 0 && f === 0) continue
-      console.log(`    ${name.padEnd(18)} ${fmtPct(b / iterations).padStart(7)} → ${fmtPct(f / iterations).padStart(7)}`)
+      console.log(
+        `    ${name.padEnd(18)} ${fmtPct(b / iterations).padStart(7)} → ${fmtPct(f / iterations).padStart(7)}`,
+      )
     }
   }
 
   console.log('\nInterpretation:')
   console.log('  - p50 is dominated by the phase-1 early exit (one healthy primary fills the page).')
   console.log('  - p95/p99 are driven by waitFor backends (wikipedia 429 chains, arxiv XML, yahoo retries).')
-  console.log('  - Scenario C shows the phase-shortening ceiling: faster p50/p95 at the cost of more late results dropped.')
+  console.log(
+    '  - Scenario C shows the phase-shortening ceiling: faster p50/p95 at the cost of more late results dropped.',
+  )
   if (failure) {
     console.log('  - Conditional failure: wikipedia-429-window는 체인 스킵 + 미러 await로 지연을 늘리고,')
     console.log('    backend-down은 주력 백엔드 이탈 시 phase 연장으로 지연을 늘린다 (위 Δ 표).')

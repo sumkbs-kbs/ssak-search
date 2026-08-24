@@ -23,8 +23,13 @@ const RESULTS_DIR = path.join(EVAL_DIR, 'results')
 
 // ── Parse CLI args ──
 const args = process.argv.slice(2)
-const queryCount = parseInt(args.find((a: string) => a.startsWith('--queries'))?.split('=')[1] || args[args.indexOf('--queries') + 1] || '30')
-const weightsArg = args.find((a: string) => a.startsWith('--weights'))?.split('=')[1] || args[args.indexOf('--weights') + 1] || '0.6,0.7,0.8,0.9'
+const queryCount = parseInt(
+  args.find((a: string) => a.startsWith('--queries'))?.split('=')[1] || args[args.indexOf('--queries') + 1] || '30',
+)
+const weightsArg =
+  args.find((a: string) => a.startsWith('--weights'))?.split('=')[1] ||
+  args[args.indexOf('--weights') + 1] ||
+  '0.6,0.7,0.8,0.9'
 const WEIGHTS = weightsArg.split(',').map(Number)
 
 // ── Load data ──
@@ -32,8 +37,9 @@ const golds = JSON.parse(fs.readFileSync(path.join(EVAL_DIR, 'gold-standards.jso
 const latest = JSON.parse(fs.readFileSync(path.join(RESULTS_DIR, 'latest.json'), 'utf-8'))
 
 // Load chunk pools
-const chunkFiles = fs.readdirSync(RESULTS_DIR)
-  .filter(f => f.startsWith('chunk-') && f.endsWith('.json'))
+const chunkFiles = fs
+  .readdirSync(RESULTS_DIR)
+  .filter((f) => f.startsWith('chunk-') && f.endsWith('.json'))
   .sort()
 
 const poolsByQuery: Record<string, RerankDocument[]> = {}
@@ -54,7 +60,7 @@ for (const cf of chunkFiles) {
 }
 
 // ── Select queries ──
-const queryIds = Object.keys(poolsByQuery).filter(qid => {
+const queryIds = Object.keys(poolsByQuery).filter((qid) => {
   const gold = golds[qid]
   const pool = poolsByQuery[qid]
   return gold?.relevantDomains?.length > 0 && pool?.length >= 5
@@ -115,7 +121,7 @@ for (const qid of selectedIds) {
         { enableWorkersAI: false, enableSidecar: false, topK: 10 },
       )
 
-      const resultsForNdcg: SearchResult[] = reranked.map(r => ({
+      const resultsForNdcg: SearchResult[] = reranked.map((r) => ({
         title: r.title,
         url: r.url,
         content: r.content,
@@ -158,15 +164,15 @@ for (const w of WEIGHTS) {
 
 // ── Per-tag breakdown ──
 console.log('\n═══ Per-Tag NDCG@10 ═══')
-const tags = [...new Set(selectedIds.map(qid => tagMap.get(qid) || 'unknown'))].sort()
+const tags = [...new Set(selectedIds.map((qid) => tagMap.get(qid) || 'unknown'))].sort()
 
 for (const tag of tags) {
   const parts = WEIGHTS.map((w: number) => {
-    const tagQ = results[w].queries.filter(q => q.tag === tag)
+    const tagQ = results[w].queries.filter((q) => q.tag === tag)
     const avg = tagQ.length > 0 ? tagQ.reduce((s, q) => s + q.ndcg, 0) / tagQ.length : 0
     return `w=${w.toFixed(1)}: ${avg.toFixed(4)}`
   }).join(' | ')
-  const n = results[WEIGHTS[0]].queries.filter(q => q.tag === tag).length
+  const n = results[WEIGHTS[0]].queries.filter((q) => q.tag === tag).length
   console.log(`  ${tag.padEnd(12)} n=${String(n).padStart(3)} | ${parts}`)
 }
 
@@ -175,7 +181,10 @@ let bestW = 0.7
 let bestNdcg = 0
 for (const w of WEIGHTS) {
   const avg = results[w].count > 0 ? results[w].ndcgSum / results[w].count : 0
-  if (avg > bestNdcg) { bestNdcg = avg; bestW = w }
+  if (avg > bestNdcg) {
+    bestNdcg = avg
+    bestW = w
+  }
 }
 console.log(`\n→ Optimal weight: ${bestW.toFixed(1)} (NDCG@10: ${bestNdcg.toFixed(4)})`)
 

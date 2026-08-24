@@ -67,7 +67,7 @@ export const NEWS_HUB_OUTLETS: NewsHubOutlet[] = [
   { domain: 'theatlantic.com', feedUrl: 'https://www.theatlantic.com/feed/all/', lang: 'en' },
   { domain: 'newyorker.com', feedUrl: 'https://www.newyorker.com/feed/everything', lang: 'en' },
   { domain: 'vox.com', feedUrl: 'https://www.vox.com/rss/index.xml', lang: 'en' },
-  
+
   // ══════════════════════════════════════════════════════════════
   // EN — 비즈니스/금융 (8개)
   // ══════════════════════════════════════════════════════════════
@@ -77,9 +77,13 @@ export const NEWS_HUB_OUTLETS: NewsHubOutlet[] = [
   { domain: 'wsj.com', feedUrl: 'https://feeds.a.dj.com/rss/RSSMarketsMain.xml', lang: 'en' },
   { domain: 'businessinsider.com', feedUrl: 'https://markets.businessinsider.com/rss/news', lang: 'en' },
   { domain: 'finance.yahoo.com', feedUrl: 'https://finance.yahoo.com/news/rssindex', lang: 'en' },
-  { domain: 'investopedia.com', feedUrl: 'https://www.investopedia.com/feedbuilder/feed/getfeed/?feedName=rss_headline', lang: 'en' },
+  {
+    domain: 'investopedia.com',
+    feedUrl: 'https://www.investopedia.com/feedbuilder/feed/getfeed/?feedName=rss_headline',
+    lang: 'en',
+  },
   { domain: 'marketwatch.com', feedUrl: 'https://feeds.marketwatch.com/marketwatch/topstories/', lang: 'en' },
-  
+
   // ══════════════════════════════════════════════════════════════
   // EN — 기술 (10개)
   // ══════════════════════════════════════════════════════════════
@@ -93,7 +97,7 @@ export const NEWS_HUB_OUTLETS: NewsHubOutlet[] = [
   { domain: 'zdnet.com', feedUrl: 'https://www.zdnet.com/news/rss.xml', lang: 'en' },
   { domain: 'cnet.com', feedUrl: 'https://www.cnet.com/rss/news/', lang: 'en' },
   { domain: 'tomsguide.com', feedUrl: 'https://www.tomsguide.com/feeds/all', lang: 'en' },
-  
+
   // ══════════════════════════════════════════════════════════════
   // KR — 한국 뉴스 (10개)
   // ══════════════════════════════════════════════════════════════
@@ -107,7 +111,7 @@ export const NEWS_HUB_OUTLETS: NewsHubOutlet[] = [
   { domain: 'sedaily.com', feedUrl: 'http://www.sedaily.com/rss/rss_all.xml', lang: 'ko' },
   { domain: 'etnews.com', feedUrl: 'https://www.etnews.com/rss/news_all.xml', lang: 'ko' },
   { domain: 'zdnet.co.kr', feedUrl: 'https://www.zdnet.co.kr/rss/news.xml', lang: 'ko' },
-  
+
   // ══════════════════════════════════════════════════════════════
   // JP — 일본 뉴스 (7개)
   // ══════════════════════════════════════════════════════════════
@@ -118,19 +122,23 @@ export const NEWS_HUB_OUTLETS: NewsHubOutlet[] = [
   { domain: 'nikkei.com', feedUrl: 'https://www.nikkei.com/rss/', lang: 'ja' },
   { domain: 'mainichi.jp', feedUrl: 'https://mainichi.jp/rss/', lang: 'ja' },
   { domain: 'sankei.com', feedUrl: 'https://www.sankei.com/rss/news.xml', lang: 'ja' },
-  
+
   // ══════════════════════════════════════════════════════════════
   // ZH — 중국 뉴스 (8개)
   // ══════════════════════════════════════════════════════════════
   { domain: 'people.com.cn', feedUrl: 'http://www.people.com.cn/rss/politics.xml', lang: 'zh' },
   { domain: 'xinhuanet.com', feedUrl: 'http://www.xinhuanet.com/politics/news_politics.xml', lang: 'zh' },
   { domain: 'ithome.com', feedUrl: 'https://www.ithome.com/rss/', lang: 'zh' },
-  { domain: 'sina.com.cn', feedUrl: 'https://feed.mix.sina.com.cn/api/roll/get?pageid=153&lid=2509&k=&num=50&page=1', lang: 'zh' },
+  {
+    domain: 'sina.com.cn',
+    feedUrl: 'https://feed.mix.sina.com.cn/api/roll/get?pageid=153&lid=2509&k=&num=50&page=1',
+    lang: 'zh',
+  },
   { domain: 'sohu.com', feedUrl: 'https://www.sohu.com/rss/sports.xml', lang: 'zh' },
   { domain: '163.com', feedUrl: 'https://news.163.com/special/0001220O/newsdata_news_index.js', lang: 'zh' },
   { domain: 'qq.com', feedUrl: 'https://new.qq.com/rss/', lang: 'zh' },
   { domain: '36kr.com', feedUrl: 'https://36kr.com/feed', lang: 'zh' },
-  
+
   // ══════════════════════════════════════════════════════════════
   // EN — 과학/의료 (5개)
   // ══════════════════════════════════════════════════════════════

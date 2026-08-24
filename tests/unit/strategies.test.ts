@@ -600,18 +600,48 @@ describe('Search Strategies — task composition', () => {
 
     it('omits the S104 site: task for EN/KR/JA and zh non-travel queries', () => {
       // EN — reddit/SE 경로가 커뮤니티 gold 담당
-      expect(taskNames(getStrategy('all').buildTasks(makeCtx({ focus: 'all', queryType: 'general', query: 'best travel tips' })))).not.toContain('ddg-site-zh-travel')
+      expect(
+        taskNames(
+          getStrategy('all').buildTasks(makeCtx({ focus: 'all', queryType: 'general', query: 'best travel tips' })),
+        ),
+      ).not.toContain('ddg-site-zh-travel')
       // KR — naver 경로
-      expect(taskNames(getStrategy('all').buildTasks(makeCtx({ focus: 'all', queryType: 'general', korean: true, query: '제주도 여행 코스' })))).not.toContain('ddg-site-zh-travel')
+      expect(
+        taskNames(
+          getStrategy('all').buildTasks(
+            makeCtx({ focus: 'all', queryType: 'general', korean: true, query: '제주도 여행 코스' }),
+          ),
+        ),
+      ).not.toContain('ddg-site-zh-travel')
       // JA — yahoo.co.jp/japan-guide는 ja 경로
-      expect(taskNames(getStrategy('all').buildTasks(makeCtx({ focus: 'all', queryType: 'general', japanese: true, query: '京都旅行 おすすめ' })))).not.toContain('ddg-site-zh-travel')
+      expect(
+        taskNames(
+          getStrategy('all').buildTasks(
+            makeCtx({ focus: 'all', queryType: 'general', japanese: true, query: '京都旅行 おすすめ' }),
+          ),
+        ),
+      ).not.toContain('ddg-site-zh-travel')
       // zh 학습/리스트 쿼리 — 게이트 미통과
-      expect(taskNames(getStrategy('all').buildTasks(makeCtx({ focus: 'all', queryType: 'general', chinese: true, query: '考研复习计划' })))).not.toContain('ddg-site-zh-travel')
+      expect(
+        taskNames(
+          getStrategy('all').buildTasks(
+            makeCtx({ focus: 'all', queryType: 'general', chinese: true, query: '考研复习计划' }),
+          ),
+        ),
+      ).not.toContain('ddg-site-zh-travel')
     })
 
     it('pickZhTravelCommunityDomain is deterministic and always in the gold set (S104)', async () => {
-      const { pickZhTravelCommunityDomain, ZH_TRAVEL_COMMUNITY_GOLD } = await import('../../src/lib/search/backend-tasks')
-      const queries = ['张家界旅游攻略', '成都美食攻略', '西藏旅游注意事项', '香港购物攻略', '重庆火锅推荐', '减肥食谱推荐']
+      const { pickZhTravelCommunityDomain, ZH_TRAVEL_COMMUNITY_GOLD } =
+        await import('../../src/lib/search/backend-tasks')
+      const queries = [
+        '张家界旅游攻略',
+        '成都美食攻略',
+        '西藏旅游注意事项',
+        '香港购物攻略',
+        '重庆火锅推荐',
+        '减肥食谱推荐',
+      ]
       for (const q of queries) {
         const a = pickZhTravelCommunityDomain(q)
         const b = pickZhTravelCommunityDomain(q)

@@ -84,20 +84,20 @@ export class AllStrategy implements SearchStrategy {
     // ── Bing 4종 병렬 사용 (무료, 안정적) ──
     // Bing은 가장 안정적인 무료 백엔드 (0% 에러율, 17K+ 요청)
     // 4종 병렬로 검색 결과 다양성 + 커버리지 극대화
-    
+
     // 1. Bing 메인 검색 (항상 실행)
     tasks.push(buildBingTask(ctx))
-    
+
     // 2. Bing-News (뉴스 쿼리 시)
     if (ctx.isNews) {
       tasks.push(buildBingNewsTask(ctx))
     }
-    
+
     // 3. Bing-Finance (금융 쿼리 시)
     if (ctx.isFinance && !ctx.korean) {
       tasks.push(buildBingFinanceTask(ctx))
     }
-    
+
     // 4. Bing-Cleaned (중국어 쿼리 시)
     if (ctx.chinese) {
       const cleanedQuery = cleanChineseQuery(ctx.query)
@@ -114,17 +114,17 @@ export class AllStrategy implements SearchStrategy {
         })
       }
     }
-    
+
     // 0b. Naver search (PRIMARY for Korean queries)
     if (ctx.korean) {
       tasks.push(buildNaverTask(ctx))
     }
-    
+
     // 1. Stock Finance (Korean stocks) — Naver Finance API
     if (ctx.isFinance && ctx.korean) {
       tasks.push(buildKoreanStockTask(ctx, 5))
     }
-    
+
     // 1b. Yahoo Finance (금융 쿼리 시, 모든 플랜에서 활성화)
     if (ctx.isFinance && !ctx.korean) {
       tasks.push(buildYahooFinanceTask(ctx, 5))
@@ -141,7 +141,7 @@ export class AllStrategy implements SearchStrategy {
       tasks.push(buildNewsOutletTask(ctx))
       tasks.push(buildNewsHubTask(ctx))
     }
-    
+
     // Chinese query: CSDN + Baidu 추가 (무료 플랜에서도 활성화)
     if (ctx.chinese) {
       tasks.push(buildCsdnTask(ctx, 3))
@@ -179,7 +179,11 @@ export class AllStrategy implements SearchStrategy {
         tasks.push(buildStackExchangeTask(ctx, 5))
 
         // DDG site:MDN — 모든 플랜에서 활성화
-        if (/\b(docs?|documentation|reference|guide|tutorial|example|examples|api|how\s+to|explain(ed)?|what\s+is)\b/i.test(ctx.query)) {
+        if (
+          /\b(docs?|documentation|reference|guide|tutorial|example|examples|api|how\s+to|explain(ed)?|what\s+is)\b/i.test(
+            ctx.query,
+          )
+        ) {
           tasks.push({
             name: 'ddg-site-mdn',
             run: () =>
@@ -214,13 +218,7 @@ export class AllStrategy implements SearchStrategy {
     }
 
     // ── DDG site:reddit.com — 모든 플랜에서 활성화 ──
-    if (
-      isCommunityAdviceIntent(ctx.query) &&
-      !ctx.korean &&
-      !ctx.chinese &&
-      !ctx.japanese &&
-      !searxngConfigured
-    ) {
+    if (isCommunityAdviceIntent(ctx.query) && !ctx.korean && !ctx.chinese && !ctx.japanese && !searxngConfigured) {
       tasks.push({
         name: 'ddg-site-reddit',
         run: () =>
@@ -233,12 +231,7 @@ export class AllStrategy implements SearchStrategy {
     }
 
     // ── Stack Exchange for programming-intent ──
-    if (
-      !ctx.korean &&
-      !ctx.chinese &&
-      !ctx.japanese &&
-      isProgrammingIntent(ctx.query)
-    ) {
+    if (!ctx.korean && !ctx.chinese && !ctx.japanese && isProgrammingIntent(ctx.query)) {
       tasks.push(buildStackExchangeTask(ctx, 5))
     }
 

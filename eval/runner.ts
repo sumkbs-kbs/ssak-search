@@ -295,13 +295,7 @@ export async function runEval(
     // technical-tag burst 403s past ~10 calls and drops the github backend
     // for the rest of the run (S75), so github-routing queries get the
     // longest pace of all.
-    const paceMs = srcs.useArxiv
-      ? arxivPaceMs
-      : srcs.useGitHub
-        ? githubPaceMs
-        : usesWikipedia
-          ? wikiPaceMs
-          : fastPaceMs
+    const paceMs = srcs.useArxiv ? arxivPaceMs : srcs.useGitHub ? githubPaceMs : usesWikipedia ? wikiPaceMs : fastPaceMs
     if (paceMs > 0) {
       await new Promise((r) => setTimeout(r, paceMs))
     }

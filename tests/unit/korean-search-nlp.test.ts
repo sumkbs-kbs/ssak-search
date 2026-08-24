@@ -14,11 +14,7 @@
  */
 
 import { describe, it, expect, beforeEach } from 'vitest'
-import {
-  stripKoreanSuffix,
-  normalizeKoreanToken,
-  normalizeKoreanQuery,
-} from '../../src/lib/korean/stemmer'
+import { stripKoreanSuffix, normalizeKoreanToken, normalizeKoreanQuery } from '../../src/lib/korean/stemmer'
 import { expandQuery, setQueryExpansionEnabled } from '../../src/lib/understanding/query-expander'
 import { tokenize } from '../../src/lib/retrieval/bm25'
 import { computeScore } from '../../src/lib/util'

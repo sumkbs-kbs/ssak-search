@@ -32,8 +32,7 @@ interface PoolItem {
   response: { results: PoolResult[] }
 }
 
-const poolPath =
-  process.env.AB_POOLS ?? '/Users/mr.k/Downloads/webapp/eval/results/latest.json'
+const poolPath = process.env.AB_POOLS ?? '/Users/mr.k/Downloads/webapp/eval/results/latest.json'
 const data = JSON.parse(readFileSync(poolPath, 'utf-8')) as {
   report?: { results: PoolItem[] }
   results?: PoolItem[]

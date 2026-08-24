@@ -27,15 +27,23 @@ function loadAllResults() {
     try {
       const data = JSON.parse(fs.readFileSync(f, 'utf-8'))
       results.push(...(data.report.results || []))
-    } catch { /* ignore invalid URL */ }
+    } catch {
+      /* ignore invalid URL */
+    }
   }
   return results
 }
 
 function extractDomains(results: SearchResult[]): string[] {
-  return results.map((r: SearchResult) => {
-    try { return new URL(r.url).hostname.replace(/^www\./, '') } catch { return '' }
-  }).filter(Boolean)
+  return results
+    .map((r: SearchResult) => {
+      try {
+        return new URL(r.url).hostname.replace(/^www\./, '')
+      } catch {
+        return ''
+      }
+    })
+    .filter(Boolean)
 }
 
 const gs = JSON.parse(fs.readFileSync(GS_PATH, 'utf-8'))
@@ -70,19 +78,41 @@ for (const [queryId, gold] of Object.entries(gs) as [string, { relevantDomains?:
   // Japanese-relevant domains to consider adding
   const jaExtras = [
     // Travel
-    'travel.rakuten.co.jp', 'rurubu.jp', 'tabirai.net', '4travel.jp',
-    'jalan.net', 'ikyu.com', 'navitime.co.jp', 'ekitan.com',
-    'tabi-melier.jp', 'tsunagujapan.com',
+    'travel.rakuten.co.jp',
+    'rurubu.jp',
+    'tabirai.net',
+    '4travel.jp',
+    'jalan.net',
+    'ikyu.com',
+    'navitime.co.jp',
+    'ekitan.com',
+    'tabi-melier.jp',
+    'tsunagujapan.com',
     // News
-    'news.google.com', 'mainichi.jp', 'yomiuri.co.jp', 'sankei.com',
-    'response.jp', ' Impress.co.jp', 'techtarget.itmedia.co.jp',
+    'news.google.com',
+    'mainichi.jp',
+    'yomiuri.co.jp',
+    'sankei.com',
+    'response.jp',
+    ' Impress.co.jp',
+    'techtarget.itmedia.co.jp',
     // Tech
-    'zenn.dev', 'qiita.com', 'gigazine.net', 'hatena.ne.jp',
-    'techplay.jp', 'atmarkit.co.jp', 'note.com', 'media.goo.ne.jp',
+    'zenn.dev',
+    'qiita.com',
+    'gigazine.net',
+    'hatena.ne.jp',
+    'techplay.jp',
+    'atmarkit.co.jp',
+    'note.com',
+    'media.goo.ne.jp',
     // Food/Recipe
-    'cookpad.com', 'delishkitchen.tv', 'orangepage.net', 'kurashiru.com',
+    'cookpad.com',
+    'delishkitchen.tv',
+    'orangepage.net',
+    'kurashiru.com',
     // General
-    'news.yahoo.co.jp', 'news.yahoo.com',
+    'news.yahoo.co.jp',
+    'news.yahoo.com',
     // Wikipedia (always relevant for factual)
     'ja.wikipedia.org',
   ]
@@ -103,7 +133,7 @@ for (const [queryId, gold] of Object.entries(gs) as [string, { relevantDomains?:
     newDomains.add('orangepage.net')
   }
 
-  const added = [...newDomains].filter(d => !gold.relevantDomains?.includes(d))
+  const added = [...newDomains].filter((d) => !gold.relevantDomains?.includes(d))
   if (added.length > 0) {
     gold.relevantDomains = [...newDomains]
     console.log(`${queryId}: +${added.join(', ')}`)

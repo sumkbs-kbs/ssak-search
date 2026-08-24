@@ -1,5 +1,11 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest'
-import { OptimizedLRUCache, type MemoryManager, getMemoryManager, getMemoryStats, cleanupMemory } from '../../src/lib/memory/memory-optimizer'
+import {
+  OptimizedLRUCache,
+  type MemoryManager,
+  getMemoryManager,
+  getMemoryStats,
+  cleanupMemory,
+} from '../../src/lib/memory/memory-optimizer'
 
 describe('OptimizedLRUCache', () => {
   let cache: OptimizedLRUCache<string>
@@ -52,7 +58,7 @@ describe('OptimizedLRUCache', () => {
     shortCache.set('key', 'value')
     expect(shortCache.get('key')).toBe('value')
 
-    await new Promise(resolve => setTimeout(resolve, 150))
+    await new Promise((resolve) => setTimeout(resolve, 150))
     expect(shortCache.get('key')).toBeNull()
 
     shortCache.destroy()
@@ -68,7 +74,7 @@ describe('OptimizedLRUCache', () => {
   it('should delete entries', () => {
     cache.set('key', 'value')
     expect(cache.has('key')).toBe(true)
-    
+
     cache.delete('key')
     expect(cache.has('key')).toBe(false)
   })
@@ -77,7 +83,7 @@ describe('OptimizedLRUCache', () => {
     cache.set('key1', 'value1')
     cache.set('key2', 'value2')
     cache.clear()
-    
+
     expect(cache.size).toBe(0)
     expect(cache.get('key1')).toBeNull()
   })
@@ -93,7 +99,7 @@ describe('OptimizedLRUCache', () => {
     expect(stats.maxSize).toBe(3)
     expect(stats.totalHits).toBe(2)
     expect(stats.totalMisses).toBe(1)
-    expect(stats.hitRate).toBe(2/3)
+    expect(stats.hitRate).toBe(2 / 3)
   })
 
   it('should cleanup expired entries', async () => {
@@ -106,7 +112,7 @@ describe('OptimizedLRUCache', () => {
     cleanupCache.set('key1', 'value1')
     cleanupCache.set('key2', 'value2')
 
-    await new Promise(resolve => setTimeout(resolve, 150))
+    await new Promise((resolve) => setTimeout(resolve, 150))
 
     const removed = cleanupCache.cleanup()
     expect(removed).toBe(2)
@@ -126,7 +132,7 @@ describe('MemoryManager', () => {
   it('should register and retrieve caches', () => {
     const cache = manager.registerCache<string>('test-cache', { maxSize: 100 })
     expect(cache).toBeDefined()
-    
+
     const retrieved = manager.getCache<string>('test-cache')
     expect(retrieved).toBe(cache)
   })
@@ -144,7 +150,7 @@ describe('MemoryManager', () => {
   it('should collect stats from all caches', () => {
     manager.registerCache<string>('cache1')
     manager.registerCache<string>('cache2')
-    
+
     const stats = manager.getStats()
     expect(stats.totalCaches).toBeGreaterThanOrEqual(2)
     expect(stats.cacheStats).toBeDefined()

@@ -105,12 +105,7 @@ export class SSOManager {
   /**
    * Handle SSO callback.
    */
-  async handleCallback(
-    code: string,
-    state: string,
-    ipAddress: string,
-    userAgent: string,
-  ): Promise<SSOUser | null> {
+  async handleCallback(code: string, state: string, ipAddress: string, userAgent: string): Promise<SSOUser | null> {
     try {
       // Exchange code for tokens
       const tokens = await this.exchangeCode(code, state)
@@ -254,11 +249,7 @@ export class SSOManager {
     return user
   }
 
-  private createSession(
-    userId: string,
-    ipAddress: string,
-    userAgent: string,
-  ): SSOSession {
+  private createSession(userId: string, ipAddress: string, userAgent: string): SSOSession {
     const session: SSOSession = {
       sessionId: this.generateSessionId(),
       userId,
@@ -335,7 +326,7 @@ export class RBACManager {
     const user = this.getUser(userId)
     if (!user) return false
 
-    const role = this.policy.roles.find(r => r.id === roleId)
+    const role = this.policy.roles.find((r) => r.id === roleId)
     if (!role) return false
 
     if (!user.roles.includes(roleId)) {
@@ -370,7 +361,7 @@ export class RBACManager {
    * Get role by ID.
    */
   getRole(roleId: string): Role | undefined {
-    return this.policy.roles.find(r => r.id === roleId)
+    return this.policy.roles.find((r) => r.id === roleId)
   }
 
   private getUser(_userId: string): SSOUser | null {
@@ -442,7 +433,7 @@ export class AuditLogger {
     startDate?: number
     endDate?: number
   }): AuditEvent[] {
-    return this.events.filter(event => {
+    return this.events.filter((event) => {
       if (filters?.eventType && event.eventType !== filters.eventType) return false
       if (filters?.userId && event.userId !== filters.userId) return false
       if (filters?.resource && event.resource !== filters.resource) return false
@@ -462,7 +453,7 @@ export class AuditLogger {
     successRate: number
   } {
     const events = timeRange
-      ? this.events.filter(e => e.timestamp >= timeRange.start && e.timestamp <= timeRange.end)
+      ? this.events.filter((e) => e.timestamp >= timeRange.start && e.timestamp <= timeRange.end)
       : this.events
 
     const eventsByType: Record<string, number> = {}

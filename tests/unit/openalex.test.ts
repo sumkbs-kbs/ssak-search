@@ -358,7 +358,9 @@ describe('openalexSearch', () => {
   })
 
   it('does NOT retry the rate-limiter capacity-race throw', async () => {
-    mockFetchWithTimeout.mockRejectedValue(new Error('Rate limiter rejected (capacity race): https://api.openalex.org/works'))
+    mockFetchWithTimeout.mockRejectedValue(
+      new Error('Rate limiter rejected (capacity race): https://api.openalex.org/works'),
+    )
     const results = await openalexSearch('no capacity retry')
     expect(mockFetchWithTimeout).toHaveBeenCalledTimes(1)
     expect(results).toEqual([])

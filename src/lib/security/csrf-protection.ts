@@ -57,7 +57,7 @@ const DEFAULT_CONFIG: CsrfConfig = {
 function generateTokenValue(): string {
   const array = new Uint8Array(32)
   crypto.getRandomValues(array)
-  return Array.from(array, byte => byte.toString(16).padStart(2, '0')).join('')
+  return Array.from(array, (byte) => byte.toString(16).padStart(2, '0')).join('')
 }
 
 // ============================================================
@@ -117,7 +117,7 @@ export class CsrfManager {
     const now = Date.now()
 
     // Find matching token
-    const token = tokens.find(t => t.value === tokenValue)
+    const token = tokens.find((t) => t.value === tokenValue)
     if (!token) {
       return false
     }
@@ -125,14 +125,20 @@ export class CsrfManager {
     // Check expiration
     if (now > token.expiresAt) {
       // Remove expired token
-      this.tokens.set(sessionId, tokens.filter(t => t.value !== tokenValue))
+      this.tokens.set(
+        sessionId,
+        tokens.filter((t) => t.value !== tokenValue),
+      )
       return false
     }
 
     // Token is valid
     if (this.config.enableRotation) {
       // Rotate token after use
-      this.tokens.set(sessionId, tokens.filter(t => t.value !== tokenValue))
+      this.tokens.set(
+        sessionId,
+        tokens.filter((t) => t.value !== tokenValue),
+      )
     }
 
     return true
@@ -154,7 +160,7 @@ export class CsrfManager {
     let removed = 0
 
     for (const [sessionId, tokens] of this.tokens) {
-      const valid = tokens.filter(t => now <= t.expiresAt)
+      const valid = tokens.filter((t) => now <= t.expiresAt)
       if (valid.length === 0) {
         this.tokens.delete(sessionId)
       } else {

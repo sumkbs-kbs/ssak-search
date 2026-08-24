@@ -104,7 +104,7 @@ export class QueryBuilder {
     }
 
     if (this._orderBy.length > 0) {
-      const orders = this._orderBy.map(o => `${o.column} ${o.direction}`)
+      const orders = this._orderBy.map((o) => `${o.column} ${o.direction}`)
       sql += ` ORDER BY ${orders.join(', ')}`
     }
 
@@ -144,10 +144,7 @@ export class PostgresClient {
   /**
    * Execute a raw SQL query.
    */
-  async query<T = Record<string, unknown>>(
-    sql: string,
-    params?: unknown[],
-  ): Promise<QueryResult<T>> {
+  async query<T = Record<string, unknown>>(sql: string, params?: unknown[]): Promise<QueryResult<T>> {
     const startTime = Date.now()
 
     try {
@@ -180,9 +177,7 @@ export class PostgresClient {
   /**
    * Execute a query using the query builder.
    */
-  async queryBuilder<T = Record<string, unknown>>(
-    builder: QueryBuilder,
-  ): Promise<QueryResult<T>> {
+  async queryBuilder<T = Record<string, unknown>>(builder: QueryBuilder): Promise<QueryResult<T>> {
     const { sql, params } = builder.build()
     return this.query<T>(sql, params)
   }
@@ -190,9 +185,7 @@ export class PostgresClient {
   /**
    * Execute multiple queries in a transaction.
    */
-  async transaction<T>(
-    fn: (client: TransactionClient) => Promise<T>,
-  ): Promise<T> {
+  async transaction<T>(fn: (client: TransactionClient) => Promise<T>): Promise<T> {
     const client = this.createTransactionClient()
     try {
       await client.query('BEGIN')
@@ -244,7 +237,7 @@ export class PostgresClient {
     // For now, we'll use a mock implementation
 
     // Simulate query execution
-    await new Promise(resolve => setTimeout(resolve, 10))
+    await new Promise((resolve) => setTimeout(resolve, 10))
 
     return {
       rows: [] as T[],
@@ -253,10 +246,7 @@ export class PostgresClient {
     }
   }
 
-  private async executeWithRetry<T>(
-    fn: () => Promise<T>,
-    maxRetries = 3,
-  ): Promise<T> {
+  private async executeWithRetry<T>(fn: () => Promise<T>, maxRetries = 3): Promise<T> {
     let lastError: Error | null = null
 
     for (let attempt = 0; attempt < maxRetries; attempt++) {
@@ -267,7 +257,7 @@ export class PostgresClient {
         if (attempt < maxRetries - 1) {
           const delay = Math.min(1000 * Math.pow(2, attempt), 10_000)
           logger.warn('[Postgres] Retrying query', { attempt: attempt + 1, delayMs: delay })
-          await new Promise(resolve => setTimeout(resolve, delay))
+          await new Promise((resolve) => setTimeout(resolve, delay))
         }
       }
     }

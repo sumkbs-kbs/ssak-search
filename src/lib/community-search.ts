@@ -445,7 +445,7 @@ export async function csdnSearch(query: string, opts: CommunitySearchOptions = {
 
 /**
  * Baidu search — Chinese search engine returning real Chinese content.
- * 
+ *
  * Baidu's web search returns HTML which we parse for result URLs and titles.
  * From non-CN IPs, Baidu may return CAPTCHA (wappass redirect) — we detect
  * this and return empty gracefully.
@@ -482,32 +482,32 @@ export function resetBaiduQuota(): void {
  */
 function parseBaiduHtml(html: string, query: string, maxResults: number): SearchResult[] {
   const results: SearchResult[] = []
-  
+
   // Check for CAPTCHA redirect (wappass)
   if (html.includes('wappass.baidu.com') || html.includes('passport.baidu.com')) {
     logger.warn('Baidu CAPTCHA detected (non-CN IP)')
     return []
   }
-  
+
   // Match result containers: <div class="result" or <div class="c-container"
   // Each result has: <h3><a href="...">title</a></h3> and optional snippet
   const resultPattern = /<div[^>]*class="(?:result|c-container)"[^>]*>([\s\S]*?)<\/div>/gi
   const urlPattern = /href="(https?:\/\/[^"]+)"/i
   const titlePattern = /<h3[^>]*>([\s\S]*?)<\/h3>/i
   const cleanHtmlPattern = /<[^>]+>/g
-  
+
   let match: RegExpExecArray | null
   while ((match = resultPattern.exec(html)) !== null && results.length < maxResults) {
     const block = match[1]
-    
+
     // Extract URL
     const urlMatch = urlPattern.exec(block)
     if (!urlMatch) continue
     const url = urlMatch[1]
-    
+
     // Skip Baidu internal links
     if (url.includes('baidu.com') && !url.includes('baike.baidu.com')) continue
-    
+
     // Extract title
     const titleMatch = titlePattern.exec(block)
     let title = ''
@@ -515,16 +515,16 @@ function parseBaiduHtml(html: string, query: string, maxResults: number): Search
       title = titleMatch[1].replace(cleanHtmlPattern, '').trim()
       title = decodeEntities(title)
     }
-    
+
     if (!title || !url) continue
-    
+
     // Extract snippet (optional)
     let snippet = ''
     const snippetMatch = /<span[^>]*class="content-right_[^"]*"[^>]*>([\s\S]*?)<\/span>/i.exec(block)
     if (snippetMatch) {
       snippet = snippetMatch[1].replace(cleanHtmlPattern, '').trim()
     }
-    
+
     results.push({
       title,
       url,
@@ -533,7 +533,7 @@ function parseBaiduHtml(html: string, query: string, maxResults: number): Search
       score: computeScore(url, title, query),
     })
   }
-  
+
   return results.slice(0, maxResults)
 }
 
@@ -544,13 +544,13 @@ function parseBaiduHtml(html: string, query: string, maxResults: number): Search
  */
 export async function baiduSearch(query: string, opts: CommunitySearchOptions = {}): Promise<SearchResult[]> {
   const { maxResults = 5, timeoutMs = backendTimeoutMs('baidu', 8000), env } = opts
-  
+
   if (!baiduQuotaAvailable()) {
     logger.warn('Baidu API quota soft floor reached — skipping')
     return []
   }
   baiduCallsInWindow += 1
-  
+
   try {
     const params = new URLSearchParams({
       wd: query,
@@ -558,25 +558,25 @@ export async function baiduSearch(query: string, opts: CommunitySearchOptions = 
       ie: 'utf-8',
     })
     const url = `${BAIDU_SEARCH_URL}?${params.toString()}`
-    
+
     const response = await fetchWithTimeout(
       env,
       url,
       {
         headers: {
           'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120.0.0.0 Safari/537.36',
-          'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+          Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
           'Accept-Language': 'zh-CN,zh;q=0.9,en;q=0.8',
         },
       },
       timeoutMs,
     )
-    
+
     if (!response.ok) {
       logger.warn('Baidu search non-OK:', { status: response.status })
       return []
     }
-    
+
     const html = await response.text()
     return parseBaiduHtml(html, query, maxResults)
   } catch (err) {

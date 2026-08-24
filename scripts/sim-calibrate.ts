@@ -87,9 +87,10 @@ export interface EvalReportShape {
 }
 
 /** 다중 eval 리포트에서 responseTimeMs 샘플 + backendCoverage를 병합. */
-export function observedFromReports(
-  reports: EvalReportShape[],
-): { wallTimes: number[]; coverage: Record<string, number> } {
+export function observedFromReports(reports: EvalReportShape[]): {
+  wallTimes: number[]
+  coverage: Record<string, number>
+} {
   const wallTimes: number[] = []
   const coverage: Record<string, number> = {}
   for (const r of reports) {
@@ -209,10 +210,7 @@ export interface CalibrationResult {
  * 빠름 + 소수 느림)는 상수 가산으로 표현할 수 없으므로, 오버헤드는 로그노말
  * 분포로 탐색한다.
  */
-export function calibrateLatencyModel(
-  obs: ObservedStats,
-  opts: CalibrationOptions = {},
-): CalibrationResult {
+export function calibrateLatencyModel(obs: ObservedStats, opts: CalibrationOptions = {}): CalibrationResult {
   const iterations = opts.iterations ?? 1500
   const seed = opts.seed ?? 42
   const maxResults = opts.maxResults ?? 10
@@ -393,7 +391,9 @@ function main(): void {
     console.log(`=== Fanout model calibration (eval responseTimeMs) ===`)
     console.log(`eval: ${paths.join(', ')}`)
     console.log(`measured (n=${obs.n}): p50=${fmt(obs.p50)} p95=${fmt(obs.p95)} p99=${fmt(obs.p99)}`)
-    console.log(`baseline model:      p50=${fmt(r.before.p50)} p95=${fmt(r.before.p95)} p99=${fmt(r.before.p99)}  err=${r.errorBefore.toFixed(4)}`)
+    console.log(
+      `baseline model:      p50=${fmt(r.before.p50)} p95=${fmt(r.before.p95)} p99=${fmt(r.before.p99)}  err=${r.errorBefore.toFixed(4)}`,
+    )
     console.log(
       `calibrated (scale=${r.scale.toFixed(2)}, overhead=LN(${fmt(r.overhead.medianMs)},${r.overhead.sigma.toFixed(1)})): p50=${fmt(r.after.p50)} p95=${fmt(r.after.p95)} p99=${fmt(r.after.p99)}  err=${r.errorAfter.toFixed(4)}`,
     )

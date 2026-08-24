@@ -186,7 +186,7 @@ export class ClickLogDO extends DurableObject<Env> {
         lines.push(`# query: ${row.query}`)
         lastGroup = row.group
       }
-      const featureStr = row.features.map(f => f.toFixed(6)).join(' ')
+      const featureStr = row.features.map((f) => f.toFixed(6)).join(' ')
       lines.push(`${row.label} ${row.group} ${featureStr}`)
     }
     return lines.join('\n')

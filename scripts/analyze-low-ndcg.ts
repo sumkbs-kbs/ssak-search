@@ -78,7 +78,11 @@ for (const r of lowBand) {
   if (goldDomains.length === 0) continue
   for (const res of (r.response?.results || []).slice(0, 3)) {
     let domain = ''
-    try { domain = new URL(res.url).hostname.replace(/^www\./, '') } catch { domain = res.domain || '' }
+    try {
+      domain = new URL(res.url).hostname.replace(/^www\./, '')
+    } catch {
+      domain = res.domain || ''
+    }
     const isGold = goldDomains.some((gd) => domain === gd || domain.endsWith(`.${gd}`))
     if (!isGold && domain) {
       if (!topOutrankers[domain]) topOutrankers[domain] = { count: 0, queries: [] }
@@ -106,16 +110,22 @@ for (const r of zeroNdcg.slice(0, 15)) {
   const top3 = (r.response?.results || []).slice(0, 3)
   for (const res of top3) {
     let domain = ''
-    try { domain = new URL(res.url).hostname.replace(/^www\./, '') } catch { domain = res.domain || '?' }
+    try {
+      domain = new URL(res.url).hostname.replace(/^www\./, '')
+    } catch {
+      domain = res.domain || '?'
+    }
     console.log(`      ✗ ${domain} (score=${res.score.toFixed(3)}) ${res.title.slice(0, 60)}`)
   }
 }
 
 // Detail: 0.1~0.3 range
-const midLow = lowBand.filter((r) => {
-  const n = r.ranking?.ndcgAt10 ?? 0
-  return n >= 0.1 && n <= 0.3
-}).sort((a, b) => (a.ranking?.ndcgAt10 ?? 0) - (b.ranking?.ndcgAt10 ?? 0))
+const midLow = lowBand
+  .filter((r) => {
+    const n = r.ranking?.ndcgAt10 ?? 0
+    return n >= 0.1 && n <= 0.3
+  })
+  .sort((a, b) => (a.ranking?.ndcgAt10 ?? 0) - (b.ranking?.ndcgAt10 ?? 0))
 
 console.log(`\n─── NDCG 0.1~0.3 상세 (${midLow.length}건) ───`)
 for (const r of midLow.slice(0, 20)) {
@@ -127,7 +137,11 @@ for (const r of midLow.slice(0, 20)) {
   const pool = r.response?.results || []
   for (const res of pool.slice(0, 5)) {
     let domain = ''
-    try { domain = new URL(res.url).hostname.replace(/^www\./, '') } catch { domain = res.domain || '?' }
+    try {
+      domain = new URL(res.url).hostname.replace(/^www\./, '')
+    } catch {
+      domain = res.domain || '?'
+    }
     const isGold = goldDomains.some((gd) => domain === gd || domain.endsWith(`.${gd}`))
     console.log(`      ${isGold ? '✓' : '✗'} ${domain} (score=${res.score.toFixed(3)}) ${res.title.slice(0, 60)}`)
   }

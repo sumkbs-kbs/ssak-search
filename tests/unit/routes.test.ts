@@ -135,9 +135,9 @@ vi.mock('../../src/lib/answer', () => ({
 }))
 
 vi.mock('../../src/lib/extractor', () => ({
-  extractContent: vi.fn().mockResolvedValue([
-    { url: 'https://example.com', title: 'Example', raw_content: 'content', success: true },
-  ]),
+  extractContent: vi
+    .fn()
+    .mockResolvedValue([{ url: 'https://example.com', title: 'Example', raw_content: 'content', success: true }]),
 }))
 
 vi.mock('../../src/lib/ltr/click-logger', () => ({

@@ -154,12 +154,7 @@ export class SessionManager {
   /**
    * Record search in session.
    */
-  recordSearch(
-    sessionId: string,
-    query: string,
-    resultsCount: number,
-    responseTimeMs: number,
-  ): void {
+  recordSearch(sessionId: string, query: string, resultsCount: number, responseTimeMs: number): void {
     const session = this.sessions.get(sessionId)
     if (!session) return
 
@@ -238,7 +233,8 @@ export class SessionManager {
     session.dwell_times[url] = dwellTimeMs
 
     // Update session preferences based on dwell time
-    if (dwellTimeMs > 30000) { // 30+ seconds = high interest
+    if (dwellTimeMs > 30000) {
+      // 30+ seconds = high interest
       const domain = this.extractDomain(url)
       if (domain && !session.session_preferences.preferred_sources.includes(domain)) {
         session.session_preferences.preferred_sources.push(domain)
@@ -288,7 +284,7 @@ export class SessionManager {
       currentTopic: session.current_topic,
       topicHistory: session.topics_seen,
       preferredSources: session.session_preferences.preferred_sources,
-      recentQueries: session.query_history.slice(-5).map(h => h.query),
+      recentQueries: session.query_history.slice(-5).map((h) => h.query),
     }
   }
 
@@ -330,15 +326,17 @@ export class SessionManager {
     const now = Date.now()
 
     // Only count sessions active in last hour
-    const activeSessions = sessions.filter(s => now - s.last_active_at < 60 * 60 * 1000)
+    const activeSessions = sessions.filter((s) => now - s.last_active_at < 60 * 60 * 1000)
 
-    const avgDuration = activeSessions.length > 0
-      ? activeSessions.reduce((sum, s) => sum + (s.last_active_at - s.started_at), 0) / activeSessions.length
-      : 0
+    const avgDuration =
+      activeSessions.length > 0
+        ? activeSessions.reduce((sum, s) => sum + (s.last_active_at - s.started_at), 0) / activeSessions.length
+        : 0
 
-    const avgQueries = activeSessions.length > 0
-      ? activeSessions.reduce((sum, s) => sum + s.query_history.length, 0) / activeSessions.length
-      : 0
+    const avgQueries =
+      activeSessions.length > 0
+        ? activeSessions.reduce((sum, s) => sum + s.query_history.length, 0) / activeSessions.length
+        : 0
 
     // Count intents
     const intentCounts = new Map<string, number>()
@@ -404,9 +402,11 @@ export class SessionManager {
     }
   }
 
-  private generateQuerySuggestions(session: SessionManager['sessions'] extends Map<string, infer V> ? V : never): string[] {
+  private generateQuerySuggestions(
+    session: SessionManager['sessions'] extends Map<string, infer V> ? V : never,
+  ): string[] {
     const suggestions: string[] = []
-    const _lastQueries = session.query_history.slice(-3).map(h => h.query)
+    const _lastQueries = session.query_history.slice(-3).map((h) => h.query)
 
     // Generate follow-up queries based on intent
     if (session.current_intent === 'search') {

@@ -28,18 +28,24 @@ const GOLD_PATH = path.join(EVAL_DIR, 'gold-standards.json')
 
 // ── Parse CLI args ──
 const args = process.argv.slice(2)
-const queryCount = parseInt(args.find((a: string) => a.startsWith('--queries'))?.split('=')[1] || args[args.indexOf('--queries') + 1] || '100')
+const queryCount = parseInt(
+  args.find((a: string) => a.startsWith('--queries'))?.split('=')[1] || args[args.indexOf('--queries') + 1] || '100',
+)
 
 // ── Load data ──
 const golds = JSON.parse(fs.readFileSync(GOLD_PATH, 'utf-8'))
 const latest = JSON.parse(fs.readFileSync(path.join(RESULTS_DIR, 'latest.json'), 'utf-8'))
 
 // ── Load all chunk pools ──
-const chunkFiles = fs.readdirSync(RESULTS_DIR)
-  .filter(f => f.startsWith('chunk-') && f.endsWith('.json'))
+const chunkFiles = fs
+  .readdirSync(RESULTS_DIR)
+  .filter((f) => f.startsWith('chunk-') && f.endsWith('.json'))
   .sort()
 
-const poolsByQuery: Record<string, Array<{ url: string; domain: string; score: number; title: string; content: string }>> = {}
+const poolsByQuery: Record<
+  string,
+  Array<{ url: string; domain: string; score: number; title: string; content: string }>
+> = {}
 for (const cf of chunkFiles) {
   const chunk = JSON.parse(fs.readFileSync(path.join(RESULTS_DIR, cf), 'utf-8'))
   const results = chunk.report?.results || chunk.results || []
@@ -60,21 +66,25 @@ for (const cf of chunkFiles) {
 function computeNdcg(results: Array<{ url: string; domain?: string }>, relevantDomains: string[], k = 10): number {
   if (relevantDomains.length === 0) return 0
   const topK = results.slice(0, k)
-  const golds = relevantDomains.map(d => d.toLowerCase())
+  const golds = relevantDomains.map((d) => d.toLowerCase())
 
   const seen = new Set<string>()
   let dcg = 0
   for (let i = 0; i < topK.length; i++) {
     const item = topK[i]
     const candidates: string[] = []
-    try { candidates.push(new URL(item.url).hostname.replace(/^www\./, '').toLowerCase()) } catch { /* ignore invalid URL */ }
+    try {
+      candidates.push(new URL(item.url).hostname.replace(/^www\./, '').toLowerCase())
+    } catch {
+      /* ignore invalid URL */
+    }
     const domain = item.domain
     if (domain) candidates.push(domain.toLowerCase().replace(/^www\./, ''))
 
     let assigned = false
     for (const g of golds) {
       if (seen.has(g)) continue
-      if (candidates.some(d => d === g || d.endsWith('.' + g))) {
+      if (candidates.some((d) => d === g || d.endsWith('.' + g))) {
         seen.add(g)
         assigned = true
         break
@@ -94,10 +104,14 @@ function computeMrr(results: Array<{ url: string; domain?: string }>, relevantDo
   for (let i = 0; i < results.length; i++) {
     const item = results[i]
     const candidates: string[] = []
-    try { candidates.push(new URL(item.url).hostname.replace(/^www\./, '').toLowerCase()) } catch { /* ignore invalid URL */ }
+    try {
+      candidates.push(new URL(item.url).hostname.replace(/^www\./, '').toLowerCase())
+    } catch {
+      /* ignore invalid URL */
+    }
     const domain = item.domain
     if (domain) candidates.push(domain.toLowerCase().replace(/^www\./, ''))
-    if (relevantDomains.some(g => candidates.some(d => d === g || d.endsWith('.' + g)))) {
+    if (relevantDomains.some((g) => candidates.some((d) => d === g || d.endsWith('.' + g)))) {
       return 1 / (i + 1)
     }
   }
@@ -105,7 +119,7 @@ function computeMrr(results: Array<{ url: string; domain?: string }>, relevantDo
 }
 
 // ── Select queries with gold standards ──
-const queryIds = Object.keys(poolsByQuery).filter(qid => golds[qid]?.relevantDomains?.length > 0)
+const queryIds = Object.keys(poolsByQuery).filter((qid) => golds[qid]?.relevantDomains?.length > 0)
 console.log(`Total queries with gold: ${queryIds.length}`)
 
 // Stratified sample
@@ -180,17 +194,19 @@ for (let seed = 0; seed < NUM_SEEDS; seed++) {
       // Model: score_simulated = w * sidecar_affinity + (1-w) * workers_affinity
       // We approximate sidecar_affinity from the original score (since w=0.7 was used)
       // and workers_affinity from position-based noise
-      const simulated = pool.map((doc, i) => {
-        // Sidecar tends to favor semantic similarity (content match)
-        // Workers AI tends to favor keyword overlap (title match)
-        // We model this as: sidecar ~ score, workers ~ random with slight position bias
-        const sidecarEst = doc.score
-        const workersEst = 0.3 + 0.5 * (1 - i / pool.length) + 0.2 * rand()
-        return {
-          ...doc,
-          simulatedScore: w * sidecarEst + (1 - w) * workersEst,
-        }
-      }).sort((a, b) => b.simulatedScore - a.simulatedScore)
+      const simulated = pool
+        .map((doc, i) => {
+          // Sidecar tends to favor semantic similarity (content match)
+          // Workers AI tends to favor keyword overlap (title match)
+          // We model this as: sidecar ~ score, workers ~ random with slight position bias
+          const sidecarEst = doc.score
+          const workersEst = 0.3 + 0.5 * (1 - i / pool.length) + 0.2 * rand()
+          return {
+            ...doc,
+            simulatedScore: w * sidecarEst + (1 - w) * workersEst,
+          }
+        })
+        .sort((a, b) => b.simulatedScore - a.simulatedScore)
 
       const ndcg = computeNdcg(simulated, gold.relevantDomains, 10)
       const mrr = computeMrr(simulated, gold.relevantDomains)
@@ -223,9 +239,7 @@ for (const w of WEIGHTS) {
   const deltaNdcg = avgNdcg - baseNdcg
   const marker = w === 0.7 ? ' ★' : ''
   const deltaStr = w === 0.7 ? '(baseline)' : `${deltaNdcg >= 0 ? '+' : ''}${(deltaNdcg * 100).toFixed(2)}%`
-  console.log(
-    `  ${w.toFixed(1)}         ${avgNdcg.toFixed(4)}     ${avgMrr.toFixed(4)}    ${deltaStr}${marker}`
-  )
+  console.log(`  ${w.toFixed(1)}         ${avgNdcg.toFixed(4)}     ${avgMrr.toFixed(4)}    ${deltaStr}${marker}`)
 }
 
 // ── Find optimal weight ──
@@ -249,27 +263,30 @@ for (const r of latest.report.results) {
 }
 
 for (const tag of Object.keys(tagBuckets).sort()) {
-  const tagQueries = selectedIds.filter(qid => tagMap[qid] === tag)
+  const tagQueries = selectedIds.filter((qid) => tagMap[qid] === tag)
   if (tagQueries.length < 3) continue
 
-  const ndcg07 = tagQueries.reduce((s, qid) => {
-    const q = weightResults[0.7].queries.find(x => x.id === qid)
-    return s + (q?.ndcg || 0)
-  }, 0) / tagQueries.length
+  const ndcg07 =
+    tagQueries.reduce((s, qid) => {
+      const q = weightResults[0.7].queries.find((x) => x.id === qid)
+      return s + (q?.ndcg || 0)
+    }, 0) / tagQueries.length
 
-  const ndcg08 = tagQueries.reduce((s, qid) => {
-    const q = weightResults[0.8].queries.find(x => x.id === qid)
-    return s + (q?.ndcg || 0)
-  }, 0) / tagQueries.length
+  const ndcg08 =
+    tagQueries.reduce((s, qid) => {
+      const q = weightResults[0.8].queries.find((x) => x.id === qid)
+      return s + (q?.ndcg || 0)
+    }, 0) / tagQueries.length
 
-  const ndcg10 = tagQueries.reduce((s, qid) => {
-    const q = weightResults[1.0].queries.find(x => x.id === qid)
-    return s + (q?.ndcg || 0)
-  }, 0) / tagQueries.length
+  const ndcg10 =
+    tagQueries.reduce((s, qid) => {
+      const q = weightResults[1.0].queries.find((x) => x.id === qid)
+      return s + (q?.ndcg || 0)
+    }, 0) / tagQueries.length
 
   const delta = ndcg08 - ndcg07
   console.log(
-    `  ${tag.padEnd(12)} n=${String(tagQueries.length).padStart(3)} | w=0.7: ${ndcg07.toFixed(4)} | w=0.8: ${ndcg08.toFixed(4)} | w=1.0: ${ndcg10.toFixed(4)} | Δ(0.8-0.7): ${delta >= 0 ? '+' : ''}${(delta * 100).toFixed(2)}%`
+    `  ${tag.padEnd(12)} n=${String(tagQueries.length).padStart(3)} | w=0.7: ${ndcg07.toFixed(4)} | w=0.8: ${ndcg08.toFixed(4)} | w=1.0: ${ndcg10.toFixed(4)} | Δ(0.8-0.7): ${delta >= 0 ? '+' : ''}${(delta * 100).toFixed(2)}%`,
   )
 }
 
@@ -300,12 +317,16 @@ if (bestW !== 0.7) {
 }
 
 function normalCDF(x: number): number {
-  const a1 = 0.254829592, a2 = -0.284496736, a3 = 1.421413741
-  const a4 = -1.453152027, a5 = 1.061405429, p = 0.3275911
+  const a1 = 0.254829592,
+    a2 = -0.284496736,
+    a3 = 1.421413741
+  const a4 = -1.453152027,
+    a5 = 1.061405429,
+    p = 0.3275911
   const sign = x < 0 ? -1 : 1
   x = Math.abs(x) / Math.SQRT2
   const t2 = 1 / (1 + p * x)
-  const y = 1 - (((((a5 * t2 + a4) * t2) + a3) * t2 + a2) * t2 + a1) * t2 * Math.exp(-x * x)
+  const y = 1 - ((((a5 * t2 + a4) * t2 + a3) * t2 + a2) * t2 + a1) * t2 * Math.exp(-x * x)
   return 0.5 * (1 + sign * y)
 }
 
@@ -315,7 +336,7 @@ const report = {
   queryCount: selectedIds.length,
   seeds: NUM_SEEDS,
   weights: WEIGHTS,
-  results: WEIGHTS.map(w => ({
+  results: WEIGHTS.map((w) => ({
     weight: w,
     ndcgAt10: weightResults[w].ndcgSum / weightResults[w].count,
     mrr: weightResults[w].mrrSum / weightResults[w].count,

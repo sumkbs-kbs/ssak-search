@@ -175,10 +175,7 @@ function formatChange(rate: number | undefined): string {
  * Returns [] when no coin is detected (backend-skip contract) or when every
  * source fails (graceful degradation to general web results only).
  */
-export async function cryptoPriceSearch(
-  query: string,
-  opts: { timeoutMs?: number } = {},
-): Promise<SearchResult[]> {
+export async function cryptoPriceSearch(query: string, opts: { timeoutMs?: number } = {}): Promise<SearchResult[]> {
   const symbols = detectCryptoCoins(query)
   if (symbols.length === 0) return []
 

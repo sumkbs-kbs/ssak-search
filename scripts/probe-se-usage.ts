@@ -93,7 +93,15 @@ if (fromArtifacts) {
   for (const f of files) {
     const raw = JSON.parse(readFileSync(resolve(process.cwd(), f), 'utf8'))
     const r = (raw as { report?: { results?: unknown[] } }).report ?? raw
-    for (const row of (r as { results: Array<{ query: { id: string }; backends?: string[]; response?: { results?: Array<{ domain?: string }> } }> }).results) {
+    for (const row of (
+      r as {
+        results: Array<{
+          query: { id: string }
+          backends?: string[]
+          response?: { results?: Array<{ domain?: string }> }
+        }>
+      }
+    ).results) {
       const id = row.query.id
       if (!routable.some((q) => q.id === id)) continue
       const used = (row.backends ?? []).includes('stack-exchange')
@@ -129,7 +137,9 @@ console.log('\n━━━ 결과 ━━━')
 console.log(`expected (라우팅 가능 SO gold query-run): ${agg.expected}`)
 console.log(`stack-exchange 사용 (backends 포함)       : ${pct(agg.used, agg.expected)}`)
 console.log(`풀에 stackoverflow.com 존재                : ${pct(agg.poolHasSO, agg.expected)}`)
-console.log(`gold 회수 (사용 중 gold 히트)              : ${pct(agg.goldHit, Math.max(agg.used, 1))} (사용 ${agg.used} 기준)`)
+console.log(
+  `gold 회수 (사용 중 gold 히트)              : ${pct(agg.goldHit, Math.max(agg.used, 1))} (사용 ${agg.used} 기준)`,
+)
 console.log(`사용 중 gold 히트율                        : ${agg.used > 0 ? pct(agg.goldHit, agg.used) : '–'}`)
 console.log('')
 console.log('쿼리별 (사용 0회 쿼리는 생략):')
@@ -142,4 +152,6 @@ const proj3Run = Math.round((agg.used / Math.max(agg.expected, 1)) * (routable.l
 console.log(
   `  단일/복수 run 실측 사용 ${agg.used}/${agg.expected} → 3-run 전체 투영 ≈ ${proj3Run}건 (라우팅 가능 39 × 3 = 117 기준)`,
 )
-console.log(agg.used > 0 && agg.goldHit / Math.max(agg.used, 1) >= 0.5 ? '✅ gold 기여 ≥ 0.5 달성' : '⚠️ gold 기여 < 0.5')
+console.log(
+  agg.used > 0 && agg.goldHit / Math.max(agg.used, 1) >= 0.5 ? '✅ gold 기여 ≥ 0.5 달성' : '⚠️ gold 기여 < 0.5',
+)

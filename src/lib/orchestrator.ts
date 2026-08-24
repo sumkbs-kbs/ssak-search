@@ -44,9 +44,21 @@ import { extractContent } from './extractor'
 import { generateAnswer, attachFactCheckToAnswer } from './answer'
 import { buildKnowledgePanel, matchImagesToResults } from './knowledge-panel'
 import { hybridSearch } from './retrieval'
-import { generateRelatedQueries, truncateToTokens, countryToBingMkt, countryToLanguageTag, filterMirrorResults } from './util'
+import {
+  generateRelatedQueries,
+  truncateToTokens,
+  countryToBingMkt,
+  countryToLanguageTag,
+  filterMirrorResults,
+} from './util'
 import { type AgenticSearchOptions, executeAgenticSearch } from './agentic'
-import { recordAgenticPipeline, getAgenticMetrics, recordCpuBudgetActivation, recordCoherenceDrop, recordDoiCap } from './metrics'
+import {
+  recordAgenticPipeline,
+  getAgenticMetrics,
+  recordCpuBudgetActivation,
+  recordCoherenceDrop,
+  recordDoiCap,
+} from './metrics'
 import { maybeAlertHighRegenerationRate } from './slack-alert'
 import { cacheKey, cacheParamsSignature } from './cache'
 import { semanticCacheLookup, semanticCacheStore } from './semantic-cache'
@@ -628,7 +640,7 @@ export async function executeSearch(request: SearchRequest, config: Orchestrator
     // yahoo-finance) that never actually execute: TieredFanout's minResults
     // early-exit drops tier2/3 gold-domain backends whenever bing/self-index
     // fill the page first. Names absent from the task plan are no-ops.
-    const taskNames = new Set(tasks.map(t => t.name))
+    const taskNames = new Set(tasks.map((t) => t.name))
     const wantedProtected: string[] = []
     switch (ctx.queryType) {
       case 'technical':
@@ -662,7 +674,7 @@ export async function executeSearch(request: SearchRequest, config: Orchestrator
           wantedProtected.push('reddit', 'ddg-site-reddit')
         }
     }
-    const protectedBackends = wantedProtected.filter(name => taskNames.has(name))
+    const protectedBackends = wantedProtected.filter((name) => taskNames.has(name))
 
     // Use tiered fanout for progressive result collection
     const tieredFanout = new TieredFanout()
@@ -743,11 +755,7 @@ export async function executeSearch(request: SearchRequest, config: Orchestrator
         // confounded by live-API state — see docs/assessment/08_CHANGELOG.md).
         const gateEnabled = env?.MIRROR_RELEVANCE_GATE !== '0'
         const relevantMirror =
-          mirror.results.length > 0
-            ? gateEnabled
-              ? filterMirrorResults(query, mirror.results)
-              : mirror.results
-            : []
+          mirror.results.length > 0 ? (gateEnabled ? filterMirrorResults(query, mirror.results) : mirror.results) : []
         if (relevantMirror.length > 0) {
           resultSets.push(relevantMirror)
           usedBackends.push(mirror.backend)
@@ -809,7 +817,12 @@ export async function executeSearch(request: SearchRequest, config: Orchestrator
     // up to 9 extra fetches (3 URLs × Jina/sidecar/direct chain), and pushing
     // past the 50-subrequest cap turns a slow result into a 500.
     // P2-3: Also skipped on free plan/lightweight mode to save CPU time.
-    if (search_depth === 'advanced' && results.length > 0 && !config.subrequestTracker?.budgetExhausted() && !lightweightMode) {
+    if (
+      search_depth === 'advanced' &&
+      results.length > 0 &&
+      !config.subrequestTracker?.budgetExhausted() &&
+      !lightweightMode
+    ) {
       for (const r of results.slice(0, 3)) {
         if (r.content.length < 200 && r.raw_content) {
           r.content = truncateToTokens(r.raw_content, 800)

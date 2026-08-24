@@ -46,9 +46,8 @@ const { createPlan } = await import('../../src/lib/agentic/planner')
 const { executePlan } = await import('../../src/lib/agentic/executor')
 // _lookupStockCodeForTest comes from the REAL module (stock-finance's
 // searchKoreanStock is mocked, but the pure lookup must stay real).
-const { _lookupStockCodeForTest } = await vi.importActual<typeof import('../../src/lib/stock-finance')>(
-  '../../src/lib/stock-finance',
-)
+const { _lookupStockCodeForTest } =
+  await vi.importActual<typeof import('../../src/lib/stock-finance')>('../../src/lib/stock-finance')
 
 function makeResult(title: string, domain: string, i: number) {
   return { title, url: `https://${domain}/${i}`, content: `Content ${i}`, score: 0.6, domain }

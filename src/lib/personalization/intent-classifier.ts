@@ -22,14 +22,14 @@ import type { Env } from '../../types'
 // ============================================================
 
 export type SearchIntent =
-  | 'informational'    // seeking knowledge
-  | 'navigational'     // wants specific site
-  | 'transactional'    // wants to do something
-  | 'local'           // location-based
-  | 'commercial'      // research before purchase
-  | 'social'          // seeking opinions/community
-  | 'media'           // seeking images/videos
-  | 'news'            // seeking current events
+  | 'informational' // seeking knowledge
+  | 'navigational' // wants specific site
+  | 'transactional' // wants to do something
+  | 'local' // location-based
+  | 'commercial' // research before purchase
+  | 'social' // seeking opinions/community
+  | 'media' // seeking images/videos
+  | 'news' // seeking current events
 
 export interface IntentClassification {
   primary: SearchIntent
@@ -184,12 +184,11 @@ export class IntentClassifier {
     }
 
     // Find top 2 intents
-    const sorted = Object.entries(scores)
-      .sort(([, a], [, b]) => b - a)
+    const sorted = Object.entries(scores).sort(([, a], [, b]) => b - a)
 
     const primary = sorted[0][0] as SearchIntent
     const primaryScore = sorted[0][1]
-    const secondary = sorted[1][1] > 0.3 ? sorted[1][0] as SearchIntent : undefined
+    const secondary = sorted[1][1] > 0.3 ? (sorted[1][0] as SearchIntent) : undefined
 
     // Normalize confidence
     const totalScore = Object.values(scores).reduce((a, b) => a + b, 0)
@@ -290,8 +289,8 @@ export class IntentClassifier {
     if (query.split(/\s+/).length < 3) return true
 
     // Multiple intents detected
-    const intentCount = Object.values(INTENT_PATTERNS).filter(patterns =>
-      patterns.some(p => p.pattern.test(query))
+    const intentCount = Object.values(INTENT_PATTERNS).filter((patterns) =>
+      patterns.some((p) => p.pattern.test(query)),
     ).length
     if (intentCount > 2) return true
 

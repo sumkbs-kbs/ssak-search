@@ -22,7 +22,9 @@ async function main(): Promise<void> {
       domains.set(d, (domains.get(d) ?? 0) + 1)
     }
     const top = [...domains.entries()].sort((a, b) => b[1] - a[1]).slice(0, 6)
-    console.log(`${c.label.padEnd(38)} → ${String(res.length).padStart(2)}건  ${Date.now() - t0}ms  [${top.map(([d, n]) => `${d}×${n}`).join(' ') || '(빈 풀)'}]`)
+    console.log(
+      `${c.label.padEnd(38)} → ${String(res.length).padStart(2)}건  ${Date.now() - t0}ms  [${top.map(([d, n]) => `${d}×${n}`).join(' ') || '(빈 풀)'}]`,
+    )
   }
 }
 

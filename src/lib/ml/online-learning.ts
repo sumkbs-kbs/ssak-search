@@ -149,7 +149,7 @@ export class OnlineLearner {
    * Predict scores for multiple examples.
    */
   predictBatch(examples: number[][]): number[] {
-    return examples.map(f => this.predict(f))
+    return examples.map((f) => this.predict(f))
   }
 
   /**
@@ -338,13 +338,9 @@ export class FeatureDriftDetector {
       })
       .filter((d): d is { feature: string; driftScore: number } => d !== null)
 
-    const driftingFeatures = drifts
-      .filter(d => d.driftScore > this.threshold)
-      .map(d => d.feature)
+    const driftingFeatures = drifts.filter((d) => d.driftScore > this.threshold).map((d) => d.feature)
 
-    const avgDriftScore = drifts.length > 0
-      ? drifts.reduce((sum, d) => sum + d.driftScore, 0) / drifts.length
-      : 0
+    const avgDriftScore = drifts.length > 0 ? drifts.reduce((sum, d) => sum + d.driftScore, 0) / drifts.length : 0
 
     return {
       featuresTracked: drifts.length,
@@ -406,7 +402,7 @@ export class ModelRegistry {
     }
 
     // Promote new version
-    const target = versions.find(v => v.version === version)
+    const target = versions.find((v) => v.version === version)
     if (!target) return false
 
     target.status = 'active'
@@ -421,7 +417,7 @@ export class ModelRegistry {
     const versions = this.models.get(modelId)
     if (!versions) return null
 
-    return versions.find(v => v.status === 'active') ?? null
+    return versions.find((v) => v.status === 'active') ?? null
   }
 
   /**
@@ -444,7 +440,7 @@ export class ModelRegistry {
 
     for (const [modelId, versions] of this.models) {
       totalVersions += versions.length
-      if (versions.some(v => v.status === 'active')) {
+      if (versions.some((v) => v.status === 'active')) {
         activeModels.push(modelId)
       }
     }
@@ -468,17 +464,17 @@ export class OnlineLearningPipeline {
   private trainingBuffer: TrainingExample[]
   private bufferSize: number
 
-  constructor(numFeatures: number, config?: {
-    learningRate?: number
-    driftWindowSize?: number
-    driftThreshold?: number
-    bufferSize?: number
-  }) {
+  constructor(
+    numFeatures: number,
+    config?: {
+      learningRate?: number
+      driftWindowSize?: number
+      driftThreshold?: number
+      bufferSize?: number
+    },
+  ) {
     this.learner = new OnlineLearner(numFeatures, config?.learningRate)
-    this.driftDetector = new FeatureDriftDetector(
-      config?.driftWindowSize,
-      config?.driftThreshold,
-    )
+    this.driftDetector = new FeatureDriftDetector(config?.driftWindowSize, config?.driftThreshold)
     this.registry = new ModelRegistry()
     this.trainingBuffer = []
     this.bufferSize = config?.bufferSize ?? 100

@@ -1,9 +1,9 @@
 #!/usr/bin/env tsx
 /**
  * Aggregate chunk eval results into a single unified report.
- * 
+ *
  * Usage: npx tsx eval/aggregate-chunks.ts [--save-baseline]
- * 
+ *
  * Reads eval/results/chunk-{start}-{end}.json files and produces:
  * - eval/results/latest.json (unified report)
  * - eval/baseline.json (if --save-baseline)
@@ -27,8 +27,9 @@ interface ChunkReport {
 
 function loadChunks(): ChunkReport[] {
   const chunks: ChunkReport[] = []
-  const files = fs.readdirSync(RESULTS_DIR)
-    .filter(f => f.startsWith('chunk-') && f.endsWith('.json'))
+  const files = fs
+    .readdirSync(RESULTS_DIR)
+    .filter((f) => f.startsWith('chunk-') && f.endsWith('.json'))
     .sort((a, b) => {
       const aStart = parseInt(a.split('-')[1])
       const bStart = parseInt(b.split('-')[1])
@@ -77,13 +78,16 @@ function aggregate(chunks: ChunkReport[]): EvalReport {
   }
 
   // Merge latency
-  const allLatencies = allResults.map(r => r.responseTimeMs).sort((a, b) => a - b)
+  const allLatencies = allResults.map((r) => r.responseTimeMs).sort((a, b) => a - b)
   const latencyPercentiles = computePercentiles(allLatencies)
 
   // Recalculate ranking metrics using current gold-standards.json
   // (the chunk files may contain stale NDCG from an earlier gold version)
   const gs = JSON.parse(fs.readFileSync(path.join(EVAL_DIR, 'gold-standards.json'), 'utf-8'))
-  let ndcgSum = 0, mrrSum = 0, precSum = 0, goldCount = 0
+  let ndcgSum = 0,
+    mrrSum = 0,
+    precSum = 0,
+    goldCount = 0
 
   for (const r of allResults) {
     const gold = gs[r.query.id]
@@ -94,7 +98,11 @@ function aggregate(chunks: ChunkReport[]): EvalReport {
     const ndcg = computeNdcg(poolResults, gold.relevantDomains, 10)
     const relevantHits = poolResults.slice(0, 10).filter((res: SearchResult) => {
       const candidates: string[] = []
-      try { candidates.push(new URL(res.url).hostname.replace(/^www\./, '').toLowerCase()) } catch { /* ignore invalid URL */ }
+      try {
+        candidates.push(new URL(res.url).hostname.replace(/^www\./, '').toLowerCase())
+      } catch {
+        /* ignore invalid URL */
+      }
       if (res.domain) candidates.push(res.domain.toLowerCase().replace(/^www\./, ''))
       return gold.relevantDomains.some((g: string) => candidates.some((d) => d === g || d.endsWith('.' + g)))
     }).length
@@ -102,7 +110,11 @@ function aggregate(chunks: ChunkReport[]): EvalReport {
       for (let i = 0; i < poolResults.length; i++) {
         const res = poolResults[i]
         const candidates: string[] = []
-        try { candidates.push(new URL(res.url).hostname.replace(/^www\./, '').toLowerCase()) } catch { /* ignore invalid URL */ }
+        try {
+          candidates.push(new URL(res.url).hostname.replace(/^www\./, '').toLowerCase())
+        } catch {
+          /* ignore invalid URL */
+        }
         if (res.domain) candidates.push(res.domain.toLowerCase().replace(/^www\./, ''))
         if (gold.relevantDomains.some((g: string) => candidates.some((d) => d === g || d.endsWith('.' + g)))) {
           return 1 / (i + 1)
@@ -121,12 +133,15 @@ function aggregate(chunks: ChunkReport[]): EvalReport {
     r.ranking = { ndcgAt10: ndcg, mrr, precisionAt10: precision, relevantHits }
   }
 
-  const ranking: AggregateRankingMetrics | undefined = goldCount > 0 ? {
-    queriesWithGoldStandard: goldCount,
-    avgNdcgAt10: ndcgSum / goldCount,
-    avgMrr: mrrSum / goldCount,
-    avgPrecisionAt10: precSum / goldCount,
-  } : undefined
+  const ranking: AggregateRankingMetrics | undefined =
+    goldCount > 0
+      ? {
+          queriesWithGoldStandard: goldCount,
+          avgNdcgAt10: ndcgSum / goldCount,
+          avgMrr: mrrSum / goldCount,
+          avgPrecisionAt10: precSum / goldCount,
+        }
+      : undefined
 
   // Aggregate QPS
   const totalDurationMs = allResults.reduce((sum, r) => sum + r.responseTimeMs, 0)
@@ -146,7 +161,7 @@ function aggregate(chunks: ChunkReport[]): EvalReport {
     }
   }
 
-  const passed = allResults.filter(r => r.passed).length
+  const passed = allResults.filter((r) => r.passed).length
   const failed = allResults.length - passed
 
   return {
@@ -167,12 +182,25 @@ function aggregate(chunks: ChunkReport[]): EvalReport {
 
 // ── Tag-level analysis ──
 function printTagAnalysis(results: EvalResult[]) {
-  const tagStats: Record<string, { count: number; ndcgSum: number; mrrSum: number; precSum: number; goldCount: number; pass: number; fail: number; latencySum: number }> = {}
+  const tagStats: Record<
+    string,
+    {
+      count: number
+      ndcgSum: number
+      mrrSum: number
+      precSum: number
+      goldCount: number
+      pass: number
+      fail: number
+      latencySum: number
+    }
+  > = {}
 
   for (const r of results) {
     const tags = r.query?.tags || []
     for (const tag of tags) {
-      if (!tagStats[tag]) tagStats[tag] = { count: 0, ndcgSum: 0, mrrSum: 0, precSum: 0, goldCount: 0, pass: 0, fail: 0, latencySum: 0 }
+      if (!tagStats[tag])
+        tagStats[tag] = { count: 0, ndcgSum: 0, mrrSum: 0, precSum: 0, goldCount: 0, pass: 0, fail: 0, latencySum: 0 }
       tagStats[tag].count++
       tagStats[tag].latencySum += r.responseTimeMs
       if (r.passed) tagStats[tag].pass++
@@ -187,7 +215,15 @@ function printTagAnalysis(results: EvalResult[]) {
   }
 
   console.log('\n═══ Per-Tag NDCG@10 Breakdown ═══')
-  console.log('Tag'.padEnd(18) + 'Queries'.padStart(8) + '  NDCG@10'.padStart(10) + '  MRR'.padStart(8) + '  P@10'.padStart(8) + '  AvgMs'.padStart(8) + '  Pass%'.padStart(8))
+  console.log(
+    'Tag'.padEnd(18) +
+      'Queries'.padStart(8) +
+      '  NDCG@10'.padStart(10) +
+      '  MRR'.padStart(8) +
+      '  P@10'.padStart(8) +
+      '  AvgMs'.padStart(8) +
+      '  Pass%'.padStart(8),
+  )
   console.log('─'.repeat(78))
   const sorted = Object.entries(tagStats).sort((a, b) => b[1].count - a[1].count)
   for (const [tag, s] of sorted) {
@@ -195,15 +231,15 @@ function printTagAnalysis(results: EvalResult[]) {
     const mrr = s.goldCount > 0 ? (s.mrrSum / s.goldCount).toFixed(4) : 'N/A'
     const prec = s.goldCount > 0 ? (s.precSum / s.goldCount).toFixed(4) : 'N/A'
     const avgMs = (s.latencySum / s.count).toFixed(0)
-    const passRate = (s.pass / s.count * 100).toFixed(1)
+    const passRate = ((s.pass / s.count) * 100).toFixed(1)
     console.log(
       tag.padEnd(18) +
-      String(s.count).padStart(8) +
-      ndcg.padStart(10) +
-      mrr.padStart(8) +
-      prec.padStart(8) +
-      avgMs.padStart(8) +
-      (passRate + '%').padStart(8)
+        String(s.count).padStart(8) +
+        ndcg.padStart(10) +
+        mrr.padStart(8) +
+        prec.padStart(8) +
+        avgMs.padStart(8) +
+        (passRate + '%').padStart(8),
     )
   }
 }

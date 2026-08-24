@@ -40,13 +40,38 @@ function localScore(features: number[]): number {
   // Weight vector learned from domain expertise (not ML-trained)
   // This provides reasonable ranking even without the sidecar model
   const weights = [
-    0.02, 0.03, 0.01, 0.01, 0.01,  // query features (0-4)
-    0.02, 0.03, 0.01, 0.01, 0.05, 0.01,  // document features (5-10)
-    0.15, 0.10, 0.08, 0.12, 0.08, 0.06, 0.05,  // interaction features (11-17)
-    0.10, 0.02, 0.03,  // authority features (18-20)
-    0.02, 0.01, 0.02, 0.02,  // position & source (21-24)
-    0.01, 0.01, 0.01, 0.01, 0.01,  // context (25-29)
-    0.02, 0.01,  // user features (30-31)
+    0.02,
+    0.03,
+    0.01,
+    0.01,
+    0.01, // query features (0-4)
+    0.02,
+    0.03,
+    0.01,
+    0.01,
+    0.05,
+    0.01, // document features (5-10)
+    0.15,
+    0.1,
+    0.08,
+    0.12,
+    0.08,
+    0.06,
+    0.05, // interaction features (11-17)
+    0.1,
+    0.02,
+    0.03, // authority features (18-20)
+    0.02,
+    0.01,
+    0.02,
+    0.02, // position & source (21-24)
+    0.01,
+    0.01,
+    0.01,
+    0.01,
+    0.01, // context (25-29)
+    0.02,
+    0.01, // user features (30-31)
   ]
 
   let score = 0
@@ -90,14 +115,7 @@ export async function applyLtrRankingV2(results: SearchResult[], ctx: SearchCont
 
   // Compute v2 features for all results
   const allFeatures = organicResults.map((r, i) =>
-    computeResultFeaturesV2(
-      ctx.query,
-      r,
-      qFeats,
-      extractSourceBackend(r),
-      i + 1,
-      userFeats,
-    ),
+    computeResultFeaturesV2(ctx.query, r, qFeats, extractSourceBackend(r), i + 1, userFeats),
   )
 
   // Try sidecar first, fall back to local scoring
@@ -109,7 +127,7 @@ export async function applyLtrRankingV2(results: SearchResult[], ctx: SearchCont
 
   // Local fallback if sidecar unavailable
   if (!scores) {
-    scores = allFeatures.map(f => localScore(f))
+    scores = allFeatures.map((f) => localScore(f))
     logger.debug('[LTR v2] using local scoring fallback')
   }
 
@@ -151,7 +169,7 @@ async function callSidecarV2(
       logger.warn('[LTR v2] sidecar rank failed:', { status: resp.status })
       return null
     }
-    const body = await resp.json() as { scores?: number[] }
+    const body = (await resp.json()) as { scores?: number[] }
     if (!Array.isArray(body.scores) || body.scores.length !== features.length) {
       logger.warn('[LTR v2] sidecar returned invalid scores')
       return null

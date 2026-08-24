@@ -71,11 +71,7 @@ export class CircuitBreaker {
   private resetTimeoutMs: number
   private halfOpenMaxAttempts: number
 
-  constructor(config?: {
-    failureThreshold?: number
-    resetTimeoutMs?: number
-    halfOpenMaxAttempts?: number
-  }) {
+  constructor(config?: { failureThreshold?: number; resetTimeoutMs?: number; halfOpenMaxAttempts?: number }) {
     this.failureThreshold = config?.failureThreshold ?? 5
     this.resetTimeoutMs = config?.resetTimeoutMs ?? 30000
     this.halfOpenMaxAttempts = config?.halfOpenMaxAttempts ?? 3
@@ -179,10 +175,7 @@ export class RetryManager {
   /**
    * Execute with retry.
    */
-  async executeWithRetry<T>(
-    fn: () => Promise<T>,
-    shouldRetry?: (error: Error) => boolean,
-  ): Promise<T> {
+  async executeWithRetry<T>(fn: () => Promise<T>, shouldRetry?: (error: Error) => boolean): Promise<T> {
     let lastError: Error | null = null
 
     for (let attempt = 0; attempt <= this.config.maxRetries; attempt++) {
@@ -209,7 +202,7 @@ export class RetryManager {
           error: lastError.message,
         })
 
-        await new Promise(resolve => setTimeout(resolve, delay))
+        await new Promise((resolve) => setTimeout(resolve, delay))
       }
     }
 
@@ -282,7 +275,7 @@ export class HealthMonitor {
       const result = await Promise.race([
         check.check(),
         new Promise<boolean>((_, reject) =>
-          setTimeout(() => reject(new Error('Health check timeout')), check.timeoutMs)
+          setTimeout(() => reject(new Error('Health check timeout')), check.timeoutMs),
         ),
       ])
 
@@ -314,16 +307,22 @@ export class HealthMonitor {
   /**
    * Get health status.
    */
-  getStatus(): Record<string, {
-    status: 'healthy' | 'degraded' | 'down'
-    lastCheck: number
-    consecutiveFailures: number
-  }> {
-    const status: Record<string, {
+  getStatus(): Record<
+    string,
+    {
       status: 'healthy' | 'degraded' | 'down'
       lastCheck: number
       consecutiveFailures: number
-    }> = {}
+    }
+  > {
+    const status: Record<
+      string,
+      {
+        status: 'healthy' | 'degraded' | 'down'
+        lastCheck: number
+        consecutiveFailures: number
+      }
+    > = {}
 
     for (const [name, check] of this.checks) {
       let healthStatus: 'healthy' | 'degraded' | 'down' = 'healthy'
@@ -350,7 +349,7 @@ export class HealthMonitor {
    * Check if all systems are healthy.
    */
   isHealthy(): boolean {
-    return [...this.checks.values()].every(c => c.lastStatus)
+    return [...this.checks.values()].every((c) => c.lastStatus)
   }
 }
 
@@ -384,11 +383,7 @@ export class FaultRecoveryManager {
   /**
    * Execute with circuit breaker and retry.
    */
-  async executeWithRecovery<T>(
-    service: string,
-    fn: () => Promise<T>,
-    fallback?: () => Promise<T>,
-  ): Promise<T> {
+  async executeWithRecovery<T>(service: string, fn: () => Promise<T>, fallback?: () => Promise<T>): Promise<T> {
     const circuitBreaker = this.getCircuitBreaker(service)
 
     // Check circuit breaker
@@ -465,15 +460,21 @@ export class FaultRecoveryManager {
    */
   getHealthStatus(): {
     overall: 'healthy' | 'degraded' | 'down'
-    services: Record<string, {
-      circuitState: CircuitState
-      health: 'healthy' | 'degraded' | 'down'
-    }>
+    services: Record<
+      string,
+      {
+        circuitState: CircuitState
+        health: 'healthy' | 'degraded' | 'down'
+      }
+    >
   } {
-    const services: Record<string, {
-      circuitState: CircuitState
-      health: 'healthy' | 'degraded' | 'down'
-    }> = {}
+    const services: Record<
+      string,
+      {
+        circuitState: CircuitState
+        health: 'healthy' | 'degraded' | 'down'
+      }
+    > = {}
 
     let overallHealthy = true
     let anyDown = false
@@ -504,8 +505,7 @@ export class FaultRecoveryManager {
     recoveryActions: number
     healthChecks: number
   } {
-    const openCircuits = [...this.circuitBreakers.values()]
-      .filter(cb => cb.getState().state === 'open').length
+    const openCircuits = [...this.circuitBreakers.values()].filter((cb) => cb.getState().state === 'open').length
 
     return {
       circuitBreakers: this.circuitBreakers.size,

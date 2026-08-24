@@ -41,7 +41,13 @@ const LIKE_ROW = {
 
 const VECTOR_ROW = {
   id: 'vec-1',
-  chunk: { title: 'Vector Workers Doc', url: 'https://vector.example.com/doc', content: 'workers vector content', domain: 'vector.example.com', publishedDate: undefined },
+  chunk: {
+    title: 'Vector Workers Doc',
+    url: 'https://vector.example.com/doc',
+    content: 'workers vector content',
+    domain: 'vector.example.com',
+    publishedDate: undefined,
+  },
   score: 0.9,
 }
 
@@ -177,7 +183,11 @@ describe('HybridSearchEngine', () => {
   it('hybridSearch convenience function runs the engine', async () => {
     searchIndexMock.mockResolvedValue([])
     const env = d1Env([FTS_ROW], [])
-    const results = await hybridSearch(env, 'cloudflare workers', { maxResults: 5, enableReranking: false, enableDiversity: false })
+    const results = await hybridSearch(env, 'cloudflare workers', {
+      maxResults: 5,
+      enableReranking: false,
+      enableDiversity: false,
+    })
     expect(results.length).toBe(1)
   })
 })

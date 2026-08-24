@@ -94,13 +94,19 @@ export async function extractFeatures(
  * Prepare training dataset from click log data.
  */
 export function prepareDataset(examples: TrainingExample[]): TrainingDataset {
-  const uniqueQueries = new Set(examples.map(e => e.query))
-  const uniqueDomains = new Set(examples.map(e => {
-    try { return new URL(e.url).hostname } catch { return '' }
-  }))
+  const uniqueQueries = new Set(examples.map((e) => e.query))
+  const uniqueDomains = new Set(
+    examples.map((e) => {
+      try {
+        return new URL(e.url).hostname
+      } catch {
+        return ''
+      }
+    }),
+  )
 
-  const positiveExamples = examples.filter(e => e.label === 1).length
-  const negativeExamples = examples.filter(e => e.label === 0).length
+  const positiveExamples = examples.filter((e) => e.label === 1).length
+  const negativeExamples = examples.filter((e) => e.label === 0).length
 
   return {
     examples,
@@ -163,9 +169,7 @@ export function exportToLightGBM(dataset: TrainingDataset): string {
   for (const [query, examples] of grouped) {
     lines.push(`# query: ${query}`)
     for (const ex of examples) {
-      const featureStr = ex.features
-        .map((f, i) => `${i}:${f.toFixed(6)}`)
-        .join(' ')
+      const featureStr = ex.features.map((f, i) => `${i}:${f.toFixed(6)}`).join(' ')
       lines.push(`${ex.label} ${groupIdx} ${featureStr}`)
     }
     groupIdx++
@@ -181,10 +185,7 @@ export function exportToLightGBM(dataset: TrainingDataset): string {
 /**
  * Generate model metadata for versioning.
  */
-export function generateModelMetadata(
-  dataset: TrainingDataset,
-  version?: string,
-): ModelMetadata {
+export function generateModelMetadata(dataset: TrainingDataset, version?: string): ModelMetadata {
   return {
     version: version ?? `v${Date.now()}`,
     trainedAt: new Date().toISOString(),
@@ -238,7 +239,9 @@ export function computeFeatureImportance(
   }))
 
   normalized.sort((a, b) => b.importance - a.importance)
-  normalized.forEach((item, i) => { item.rank = i + 1 })
+  normalized.forEach((item, i) => {
+    item.rank = i + 1
+  })
 
   return normalized
 }

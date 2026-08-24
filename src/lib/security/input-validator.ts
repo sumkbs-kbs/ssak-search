@@ -56,17 +56,17 @@ const INJECTION_PATTERNS = [
   /(\b(SELECT|INSERT|UPDATE|DELETE|DROP|CREATE|ALTER|EXEC|EXECUTE)\b)/i,
   /(--|;|\/\*|\*\/|xp_)/,
   /(\bOR\b\s+\b\d+\b\s*=\s*\b\d+\b)/i,
-  
+
   // XSS
   /<script\b[^>]*>/i,
   /javascript:/i,
   /on\w+\s*=/i,
-  
+
   // Path traversal
   /(\.\.\/|\.\.\\)/,
-  
+
   // Command injection
-  /[;&|`$]/
+  /[;&|`$]/,
 ]
 
 // ============================================================
@@ -74,21 +74,20 @@ const INJECTION_PATTERNS = [
 // ============================================================
 
 export function sanitizeInput(input: string): string {
-  return input
-    .trim()
-    // eslint-disable-next-line no-control-regex -- intentional: strip ASCII control characters
-    .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '') // Remove control chars
-    .normalize('NFC') // Normalize Unicode
+  return (
+    input
+      .trim()
+      // eslint-disable-next-line no-control-regex -- intentional: strip ASCII control characters
+      .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '') // Remove control chars
+      .normalize('NFC')
+  ) // Normalize Unicode
 }
 
 // ============================================================
 // Query Validator
 // ============================================================
 
-export function validateQuery(
-  query: unknown,
-  config: Partial<ValidationConfig> = {},
-): ValidationResult<string> {
+export function validateQuery(query: unknown, config: Partial<ValidationConfig> = {}): ValidationResult<string> {
   const cfg = { ...DEFAULT_CONFIG, ...config }
   const errors: string[] = []
 
@@ -133,10 +132,7 @@ export function validateQuery(
 // Results Count Validator
 // ============================================================
 
-export function validateResultsCount(
-  count: unknown,
-  config: Partial<ValidationConfig> = {},
-): ValidationResult<number> {
+export function validateResultsCount(count: unknown, config: Partial<ValidationConfig> = {}): ValidationResult<number> {
   const cfg = { ...DEFAULT_CONFIG, ...config }
 
   // Parse to number
@@ -157,10 +153,7 @@ export function validateResultsCount(
 // Context Validator
 // ============================================================
 
-export function validateContext(
-  context: unknown,
-  config: Partial<ValidationConfig> = {},
-): ValidationResult<string[]> {
+export function validateContext(context: unknown, config: Partial<ValidationConfig> = {}): ValidationResult<string[]> {
   const cfg = { ...DEFAULT_CONFIG, ...config }
 
   if (!Array.isArray(context)) {
@@ -192,9 +185,7 @@ export function validateContext(
 // API Key Validator
 // ============================================================
 
-export function validateApiKeyFormat(
-  key: unknown,
-): ValidationResult<string> {
+export function validateApiKeyFormat(key: unknown): ValidationResult<string> {
   if (typeof key !== 'string') {
     return { success: false, errors: ['API key must be a string'] }
   }
@@ -222,10 +213,7 @@ export function validateApiKeyFormat(
 // CSRF Token Validator
 // ============================================================
 
-export function validateCsrfToken(
-  token: unknown,
-  expected: string,
-): ValidationResult<boolean> {
+export function validateCsrfToken(token: unknown, expected: string): ValidationResult<boolean> {
   if (typeof token !== 'string') {
     return { success: false, errors: ['CSRF token must be a string'] }
   }
@@ -285,11 +273,7 @@ export function validateBatch<T>(
 /**
  * Validate and sanitize a search request.
  */
-export function validateSearchRequest(params: {
-  query?: unknown
-  resultsCount?: unknown
-  context?: unknown
-}): {
+export function validateSearchRequest(params: { query?: unknown; resultsCount?: unknown; context?: unknown }): {
   success: boolean
   query?: string
   resultsCount?: number

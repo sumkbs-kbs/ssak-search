@@ -350,7 +350,7 @@ monitorRoute.get('/', async (c) => {
   // ── Region identification (D.3 Multi-Region) ──
   // Cloudflare Workers expose request.cf with geo data.
   // In multi-region setup, this identifies which region served the request.
-interface CfRequestMeta {
+  interface CfRequestMeta {
     colo?: string
     city?: string
     country?: string
@@ -362,10 +362,10 @@ interface CfRequestMeta {
   const reqLike = c.req as unknown as { raw?: { cf?: CfRequestMeta }; cf?: CfRequestMeta }
   const cf = reqLike.raw?.cf ?? reqLike.cf
   const region = {
-    id: cf?.colo ?? 'unknown',         // CF data center ID (e.g. 'SFO', 'NRT', 'LHR')
+    id: cf?.colo ?? 'unknown', // CF data center ID (e.g. 'SFO', 'NRT', 'LHR')
     city: cf?.city ?? 'unknown',
     country: cf?.country ?? 'unknown',
-    region: cf?.region ?? 'unknown',    // Geographic region code
+    region: cf?.region ?? 'unknown', // Geographic region code
     timezone: cf?.timezone ?? 'unknown',
     httpProtocol: cf?.httpProtocol ?? 'unknown',
     tlsVersion: cf?.tlsVersion ?? 'unknown',
@@ -375,7 +375,7 @@ interface CfRequestMeta {
   // If the primary region is US (SFO/IAD/ORD) and this is APAC (NRT/HKG/SIN),
   // or vice versa, it indicates a failover event.
   const PRIMARY_REGIONS = ['SFO', 'IAD', 'ORD', 'ATL', 'DFW', 'LAX'] // US Cloudflare colos
-  const APAC_REGIONS = ['NRT', 'HKG', 'SIN', 'SYD', 'ICN', 'TPE']   // APAC Cloudflare colos
+  const APAC_REGIONS = ['NRT', 'HKG', 'SIN', 'SYD', 'ICN', 'TPE'] // APAC Cloudflare colos
   const isPrimaryRegion = PRIMARY_REGIONS.includes(region.id)
   const isFailover = !isPrimaryRegion && APAC_REGIONS.includes(region.id)
 

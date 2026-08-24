@@ -10,7 +10,11 @@ async function fetchXml(url: string): Promise<string> {
   const t = setTimeout(() => ctrl.abort(), 8000)
   try {
     const res = await fetch(url, {
-      headers: { 'User-Agent': DESKTOP_UA, 'Accept-Language': 'zh-CN,zh;q=0.9,en;q=0.8', Accept: 'application/rss+xml, application/xml;q=0.9, */*;q=0.8' },
+      headers: {
+        'User-Agent': DESKTOP_UA,
+        'Accept-Language': 'zh-CN,zh;q=0.9,en;q=0.8',
+        Accept: 'application/rss+xml, application/xml;q=0.9, */*;q=0.8',
+      },
       signal: ctrl.signal,
     })
     return await res.text()
@@ -58,7 +62,9 @@ async function main(): Promise<void> {
         }
       }
       const top = [...domains.entries()].sort((a, b) => b[1] - a[1]).slice(0, 8)
-      console.log(`${c.label.padEnd(26)} → ${String(items.length).padStart(2)}건  [${top.map(([d, n]) => `${d}×${n}`).join(' ') || '(item 없음)'}]`)
+      console.log(
+        `${c.label.padEnd(26)} → ${String(items.length).padStart(2)}건  [${top.map(([d, n]) => `${d}×${n}`).join(' ') || '(item 없음)'}]`,
+      )
     } catch (e) {
       console.log(`${c.label.padEnd(26)} → NET-ERR ${String(e).slice(0, 60)}`)
     }

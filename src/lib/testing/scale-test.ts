@@ -192,7 +192,7 @@ export class ScaleTestRunner {
     endTime: number,
   ): Promise<void> {
     // Wait for ramp-up
-    await new Promise(resolve => setTimeout(resolve, delayMs))
+    await new Promise((resolve) => setTimeout(resolve, delayMs))
 
     const regionRps = Math.ceil(this.config.targetRps / this.config.regions)
     const intervalMs = 1000 / regionRps
@@ -221,7 +221,7 @@ export class ScaleTestRunner {
       const elapsed = Date.now() - requestStart
       const sleepMs = Math.max(0, intervalMs - elapsed)
       if (sleepMs > 0) {
-        await new Promise(resolve => setTimeout(resolve, sleepMs))
+        await new Promise((resolve) => setTimeout(resolve, sleepMs))
       }
     }
   }
@@ -263,7 +263,7 @@ export class ScaleTestRunner {
     // SLO validation
     const sloValidation = {
       latencyP99Met: p99 <= this.config.maxP99LatencyMs,
-      errorRateMet: (allMetrics.failedRequests / allMetrics.totalRequests) <= this.config.maxErrorRate,
+      errorRateMet: allMetrics.failedRequests / allMetrics.totalRequests <= this.config.maxErrorRate,
       throughputMet: achievedRps >= this.config.targetRps * 0.9,
       resourceUtilizationMet: allMetrics.maxCpuPercent <= this.config.resources.maxCpuPercent,
     }
@@ -282,9 +282,10 @@ export class ScaleTestRunner {
         p95,
         p99,
         max: sortedLatencies[sortedLatencies.length - 1] ?? 0,
-        avg: allMetrics.latencies.length > 0
-          ? allMetrics.latencies.reduce((a, b) => a + b, 0) / allMetrics.latencies.length
-          : 0,
+        avg:
+          allMetrics.latencies.length > 0
+            ? allMetrics.latencies.reduce((a, b) => a + b, 0) / allMetrics.latencies.length
+            : 0,
       },
       throughput: {
         requestsPerSecond: achievedRps,
@@ -375,12 +376,11 @@ export class ScaleTestRunner {
       regionMetrics.push({
         region: `region-${region}`,
         requests: regionData.requests,
-        avgLatency: regionData.latencies.length > 0
-          ? regionData.latencies.reduce((a, b) => a + b, 0) / regionData.latencies.length
-          : 0,
-        errorRate: regionData.requests > 0
-          ? (regionData.requests - regionData.successes) / regionData.requests
-          : 0,
+        avgLatency:
+          regionData.latencies.length > 0
+            ? regionData.latencies.reduce((a, b) => a + b, 0) / regionData.latencies.length
+            : 0,
+        errorRate: regionData.requests > 0 ? (regionData.requests - regionData.successes) / regionData.requests : 0,
         throughput: regionData.requests / (metrics.durationMs / 1000),
       })
     }
@@ -449,12 +449,15 @@ class ScaleTestMetrics {
     this.startTime = Date.now()
   }
 
-  recordRequest(region: number, data: {
-    latencyMs: number
-    success: boolean
-    bytes: number
-    error?: string
-  }): void {
+  recordRequest(
+    region: number,
+    data: {
+      latencyMs: number
+      success: boolean
+      bytes: number
+      error?: string
+    },
+  ): void {
     this.totalRequests++
     if (data.success) {
       this.successfulRequests++
@@ -484,11 +487,7 @@ class ScaleTestMetrics {
     this.regionData.set(region, regionMetrics)
   }
 
-  recordResource(data: {
-    cpuPercent: number
-    memoryPercent: number
-    networkMbps: number
-  }): void {
+  recordResource(data: { cpuPercent: number; memoryPercent: number; networkMbps: number }): void {
     this.cpuPercentages.push(data.cpuPercent)
     this.memoryPercentages.push(data.memoryPercent)
     this.networkMbps.push(data.networkMbps)

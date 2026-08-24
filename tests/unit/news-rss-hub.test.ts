@@ -28,7 +28,11 @@ import {
 } from '../../src/lib/news-rss-hub'
 
 const BBC_OUTLET: NewsHubOutlet = { domain: 'bbc.com', feedUrl: 'https://feeds.bbci.co.uk/news/rss.xml', lang: 'en' }
-const VERGE_OUTLET: NewsHubOutlet = { domain: 'theverge.com', feedUrl: 'https://www.theverge.com/rss/index.xml', lang: 'en' }
+const VERGE_OUTLET: NewsHubOutlet = {
+  domain: 'theverge.com',
+  feedUrl: 'https://www.theverge.com/rss/index.xml',
+  lang: 'en',
+}
 
 describe('NEWS_HUB_OUTLETS — 파이럿 아웃렛 구성', () => {
   it('아웃렛 20개 이상 (P1-7 KPI "소스 20개")', () => {
@@ -107,11 +111,21 @@ describe('parseHubFeed — Atom 파싱', () => {
 describe('newsHubSearch — 아웃렛별 다양성 + gold 매칭', () => {
   const articles: NewsHubArticle[] = [
     // bbc: GPT-5 관련 2건 + 무관 1건
-    { title: 'OpenAI releases GPT-5 with new reasoning features', url: 'https://www.bbc.co.uk/news/a1', domain: 'bbc.com', lang: 'en' },
+    {
+      title: 'OpenAI releases GPT-5 with new reasoning features',
+      url: 'https://www.bbc.co.uk/news/a1',
+      domain: 'bbc.com',
+      lang: 'en',
+    },
     { title: 'GPT-5 pricing revealed by OpenAI', url: 'https://www.bbc.co.uk/news/a2', domain: 'bbc.com', lang: 'en' },
     { title: 'UK weather forecast for the week', url: 'https://www.bbc.co.uk/news/a3', domain: 'bbc.com', lang: 'en' },
     // verge: GPT-5 1건 (쿼리 토큰 3개 이상 공유 — computeScore 최소 임계 통과)
-    { title: 'OpenAI GPT-5 update for developers', url: 'https://www.theverge.com/v1', domain: 'theverge.com', lang: 'en' },
+    {
+      title: 'OpenAI GPT-5 update for developers',
+      url: 'https://www.theverge.com/v1',
+      domain: 'theverge.com',
+      lang: 'en',
+    },
     // cnn: 무관 1건
     { title: 'Markets rally on trade news', url: 'https://www.cnn.com/c1', domain: 'cnn.com', lang: 'en' },
   ]
@@ -170,7 +184,10 @@ describe('fetchNewsHub — TTL 캐시', () => {
 
   it('forceFresh 는 재수집한다', async () => {
     mockFetchWithTimeout.mockImplementation(async () => {
-      return new Response(`<rss><channel><item><title>Fresh article</title><link>https://www.bbc.co.uk/y</link></item></channel></rss>`, { status: 200 })
+      return new Response(
+        `<rss><channel><item><title>Fresh article</title><link>https://www.bbc.co.uk/y</link></item></channel></rss>`,
+        { status: 200 },
+      )
     })
     await fetchNewsHub(undefined, { forceFresh: true, outlets: [BBC_OUTLET] })
     const calls = mockFetchWithTimeout.mock.calls.length

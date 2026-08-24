@@ -136,11 +136,12 @@ export class EdgeCache {
     const complexity = classifyQueryComplexity(query)
     const now = Date.now()
 
-    const ttl = complexity === 'simple'
-      ? this.config.simpleQueryTtlMs
-      : complexity === 'complex'
-        ? this.config.complexQueryTtlMs
-        : (this.config.simpleQueryTtlMs + this.config.complexQueryTtlMs) / 2
+    const ttl =
+      complexity === 'simple'
+        ? this.config.simpleQueryTtlMs
+        : complexity === 'complex'
+          ? this.config.complexQueryTtlMs
+          : (this.config.simpleQueryTtlMs + this.config.complexQueryTtlMs) / 2
 
     // Evict if at capacity
     if (this.cache.size >= this.config.maxCacheSize) {
@@ -167,9 +168,7 @@ export class EdgeCache {
     if (entry) {
       // Update with fresh data
       const now = Date.now()
-      const ttl = entry.complexity === 'simple'
-        ? this.config.simpleQueryTtlMs
-        : this.config.complexQueryTtlMs
+      const ttl = entry.complexity === 'simple' ? this.config.simpleQueryTtlMs : this.config.complexQueryTtlMs
 
       entry.response = newResponse
       entry.createdAt = now
@@ -192,15 +191,13 @@ export class EdgeCache {
     newestEntry: number
   } {
     const entries = [...this.cache.values()]
-    const simpleCount = entries.filter(e => e.complexity === 'simple').length
-    const mediumCount = entries.filter(e => e.complexity === 'medium').length
-    const complexCount = entries.filter(e => e.complexity === 'complex').length
+    const simpleCount = entries.filter((e) => e.complexity === 'simple').length
+    const mediumCount = entries.filter((e) => e.complexity === 'medium').length
+    const complexCount = entries.filter((e) => e.complexity === 'complex').length
 
-    const avgAccess = entries.length > 0
-      ? entries.reduce((sum, e) => sum + e.accessCount, 0) / entries.length
-      : 0
+    const avgAccess = entries.length > 0 ? entries.reduce((sum, e) => sum + e.accessCount, 0) / entries.length : 0
 
-    const ages = entries.map(e => e.createdAt)
+    const ages = entries.map((e) => e.createdAt)
     const oldestEntry = ages.length > 0 ? Math.min(...ages) : 0
     const newestEntry = ages.length > 0 ? Math.max(...ages) : 0
 
@@ -233,8 +230,10 @@ export class EdgeCache {
 
     for (const [key, entry] of this.cache) {
       // Evict least accessed, break ties by age
-      if (entry.accessCount < leastAccessCount ||
-          (entry.accessCount === leastAccessCount && entry.createdAt < oldestTime)) {
+      if (
+        entry.accessCount < leastAccessCount ||
+        (entry.accessCount === leastAccessCount && entry.createdAt < oldestTime)
+      ) {
         leastAccessCount = entry.accessCount
         leastAccessKey = key
         oldestTime = entry.createdAt

@@ -237,7 +237,7 @@ export async function hybridRank(
     let vectorRrfScore = 0
     if (vectorWeights && cosineScores) {
       // The RRF contribution from vector similarity, we normalize to [0, 1] for RRF.
-      const vecRrfPosition = Math.max(1, Math.round((1 - cosineScores[i]) / 2 * (candidates.length - 1)))
+      const vecRrfPosition = Math.max(1, Math.round(((1 - cosineScores[i]) / 2) * (candidates.length - 1)))
       vectorRrfScore = vectorWeight / (RRF_K + vecRrfPosition)
     }
 

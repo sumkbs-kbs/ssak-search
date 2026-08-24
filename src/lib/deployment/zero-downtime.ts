@@ -97,10 +97,7 @@ export class DeploymentManager {
   /**
    * Create a new deployment.
    */
-  createDeployment(
-    version: string,
-    config?: Partial<DeploymentConfig>,
-  ): Deployment {
+  createDeployment(version: string, config?: Partial<DeploymentConfig>): Deployment {
     const id = `deploy_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
 
     const deployment: Deployment = {
@@ -207,10 +204,7 @@ export class DeploymentManager {
   /**
    * Record metrics for deployment.
    */
-  recordMetrics(
-    id: string,
-    metrics: Partial<DeploymentMetrics>,
-  ): void {
+  recordMetrics(id: string, metrics: Partial<DeploymentMetrics>): void {
     const deployment = this.deployments.get(id)
     if (!deployment) return
 
@@ -321,11 +315,7 @@ export class FeatureFlagManager {
   /**
    * Check if a feature is enabled for a user.
    */
-  isEnabled(
-    flagId: string,
-    userId: string,
-    context?: Record<string, unknown>,
-  ): boolean {
+  isEnabled(flagId: string, userId: string, context?: Record<string, unknown>): boolean {
     const flag = this.flags.get(flagId)
     if (!flag) return false
 
@@ -348,10 +338,7 @@ export class FeatureFlagManager {
   /**
    * Get variant for A/B test.
    */
-  getVariant(
-    flagId: string,
-    userId: string,
-  ): string | null {
+  getVariant(flagId: string, userId: string): string | null {
     const flag = this.flags.get(flagId)
     if (!flag || flag.variants.length === 0) return null
 
@@ -363,10 +350,7 @@ export class FeatureFlagManager {
   /**
    * Update flag.
    */
-  updateFlag(
-    flagId: string,
-    updates: Partial<Pick<FeatureFlag, 'enabled' | 'rolloutPercent' | 'rules'>>,
-  ): boolean {
+  updateFlag(flagId: string, updates: Partial<Pick<FeatureFlag, 'enabled' | 'rolloutPercent' | 'rules'>>): boolean {
     const flag = this.flags.get(flagId)
     if (!flag) return false
 
@@ -398,11 +382,11 @@ export class FeatureFlagManager {
     }
   } {
     const flags = [...this.flags.values()]
-    const enabledFlags = flags.filter(f => f.enabled).length
+    const enabledFlags = flags.filter((f) => f.enabled).length
 
-    const full = flags.filter(f => f.rolloutPercent === 100).length
-    const partial = flags.filter(f => f.enabled && f.rolloutPercent < 100).length
-    const disabled = flags.filter(f => !f.enabled).length
+    const full = flags.filter((f) => f.rolloutPercent === 100).length
+    const partial = flags.filter((f) => f.enabled && f.rolloutPercent < 100).length
+    const disabled = flags.filter((f) => !f.enabled).length
 
     return {
       totalFlags: flags.length,
@@ -415,16 +399,13 @@ export class FeatureFlagManager {
     let hash = 0
     for (let i = 0; i < str.length; i++) {
       const char = str.charCodeAt(i)
-      hash = ((hash << 5) - hash) + char
+      hash = (hash << 5) - hash + char
       hash |= 0
     }
     return Math.abs(hash) % 100
   }
 
-  private evaluateRule(
-    rule: FeatureFlagRule,
-    context?: Record<string, unknown>,
-  ): boolean {
+  private evaluateRule(rule: FeatureFlagRule, context?: Record<string, unknown>): boolean {
     if (!context) return false
 
     try {

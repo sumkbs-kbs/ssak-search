@@ -52,7 +52,11 @@ const SearchRequestSchema = z.object({
     .optional()
     .transform((v): Topic => (v && (TOPICS as readonly string[]).includes(v) ? (v as Topic) : 'general')),
   // Clamp instead of reject — legacy route clamped out-of-range values.
-  max_results: z.number().optional().default(10).transform((v) => Math.min(Math.max(v, 1), MAX_RESULTS)),
+  max_results: z
+    .number()
+    .optional()
+    .default(10)
+    .transform((v) => Math.min(Math.max(v, 1), MAX_RESULTS)),
   include_answer: z.boolean().optional().default(false),
   include_raw_content: z.boolean().optional().default(false),
   // Truthy coercion: boolean true / string "true" (form-serialized clients).
@@ -77,9 +81,17 @@ const SearchRequestSchema = z.object({
     .string()
     .optional()
     .transform((v): SortBy | undefined => (v === 'date' ? 'date' : v === 'relevance' ? 'relevance' : undefined)),
-  max_tokens: z.number().optional().default(4000).transform((v) => Math.min(v, MAX_TOKENS)),
+  max_tokens: z
+    .number()
+    .optional()
+    .default(4000)
+    .transform((v) => Math.min(v, MAX_TOKENS)),
   // Clamp into [1, 10] without rounding — mirrors the legacy route exactly.
-  page: z.number().optional().default(1).transform((v) => Math.min(Math.max(v, 1), MAX_PAGE)),
+  page: z
+    .number()
+    .optional()
+    .default(1)
+    .transform((v) => Math.min(Math.max(v, 1), MAX_PAGE)),
   country: z.string().optional(),
   language: z.string().optional(),
   location: z.string().optional(),
@@ -118,9 +130,7 @@ export type ParsedSearchRequest = {
   space_id?: string
 }
 
-export type ParseResult<T> =
-  | { ok: true; data: T }
-  | { ok: false; code: ErrorCode; detail: string }
+export type ParseResult<T> = { ok: true; data: T } | { ok: false; code: ErrorCode; detail: string }
 
 /**
  * Parse + validate a POST /api/search body.
@@ -161,7 +171,11 @@ export function parseSearchRequest(input: unknown): ParseResult<ParsedSearchRequ
 const ExtractRequestSchema = z.object({
   urls: z.union([z.string(), z.array(z.string())]),
   include_images: z.boolean().optional().default(false),
-  max_tokens: z.number().optional().default(8000).transform((v) => Math.min(v, MAX_EXTRACT_TOKENS)),
+  max_tokens: z
+    .number()
+    .optional()
+    .default(8000)
+    .transform((v) => Math.min(v, MAX_EXTRACT_TOKENS)),
 })
 
 /**
@@ -169,9 +183,7 @@ const ExtractRequestSchema = z.object({
  * on success. Used by the GET route's comma-separated parsing too, so both
  * endpoints enforce identical URL rules.
  */
-export function validateUrl(
-  raw: string,
-): { ok: true; value: string } | { ok: false; detail: string } {
+export function validateUrl(raw: string): { ok: true; value: string } | { ok: false; detail: string } {
   const trimmed = raw.trim()
   if (trimmed.length === 0) return { ok: false, detail: 'URL is empty' }
   if (trimmed.length > MAX_URL_LENGTH) {

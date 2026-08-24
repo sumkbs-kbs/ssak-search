@@ -10,7 +10,6 @@
  * - Guardrail metrics
  */
 
-
 // ============================================================
 // Types
 // ============================================================
@@ -96,10 +95,7 @@ export class StatisticalTests {
 
     // 95% confidence interval for difference
     const seDiff = Math.sqrt((p1 * (1 - p1)) / samples1 + (p2 * (1 - p2)) / samples2)
-    const ci: [number, number] = [
-      (p2 - p1) - 1.96 * seDiff,
-      (p2 - p1) + 1.96 * seDiff,
-    ]
+    const ci: [number, number] = [p2 - p1 - 1.96 * seDiff, p2 - p1 + 1.96 * seDiff]
 
     // Effect size (Cohen's h)
     const effectSize = 2 * (Math.asin(Math.sqrt(p2)) - Math.asin(Math.sqrt(p1)))
@@ -124,9 +120,7 @@ export class StatisticalTests {
   /**
    * Chi-squared test for independence.
    */
-  static chiSquaredTest(
-    observed: number[][],
-  ): { statistic: number; pValue: number; degreesOfFreedom: number } {
+  static chiSquaredTest(observed: number[][]): { statistic: number; pValue: number; degreesOfFreedom: number } {
     const rows = observed.length
     const cols = observed[0].length
     const total = observed.flat().reduce((a, b) => a + b, 0)
@@ -152,12 +146,7 @@ export class StatisticalTests {
   /**
    * Calculate required sample size for two-proportion test.
    */
-  static calculateSampleSize(
-    p1: number,
-    p2: number,
-    alpha: number = 0.05,
-    power: number = 0.8,
-  ): number {
+  static calculateSampleSize(p1: number, p2: number, alpha: number = 0.05, power: number = 0.8): number {
     const effectSize = Math.abs(p2 - p1)
     const pAvg = (p1 + p2) / 2
 
@@ -165,10 +154,7 @@ export class StatisticalTests {
     const zAlpha = StatisticalTests.normalQuantile(1 - alpha / 2)
     const zBeta = StatisticalTests.normalQuantile(power)
 
-    const n = Math.ceil(
-      (Math.pow(zAlpha + zBeta, 2) * 2 * pAvg * (1 - pAvg)) /
-      Math.pow(effectSize, 2)
-    )
+    const n = Math.ceil((Math.pow(zAlpha + zBeta, 2) * 2 * pAvg * (1 - pAvg)) / Math.pow(effectSize, 2))
 
     return n * 2 // Total sample size (both groups)
   }
@@ -208,7 +194,7 @@ export class StatisticalTests {
     return {
       probabilityBBeatsA: bWins / simulations,
       expectedLift: liftSum / simulations,
-      risk: 1 - (bWins / simulations),
+      risk: 1 - bWins / simulations,
     }
   }
 
@@ -228,7 +214,7 @@ export class StatisticalTests {
     x = Math.abs(x) / Math.sqrt(2)
 
     const t = 1.0 / (1.0 + p * x)
-    const y = 1.0 - (((((a5 * t + a4) * t) + a3) * t + a2) * t + a1) * t * Math.exp(-x * x)
+    const y = 1.0 - ((((a5 * t + a4) * t + a3) * t + a2) * t + a1) * t * Math.exp(-x * x)
 
     return 0.5 * (1.0 + sign * y)
   }
@@ -236,14 +222,11 @@ export class StatisticalTests {
   private static normalQuantile(p: number): number {
     // Rational approximation of the inverse normal CDF
     const a = [
-      -3.969683028665376e+01, 2.209460984245205e+02,
-      -2.759285104469687e+02, 1.383577518672690e+02,
-      -3.066479806614716e+01, 2.506628277459239e+00,
+      -3.969683028665376e1, 2.209460984245205e2, -2.759285104469687e2, 1.38357751867269e2, -3.066479806614716e1,
+      2.506628277459239,
     ]
     const b = [
-      -5.447609879822406e+01, 1.615858368580409e+02,
-      -1.556989798598866e+02, 6.680131188771972e+01,
-      -1.328068155288572e+01,
+      -5.447609879822406e1, 1.615858368580409e2, -1.556989798598866e2, 6.680131188771972e1, -1.328068155288572e1,
     ]
 
     const pLow = 0.02425
@@ -253,17 +236,23 @@ export class StatisticalTests {
 
     if (p < pLow) {
       q = Math.sqrt(-2 * Math.log(p))
-      return (((((a[0] * q + a[1]) * q + a[2]) * q + a[3]) * q + a[4]) * q + a[5]) /
+      return (
+        (((((a[0] * q + a[1]) * q + a[2]) * q + a[3]) * q + a[4]) * q + a[5]) /
         (((((b[0] * q + b[1]) * q + b[2]) * q + b[3]) * q + b[4]) * q + 1)
+      )
     } else if (p <= pHigh) {
       q = p - 0.5
       r = q * q
-      return (((((a[0] * r + a[1]) * r + a[2]) * r + a[3]) * r + a[4]) * r + a[5]) * q /
+      return (
+        ((((((a[0] * r + a[1]) * r + a[2]) * r + a[3]) * r + a[4]) * r + a[5]) * q) /
         (((((b[0] * r + b[1]) * r + b[2]) * r + b[3]) * r + b[4]) * r + 1)
+      )
     } else {
       q = Math.sqrt(-2 * Math.log(1 - p))
-      return -(((((a[0] * q + a[1]) * q + a[2]) * q + a[3]) * q + a[4]) * q + a[5]) /
+      return (
+        -(((((a[0] * q + a[1]) * q + a[2]) * q + a[3]) * q + a[4]) * q + a[5]) /
         (((((b[0] * q + b[1]) * q + b[2]) * q + b[3]) * q + b[4]) * q + 1)
+      )
     }
   }
 
@@ -286,9 +275,8 @@ export class StatisticalTests {
 
   private static logGamma(x: number): number {
     const c = [
-      76.18009172947146, -86.50532032941678,
-      24.01409824083091, -1.231739572450155,
-      0.1208650973866179e-2, -0.5395239384953e-5,
+      76.18009172947146, -86.50532032941678, 24.01409824083091, -1.231739572450155, 0.1208650973866179e-2,
+      -0.5395239384953e-5,
     ]
 
     let y = x
@@ -300,7 +288,7 @@ export class StatisticalTests {
       ser += c[j] / ++y
     }
 
-    return -tmp + Math.log(2.5066282746310007 * ser / x)
+    return -tmp + Math.log((2.5066282746310007 * ser) / x)
   }
 
   private static betaSample(alpha: number, beta: number): number {
@@ -405,13 +393,13 @@ export class ExperimentManager {
     if (!experiment) return null
 
     // Find control and treatment
-    const control = data.find(d => {
-      const variant = experiment.variants.find(v => v.id === d.variantId)
+    const control = data.find((d) => {
+      const variant = experiment.variants.find((v) => v.id === d.variantId)
       return variant?.isControl
     })
 
-    const treatment = data.find(d => {
-      const variant = experiment.variants.find(v => v.id === d.variantId)
+    const treatment = data.find((d) => {
+      const variant = experiment.variants.find((v) => v.id === d.variantId)
       return variant && !variant.isControl
     })
 
@@ -447,7 +435,7 @@ export class ExperimentManager {
     // Build variant results
     const variantResults: VariantResult[] = []
     for (const d of data) {
-      const variant = experiment.variants.find(v => v.id === d.variantId)
+      const variant = experiment.variants.find((v) => v.id === d.variantId)
       if (!variant) continue
       variantResults.push({
         variantId: d.variantId,

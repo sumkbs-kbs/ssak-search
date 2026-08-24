@@ -44,7 +44,7 @@ interface NaverNewsCacheEntry {
 }
 
 const NAVER_NEWS_CACHE = new Map<string, NaverNewsCacheEntry>()
-const NAVER_NEWS_CACHE_MAX = 100       // max cached queries
+const NAVER_NEWS_CACHE_MAX = 100 // max cached queries
 const NAVER_NEWS_CACHE_TTL_MS = 180_000 // 3 minutes (news is time-sensitive)
 
 function naverNewsCacheKey(query: string, maxResults: number, sortByRecency: boolean): string {

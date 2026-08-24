@@ -9,3 +9,7 @@ ecosystem.config.cjs
 *.yaml
 *.md
 *.snap
+# Parser regression fixtures — byte-exact HTML, never reformat
+tests/snapshots/
+tests/unit/snapshots/
+*.html

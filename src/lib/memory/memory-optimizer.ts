@@ -245,7 +245,7 @@ export class OptimizedLRUCache<T> {
 // ============================================================
 
 export class MemoryManager {
-  private caches: Map<string, OptimizedLRUCache<any>> = new Map()
+  private caches: Map<string, OptimizedLRUCache<unknown>> = new Map()
   private static instance: MemoryManager | null = null
 
   private constructor() {
@@ -285,7 +285,7 @@ export class MemoryManager {
    * Get all cache statistics.
    */
   getStats(): MemoryStats {
-    const cacheStats: Record<string, any> = {}
+    const cacheStats: Record<string, { size: number; maxSize: number; hitRate: number }> = {}
     let totalEntries = 0
 
     for (const [name, cache] of this.caches) {

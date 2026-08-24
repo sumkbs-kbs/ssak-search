@@ -14,6 +14,7 @@ import * as path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import type { EvalReport, EvalResult, AggregateRankingMetrics, LatencyPercentiles, QPSMetrics } from './types'
 import { computeNdcg } from './metrics'
+import type { SearchResult } from '../src/types'
 
 const HERE = import.meta.dirname ?? path.dirname(fileURLToPath(import.meta.url))
 const EVAL_DIR = HERE
@@ -89,9 +90,9 @@ function aggregate(chunks: ChunkReport[]): EvalReport {
     if (!gold?.relevantDomains || gold.relevantDomains.length === 0) continue
 
     // Use canonical NDCG from metrics.ts (S50 per-gold cap, dual-domain matching)
-    const poolResults = (r.response?.results || []) as any[]
+    const poolResults = (r.response?.results || []) as SearchResult[]
     const ndcg = computeNdcg(poolResults, gold.relevantDomains, 10)
-    const relevantHits = poolResults.slice(0, 10).filter((res: any) => {
+    const relevantHits = poolResults.slice(0, 10).filter((res: SearchResult) => {
       const candidates: string[] = []
       try { candidates.push(new URL(res.url).hostname.replace(/^www\./, '').toLowerCase()) } catch { /* ignore invalid URL */ }
       if (res.domain) candidates.push(res.domain.toLowerCase().replace(/^www\./, ''))

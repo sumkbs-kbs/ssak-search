@@ -15,6 +15,7 @@ import { fileURLToPath } from 'node:url'
 import { CrossEncoderReranker, type RerankDocument } from '../src/lib/retrieval/reranker'
 import type { SearchResult } from '../src/types'
 import { computeNdcg } from '../eval/metrics'
+import type { EvalResult } from '../eval/types'
 
 const HERE = import.meta.dirname ?? path.dirname(fileURLToPath(import.meta.url))
 const EVAL_DIR = path.resolve(HERE, '..', 'eval')
@@ -41,7 +42,7 @@ for (const cf of chunkFiles) {
   for (const r of chunk.report?.results || []) {
     const qid = r.query?.id
     if (!qid) continue
-    poolsByQuery[qid] = (r.response?.results || []).map((res: any, i: number) => ({
+    poolsByQuery[qid] = (r.response?.results || []).map((res: SearchResult, i: number) => ({
       id: `doc_${i}`,
       title: res.title || '',
       content: res.content || '',
@@ -108,7 +109,7 @@ for (const qid of selectedIds) {
       // Use heuristic-only mode (no ML calls) for fast offline comparison
       // The reranker falls back to heuristic when Workers AI and sidecar are unavailable
       const reranked = await reranker.rerank(
-        latest.report.results.find((r: any) => r.query?.id === qid)?.query?.query || '',
+        latest.report.results.find((r: EvalResult) => r.query?.id === qid)?.query?.query || '',
         pool,
         undefined, // no env = heuristic fallback
         { enableWorkersAI: false, enableSidecar: false, topK: 10 },

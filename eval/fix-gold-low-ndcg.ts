@@ -7,13 +7,15 @@
 import * as fs from 'node:fs'
 import * as path from 'node:path'
 import { fileURLToPath } from 'node:url'
+import type { EvalResult } from './types'
+import type { SearchResult } from '../src/types'
 
 const HERE = import.meta.dirname ?? path.dirname(fileURLToPath(import.meta.url))
 const GS_PATH = path.join(HERE, 'gold-standards.json')
 const RESULTS_DIR = path.join(HERE, 'results')
 
 function loadAllResults() {
-  const results: any[] = []
+  const results: EvalResult[] = []
   for (let start = 0; start < 600; start += 100) {
     const f = path.join(RESULTS_DIR, `chunk-${start}-${start + 100}.json`)
     try {
@@ -24,8 +26,8 @@ function loadAllResults() {
   return results
 }
 
-function extractDomains(results: any[]): string[] {
-  return results.map((r: any) => {
+function extractDomains(results: SearchResult[]): string[] {
+  return results.map((r: SearchResult) => {
     try { return new URL(r.url).hostname.replace(/^www\./, '') } catch { return '' }
   }).filter(Boolean)
 }
@@ -56,11 +58,11 @@ const allResults = loadAllResults()
 
 let updated = 0
 
-for (const [queryId, gold] of Object.entries(gs) as [string, any][]) {
+for (const [queryId, gold] of Object.entries(gs) as [string, { relevantDomains?: string[] }][]) {
   if (queryId.startsWith('_')) continue
   if (!gold.relevantDomains) continue
 
-  const queryResults = allResults.filter((r: any) => r.query?.id === queryId)
+  const queryResults = allResults.filter((r: EvalResult) => r.query?.id === queryId)
   if (queryResults.length === 0) continue
 
   const allDomains: string[] = []
@@ -68,7 +70,7 @@ for (const [queryId, gold] of Object.entries(gs) as [string, any][]) {
 
   // Calculate current NDCG
   const rels = allDomains.slice(0, 10).map((d: string) => {
-    for (const gd of gold.relevantDomains) {
+    for (const gd of gold.relevantDomains ?? []) {
       if (d === gd || d.endsWith('.' + gd)) return 1
     }
     return 0
@@ -102,7 +104,7 @@ for (const [queryId, gold] of Object.entries(gs) as [string, any][]) {
     }
 
     // Add if it's a subdomain of a gold domain
-    for (const gd of gold.relevantDomains) {
+    for (const gd of gold.relevantDomains ?? []) {
       if (d.endsWith('.' + gd)) {
         newDomains.add(d)
         break
@@ -110,7 +112,7 @@ for (const [queryId, gold] of Object.entries(gs) as [string, any][]) {
     }
   }
 
-  const added = [...newDomains].filter(d => !gold.relevantDomains.includes(d))
+  const added = [...newDomains].filter(d => !gold.relevantDomains?.includes(d))
   if (added.length > 0) {
     gold.relevantDomains = [...newDomains]
     console.log(`${queryId}: +${added.slice(0, 5).join(', ')}${added.length > 5 ? '...' : ''}`)

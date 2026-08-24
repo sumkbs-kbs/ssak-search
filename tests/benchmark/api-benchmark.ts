@@ -88,14 +88,26 @@ function calculateStats(latencies: number[], successes: number, errors: string[]
   }
 }
 
-async function fetchJson(url: string, init?: RequestInit): Promise<{ status: number; body: any; latencyMs: number }> {
+interface JsonBody {
+  cached?: boolean
+  results?: unknown[]
+  backend?: string
+  status?: string
+  auth_required?: boolean
+  mode?: string
+  rate_limiter?: { mode?: string; hosts_tracked?: number }
+  features?: Record<string, boolean>
+  [key: string]: unknown
+}
+
+async function fetchJson(url: string, init?: RequestInit): Promise<{ status: number; body: JsonBody; latencyMs: number }> {
   const start = performance.now()
   try {
     const res = await fetch(url, { ...init, signal: AbortSignal.timeout(30_000) })
-    const body = await res.json()
+    const body = (await res.json()) as JsonBody
     return { status: res.status, body, latencyMs: performance.now() - start }
   } catch (_err) {
-    return { status: 0, body: null, latencyMs: performance.now() - start }
+    return { status: 0, body: {}, latencyMs: performance.now() - start }
   }
 }
 
@@ -302,7 +314,7 @@ async function benchmarkHealthDeep(): Promise<BenchmarkResult> {
     console.log(`    Active features: ${featureList.join(', ') || 'none'}`)
 
     const backends = body.backends || {}
-    const healthy = Object.values(backends).filter((b: any) => b?.status === 'operational').length
+    const healthy = Object.values(backends).filter((b) => (b as { status?: string })?.status === 'operational').length
     const total = Object.keys(backends).length
     console.log(`    Backends:       ${healthy}/${total} healthy`)
 

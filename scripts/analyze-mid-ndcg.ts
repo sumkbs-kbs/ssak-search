@@ -75,7 +75,7 @@ for (const [topic, qs] of Object.entries(byTopic).sort((a, b) => b[1].length - a
 // Analyze gold domain coverage
 console.log('\n─── Gold 도메인 커버리지 분석 ───')
 let goldFoundInTop5 = 0
-const goldFoundInTop10 = 0
+const _goldFoundInTop10 = 0
 let goldMissing = 0
 let goldFoundButLowRank = 0
 const missingDomains: Record<string, number> = {}

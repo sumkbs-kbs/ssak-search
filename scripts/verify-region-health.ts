@@ -98,12 +98,19 @@ async function checkRegion(config: RegionConfig): Promise<RegionHealth> {
       }
     }
 
-    const data = await res.json() as any
+    interface HealthPayload {
+      status?: string
+      version?: string
+      build_commit?: string
+      region?: { id?: string; country?: string }
+      backends?: Record<string, { status?: string }>
+    }
+    const data = await res.json() as HealthPayload
 
     // Count backends
-    const backends = data.backends ?? {}
+    const backends: Record<string, { status?: string }> = data.backends ?? {}
     const backendEntries = Object.entries(backends).filter(([k]) => k !== 'workers_ai')
-    const backendsUp = backendEntries.filter(([, v]: [string, any]) => v.status === 'operational').length
+    const backendsUp = backendEntries.filter(([, v]) => v.status === 'operational').length
     const backendsTotal = backendEntries.length
 
     return {

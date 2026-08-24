@@ -350,7 +350,17 @@ monitorRoute.get('/', async (c) => {
   // ── Region identification (D.3 Multi-Region) ──
   // Cloudflare Workers expose request.cf with geo data.
   // In multi-region setup, this identifies which region served the request.
-  const cf = (c.req as any).raw?.cf ?? (c.req as any).cf ?? undefined
+interface CfRequestMeta {
+    colo?: string
+    city?: string
+    country?: string
+    region?: string
+    timezone?: string
+    httpProtocol?: string
+    tlsVersion?: string
+  }
+  const reqLike = c.req as unknown as { raw?: { cf?: CfRequestMeta }; cf?: CfRequestMeta }
+  const cf = reqLike.raw?.cf ?? reqLike.cf
   const region = {
     id: cf?.colo ?? 'unknown',         // CF data center ID (e.g. 'SFO', 'NRT', 'LHR')
     city: cf?.city ?? 'unknown',

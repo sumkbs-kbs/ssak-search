@@ -18,6 +18,8 @@
 import * as fs from 'node:fs'
 import * as path from 'node:path'
 import { fileURLToPath } from 'node:url'
+import type { SearchResult } from '../src/types'
+import type { EvalResult } from '../eval/types'
 
 const HERE = import.meta.dirname ?? path.dirname(fileURLToPath(import.meta.url))
 const EVAL_DIR = path.resolve(HERE, '..', 'eval')
@@ -44,7 +46,7 @@ for (const cf of chunkFiles) {
   for (const r of results) {
     const qid = r.query?.id
     if (!qid) continue
-    poolsByQuery[qid] = (r.response?.results || []).map((res: any) => ({
+    poolsByQuery[qid] = (r.response?.results || []).map((res: SearchResult) => ({
       url: res.url,
       domain: res.domain || '',
       score: res.score || 0,
@@ -109,7 +111,7 @@ console.log(`Total queries with gold: ${queryIds.length}`)
 // Stratified sample
 const tagBuckets: Record<string, string[]> = {}
 for (const qid of queryIds) {
-  const tag = latest.report.results.find((r: any) => r.query?.id === qid)?.query?.tags?.[0] || 'unknown'
+  const tag = latest.report.results.find((r: EvalResult) => r.query?.id === qid)?.query?.tags?.[0] || 'unknown'
   if (!tagBuckets[tag]) tagBuckets[tag] = []
   tagBuckets[tag].push(qid)
 }

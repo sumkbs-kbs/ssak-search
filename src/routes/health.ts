@@ -565,7 +565,9 @@ healthRoute.get('/', async (c) => {
   if (depth !== 'full') {
     const data = await buildLightHealthData(c.env)
     // D.3: attach region info from Cloudflare request metadata
-    const cf = (c.req as any).raw?.cf ?? (c.req as any).cf ?? undefined
+    type CfRequestMeta = { cf?: { colo?: string; city?: string; country?: string; region?: string; timezone?: string } }
+    const reqLike = c.req as unknown as CfRequestMeta & { raw?: CfRequestMeta }
+    const cf = reqLike.raw?.cf ?? reqLike.cf
     if (cf) {
       data.region = {
         id: cf.colo ?? 'unknown',

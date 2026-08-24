@@ -43,30 +43,42 @@ function parseArgs() {
 function main() {
   const { threshold, reportPath } = parseArgs()
 
+  interface GateReport {
+    ranking?: { avgNdcgAt10?: number; queriesWithGoldStandard?: number }
+    totalQueries?: number
+    passRate?: number
+    timestamp?: string
+  }
+
   // Check if report exists
   if (!fs.existsSync(reportPath)) {
     console.log(`⚠️ SKIP: No eval report found at ${reportPath}`)
     process.exit(2)
   }
 
-  let report: any
+  let report: GateReport | undefined
   try {
-    const raw = JSON.parse(fs.readFileSync(reportPath, 'utf-8'))
-    report = raw.report || raw
+    const parsed = JSON.parse(fs.readFileSync(reportPath, 'utf-8')) as { report?: GateReport }
+    report = parsed.report ?? (parsed as unknown as GateReport)
   } catch (err) {
     console.error(`❌ ERROR: Failed to parse report: ${err}`)
-    process.exit(1)
+  }
+  if (!report) {
+    console.error('❌ FAIL: Report is empty or unreadable')
+    process.exitCode = 1
+    return
   }
 
   const ranking = report.ranking
   if (!ranking || typeof ranking.avgNdcgAt10 !== 'number') {
     console.error('❌ FAIL: Report has no ranking.avgNdcgAt10 metric')
-    process.exit(1)
+    process.exitCode = 1
+    return
   }
 
-  const ndcg = ranking.avgNdcgAt10
-  const queries = ranking.queriesWithGoldStandard || report.totalQueries
-  const passRate = report.passRate ? (report.passRate * 100).toFixed(1) : 'N/A'
+  const ndcg: number = ranking.avgNdcgAt10
+  const queries = ranking.queriesWithGoldStandard ?? report.totalQueries ?? 0
+  const passRate = typeof report.passRate === 'number' ? (report.passRate * 100).toFixed(1) : 'N/A'
   const delta = ndcg - threshold
 
   console.log('═══ NDCG@10 Quality Gate ═══')

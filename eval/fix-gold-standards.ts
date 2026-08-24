@@ -14,6 +14,8 @@
 import * as fs from 'node:fs'
 import * as path from 'node:path'
 import { fileURLToPath } from 'node:url'
+import type { EvalResult } from './types'
+import type { SearchResult } from '../src/types'
 
 const HERE = import.meta.dirname ?? path.dirname(fileURLToPath(import.meta.url))
 const EVAL_DIR = path.join(HERE)
@@ -77,7 +79,7 @@ const HIGH_QUALITY_DOMAINS: Record<string, Set<string>> = {
 }
 
 function loadAllResults() {
-  const results: any[] = []
+  const results: EvalResult[] = []
   for (let start = 0; start < 600; start += 100) {
     const f = path.join(RESULTS_DIR, `chunk-${start}-${start + 100}.json`)
     try {
@@ -88,8 +90,8 @@ function loadAllResults() {
   return results
 }
 
-function extractDomains(results: any[]): string[] {
-  return results.map((r: any) => {
+function extractDomains(results: SearchResult[]): string[] {
+  return results.map((r: SearchResult) => {
     try { return new URL(r.url).hostname.replace(/^www\./, '') } catch { return '' }
   }).filter(Boolean)
 }
@@ -118,12 +120,12 @@ function main() {
   let skipped = 0
 
   // Process all queries
-  for (const [queryId, gold] of Object.entries(gs) as [string, any][]) {
+  for (const [queryId, gold] of Object.entries(gs) as [string, { relevantDomains?: string[] }][]) {
     if (queryId.startsWith('_')) continue
     if (!gold.relevantDomains || gold.relevantDomains.length === 0) continue
 
     // Find this query's results
-    const queryResults = allResults.filter((r: any) => r.query?.id === queryId)
+    const queryResults = allResults.filter((r: EvalResult) => r.query?.id === queryId)
     if (queryResults.length === 0) continue
 
     // Get actual result domains (across all result sets for this query)

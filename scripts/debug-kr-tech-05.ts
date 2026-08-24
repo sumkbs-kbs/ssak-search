@@ -4,13 +4,14 @@
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { computeNdcg, loadGoldStandards } from '../eval/metrics'
+import type { EvalResult } from '../eval/types'
 
 const golds = loadGoldStandards()
 const evalPath = resolve(process.cwd(), 'eval-results.json')
 const evalData = JSON.parse(readFileSync(evalPath, 'utf-8'))
 const results = evalData.report?.results || []
 
-const r = results.find((x: any) => x.query.id === 'kr-tech-05')
+const r = results.find((x: EvalResult) => x.query.id === 'kr-tech-05')
 if (!r) { console.log('Not found'); process.exit(1) }
 
 const goldDomains = golds['kr-tech-05'] || []

@@ -14,6 +14,7 @@
  */
 
 import { logger } from '../logger'
+import type { Context, Next } from 'hono'
 
 // ============================================================
 // Types
@@ -195,7 +196,7 @@ export class CsrfManager {
  * CSRF protection middleware for state-changing endpoints.
  */
 export function csrfProtection(manager: CsrfManager) {
-  return async (c: any, next: any) => {
+  return async (c: Context, next: Next) => {
     // Only protect state-changing methods
     const method = c.req.method
     if (method === 'GET' || method === 'HEAD' || method === 'OPTIONS') {

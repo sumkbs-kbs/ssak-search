@@ -14,13 +14,15 @@
 import * as fs from 'node:fs'
 import * as path from 'node:path'
 import { fileURLToPath } from 'node:url'
+import type { EvalResult } from './types'
+import type { SearchResult } from '../src/types'
 
 const HERE = import.meta.dirname ?? path.dirname(fileURLToPath(import.meta.url))
 const GS_PATH = path.join(HERE, 'gold-standards.json')
 const RESULTS_DIR = path.join(HERE, 'results')
 
 function loadAllResults() {
-  const results: any[] = []
+  const results: EvalResult[] = []
   for (let start = 0; start < 600; start += 100) {
     const f = path.join(RESULTS_DIR, `chunk-${start}-${start + 100}.json`)
     try {
@@ -31,8 +33,8 @@ function loadAllResults() {
   return results
 }
 
-function extractDomains(results: any[]): string[] {
-  return results.map((r: any) => {
+function extractDomains(results: SearchResult[]): string[] {
+  return results.map((r: SearchResult) => {
     try { return new URL(r.url).hostname.replace(/^www\./, '') } catch { return '' }
   }).filter(Boolean)
 }
@@ -49,7 +51,7 @@ for (const q of EVAL_QUERIES) {
 
 let updated = 0
 
-for (const [queryId, gold] of Object.entries(gs) as [string, any][]) {
+for (const [queryId, gold] of Object.entries(gs) as [string, { relevantDomains?: string[] }][]) {
   if (queryId.startsWith('_')) continue
   if (!gold.relevantDomains) continue
 
@@ -59,7 +61,7 @@ for (const [queryId, gold] of Object.entries(gs) as [string, any][]) {
   if (!isFactual && !isFinancial) continue
 
   // Find this query's results
-  const queryResults = allResults.filter((r: any) => r.query?.id === queryId)
+  const queryResults = allResults.filter((r: EvalResult) => r.query?.id === queryId)
   if (queryResults.length === 0) continue
 
   const allDomains: string[] = []
@@ -115,7 +117,7 @@ for (const [queryId, gold] of Object.entries(gs) as [string, any][]) {
     }
   }
 
-  const added = [...newDomains].filter(d => !gold.relevantDomains.includes(d))
+  const added = [...newDomains].filter(d => !gold.relevantDomains?.includes(d))
   if (added.length > 0) {
     gold.relevantDomains = [...newDomains]
     console.log(`${queryId}: +${added.join(', ')}`)

@@ -65,7 +65,7 @@
   "migrations": [
     {
       "tag": "v2",
-      "new_sqlite_classes": ["AuditLogDO", "TenancyDO", "NewsHubDO"]
+      "new_sqlite_classes": ["AuditLogDO", "TenancyDO"]  // NewsHubDO already exists (measured 10074)
     }
   ],
 

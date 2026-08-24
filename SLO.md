@@ -12,7 +12,7 @@
 |------|-------|
 | **Service name** | `ssak-search` (Cloudflare Pages) |
 | **Endpoints covered** | `POST /api/search`, `GET /api/search`, `POST /api/extract`, `GET /api/health`, `GET /api/metrics` |
-| **Client-facing domain** | `https://ssak-search.pages.dev` (and custom domains) |
+| **Client-facing domain** | `https://search-engine-api.pages.dev` (and custom domains) |
 | **Backend dependencies** | Bing, Naver, Wikipedia, GitHub, HackerNews, Reddit, arXiv, DuckDuckGo, Jina AI, Workers AI |
 
 ---

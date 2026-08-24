@@ -3,7 +3,7 @@
 > **프로젝트**: webapp — Tavily-호환 AI 검색 엔진  
 > **버전**: 3.0.0  
 > **마지막 업데이트**: 2026-07-22  
-> **배포 URL**: https://ssak-search.pages.dev  
+> **배포 URL**: https://search-engine-api.pages.dev  
 > **GitHub**: Private (@mr.k/webapp)
 
 ---

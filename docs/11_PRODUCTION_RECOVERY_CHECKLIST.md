@@ -19,7 +19,7 @@
 | 백엔드 | ⚠️ 일부 | bing/naver/ddg/workers_ai ✅ · brave ❌ · wikipedia/github/hackernews/reddit degraded |
 | 스테이징 | ⚠️ 배포 없음 | `staging.search-engine-api.pages.dev` → "Deployment Not Found" |
 
-> **중요 교훈**: 이전 세션에서 `ssak-search.pages.dev`(NXDOMAIN)를 확인해 "프로덕션 다운"으로 오판했음.
+> **중요 교훈**: 이전 세션에서 `search-engine-api.pages.dev`(NXDOMAIN)를 확인해 "프로덕션 다운"으로 오판했음.
 > **실제 프로덕션 도메인은 `search-engine-api.pages.dev`** (wrangler.jsonc `name`, deploy.yml `PROJECT_NAME` 확인).
 
 ---
@@ -100,7 +100,7 @@ curl -s -o /dev/null -w '%{http_code}\n' https://search-engine-api.pages.dev/doc
 | C2 | **canary 파서 회귀 감지** | HTML 스크래핑 의존 — 마크업 변경 시 즉시 회귀 | Pages Variables `HEALTH_CANARY_ENABLED=true` | `/api/canary` 동작 |
 | C3 | **Sentry DSN 설정** | 오류 추적 no-op 상태 | `npx wrangler pages secret put SENTRY_DSN` | Sentry 대시보드 수신 |
 | C4 | **Logpush 설정** | 감사 로그 7일 후 소실 | scripts/create-logpush-datadog.sh (Datadog 시) | 로그 수신 확인 |
-| C5 | **README 도메인 참조 정리** | README에 구 `ssak-search.pages.dev` 다수 | ✅ 이번 세션에서 일괄 수정 완료 | grep 결과 0 |
+| C5 | **README 도메인 참조 정리** | README에 구 `search-engine-api.pages.dev` 다수 | ✅ 이번 세션에서 일괄 수정 완료 | grep 결과 0 |
 | C6 | **검증 스크립트 개선 반영** | verify-do-binding.sh 기본 URL 오류·bash 패딩 버그 | ✅ 이번 세션에서 수정 완료 | 스크립트 정상 실행 |
 
 ---
@@ -146,7 +146,7 @@ print('status:', d['status'])"
 |---|---|---|
 | `scripts/verify-do-binding.sh` | 기본 WORKER_URL → `search-engine-api.pages.dev` | NXDOMAIN 도메인 참조 (스크립트 전체 오판 유발) |
 | `scripts/verify-do-binding.sh` | `${var:15s}` bash 패딩 버그 → printf 패딩 | `set -u`에서 "value too great for base" — DO 라우트 검사 전체 스킵 |
-| `README.md` | `ssak-search.pages.dev` → `search-engine-api.pages.dev` (7곳) | 존재하지 않는 도메인 참조 |
+| `README.md` | `search-engine-api.pages.dev` → `search-engine-api.pages.dev` (7곳) | 존재하지 않는 도메인 참조 |
 | `docs/01_CURRENT_STATE_ASSESSMENT.md` | 프로덕션 상태 기록 정정 | "HTTP 000 다운" 오판 → "가동 중 partial_outage" |
 
 ---

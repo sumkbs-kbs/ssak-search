@@ -233,7 +233,7 @@
 
 - [ ] **Cloudflare Load Balancer 생성**
   - Account A Dashboard → Traffic → Load Balancing → Create Load Balancer
-  - Hostname: `ssak-search.pages.dev` (메인 도메인)
+  - Hostname: `search-engine-api.pages.dev` (메인 도메인)
   - **Origin Pools**:
     - Pool 1 (US): Account A Pages URL
     - Pool 2 (APAC): Account B Pages URL

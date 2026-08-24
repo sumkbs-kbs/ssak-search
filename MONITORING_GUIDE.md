@@ -66,7 +66,7 @@ Content-Type: text/plain; version=0.0.4
 
 ```bash
 # Verify metrics are being emitted
-curl -s https://ssak-search.pages.dev/api/metrics | head -20
+curl -s https://search-engine-api.pages.dev/api/metrics | head -20
 
 # Output:
 # HELP search_backend_status Backend status (1=healthy, 0.5=degraded, 0=down)
@@ -81,7 +81,7 @@ curl -s https://ssak-search.pages.dev/api/metrics | head -20
 For a full current snapshot:
 
 ```bash
-curl -s https://ssak-search.pages.dev/api/metrics
+curl -s https://search-engine-api.pages.dev/api/metrics
 ```
 
 ---
@@ -200,7 +200,7 @@ scrape_configs:
     scheme: https
     static_configs:
       - targets:
-          - 'ssak-search.pages.dev'
+          - 'search-engine-api.pages.dev'
         labels:
           service: 'ssak-search'
     scrape_interval: 60s
@@ -213,7 +213,7 @@ scrape_configs:
 #### Approach 2: Grafana Cloud Prometheus
 
 If using Grafana Cloud, use the **Prometheus data source** pointing to
-`https://ssak-search.pages.dev/api/metrics` directly with a scrape interval
+`https://search-engine-api.pages.dev/api/metrics` directly with a scrape interval
 of 60s.
 
 #### Approach 3: Cloudflare Workers-based Scraping Proxy
@@ -229,7 +229,7 @@ export default {
       return new Response('Not found', { status: 404 })
     }
 
-    const resp = await fetch('https://ssak-search.pages.dev/api/metrics')
+    const resp = await fetch('https://search-engine-api.pages.dev/api/metrics')
     const text = await resp.text()
 
     return new Response(text, {
@@ -245,7 +245,7 @@ export default {
 ### Grafana Prometheus Data Source
 
 1. Add a new **Prometheus** data source in Grafana
-2. URL: `https://ssak-search.pages.dev` (or your proxy URL)
+2. URL: `https://search-engine-api.pages.dev` (or your proxy URL)
 3. Scrape interval: `60s`
 4. Save & Test
 
@@ -542,7 +542,7 @@ Example with 99.9% SLO:
 The API provides an SLO report at `/api/monitor`:
 
 ```bash
-curl -s https://ssak-search.pages.dev/api/monitor | jq
+curl -s https://search-engine-api.pages.dev/api/monitor | jq
 ```
 
 ```json
@@ -595,7 +595,7 @@ At peak throughput:
 The `/api/usage` endpoint shows current subrequest consumption:
 
 ```bash
-curl -s https://ssak-search.pages.dev/api/usage | jq
+curl -s https://search-engine-api.pages.dev/api/usage | jq
 ```
 
 ```json
@@ -624,10 +624,10 @@ search_subrequests_per_request
 
 ```bash
 # Check if the /api/metrics endpoint is reachable
-curl -sf https://ssak-search.pages.dev/api/metrics | grep search_requests_total
+curl -sf https://search-engine-api.pages.dev/api/metrics | grep search_requests_total
 
 # Check if content-type is correct
-curl -sI https://ssak-search.pages.dev/api/metrics | grep content-type
+curl -sI https://search-engine-api.pages.dev/api/metrics | grep content-type
 # Expected: text/plain; version=0.0.4
 ```
 
@@ -635,7 +635,7 @@ curl -sI https://ssak-search.pages.dev/api/metrics | grep content-type
 
 ```bash
 # Check the persistence gauge
-curl -s https://ssak-search.pages.dev/api/metrics | grep search_metrics_persistence
+curl -s https://search-engine-api.pages.dev/api/metrics | grep search_metrics_persistence
 # Expected: search_metrics_persistence 1
 # If 0: the ANALYTICS binding is not configured
 ```
@@ -659,9 +659,9 @@ If using a browser-based Prometheus client (e.g., prometheus-ui), CORS is handle
 
 | Resource | URL |
 |----------|-----|
-| Production metrics | `https://ssak-search.pages.dev/api/metrics` |
-| Health check | `https://ssak-search.pages.dev/api/health` |
-| SLO report | `https://ssak-search.pages.dev/api/monitor` |
-| Usage stats | `https://ssak-search.pages.dev/api/usage` |
-| OpenAPI spec | `https://ssak-search.pages.dev/openapi.yaml` |
+| Production metrics | `https://search-engine-api.pages.dev/api/metrics` |
+| Health check | `https://search-engine-api.pages.dev/api/health` |
+| SLO report | `https://search-engine-api.pages.dev/api/monitor` |
+| Usage stats | `https://search-engine-api.pages.dev/api/usage` |
+| OpenAPI spec | `https://search-engine-api.pages.dev/openapi.yaml` |
 | GitHub repo | `https://github.com/mr.k/webapp` |

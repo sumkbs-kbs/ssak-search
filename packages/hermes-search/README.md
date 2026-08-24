@@ -17,7 +17,7 @@ pip install hermes-search
 from hermes_search import HermesSearch
 
 # Connect to your deployed instance
-client = HermesSearch(base_url="https://4ebb7a0f.ssak-search.pages.dev/api")
+client = HermesSearch(base_url="https://4ebb7a0f.search-engine-api.pages.dev/api")
 
 # Simple search (Tavily-compatible)
 result = client.search_dict("2026 AI trends", max_results=5, include_answer=True)
@@ -37,7 +37,7 @@ if result.get("answer"):
 from hermes_search import HermesAgentTools
 
 # Create Hermes Agent-compatible tools
-tools = HermesAgentTools(base_url="https://4ebb7a0f.ssak-search.pages.dev/api")
+tools = HermesAgentTools(base_url="https://4ebb7a0f.search-engine-api.pages.dev/api")
 
 # Get OpenAI-compatible function definitions
 tool_defs = tools.get_tool_definitions()
@@ -59,7 +59,7 @@ import asyncio
 from hermes_search import HermesSearch
 
 async def main():
-    client = HermesSearch(base_url="https://4ebb7a0f.ssak-search.pages.dev/api")
+    client = HermesSearch(base_url="https://4ebb7a0f.search-engine-api.pages.dev/api")
 
     # Search with AI answer
     result = await client.search_async_dict(

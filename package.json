@@ -115,7 +115,7 @@
     "hono": "^4.12.30"
   },
   "devDependencies": {
-    "@ai-sdk/openai": "^4.0.17",
+    "@ai-sdk/openai": "^4.0.45",
     "@cloudflare/vitest-pool-workers": "^0.16.20",
     "@cloudflare/workers-types": "^5.20260718.1",
     "@eslint/js": "^9.39.5",

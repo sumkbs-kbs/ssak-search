@@ -5,6 +5,29 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.6.0] — Browser Agent 백엔드 v1 (Phase I) (2026-08-24)
+
+### Added
+- **로컬 브라우저 검색 백엔드** (`browser-agent/server.mjs` + `src/lib/browser-search.ts`):
+  - 실행 중인 Chrome에 CDP 연결(DevToolsActivePort 자동감지) — 거주 IP·실제
+    핑거프린트·로그인 세션으로 봇 차단 통과 (개인 단일 사용자 전용)
+  - Bing SERP: ck/a 클릭추적 base64 디코딩 / Naver: 2026 리디자인 대응
+    외부 호스트 링크 수집(광고 ader.naver.com 배제)
+  - `/page` 본문 추출 + SSRF 방어, Bearer 인증, 내비게이션 페이싱 4초
+  - CF 측 `BROWSER_AGENT_URL` env 게이트 백엔드(tier1) — 미설정 시 하위호환
+- **동치 게이트 양측 키 인증** (`scripts/verify-env-equivalence.sh`):
+  - 환경별 API_KEY_DO 저장소 분리 실측 대응 — EQ_A_KEY/EQ_B_KEY 시크릿
+- **문서**: docs/BROWSER_AGENT.md (설계·보안·운영)
+- 단위 테스트 3135 → 3141
+
+### Fixed
+- **/api/keys 무인증 발급 취약점** (`src/routes/keys.ts`):
+  - 라이브 실측으로 확인 — POST/GET이 인증 없이 통과(주석과 불일치)
+  - requireManageAuth 가드: 유효 키 + write/admin 스코프 요구 (부트스트랩 모드 유지)
+
+### Changed
+- 프로덕션 동기화: fb48380 직접 배포(로테이션 문서 공인 완화 경로)
+
 ## [2.5.0] — 백엔드 풀 응집도 필터 (Phase H) (2026-08-24)
 
 ### Fixed

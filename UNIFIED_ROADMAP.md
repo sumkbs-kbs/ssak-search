@@ -651,6 +651,38 @@
 
 ---
 
+## 🌐 Phase I — Browser Agent: 로컬 브라우저 거주 세션 검색 백엔드 (2026-08-24)
+
+> 봇 차단 심화(DDG 클라우드IP 차단·Bing 셸 수확·Wikipedia 429 상시화 실측)에 대한
+> 사용자 제안 채택: 「내가 쓰던 창을 붙잡는다(로그인 세션) → 페이지를 연다 → 화면을 읽는다」.
+> 개인 단일 사용자 제약이 이 방식의 최대 약점(가용성·동시성)을 무력화함.
+
+### 구현
+
+| 컴포넌트 | 내용 |
+|---|---|
+| `browser-agent/server.mjs` | 로컬 데몬 — CDP(DevToolsActivePort 자동감지)로 실행 중인 Chrome 연결. `/serp`(Bing/Naver)·`/page`(본문 추출)·`/health` |
+| `src/lib/browser-search.ts` | CF 측 백엔드 태스크 — `BROWSER_AGENT_URL` env 게이트(미설정 시 미생성=하위호환), tier1 배치, 한국어→naver/기타→bing |
+| 보안 | Bearer 토큰 필수, /page SSRF 방어(사설·localhost·비표준 포트 차단), 내비게이션 페이싱 4초 |
+
+### 실측 (라이브)
+
+| 항목 | 결과 |
+|---|---|
+| Bing SERP (한국어 쿼리) | cloudflare.com/namu.wiki 등 실도메인 — ck/a 추적 URL base64 디코딩 포함 |
+| Naver SERP | samsung.com/kr.investing.com/tossinvest.com — 2026 리디자인(fender-ui_*) 대응 외부호스트 수집 방식, 광고 ader.naver.com 자동 배제 |
+| 파이프라인 통합 | backend `bing+browser+github+dbpedia`, playwright.dev 회수 |
+| 회귀 | 단위 3135→3141, 전체 게이트 녹색 |
+
+### 운영 활성화 (사용자)
+
+1. `cd browser-agent && npm install && npm start` (Chrome 실행 필요)
+2. 노출: `tailscale serve 8765` 또는 cloudflared tunnel
+3. Pages 환경변수: `BROWSER_AGENT_URL` · `BROWSER_AGENT_TOKEN`
+4. Mac 종료 시 자동 폴백(회로차단기) — 클라우드 경로 유지
+
+---
+
 ## 📈 단계별 목표 메트릭
 
 | 메트릭 | 현재 | Phase A | Phase B | Phase C | Phase D | 목표 |

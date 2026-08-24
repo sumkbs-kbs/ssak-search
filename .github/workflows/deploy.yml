@@ -171,6 +171,11 @@ jobs:
         # skipped → [13] Notify 알림으로 이어진다.
         env:
           npm_config_yes: "true"
+          # 수정 101 (2026-08-24): 이 스텝은 plain run: 이라 wrangler-action의
+          # 자격증명 주입을 받지 못한다 — 토큰 없는 wrangler list는 빈 결과를
+          # 반환해 재시도 5회 후 실패(실측). 가드 스텝과 동일하게 주입.
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: bash scripts/verify-pages-bundle.sh --expected-commit "${{ github.sha }}" --branch staging
 
       - name: Deploy probe-scheduler (Staging)

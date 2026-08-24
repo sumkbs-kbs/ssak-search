@@ -53,15 +53,21 @@
       { "name": "NEWS_HUB_DO", "class_name": "NewsHubDO" }
     ]
   },
-  // Migrations REMOVED (2026-08-24): every DO class below already exists in
-  // production, and the server-side migration ledger for this script no
-  // longer matches this list — re-declaring any of them as new_sqlite_classes
-  // fails with CF error 10074 ("already depended on by existing Durable
-  // Objects"; measured live for RateLimiterDO then ThreadDO). All classes use
-  // only the KV-style ctx.storage.get/put API (see Storage note above), which
-  // works identically on SQLite and legacy backends, so no storage migration
-  // is needed. If a genuinely NEW class is added later, declare it in a fresh
-  // migrations entry with a new tag.
+  // Migration state calibrated against PRODUCTION (2026-08-24 live deploy
+  // measurements): the v1 classes all already exist server-side — declaring
+  // them again fails with CF 10074 ("already depended on by existing Durable
+  // Objects"). The v2 trio (AuditLog/Tenancy/NewsHub) was never applied
+  // (their deploys were disabled by 08668fc), so they still need creation —
+  // dropping them instead failed with CF 10061 ("not configured to implement
+  // Durable Objects") at the AuditLogDO binding. Keep ONLY the unapplied v2
+  // classes here. All classes use the KV-style ctx.storage API regardless of
+  // backend (see Storage note above).
+  "migrations": [
+    {
+      "tag": "v2",
+      "new_sqlite_classes": ["AuditLogDO", "TenancyDO", "NewsHubDO"]
+    }
+  ],
 
   // ── Env bindings the DOs read from this.env (subset of Pages) ──────────
   // CrawlerDO uses SEARCH_INDEX_DB + INDEX_QUEUE; search backends called from

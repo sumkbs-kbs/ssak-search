@@ -48,7 +48,10 @@ env:
 jobs:
   eval:
     name: Search Quality Evaluation
-    runs-on: ubuntu-latest
+    # Phase I 후속 (2026-08-25): Self-hosted Runner(Mac, 거주 IP)에서 실행 —
+    # 러너 IP 봇월로 인한 CJK 가용성 실패(311건 실측) 근본 해소.
+    # 러너 오프라인 시 잡은 대기 후 180분 타임아웃 — Mac 상시 사용 환경 전제.
+    runs-on: [self-hosted, ssak-mac]
     # S104-③-⑧ (2026-08-12): the repo's default workflow permission is
     # read-only, so the plain `git push` in "Commit updated baseline" was
     # denied to github-actions[bot] (run 31582039295 step 10 failed with

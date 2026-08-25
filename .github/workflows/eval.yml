@@ -265,7 +265,13 @@ jobs:
             # 커밋 — baseline 단독 스테이징이 세대 불일치(d33ce3b) 의 원인.
             git add eval/baselines/latest.json eval/results/latest.json eval/results/run-*.json
             git diff --cached --quiet || git commit -m "chore: update eval baseline [skip ci]"
-            git push
+            # 2026-08-25: 평가 진행 중 다른 커밋이 main에 밀리면 베이스라인 push가
+            # 거부되는 레이스 실측(run bd3a555 유실) — rebase 후 재시도 3회.
+            for attempt in 1 2 3; do
+              git pull --rebase origin "${GITHUB_REF_NAME}" && git push && break
+              echo "⚠️ push rejected (attempt $attempt/3) — rebasing onto remote head"
+              sleep 10
+            done
             echo "Baseline updated and committed"
           fi
 

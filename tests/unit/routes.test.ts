@@ -197,12 +197,11 @@ describe('Route Handlers', () => {
         expect(res.status).toBe(400)
       })
 
-      it('returns 404 (not 200) for a query that yields no results', async () => {
-        // Agent-friendly contract (feedback item 5): empty results use HTTP 404
-        // so callers can branch on status without inspecting the body. The body
-        // is still a full SearchResponse with no_results=true.
+      it('returns 200 with no_results=true for a query that yields no results', async () => {
+        // REST semantics fix: empty results are HTTP 200 + no_results=true.
+        // Clients branch on the body flag, not the status code.
         const res = await requestWithEnv(app, '/api/search?q=test')
-        expect(res.status).toBe(404)
+        expect(res.status).toBe(200)
         const body = (await res.json()) as any
         expect(body.query).toBe('test')
         expect(body.results).toEqual([])
@@ -211,7 +210,7 @@ describe('Route Handlers', () => {
 
       it('returns 404 for query parameter "query" with no results', async () => {
         const res = await requestWithEnv(app, '/api/search?query=hello')
-        expect(res.status).toBe(404)
+        expect(res.status).toBe(200)
         const body = (await res.json()) as any
         expect(body.query).toBe('hello')
         expect(body.no_results).toBe(true)
@@ -219,14 +218,14 @@ describe('Route Handlers', () => {
 
       it('parses max_results parameter', async () => {
         const res = await requestWithEnv(app, '/api/search?q=test&max_results=5')
-        expect(res.status).toBe(404) // empty result → 404, param still parsed
+        expect(res.status).toBe(200) // empty result → 200 + no_results, param still parsed
         const body = (await res.json()) as any
         expect(body.page_size).toBe(5)
       })
 
       it('caps max_results at 20', async () => {
         const res = await requestWithEnv(app, '/api/search?q=test&max_results=100')
-        expect(res.status).toBe(404)
+        expect(res.status).toBe(200)
         const body = (await res.json()) as any
         expect(body.page_size).toBe(20)
       })
@@ -392,14 +391,14 @@ describe('Route Handlers', () => {
         expect(body.code).toBe('too_many_domains')
       })
 
-      it('returns 404 for valid POST body that yields no results', async () => {
-        // Agent-friendly contract: empty results → 404 with no_results:true body.
+      it('returns 200 + no_results for valid POST body that yields no results', async () => {
+        // REST semantics: empty results → 200 with no_results=true.
         const res = await requestWithEnv(app, '/api/search', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ query: 'test query', max_results: 5 }),
         })
-        expect(res.status).toBe(404)
+        expect(res.status).toBe(200)
         const body = (await res.json()) as any
         expect(body.query).toBe('test query')
         expect(body.no_results).toBe(true)

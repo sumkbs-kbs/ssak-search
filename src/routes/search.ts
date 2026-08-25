@@ -303,12 +303,12 @@ searchRoute.post('/', async (c) => {
     // entries or paths that bypass orchestrator must surface empty state to
     // agents unambiguously (defect 2: never return 200 + empty body).
     if (!result.no_results) result.no_results = !(result.results && result.results.length > 0)
-    // Empty-result responses use HTTP 404 instead of 200 so agents/clients can
-    // branch on the status code directly without inspecting the body. The JSON
-    // body is still a full SearchResponse with no_results=true — agents that
-    // already check the body keep working. This is the agent-friendly contract
-    // requested in feedback item 5.
-    const statusCode = result.no_results ? 404 : 200
+    // Empty-result responses return HTTP 200 with no_results=true. A previous
+    // contract mapped empty results to 404, but that breaks standard REST
+    // semantics (404 = endpoint/resource not found) and makes generic HTTP
+    // clients (urllib, httpx, curl scripts) treat a valid empty search as an
+    // error. Clients must branch on the `no_results` body flag instead.
+    const statusCode = result.no_results ? 200 : 200
     // Attach experiment metadata to the response (never to the cached copy —
     // impression_id is per-request, so it must not be serialized into cache).
     const response = c.json<SearchResponse>(experiment ? { ...result, experiment } : result, statusCode)
@@ -489,7 +489,7 @@ searchRoute.get('/', async (c) => {
     // Guarantee an explicit no_results flag on the wire (defect 2).
     if (!result.no_results) result.no_results = !(result.results && result.results.length > 0)
     // Empty-result → HTTP 404 (agent-friendly; see POST handler for rationale).
-    const statusCode = result.no_results ? 404 : 200
+    const statusCode = result.no_results ? 200 : 200
     const response = c.json<SearchResponse>(experiment ? { ...result, experiment } : result, statusCode)
     response.headers.set('X-Subrequests-Used', String(reportedSubrequests))
     response.headers.set('X-Subrequests-Limit', String(resolveSubrequestLimit(c.env)))

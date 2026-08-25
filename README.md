@@ -244,6 +244,14 @@ Parser 회귀 감지 — 각 백엔드에 실제 검색 쿼리를 실행하여 �
 ```
 - `depth`: `quick` (3개 하위 쿼리) 또는 `deep` (6개 하위 쿼리)
 
+## Browser Agent — 로컬 브라우저 거주 세션 백엔드 (Phase I)
+
+봇 차단 심화 대응: 실행 중인 Chrome을 CDP로 구동해 Bing/Naver SERP와 기사 본문을
+거주 IP·실제 세션으로 읽는 선택적 백엔드. 설계·보안·운영은
+**[docs/BROWSER_AGENT.md](docs/BROWSER_AGENT.md)** 참조. 활성화:
+`browser-agent/start.sh` 실행 → Pages 환경변수 `BROWSER_AGENT_URL`/
+`BROWSER_AGENT_TOKEN` 설정.
+
 ## 한국어 검색 최적화
 
 ### Naver 모바일 백엔드 (`src/lib/naver-search.ts`)
@@ -331,6 +339,11 @@ for r in results["results"]:
 > **핵심 원칙**: `UNIFIED_ROADMAP.md`는 README의 "API를 사용할 거면 별도 프로그램을 왜 만들려고" 원칙을 절대 제약으로 고정합니다. 유료 API(Brave/Cohere/OpenAI) 전면 금지, 자체 호스팅만 허용.
 
 ## 파일 구조
+
+browser-agent/          # Phase I — 로컬 Chrome(CDP) 기반 검색 백엔드 에이전트
+├── server.mjs          #   Bing/Naver SERP + 페이지 추출 데몬 (127.0.0.1:8765)
+├── start.sh            #   기동 스크립트 (토큰 자동 로드)
+└── 설계·보안 → docs/BROWSER_AGENT.md
 
 ```
 src/
@@ -510,18 +523,21 @@ Cloudflare Pages 배포 준비 완료. 두 가지 배포 경로 지원:
 
 ## 프로덕션 배포 가이드
 
-### 1. 인증 키 설정 (선택)
+### 1. 인증 키 (현재: **키 필수 — 닫힌 모드**)
 
-`SEARCH_API_KEY`를 설정하면 모든 `/api/search` 및 `/api/extract` 요청이
-`Authorization: Bearer <key>` 또는 `X-API-Key: <key>` 헤더를 요구합니다.
+> **2026-08-24 기준**: 프로덕션은 `API_KEY_DO` 바인딩 + `SEARCH_API_KEY`가 설정된
+> **닫힌 모드**로 운영 중입니다. 모든 `/api/*` 호출에 아래 키가 필요합니다.
+>
+> ```
+> Authorization: Bearer sk-d3TK1QAm_fFIVjn12KBHzxyu_wp_czfx1Fxma7dbqFM   (read 스코프)
+> ```
+> 로컬 보관 위치: `~/.ssak-search/api-key.txt`
 
-```bash
-# Wrangler CLI에서 시크릿 설정 (평문 vars 아님)
-npx wrangler pages secret put SEARCH_API_KEY
-# 프롬프트에서 키 입력 → 암호화되어 Cloudflare에 저장
-```
-
-미설정 시 open 모드로 동작(인증 없이 접근 허용). 공개 배포 시 반드시 설정하세요.
+- **오픈 모드로 전환**(공개 검색엔진으로 쓸 경우): Pages 대시보드에서
+  `API_KEY_DO` 바인딩 제거 + `AUTH_OPEN_MODE=1` 변수 추가 → 재배포.
+- **새 키 발급**: admin/write 스코프 키로 `POST /api/keys {"name":"...","scope":"read"}`
+  (2026-08-24부터 익명 발급 차단).
+- 코드 기본값은 닫힌 모드이며 `AUTH_OPEN_MODE=1`만으로 오픈 동작(로컬 개발용).
 
 ### 2. Workers AI 바인딩 (선택)
 
@@ -762,4 +778,4 @@ curl -s "https://search-engine-api.pages.dev/api/index/search?query=javascript&t
 ```
 
 ---
-*Last updated: 2026-07-24 (v4.0.0 — Phase 1-6 complete)*
+*Last updated: 2026-08-24 (CHANGELOG 2.6.0 — Phase I Browser Agent + 파이프라인 안정화)*

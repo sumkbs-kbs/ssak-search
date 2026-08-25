@@ -14,7 +14,7 @@ import { logger, toError } from '../lib/logger'
 import { cors } from 'hono/cors'
 import type { AppBindings, ExtractResponse, ErrorResponse } from '../types'
 import { extractContent } from '../lib/extractor'
-import { validateApiKeyWithTenant, checkClientRateLimit, getClientIp } from '../lib/auth'
+import { validateApiKeyAsync, checkClientRateLimit, getClientIp } from '../lib/auth'
 import { recordExtractRequest, recordExtractSubrequests, setMetricsEnv } from '../lib/metrics'
 import { auditAuthFailure, auditRateLimit, audit } from '../lib/audit'
 import { parseExtractRequest, validateUrl, MAX_EXTRACT_URLS } from '../lib/validation/schemas'
@@ -50,7 +50,7 @@ extractRoute.use('/*', async (c, next) => {
   }
 
   // Multi-tenant API key validation
-  const authResult = validateApiKeyWithTenant(c.req.raw.headers, c.env.TENANTS_CONFIG, c.env.SEARCH_API_KEY, c.env)
+  const authResult = await validateApiKeyAsync(c.req.raw.headers, c.env)
   if (!authResult.valid) {
     auditAuthFailure({
       reason: authResult.reason || 'Unauthorized',

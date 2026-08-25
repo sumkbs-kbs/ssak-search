@@ -15,7 +15,7 @@ import { cors } from 'hono/cors'
 import type { AppBindings, SearchResult, ErrorResponse } from '../types'
 import { bingNewsSearch } from '../lib/bing-search'
 import { hackerNewsSearch, redditSearch } from '../lib/specialized'
-import { validateApiKeyWithTenant, checkClientRateLimit, getClientIp } from '../lib/auth'
+import { validateApiKeyAsync, checkClientRateLimit, getClientIp } from '../lib/auth'
 import { auditAuthFailure, audit } from '../lib/audit'
 import { setMetricsEnv, recordSearchSubrequests } from '../lib/metrics'
 import { getCached, setCached } from '../lib/cache'
@@ -165,7 +165,7 @@ newsRoute.use('/*', async (c, next) => {
     return c.json<ErrorResponse>({ detail: 'Request body too large (max 64KB)', code: 'payload_too_large' }, 413)
   }
 
-  const authResult = validateApiKeyWithTenant(c.req.raw.headers, c.env.TENANTS_CONFIG, c.env.SEARCH_API_KEY, c.env)
+  const authResult = await validateApiKeyAsync(c.req.raw.headers, c.env)
   if (!authResult.valid) {
     auditAuthFailure({
       reason: authResult.reason || 'Invalid or missing API key',

@@ -14,7 +14,7 @@ import { cors } from 'hono/cors'
 import type { AppBindings, ImageResult, ErrorResponse } from '../types'
 
 import { searchAllFreeImageSources } from '../lib/free-image-search'
-import { validateApiKeyWithTenant, checkClientRateLimit, getClientIp } from '../lib/auth'
+import { validateApiKeyAsync, checkClientRateLimit, getClientIp } from '../lib/auth'
 import { auditAuthFailure, audit } from '../lib/audit'
 import { setMetricsEnv, recordSearchSubrequests } from '../lib/metrics'
 import { getCached, setCached } from '../lib/cache'
@@ -167,7 +167,7 @@ imagesRoute.use('/*', async (c, next) => {
   }
 
   // Multi-tenant API key validation
-  const authResult = validateApiKeyWithTenant(c.req.raw.headers, c.env.TENANTS_CONFIG, c.env.SEARCH_API_KEY, c.env)
+  const authResult = await validateApiKeyAsync(c.req.raw.headers, c.env)
   if (!authResult.valid) {
     auditAuthFailure({
       reason: authResult.reason || 'Invalid or missing API key',

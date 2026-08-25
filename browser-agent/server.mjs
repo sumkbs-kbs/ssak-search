@@ -22,6 +22,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 import os from 'node:os'
 import { chromium } from 'playwright'
+import { randomBytes } from 'node:crypto'
 
 const PORT = Number(process.env.PORT || 8765)
 const MIN_NAV_GAP_MS = 4_000
@@ -30,7 +31,7 @@ const PAGE_TEXT_MAX = 20_000
 // ── 인증 토큰 ────────────────────────────────────────────────────────────────
 let TOKEN = process.env.BROWSER_AGENT_TOKEN || ''
 if (!TOKEN) {
-  TOKEN = 'ba_' + require('node:crypto').randomBytes(24).toString('hex')
+  TOKEN = 'ba_' + randomBytes(24).toString('hex')
   console.log('[auth] BROWSER_AGENT_TOKEN 미설정 — 임의 토큰 생성. 이 값으로 호출하세요:')
   console.log(`       Bearer ${TOKEN}`)
 }

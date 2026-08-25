@@ -77,6 +77,18 @@ Hermes → ssak-search (Cloudflare Pages)
 - 에이전트 결과의 자체 인덱스 역피드 (크롤러 역할 겸업)
 - 다중 탭 병렬화
 
+## 5.5 운영 실측 노트 (2026-08-24 첫날)
+
+- **CDP 웨지 사례**: 하루 종료 반복 연결 후 Chrome 디버그 서버가 WS 핸드셰이크
+  타임아웃 상태로 웨지됨(45s+). Chrome 재시작 없이도 수 분 뒤 자가 해제 확인 —
+  에이전트는 매 호출마다 DevToolsActivePort를 재독학하므로 재설정 불필요 자동 복구.
+- **launchd 상시 기동은 v1에서 철거**: 데몬은 어차피 Chrome 실행 중일 때만
+  의미가 있어 부팅 자동기동이 불필요한 복잡성이었음(+미스터리 hang 1건).
+  `browser-agent/start.sh`(중복 기동 방지 + 토큰 자동 로드) 사용이 v1 표준.
+- **Naver 2026 리디자인**: 유기적 결과가 fender-ui_<해시> 컴포넌트 안쪽이라
+  클래스 셀렉터 무효 — 외부 호스트 링크 수집 방식으로 우회(광고 ader.naver.com
+  자동 배제). 광고 비율이 시간대별로 다르므로 결과 수 변동은 정상.
+
 ## 6. 운영 체크리스트
 
 1. `cd browser-agent && npm install && npm start` (Chrome 실행 상태 필요)

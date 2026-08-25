@@ -30,12 +30,13 @@ const argOf = (name: string, def?: string) => {
   return i !== -1 && ARGS[i + 1] ? ARGS[i + 1] : def
 }
 const LIMIT = Number(argOf('queries', '40'))
-const OUT_FILE = argOf('out', 'eval/results/commercial-benchmark.json')
+const OUT_FILE = argOf('out', 'eval/benchmarks/commercial-benchmark.json')
 
 // 대표 쿼리 선정: 카테고리 균형 (kr 재무/뉴스/일반 + en 기술/사실 + ja/zh 소수)
 function pickQueries(): Array<{ id: string; query: string }> {
   const byPrefix = (p: string, n: number) =>
-    EVAL_QUERIES.filter((q) => q.id.startsWith(p)).slice(0, n)
+    EVAL_QUERIES.filter((q) => q.id.startsWith(p))
+      .slice(0, n)
       .map((q) => ({ id: q.id, query: q.query }))
   return [
     ...byPrefix('kr-stock-', 6),
@@ -63,7 +64,7 @@ async function runSsak(query: string): Promise<EngineResult> {
   const t0 = Date.now()
   try {
     const r = await executeSearch({ query, max_results: 10 }, {} as Parameters<typeof executeSearch>[1])
-    const results = ((r as any).results || []) as SearchResult[]
+    const results = ((r as { results?: SearchResult[] }).results || []) as SearchResult[]
     return { engine: 'ssak-search', results, ms: Date.now() - t0 }
   } catch (err) {
     return { engine: 'ssak-search', results: [], ms: Date.now() - t0, error: String(err).slice(0, 120) }
@@ -97,14 +98,24 @@ async function runTavily(key: string, query: string): Promise<EngineResult> {
 // ── 메인 ────────────────────────────────────────────────────────────────────
 async function main() {
   const queries = pickQueries()
-  console.log(`쿼리 ${queries.length}개 · 엔진: ssak-search${TAVILY_KEY ? ' + Tavily' : ' (TAVILY_API_KEY 미설정 — ssak 단독 드라이런)'}`)
+  console.log(
+    `쿼리 ${queries.length}개 · 엔진: ssak-search${TAVILY_KEY ? ' + Tavily' : ' (TAVILY_API_KEY 미설정 — ssak 단독 드라이런)'}`,
+  )
 
   // gold 로드
   const goldPath = path.join(process.cwd(), 'eval', 'gold-standards.json')
   const golds = JSON.parse(fs.readFileSync(goldPath, 'utf8')) as Record<string, { relevantDomains?: string[] }>
   const goldOf = (id: string) => golds[id]?.relevantDomains ?? []
 
-  interface Row { id: string; ssakN: number; tavN: number | null; ssakMs: number; tavMs?: number }
+  interface Row {
+    id: string
+    ssakN: number
+    tavN: number | null
+    ssakMs: number
+    tavMs?: number
+    ssakTop?: Array<{ url: string; title: string }>
+    tavTop?: Array<{ url: string; title: string }>
+  }
   const rows: Row[] = []
 
   for (let i = 0; i < queries.length; i++) {
@@ -116,13 +127,24 @@ async function main() {
 
     let tavN: number | null = null
     let tavMs: number | undefined
+    let tavRes: EngineResult | null = null
     if (TAVILY_KEY) {
-      const t = await runTavily(TAVILY_KEY, query)
-      tavMs = t.ms
-      tavN = t.error ? -1 : computeNdcg(t.results, gold, 10)
+      tavRes = await runTavily(TAVILY_KEY, query)
+      tavMs = tavRes.ms
+      tavN = tavRes.error ? -1 : computeNdcg(tavRes.results, gold, 10)
     }
 
-    rows.push({ id, ssakN, tavN, ssakMs: s.ms, tavMs })
+    const top = (r: EngineResult) =>
+      r.results.slice(0, 3).map((x) => ({ url: x.url.slice(0, 90), title: x.title.slice(0, 80) }))
+    rows.push({
+      id,
+      ssakN,
+      tavN,
+      ssakMs: s.ms,
+      tavMs,
+      ssakTop: top(s),
+      tavTop: TAVILY_KEY && tavRes ? top(tavRes) : undefined,
+    })
     const tv = tavN === null ? '—' : tavN === -1 ? 'ERR' : tavN.toFixed(3)
     console.log(`[${i + 1}/${queries.length}] ${id} ssak=${ssakN.toFixed(3)} tavily=${tv}`)
   }
@@ -130,21 +152,37 @@ async function main() {
   // 요약
   const mean = (xs: number[]) => xs.reduce((a, b) => a + b, 0) / (xs.length || 1)
   const sMean = mean(rows.map((r) => r.ssakN))
-  const tMean = TAVILY_KEY ? mean(rows.map((r) => r.tavN ?? 0)) : null
+  const tMean = TAVILY_KEY ? mean(rows.map((r) => r.tavN ?? 0)) : null // TAVILY_KEY 시 number
 
   console.log('\n════════ 비교 결과 ════════')
   console.log(`ssak-search 평균 NDCG@10: ${sMean.toFixed(4)}`)
-  if (TAVILY_KEY) console.log(`Tavily     평균 NDCG@10: ${tMean!.toFixed(4)}  → 차이 ${(sMean - tMean!).toFixed(4)} (${sMean > tMean! ? 'ssak 우위 ✓' : 'Tavily 우위'})`)
+  if (TAVILY_KEY && tMean !== null)
+    console.log(
+      `Tavily     평균 NDCG@10: ${tMean.toFixed(4)}  → 차이 ${(sMean - tMean).toFixed(4)} (${sMean > tMean ? 'ssak 우위 ✓' : 'Tavily 우위'})`,
+    )
 
   // 저장
   fs.mkdirSync(path.dirname(path.join(process.cwd(), OUT_FILE)), { recursive: true })
-  fs.writeFileSync(path.join(process.cwd(), OUT_FILE), JSON.stringify({
-    timestamp: new Date().toISOString(),
-    engines: TAVILY_KEY ? ['ssak-search', 'tavily'] : ['ssak-search'],
-    summary: { ssak: Number(sMean.toFixed(4)), tavily: TAVILY_KEY ? Number(tMean!.toFixed(4)) : null },
-    rows,
-  }, null, 1))
+  fs.writeFileSync(
+    path.join(process.cwd(), OUT_FILE),
+    JSON.stringify(
+      {
+        timestamp: new Date().toISOString(),
+        engines: TAVILY_KEY ? ['ssak-search', 'tavily'] : ['ssak-search'],
+        summary: {
+          ssak: Number(sMean.toFixed(4)),
+          tavily: TAVILY_KEY && tMean !== null ? Number(tMean.toFixed(4)) : null,
+        },
+        rows,
+      },
+      null,
+      1,
+    ),
+  )
   console.log(`저장: ${OUT_FILE}`)
 }
 
-main().catch((e) => { console.error(e); process.exit(1) })
+main().catch((e) => {
+  console.error(e)
+  process.exit(1)
+})

@@ -812,6 +812,14 @@ export async function executeSearch(request: SearchRequest, config: Orchestrator
     // ── 8. Ranking pipeline (filter → recompute → boost → sort → threshold) ──
     results = await applyRankingPipeline(results, ctx)
 
+    // ── 8.5 도메인 다양성 캡 (상위 결과 동일 도메인 연타 방지) ──
+    // 벤치마크 감사 실측(2026-08-24): en-fact 쿼리에서 en.wikipedia.org 하위
+    // 문서가 top-3를 독점 — 다양성 부족이 감점 요인. 정렬 후 적용하므로 각
+    // 도메인의 최고 점수 인스턴스가 우선 유지된다. 기존 HN/doi 캡과 동일한
+    // capSourceResults 재사용.
+    results = capSourceResults(results, 'wikipedia.org', 2)
+    results = capSourceResults(results, 'github.com', 3)
+
     // ── 9. Enrichment (advanced depth) ──
     // Skipped when the subrequest budget is exhausted — enrichment can issue
     // up to 9 extra fetches (3 URLs × Jina/sidecar/direct chain), and pushing

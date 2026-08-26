@@ -53,6 +53,7 @@ export function mapBrowserAgentResults(raw: BrowserSerpResult[], maxResults: num
 export function buildBrowserAgentTask(ctx: SearchContext, maxResults = 8) {
   const env = ctx.env as { BROWSER_AGENT_URL?: string; BROWSER_AGENT_TOKEN?: string } | undefined
   const baseUrl = env?.BROWSER_AGENT_URL
+  console.log('[browser-agent] gate:', Boolean(baseUrl), '| url host:', baseUrl ? new URL(baseUrl).host : '(unset)')
   if (!baseUrl) return null
 
   // 한국어면 Naver 우선, 그 외 Bing. 두 엔진을 모두 태우지 않는 이유:
@@ -63,7 +64,8 @@ export function buildBrowserAgentTask(ctx: SearchContext, maxResults = 8) {
     name: 'browser',
     run: async () => {
       const controller = new AbortController()
-      const timer = setTimeout(() => controller.abort(), 12_000)
+      const timer = setTimeout(() => controller.abort(), 25_000)
+      const t0 = Date.now()
       try {
         const resp = await fetch(`${baseUrl.replace(/\/+$/, '')}/serp`, {
           method: 'POST',
@@ -75,6 +77,7 @@ export function buildBrowserAgentTask(ctx: SearchContext, maxResults = 8) {
           signal: controller.signal,
         })
         if (!resp.ok) throw new Error(`browser agent HTTP ${resp.status}`)
+        console.log('[browser-agent] serp ok in', Date.now() - t0, 'ms')
         const data = (await resp.json()) as { results?: BrowserSerpResult[] }
         return mapBrowserAgentResults(data.results ?? [], maxResults)
       } finally {

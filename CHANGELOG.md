@@ -19,6 +19,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - **Tier 4 (Self-Healing Error Contract)**: 403, 404, SPA 렌더링 실패 시 LLM에게 `agent_hint` 및 `suggested_action` 제공.
 - **JSON-LD / Schema.org 제로-토큰 추출기**: `<script type="application/ld+json">` 태그를 DOM 파싱 없이 기계 판독용 정형 JSON으로 즉시 추출 (`extract_depth: "structured_facts"`).
 - **시맨틱 헤딩 청킹 & TOC 추출**: 문서 마크다운 헤딩 분해 (`extract_depth: "toc_only"`) 및 특정 챕터만 절삭 추출하는 `section_target` 매개변수 지원.
+- **Model Context Protocol (MCP) 서버** (`sdk/mcp_server.py` + `docs/MCP_INTEGRATION_GUIDE.md`): Hermes 3, Claude Desktop, Cursor, Antigravity 등의 AI 에이전트에 `ssak_search`, `ssak_extract`, `ssak_deep_research` 도구를 즉시 제공하는 표준 JSON-RPC 2.0 stdio 서버.
 - **Python Agent SDK** (`sdk/agent_tool.py`): LangChain, AutoGen, CrewAI, OpenAI Function Calling 1줄 바인딩 클라이언트 제공.
 - **실전 라이브 E2E 벤치마크 하네스** (`scripts/run-live-benchmark.ts`): 5대 시나리오 실시간 웹 트래픽 측정 스위트 (100% Pass Rate).
 - **OpenAPI 3.1 명세서 동기화** (`openapi.yaml`): Agent API 3종 공식 등록.

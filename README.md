@@ -165,7 +165,7 @@ LangChain / OpenAI Function Calling에 1줄로 연동 가능:
 ```python
 from sdk.agent_tool import SsakSearchAgentClient
 
-client = SsakSearchAgentClient(base_url="https://webapp.pages.dev")
+client = SsakSearchAgentClient(base_url="http://localhost:8787")
 
 # 초저지연 검색
 search_res = await client.search("Anthropic Claude 3.7", max_results=3)
@@ -178,7 +178,23 @@ extract_res = await client.extract(
 )
 ```
 
+### 5. Model Context Protocol (MCP) 서버 (`sdk/mcp_server.py`)
+Hermes 3, Claude Desktop, Cursor, Antigravity 등의 AI 에이전트에 표준 MCP 서버로 1분 만에 연동:
+```json
+{
+  "mcpServers": {
+    "ssak-search": {
+      "command": "python3",
+      "args": ["/Users/mr.k/Downloads/webapp/sdk/mcp_server.py"],
+      "env": { "SSAK_API_BASE": "http://localhost:8787" }
+    }
+  }
+}
+```
+> 자세한 연동 가이드는 [`docs/MCP_INTEGRATION_GUIDE.md`](file:///Users/mr.k/Downloads/webapp/docs/MCP_INTEGRATION_GUIDE.md)를 참고하세요.
+
 ## API 엔드포인트 (표준)
+
 
 ### POST /api/search (또는 GET /api/search?q=...)
 

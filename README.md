@@ -529,9 +529,10 @@ Cloudflare Pages 배포 준비 완료. 두 가지 배포 경로 지원:
 > **닫힌 모드**로 운영 중입니다. 모든 `/api/*` 호출에 아래 키가 필요합니다.
 >
 > ```
-> Authorization: Bearer sk-d3TK1QAm_fFIVjn12KBHzxyu_wp_czfx1Fxma7dbqFM   (read 스코프)
+> Authorization: Bearer sk-...REDACTED   (read 스코프 — 실제 키는 로컬 보관: `~/.ssak-search/api-key.txt`)
 > ```
-> 로컬 보관 위치: `~/.ssak-search/api-key.txt`
+> (2026-08-27 보안 조치: 이전에 본 문서에 평문으로 노출됐던 키는 폐기 대상입니다.
+> 회전 절차는 [docs/SECRET_ROTATION.md](docs/SECRET_ROTATION.md) 참조)
 
 - **오픈 모드로 전환**(공개 검색엔진으로 쓸 경우): Pages 대시보드에서
   `API_KEY_DO` 바인딩 제거 + `AUTH_OPEN_MODE=1` 변수 추가 → 재배포.

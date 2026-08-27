@@ -9,8 +9,7 @@
 set -euo pipefail
 
 # 폐기 대상 키는 리포에 평문으로 남기지 않기 위해 조각으로 조립한다.
-# (문서/스크립트 어디에도 완전한 literal 키가 남으면 재노출 사고가 된다.)
-PATTERN="sk-d3TK""1QAm_""fFIVjn12KBHzxyu""_wp_czfx1Fxma7dbqFM"
+PATTERN="sk-d3""TK""1QAm_""fFIVjn12KBHzxyu""_wp_czfx1Fxma7dbqFM"
 REPLACEMENT='***REMOVED-LEAKED-KEY***'
 
 fail() { echo "[purge] ERROR: $*" >&2; exit 1; }

@@ -371,12 +371,21 @@
 | `/api/upload` | `src/routes/upload.ts` | 업로드 |
 | `/api/canary` | `src/routes/canary.ts` | Parser 회귀 감지 |
 | `/api/analytics-proxy` | `src/routes/analytics-proxy.ts` | Grafana 데이터소스 프록시 |
+| `/api/agent` | `src/routes/agent.ts` | AI Agent 전용 초저지연 검색, SSE 스트리밍, 4단계 스텔스 추출 |
 | `/api/openai` | `src/routes/openai.ts` | OpenAI 호환 API |
 | `/docs` | `src/pages/docs.ts` | API 문서 |
 | `/dashboard` | `src/pages/dashboard.ts` | 대시보드 |
 
+### AI Agent SDK & 고속 엔진
+| 카테고리 | 파일 | 설명 |
+|----------|------|------|
+| **Python SDK** | `sdk/agent_tool.py` | LangChain / AutoGen / CrewAI 호환 에이전트 클라이언트 |
+| **스텔스 추출기** | `src/lib/agent-extractor.ts` | 4단계 스텔스 에스컬레이션, JSON-LD, TOC 추출 |
+| **조기반환 검색** | `src/lib/agent-search-orchestrator.ts` | 서브세컨드 병렬 레이스 및 조기 반환 검색 오케스트레이터 |
+| **E2E 하네스** | `scripts/run-live-benchmark.ts` | 라이브 웹 5대 시나리오 실시간 벤치마크 러너 |
+
 ---
 
-> **최종 업데이트**: 2026-07-22  
+> **최종 업데이트**: 2026-08-27  
 > **문서 버전**: v1.0  
 > **작성 도구**: Freebuff AI Agent (Buffy)

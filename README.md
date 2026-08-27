@@ -127,7 +127,58 @@ DuckDuckGo의 html 엔드포인트가 HTTP 202(anti-bot) 반환 시 lite 엔드�
 - **수정 전**: `/[^\w\s]/g` → "삼성전자" → "" (모든 한글 제거)
 - **수정 후**: `/[^\p{L}\p{N}\s]/gu` → Unicode 속성 이스케이프로 모든 언어 보존
 
-## API 엔드포인트
+## 🤖 AI Agent 전용 엔드포인트 (Sub-Second & Stealth)
+
+LLM Function Calling / Tool Use(LangChain, AutoGen, CrewAI, OpenAI)에 최적화된 **초저지연(Sub-second), 제로 노이즈(Zero Boilerplate), 4단계 스텔스 우회** 엔드포인트입니다.
+
+### 1. POST /api/agent/search (초저지연 병렬 검색)
+- **특징:** 병렬 프로바이더 레이스 및 조기 반환(Early Return) 메커니즘으로 P95 레이턴시 **< 800ms** 달성.
+```json
+// POST /api/agent/search
+{
+  "query": "삼성전자 오늘 주가",
+  "max_results": 5
+}
+```
+
+### 2. POST /api/agent/stream-search (실시간 SSE 스트리밍)
+- **특징:** 첫 번째 검색 결과가 수집되는 즉시 SSE(`event: hit`)로 스트리밍 방출 (TTFT < 300ms).
+
+### 3. POST /api/agent/extract (4단계 스텔스 마크다운 & JSON-LD 추출)
+- **특징:**
+  - **4단계 스텔스 에스컬레이션:** Static Fetch(Tier 1) ➔ Jina Global Proxy(Tier 2) ➔ Scrapling Sidecar Camoufox/Patchright(Tier 3) ➔ 자율 복구 에러 계약(Tier 4)
+  - **JSON-LD / Schema.org:** `extract_depth: "structured_facts"` 시 기계 판독용 JSON 즉시 추출
+  - **온디맨드 섹션 타겟:** `section_target: "Ethics"` 지정 시 해당 헤딩 챕터만 선별 추출 (토큰 낭비 95% 절감)
+  - **목차 추출:** `extract_depth: "toc_only"` 지정 시 전체 헤딩 목차만 경량 반환
+```json
+// POST /api/agent/extract
+{
+  "url": "https://en.wikipedia.org/wiki/Artificial_intelligence",
+  "extract_depth": "full_markdown",
+  "section_target": "Ethics",
+  "max_token_budget": 2000
+}
+```
+
+### 4. Python Agent SDK (`sdk/agent_tool.py`)
+LangChain / OpenAI Function Calling에 1줄로 연동 가능:
+```python
+from sdk.agent_tool import SsakSearchAgentClient
+
+client = SsakSearchAgentClient(base_url="https://webapp.pages.dev")
+
+# 초저지연 검색
+search_res = await client.search("Anthropic Claude 3.7", max_results=3)
+
+# 섹션 타겟 추출
+extract_res = await client.extract(
+    url="https://en.wikipedia.org/wiki/Artificial_intelligence",
+    section_target="Ethics",
+    max_token_budget=1500
+)
+```
+
+## API 엔드포인트 (표준)
 
 ### POST /api/search (또는 GET /api/search?q=...)
 

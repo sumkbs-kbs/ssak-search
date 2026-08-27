@@ -109,7 +109,7 @@ jobs:
         # 방안 B (2026-08-14): staging 은 DEPLOY_ENV=staging 으로 빌드된
         # worker-bundle-staging 을 받는다 (ci.yml 에서 환경별로 별도 빌드·업로드).
         if: github.event_name == 'workflow_run'
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: worker-bundle-staging
           path: dist/
@@ -372,7 +372,7 @@ jobs:
         # 방안 B (2026-08-14): production 은 DEPLOY_ENV=production 으로 빌드된
         # worker-bundle-production 을 받는다.
         if: github.event_name == 'workflow_run'
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: worker-bundle-production
           path: dist/

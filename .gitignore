@@ -59,3 +59,9 @@ local-index/sync-*.json
 local-index/logs/
 
 .gstack/
+.omo/
+
+# Eval & benchmark dumps
+eval-results.json
+benchmark-results.json
+eval/results/

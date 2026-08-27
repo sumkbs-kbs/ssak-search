@@ -22,18 +22,29 @@ SSAK_API_BASE = os.environ.get("SSAK_API_BASE", "http://localhost:8787")
 MCP_TOOLS = [
     {
         "name": "ssak_search",
-        "description": "Perform sub-second real-time web search optimized for AI Agents. Returns top web results with high SNR snippets (Average latency 200~700ms).",
+        "description": "Perform sub-second real-time web search optimized for AI Agents. Supports topic-specific authority boosting (e.g. code/finance) and sub-query decomposition.",
         "inputSchema": {
             "type": "object",
             "properties": {
                 "query": {
                     "type": "string",
-                    "description": "The search query (Korean or English, e.g., '삼성전자 실적', 'Claude 3.7 reasoning architecture')",
+                    "description": "The search query (Korean or English, e.g., 'Next.js 15 server actions', '삼성전자 실적')",
                 },
                 "max_results": {
                     "type": "integer",
                     "description": "Maximum number of search results to return (1 to 10, default: 5)",
                     "default": 5,
+                },
+                "topic": {
+                    "type": "string",
+                    "enum": ["general", "code", "news", "finance"],
+                    "default": "general",
+                    "description": "Domain focus: 'code' (boosts GitHub, StackOverflow, MDN, docs), 'finance', 'news', or 'general'",
+                },
+                "decompose_subqueries": {
+                    "type": "boolean",
+                    "default": False,
+                    "description": "When true, decomposes query into 3 sub-queries (docs, issues, solutions) for deep multifaceted search",
                 },
             },
             "required": ["query"],
@@ -41,7 +52,7 @@ MCP_TOOLS = [
     },
     {
         "name": "ssak_extract",
-        "description": "Extract clean, high-density markdown and structured metadata from any web URL using a 4-tier stealth anti-bot escalation pipeline (95%+ evasion on Cloudflare/bot challenges).",
+        "description": "Extract clean, high-density markdown, code symbols, or structured metadata from any web URL using a 4-tier stealth anti-bot escalation pipeline.",
         "inputSchema": {
             "type": "object",
             "properties": {
@@ -51,9 +62,9 @@ MCP_TOOLS = [
                 },
                 "extract_depth": {
                     "type": "string",
-                    "enum": ["full_markdown", "summary", "structured_facts", "toc_only"],
+                    "enum": ["full_markdown", "summary", "structured_facts", "toc_only", "code_symbols"],
                     "default": "full_markdown",
-                    "description": "Extraction mode: 'full_markdown' (dense body), 'toc_only' (table of contents), or 'structured_facts' (JSON-LD)",
+                    "description": "Extraction mode: 'full_markdown' (dense body), 'code_symbols' (AST signatures & code blocks only), 'toc_only' (table of contents), or 'structured_facts' (JSON-LD)",
                 },
                 "section_target": {
                     "type": "string",
@@ -62,7 +73,7 @@ MCP_TOOLS = [
                 "max_token_budget": {
                     "type": "integer",
                     "default": 4000,
-                    "description": "Maximum token budget for the extracted content (500 to 16000)",
+                    "description": "Maximum token budget for the extracted content (200 to 16000)",
                 },
             },
             "required": ["url"],
@@ -119,9 +130,7 @@ def call_api(endpoint: str, payload: dict) -> dict:
 
 def handle_tool_call(tool_name: str, arguments: dict) -> list:
     if tool_name == "ssak_search":
-        query = arguments.get("query", "")
-        max_results = arguments.get("max_results", 5)
-        res = call_api("/api/agent/search", {"query": query, "max_results": max_results})
+        res = call_api("/api/agent/search", arguments)
         return [{"type": "text", "text": json.dumps(res, ensure_ascii=False, indent=2)}]
 
     elif tool_name == "ssak_extract":

@@ -6,9 +6,11 @@ import type { Env } from '../types'
 
 export const AgentToolInputSchema = z.object({
   url: z.string().url({ message: 'Invalid URL format' }),
-  extract_depth: z.enum(['summary', 'full_markdown', 'structured_facts', 'toc_only']).default('full_markdown'),
+  extract_depth: z
+    .enum(['summary', 'full_markdown', 'structured_facts', 'toc_only', 'code_symbols'])
+    .default('full_markdown'),
   section_target: z.string().optional().describe('Target specific heading or topic section in long documents'),
-  max_token_budget: z.number().int().min(500).max(16000).default(4000),
+  max_token_budget: z.number().int().min(200).max(16000).default(4000),
   strip_links: z.boolean().default(false),
 })
 
@@ -28,6 +30,7 @@ export interface AgentToolOutput {
   markdown_content?: string
   structured_data?: Record<string, unknown>
   table_of_contents?: string[]
+  code_symbols?: Array<{ heading: string; code: string; language?: string }>
   token_count: number
   took_ms?: number
   escalation_tier?: 'TIER_1_STATIC' | 'TIER_2_JINA_PROXY' | 'TIER_3_STEALTH_SIDECAR'
@@ -35,6 +38,8 @@ export interface AgentToolOutput {
     published_time?: string
     author?: string
     content_type: 'article' | 'documentation' | 'forum' | 'structured_json_ld' | 'unknown'
+    is_deprecated?: boolean
+    freshness_warning?: string
   }
   error?: {
     code: 'BOT_BLOCKED' | 'TIMEOUT' | 'DNS_NOT_FOUND' | 'CONTENT_TOO_SPARSE' | 'INTERNAL_ERROR'
@@ -68,7 +73,8 @@ export function extractJsonLd(rawHtml: string): { data: Record<string, unknown>;
             title: item.headline || item.name,
             description: item.description,
             author: authorStr,
-            date_published: item.datePublished || item.uploadDate,
+            date_published: item.datePublished || item.uploadDate || item.dateCreated,
+            date_modified: item.dateModified,
             article_body: item.articleBody,
             faq: Array.isArray(item.mainEntity)
               ? item.mainEntity.map((q: unknown) => {
@@ -91,7 +97,93 @@ export function extractJsonLd(rawHtml: string): { data: Record<string, unknown>;
 }
 
 /**
- * 2. Semantic Heading Splitter (TOC & On-Demand Section Harvester)
+ * 2. Freshness & Deprecation Detection
+ */
+export function detectFreshness(
+  rawHtml: string,
+  markdown: string,
+): { published_time?: string; is_deprecated?: boolean; freshness_warning?: string } {
+  let published_time: string | undefined
+
+  // Match HTML meta tags for date
+  const dateMatch =
+    rawHtml.match(/<meta\b[^>]*property=["']article:published_time["'][^>]*content=["']([^"']+)["']/i) ||
+    rawHtml.match(/<meta\b[^>]*name=["'](?:pubdate|publishdate|date)["'][^>]*content=["']([^"']+)["']/i) ||
+    rawHtml.match(/<time\b[^>]*datetime=["']([^"']+)["']/i)
+
+  if (dateMatch) {
+    published_time = dateMatch[1]
+  }
+
+  const isDeprecated =
+    /\b(deprecated|no longer maintained|legacy api|outdated)\b/i.test(markdown.slice(0, 1500)) ||
+    /\b(deprecated|legacy)\b/i.test(rawHtml.slice(0, 2000))
+
+  let freshness_warning: string | undefined
+  if (isDeprecated) {
+    freshness_warning = 'This documentation contains deprecated/legacy markers. Verify against latest release notes.'
+  } else if (published_time) {
+    const year = parseInt(published_time.slice(0, 4), 10)
+    const currentYear = new Date().getFullYear()
+    if (year && currentYear - year >= 4) {
+      freshness_warning = `Document published in ${year} (${currentYear - year} years ago). API signatures may have changed.`
+    }
+  }
+
+  return { published_time, is_deprecated: isDeprecated || undefined, freshness_warning }
+}
+
+/**
+ * 3. Code Symbol & AST Signature Extractor
+ */
+export function extractCodeSymbols(markdown: string): Array<{ heading: string; code: string; language?: string }> {
+  const codeBlocks: Array<{ heading: string; code: string; language?: string }> = []
+  const lines = markdown.split('\n')
+
+  let currentHeading = 'Global'
+  let inCodeBlock = false
+  let currentLang = ''
+  let currentCodeLines: string[] = []
+
+  for (const line of lines) {
+    const headingMatch = line.match(/^(#{1,4})\s+(.+)$/)
+    if (headingMatch && !inCodeBlock) {
+      currentHeading = headingMatch[2].trim()
+      continue
+    }
+
+    const codeStart = line.match(/^```(\w*)/)
+    if (codeStart && !inCodeBlock) {
+      inCodeBlock = true
+      currentLang = codeStart[1] || ''
+      currentCodeLines = []
+      continue
+    }
+
+    if (line.startsWith('```') && inCodeBlock) {
+      inCodeBlock = false
+      const fullCode = currentCodeLines.join('\n').trim()
+      if (fullCode.length > 0) {
+        codeBlocks.push({
+          heading: currentHeading,
+          language: currentLang || undefined,
+          code: fullCode,
+        })
+      }
+      currentCodeLines = []
+      continue
+    }
+
+    if (inCodeBlock) {
+      currentCodeLines.push(line)
+    }
+  }
+
+  return codeBlocks
+}
+
+/**
+ * 4. Semantic Heading Splitter (TOC & On-Demand Section Harvester)
  */
 export function extractSemanticSections(markdown: string): { toc: string[]; sections: DocumentSection[] } {
   const lines = markdown.split('\n')
@@ -137,7 +229,7 @@ export function extractSemanticSections(markdown: string): { toc: string[]; sect
 }
 
 /**
- * 3. High-Density Text & Markdown Extractor
+ * 5. High-Density Text & Markdown Extractor
  */
 export function sanitizeToDenseMarkdown(
   rawHtml: string,
@@ -206,7 +298,7 @@ export function sanitizeToDenseMarkdown(
 }
 
 /**
- * 4. Multi-Tier Anti-Bot Escalation Extractor (95%+ Stealth Evasion)
+ * 6. Multi-Tier Anti-Bot Escalation Extractor (95%+ Stealth Evasion)
  */
 export async function extractWithStealthEscalation(
   url: string,
@@ -256,6 +348,8 @@ export async function extractWithStealthEscalation(
 
       if (!isChallenge) {
         const jsonLd = extractJsonLd(html)
+        const freshness = detectFreshness(html, '')
+
         if (extractDepth === 'structured_facts' && jsonLd) {
           return {
             success: true,
@@ -264,11 +358,12 @@ export async function extractWithStealthEscalation(
             token_count: Math.ceil(JSON.stringify(jsonLd.data).length / 3.5),
             took_ms: Math.round(performance.now() - startTime),
             escalation_tier: 'TIER_1_STATIC',
-            metadata: { content_type: 'structured_json_ld' },
+            metadata: { content_type: 'structured_json_ld', ...freshness },
           }
         }
 
         const { markdown, toc } = sanitizeToDenseMarkdown(html, maxTokens, sectionTarget)
+
         if (extractDepth === 'toc_only') {
           return {
             success: true,
@@ -277,7 +372,25 @@ export async function extractWithStealthEscalation(
             token_count: Math.ceil((toc || []).join('\n').length / 3.5),
             took_ms: Math.round(performance.now() - startTime),
             escalation_tier: 'TIER_1_STATIC',
-            metadata: { content_type: 'documentation' },
+            metadata: { content_type: 'documentation', ...freshness },
+          }
+        }
+
+        if (extractDepth === 'code_symbols') {
+          const symbols = extractCodeSymbols(markdown)
+          const symbolMarkdown = symbols
+            .map((s) => `### ${s.heading}\n\`\`\`${s.language || ''}\n${s.code}\n\`\`\``)
+            .join('\n\n')
+          return {
+            success: true,
+            url,
+            markdown_content: symbolMarkdown,
+            code_symbols: symbols,
+            table_of_contents: toc,
+            token_count: Math.ceil(symbolMarkdown.length / 3.5),
+            took_ms: Math.round(performance.now() - startTime),
+            escalation_tier: 'TIER_1_STATIC',
+            metadata: { content_type: 'documentation', ...freshness },
           }
         }
 
@@ -291,7 +404,7 @@ export async function extractWithStealthEscalation(
             token_count: Math.ceil(markdown.length / 3.5),
             took_ms: Math.round(performance.now() - startTime),
             escalation_tier: 'TIER_1_STATIC',
-            metadata: { content_type: jsonLd ? 'structured_json_ld' : 'article' },
+            metadata: { content_type: jsonLd ? 'structured_json_ld' : 'article', ...freshness },
           }
         }
       }
@@ -306,6 +419,7 @@ export async function extractWithStealthEscalation(
   try {
     const jinaRes = await jinaExtract(url, { maxTokens, timeoutMs: 7000 })
     if (jinaRes.content && jinaRes.content.length > 80) {
+      const freshness = detectFreshness('', jinaRes.content)
       return {
         success: true,
         url,
@@ -314,7 +428,7 @@ export async function extractWithStealthEscalation(
         token_count: Math.ceil(jinaRes.content.length / 3.5),
         took_ms: Math.round(performance.now() - startTime),
         escalation_tier: 'TIER_2_JINA_PROXY',
-        metadata: { content_type: 'article' },
+        metadata: { content_type: 'article', ...freshness },
       }
     }
   } catch (_err) {
@@ -328,6 +442,7 @@ export async function extractWithStealthEscalation(
     try {
       const sidecarRes = await sidecarExtract(url, { maxTokens, env, timeoutMs: 10000 })
       if (sidecarRes?.success && sidecarRes.content && sidecarRes.content.length > 50) {
+        const freshness = detectFreshness('', sidecarRes.content)
         return {
           success: true,
           url,
@@ -336,7 +451,7 @@ export async function extractWithStealthEscalation(
           token_count: Math.ceil(sidecarRes.content.length / 3.5),
           took_ms: Math.round(performance.now() - startTime),
           escalation_tier: 'TIER_3_STEALTH_SIDECAR',
-          metadata: { content_type: 'article' },
+          metadata: { content_type: 'article', ...freshness },
         }
       }
     } catch (_err) {

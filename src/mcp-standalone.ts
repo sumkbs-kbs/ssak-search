@@ -22,19 +22,31 @@ const MCP_TOOLS = [
   {
     name: 'ssak_search',
     description:
-      'Perform sub-second real-time web search optimized for AI Agents. Returns top web results with high SNR snippets (Average latency 200~700ms).',
+      'Perform sub-second real-time web search optimized for AI Agents. Supports topic-specific authority boosting (e.g. code/finance) and sub-query decomposition.',
     inputSchema: {
       type: 'object',
       properties: {
         query: {
           type: 'string',
-          description:
-            'The search query (Korean or English, e.g., "삼성전자 실적", "Claude 3.7 reasoning architecture")',
+          description: 'The search query (Korean or English, e.g., "Next.js 15 server actions", "삼성전자 실적")',
         },
         max_results: {
           type: 'integer',
           description: 'Maximum number of search results to return (1 to 10, default: 5)',
           default: 5,
+        },
+        topic: {
+          type: 'string',
+          enum: ['general', 'code', 'news', 'finance'],
+          default: 'general',
+          description:
+            'Domain focus: "code" (boosts GitHub, StackOverflow, MDN, docs), "finance", "news", or "general"',
+        },
+        decompose_subqueries: {
+          type: 'boolean',
+          default: false,
+          description:
+            'When true, decomposes query into 3 sub-queries (docs, issues, solutions) for deep multifaceted search',
         },
       },
       required: ['query'],
@@ -43,7 +55,7 @@ const MCP_TOOLS = [
   {
     name: 'ssak_extract',
     description:
-      'Extract clean, high-density markdown and structured metadata from any web URL using a 4-tier stealth anti-bot escalation pipeline (95%+ evasion on Cloudflare/bot challenges).',
+      'Extract clean, high-density markdown, code symbols, or structured metadata from any web URL using a 4-tier stealth anti-bot escalation pipeline.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -53,10 +65,10 @@ const MCP_TOOLS = [
         },
         extract_depth: {
           type: 'string',
-          enum: ['full_markdown', 'summary', 'structured_facts', 'toc_only'],
+          enum: ['full_markdown', 'summary', 'structured_facts', 'toc_only', 'code_symbols'],
           default: 'full_markdown',
           description:
-            "Extraction mode: 'full_markdown' (dense body), 'toc_only' (table of contents), or 'structured_facts' (JSON-LD)",
+            "Extraction mode: 'full_markdown' (dense body), 'code_symbols' (AST signatures & code blocks only), 'toc_only' (table of contents), or 'structured_facts' (JSON-LD)",
         },
         section_target: {
           type: 'string',
@@ -66,7 +78,7 @@ const MCP_TOOLS = [
         max_token_budget: {
           type: 'integer',
           default: 4000,
-          description: 'Maximum token budget for the extracted content (500 to 16000)',
+          description: 'Maximum token budget for the extracted content (200 to 16000)',
         },
       },
       required: ['url'],
@@ -106,7 +118,9 @@ async function handleToolCall(
   if (toolName === 'ssak_search') {
     const query = String(args.query ?? '').trim()
     const maxResults = Math.min(Math.max(Number(args.max_results) || 5, 1), 10)
-    const result = await executeFastAgentSearch(query, maxResults, 0.82, 3000)
+    const topic = args.topic === 'code' || args.topic === 'news' || args.topic === 'finance' ? args.topic : 'general'
+    const decompose = Boolean(args.decompose_subqueries)
+    const result = await executeFastAgentSearch(query, maxResults, 0.82, 3000, undefined, topic, decompose)
     return [{ type: 'text', text: JSON.stringify(result, null, 2) }]
   }
 

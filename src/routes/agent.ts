@@ -28,9 +28,11 @@ agentApi.post('/search', async (c) => {
 
   const query = body.query.trim()
   const maxResults = Math.min(Math.max(Number(body.max_results) || 5, 1), 10)
+  const topic = body.topic === 'code' || body.topic === 'news' || body.topic === 'finance' ? body.topic : 'general'
+  const decomposeSubqueries = Boolean(body.decompose_subqueries)
 
   // 조기 반환 검색 실행
-  const result = await executeFastAgentSearch(query, maxResults, 0.82, 2000, c.env)
+  const result = await executeFastAgentSearch(query, maxResults, 0.82, 2500, c.env, topic, decomposeSubqueries)
 
   return c.json({ ...result, cached: false })
 })
@@ -46,6 +48,8 @@ agentApi.post('/stream-search', async (c) => {
   }
 
   const maxResults = Math.min(Math.max(Number(body?.max_results) || 5, 1), 10)
+  const topic = body?.topic === 'code' || body?.topic === 'news' || body?.topic === 'finance' ? body.topic : 'general'
+  const decomposeSubqueries = Boolean(body?.decompose_subqueries)
 
   return streamSSE(c, async (stream) => {
     await stream.writeSSE({
@@ -53,7 +57,7 @@ agentApi.post('/stream-search', async (c) => {
       data: JSON.stringify({ query, timestamp: new Date().toISOString() }),
     })
 
-    const result = await executeFastAgentSearch(query, maxResults, 0.82, 2500, c.env)
+    const result = await executeFastAgentSearch(query, maxResults, 0.82, 2500, c.env, topic, decomposeSubqueries)
 
     for (const hit of result.hits) {
       await stream.writeSSE({

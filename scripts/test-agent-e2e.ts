@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 /**
  * E2E Agent Pipeline Integration Test
  * Run: npx tsx scripts/test-agent-e2e.ts
@@ -29,7 +30,7 @@ async function runE2ETests() {
     body: JSON.stringify({ query: 'SpaceX Starship latest launch', max_results: 3 }),
   })
   const searchElapsed = performance.now() - searchStart
-  const searchData = (await searchRes.json()) as any
+  const searchData = (await searchRes.json()) as Record<string, any>
 
   await assert(searchRes.status === 200, `HTTP status is 200 (Got ${searchRes.status})`)
   await assert(Array.isArray(searchData.hits), 'Response contains hits array')
@@ -47,7 +48,7 @@ async function runE2ETests() {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ url: targetUrl, max_token_budget: 1500 }),
   })
-  const extractData = (await extractRes.json()) as any
+  const extractData = (await extractRes.json()) as Record<string, any>
 
   await assert(extractRes.status === 200, `Extract HTTP status is 200`)
   await assert(extractData.success === true, 'Extraction marked as success')
@@ -66,7 +67,7 @@ async function runE2ETests() {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ url: deadUrl }),
   })
-  const deadData = (await deadRes.json()) as any
+  const deadData = (await deadRes.json()) as Record<string, any>
 
   await assert(deadData.success === false, 'Dead URL correctly marked as failure')
   await assert(Boolean(deadData.error?.agent_hint), 'Actionable agent_hint provided in payload')

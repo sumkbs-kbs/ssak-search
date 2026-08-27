@@ -1,11 +1,7 @@
 import { Hono } from 'hono'
 import { streamSSE } from 'hono/streaming'
 import type { AppBindings } from '../types'
-import {
-  AgentToolInputSchema,
-  extractWithStealthEscalation,
-  handleExtractionError,
-} from '../lib/agent-extractor'
+import { AgentToolInputSchema, extractWithStealthEscalation, handleExtractionError } from '../lib/agent-extractor'
 import { executeFastAgentSearch } from '../lib/agent-search-orchestrator'
 
 export const agentApi = new Hono<{ Bindings: AppBindings }>()
@@ -14,7 +10,7 @@ export const agentApi = new Hono<{ Bindings: AppBindings }>()
  * 1. 초고속 에이전트 검색 엔드포인트
  */
 agentApi.post('/search', async (c) => {
-  const body = (await c.req.json().catch(() => null)) as Record<string, any> | null
+  const body = (await c.req.json().catch(() => null)) as Record<string, unknown> | null
   if (!body || typeof body.query !== 'string' || !body.query.trim()) {
     return c.json(
       {
@@ -34,7 +30,7 @@ agentApi.post('/search', async (c) => {
   const maxResults = Math.min(Math.max(Number(body.max_results) || 5, 1), 10)
 
   // 조기 반환 검색 실행
-  const result = await executeFastAgentSearch(query, maxResults, 0.82, 2000)
+  const result = await executeFastAgentSearch(query, maxResults, 0.82, 2000, c.env)
 
   return c.json({ ...result, cached: false })
 })
@@ -43,8 +39,8 @@ agentApi.post('/search', async (c) => {
  * 2. 실시간 SSE 스트리밍 에이전트 검색 엔드포인트 (TTFT < 300ms)
  */
 agentApi.post('/stream-search', async (c) => {
-  const body = (await c.req.json().catch(() => null)) as Record<string, any> | null
-  const query = (body?.query || '').toString().trim()
+  const body = (await c.req.json().catch(() => null)) as Record<string, unknown> | null
+  const query = String(body?.query ?? '').trim()
   if (!query) {
     return c.json({ error: 'Query parameter is required' }, 400)
   }
@@ -57,7 +53,7 @@ agentApi.post('/stream-search', async (c) => {
       data: JSON.stringify({ query, timestamp: new Date().toISOString() }),
     })
 
-    const result = await executeFastAgentSearch(query, maxResults, 0.82, 2500)
+    const result = await executeFastAgentSearch(query, maxResults, 0.82, 2500, c.env)
 
     for (const hit of result.hits) {
       await stream.writeSSE({
@@ -110,7 +106,8 @@ agentApi.post('/extract', async (c) => {
     })
 
     return c.json(result, result.success ? 200 : 200)
-  } catch (err: any) {
-    return c.json(handleExtractionError(url, 500, err.message || 'Unknown network error'), 200)
+  } catch (err: unknown) {
+    const errObj = err instanceof Error ? err.message : String(err)
+    return c.json(handleExtractionError(url, 500, errObj || 'Unknown network error'), 200)
   }
 })

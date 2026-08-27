@@ -1,7 +1,7 @@
 import { normalizeUrl } from './util'
 import { naverSearch } from './naver-search'
 import { bingSearch } from './bing-search'
-import type { Env, SearchResult } from '../types'
+import type { Env } from '../types'
 
 export interface AgentSearchHit {
   title: string
@@ -22,7 +22,7 @@ export interface AgentSearchResult {
 export async function executeFastAgentSearch(
   query: string,
   maxResults = 5,
-  confidenceThreshold = 0.80,
+  _confidenceThreshold = 0.8,
   timeoutMs = 2500,
   env?: Env,
 ): Promise<AgentSearchResult> {

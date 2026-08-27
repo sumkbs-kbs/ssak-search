@@ -26,7 +26,7 @@ export interface AgentToolOutput {
   url: string
   title?: string
   markdown_content?: string
-  structured_data?: Record<string, any>
+  structured_data?: Record<string, unknown>
   table_of_contents?: string[]
   token_count: number
   took_ms?: number
@@ -48,26 +48,37 @@ export interface AgentToolOutput {
 /**
  * 1. JSON-LD / Schema.org Zero-Token Extractor
  */
-export function extractJsonLd(rawHtml: string): { data: Record<string, any>; type: string } | null {
+export function extractJsonLd(rawHtml: string): { data: Record<string, unknown>; type: string } | null {
   const matches = rawHtml.matchAll(/<script\b[^>]*type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi)
   for (const m of matches) {
     try {
-      const parsed = JSON.parse(m[1].trim())
+      const parsed = JSON.parse(m[1].trim()) as Record<string, unknown> | Array<Record<string, unknown>>
       const item = Array.isArray(parsed) ? parsed[0] : parsed
       if (item && (item['@context'] || item['@type'])) {
+        const authorObj =
+          typeof item.author === 'object' && item.author ? (item.author as Record<string, unknown>) : null
+        const authorStr = authorObj
+          ? String(authorObj.name ?? '')
+          : typeof item.author === 'string'
+            ? item.author
+            : undefined
         return {
           type: String(item['@type'] || 'StructuredData'),
           data: {
             title: item.headline || item.name,
             description: item.description,
-            author: typeof item.author === 'object' ? item.author?.name : item.author,
+            author: authorStr,
             date_published: item.datePublished || item.uploadDate,
             article_body: item.articleBody,
             faq: Array.isArray(item.mainEntity)
-              ? item.mainEntity.map((q: any) => ({
-                  question: q.name,
-                  answer: q.acceptedAnswer?.text,
-                }))
+              ? item.mainEntity.map((q: unknown) => {
+                  const qObj = q as Record<string, unknown>
+                  const ansObj = qObj.acceptedAnswer as Record<string, unknown> | undefined
+                  return {
+                    question: qObj.name,
+                    answer: ansObj?.text,
+                  }
+                })
               : undefined,
           },
         }
@@ -220,8 +231,7 @@ export async function extractWithStealthEscalation(
         headers: {
           'User-Agent':
             'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
-          Accept:
-            'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
+          Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
           'Accept-Language': 'en-US,en;q=0.9,ko;q=0.8',
           'Sec-CH-UA': '"Google Chrome";v="131", "Chromium";v="131", "Not_A Brand";v="24"',
           'Sec-CH-UA-Mobile': '?0',
@@ -338,7 +348,12 @@ export async function extractWithStealthEscalation(
 }
 
 export function handleExtractionError(url: string, status: number, rawError: string): AgentToolOutput {
-  if (status === 403 || status === 503 || rawError.toLowerCase().includes('challenge') || rawError.toLowerCase().includes('blocked')) {
+  if (
+    status === 403 ||
+    status === 503 ||
+    rawError.toLowerCase().includes('challenge') ||
+    rawError.toLowerCase().includes('blocked')
+  ) {
     return {
       success: false,
       url,

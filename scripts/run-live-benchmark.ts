@@ -4,7 +4,7 @@
  */
 
 import { executeFastAgentSearch } from '../src/lib/agent-search-orchestrator'
-import { extractWithStealthEscalation, extractJsonLd, sanitizeToDenseMarkdown } from '../src/lib/agent-extractor'
+import { extractWithStealthEscalation } from '../src/lib/agent-extractor'
 
 interface BenchmarkRow {
   Task: string
@@ -26,7 +26,7 @@ async function runLiveBenchmark() {
   // -------------------------------------------------------------
   console.log('1️⃣ Running Fast Search: "삼성전자 오늘 주가" ...')
   const t1 = performance.now()
-  const search1 = await executeFastAgentSearch('삼성전자 오늘 주가', 3, 0.80, 3000)
+  const search1 = await executeFastAgentSearch('삼성전자 오늘 주가', 3, 0.8, 3000)
   const l1 = Math.round(performance.now() - t1)
   console.log(`   └─ Done in ${l1}ms | Hits: ${search1.hits.length} | Confidence: ${search1.signal_confidence}`)
   if (search1.hits[0]) {
@@ -45,7 +45,7 @@ async function runLiveBenchmark() {
   // -------------------------------------------------------------
   console.log('\n2️⃣ Running Fast Search: "Anthropic Claude 3.7 reasoning" ...')
   const t2 = performance.now()
-  const search2 = await executeFastAgentSearch('Anthropic Claude 3.7 reasoning', 3, 0.80, 3000)
+  const search2 = await executeFastAgentSearch('Anthropic Claude 3.7 reasoning', 3, 0.8, 3000)
   const l2 = Math.round(performance.now() - t2)
   console.log(`   └─ Done in ${l2}ms | Hits: ${search2.hits.length} | Confidence: ${search2.signal_confidence}`)
   if (search2.hits[0]) {
@@ -98,7 +98,10 @@ async function runLiveBenchmark() {
     QueryOrUrl: 'Section: Ethics',
     LatencyMs: l4,
     ResultOrTokens: `~${ext2.token_count} tokens (Filtered)`,
-    Status: ext2.success && (ext2.markdown_content?.includes('Ethics') || (ext2.markdown_content?.length || 0) > 50) ? 'PASS ✅' : 'FAIL ❌',
+    Status:
+      ext2.success && (ext2.markdown_content?.includes('Ethics') || (ext2.markdown_content?.length || 0) > 50)
+        ? 'PASS ✅'
+        : 'FAIL ❌',
   })
 
   // -------------------------------------------------------------
@@ -127,6 +130,7 @@ async function runLiveBenchmark() {
   console.log('\n======================================================================')
   console.log('📊 REAL-WORLD BENCHMARK RESULTS TABLE')
   console.log('======================================================================')
+  // eslint-disable-next-line no-console
   console.table(results)
 
   const avgLatency = Math.round(results.reduce((acc, r) => acc + r.LatencyMs, 0) / results.length)

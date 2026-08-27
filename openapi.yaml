@@ -71,6 +71,167 @@ paths:
                           type: string
 
   # ====================================================================
+  # Agent Optimized API (Sub-Second Latency & High-Density)
+  # ====================================================================
+  /api/agent/search:
+    post:
+      summary: High-speed agent search (Sub-second early return)
+      description: |
+        Optimized search endpoint designed specifically for AI Agents (LLM Function Calling).
+        Uses parallel race orchestration with early abort to cut P95 latency below 1000ms.
+      operationId: agentSearch
+      tags:
+        - Agent
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - query
+              properties:
+                query:
+                  type: string
+                  description: Keyword-dense search query
+                  example: "삼성전자 오늘 주가"
+                max_results:
+                  type: integer
+                  minimum: 1
+                  maximum: 10
+                  default: 5
+      responses:
+        "200":
+          description: Fast search hits with signal confidence
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  query:
+                    type: string
+                  took_ms:
+                    type: integer
+                  signal_confidence:
+                    type: string
+                    enum: [HIGH, MEDIUM, LOW]
+                  hits:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        title:
+                          type: string
+                        url:
+                          type: string
+                        snippet:
+                          type: string
+                        score:
+                          type: number
+                        source:
+                          type: string
+
+  /api/agent/stream-search:
+    post:
+      summary: Real-time SSE streaming agent search
+      description: Streams individual search hits as they arrive via Server-Sent Events (TTFT < 300ms).
+      operationId: agentStreamSearch
+      tags:
+        - Agent
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - query
+              properties:
+                query:
+                  type: string
+                max_results:
+                  type: integer
+                  default: 5
+      responses:
+        "200":
+          description: SSE event stream of search hits
+          content:
+            text/event-stream:
+              schema:
+                type: string
+
+  /api/agent/extract:
+    post:
+      summary: High-density stealth markdown & JSON-LD extraction
+      description: |
+        Extracts clean, noise-free Markdown or Schema.org JSON-LD structured facts.
+        Features 4-tier anti-bot stealth escalation, TOC extraction, and section targeting.
+      operationId: agentExtract
+      tags:
+        - Agent
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - url
+              properties:
+                url:
+                  type: string
+                  format: uri
+                  example: "https://en.wikipedia.org/wiki/Artificial_intelligence"
+                extract_depth:
+                  type: string
+                  enum: [summary, full_markdown, structured_facts, toc_only]
+                  default: full_markdown
+                section_target:
+                  type: string
+                  description: Optional heading name to filter specific section
+                  example: "Ethics"
+                max_token_budget:
+                  type: integer
+                  minimum: 500
+                  maximum: 16000
+                  default: 4000
+      responses:
+        "200":
+          description: Clean extracted content or actionable error
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  url:
+                    type: string
+                  markdown_content:
+                    type: string
+                  structured_data:
+                    type: object
+                  table_of_contents:
+                    type: array
+                    items:
+                      type: string
+                  token_count:
+                    type: integer
+                  escalation_tier:
+                    type: string
+                  error:
+                    type: object
+                    properties:
+                      code:
+                        type: string
+                      detail:
+                        type: string
+                      agent_hint:
+                        type: string
+                      suggested_action:
+                        type: string
+
+  # ====================================================================
   # Search
   # ====================================================================
   /api/search:

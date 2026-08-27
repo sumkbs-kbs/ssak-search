@@ -57,6 +57,7 @@ import { createLoggingMiddleware } from './lib/logger'
 import { createTracingMiddleware } from './middleware/tracing'
 import { securityMiddleware } from './lib/security-middleware'
 import { wrapApp, sentryMiddleware } from './lib/sentry'
+import { agentApi } from './routes/agent'
 import type { AppBindings, ErrorResponse } from './types'
 import openapiSpec from '../openapi.yaml?raw'
 
@@ -150,6 +151,7 @@ app.route('/api/experiments', experimentsRoute)
 app.route('/api/index', indexRoute)
 app.route('/api/blacklist', blacklistRoute)
 app.route('/api/queue', queueRoute)
+app.route('/api/agent', agentApi)
 app.route('/v1', openaiRoute)
 
 // API root - list available endpoints

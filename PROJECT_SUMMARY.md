@@ -379,8 +379,11 @@
 ### AI Agent SDK & 고속 엔진
 | 카테고리 | 파일 | 설명 |
 |----------|------|------|
-| **MCP Server** | `sdk/mcp_server.py` | Hermes 3, Claude Desktop, Cursor 표준 MCP 도구 서버 (JSON-RPC stdio) |
-| **MCP 가이드** | `docs/MCP_INTEGRATION_GUIDE.md` | 에이전트 환경별 MCP 등록 및 연동 가이드 |
+| **단일 실행 바이너리** | `bin/ssak-mcp` | Zero-Config 네이티브 독립 실행형 MCP 서버 바이너리 (Bun 컴파일) |
+| **바이너리 빌더** | `scripts/build-standalone-binary.sh` | Bun 및 PyInstaller 기반 단일 실행 바이너리 컴파일 스크립트 |
+| **TypeScript MCP** | `src/mcp-standalone.ts` | 100% 독립 실행형 TypeScript MCP JSON-RPC stdio 서버 |
+| **Python MCP** | `sdk/mcp_server.py` | Hermes 3, Claude Desktop, Cursor 표준 MCP 도구 서버 (JSON-RPC stdio) |
+| **MCP 가이드** | `docs/MCP_INTEGRATION_GUIDE.md` | 에이전트 환경별 MCP 등록 및 단일 바이너리 연동 가이드 |
 | **Python SDK** | `sdk/agent_tool.py` | LangChain / AutoGen / CrewAI 호환 에이전트 클라이언트 |
 | **스텔스 추출기** | `src/lib/agent-extractor.ts` | 4단계 스텔스 에스컬레이션, JSON-LD, TOC 추출 |
 | **조기반환 검색** | `src/lib/agent-search-orchestrator.ts` | 서브세컨드 병렬 레이스 및 조기 반환 검색 오케스트레이터 |

@@ -16,6 +16,21 @@
 
 ## ⚙️ 2. 클라이언트별 설정 방법
 
+### 🚀 [추천] 제로-컨피그 단일 바이너리 모드 (Zero-Config Standalone Binary)
+Node.js나 Python 설치 없이 컴파일된 단일 바이너리(`bin/ssak-mcp`)를 직접 지정하여 100% 독립 실행:
+
+```json
+{
+  "mcpServers": {
+    "ssak-search": {
+      "command": "/Users/mr.k/Downloads/webapp/bin/ssak-mcp"
+    }
+  }
+}
+```
+
+---
+
 ### 1) Hermes 3 & Open Source Agent (`mcp_config.json`)
 에이전트 설정 파일의 `mcpServers`에 등록합니다:
 ```json
@@ -25,7 +40,7 @@
       "command": "python3",
       "args": ["/Users/mr.k/Downloads/webapp/sdk/mcp_server.py"],
       "env": {
-        "SSAK_API_BASE": "http://localhost:8787"
+        "SSAK_API_BASE": "http://localhost:8788"
       }
     }
   }
@@ -38,11 +53,7 @@
 {
   "mcpServers": {
     "ssak-search": {
-      "command": "python3",
-      "args": ["/Users/mr.k/Downloads/webapp/sdk/mcp_server.py"],
-      "env": {
-        "SSAK_API_BASE": "http://localhost:8787"
-      }
+      "command": "/Users/mr.k/Downloads/webapp/bin/ssak-mcp"
     }
   }
 }
@@ -51,7 +62,8 @@
 ### 3) Cursor IDE (`.cursor/mcp.json` 또는 Features 설정)
 Cursor 설정의 MCP 탭에서 `Command` 타입으로 추가:
 - **Name:** `ssak-search`
-- **Command:** `python3 /Users/mr.k/Downloads/webapp/sdk/mcp_server.py`
+- **Command:** `/Users/mr.k/Downloads/webapp/bin/ssak-mcp`
+
 
 ---
 

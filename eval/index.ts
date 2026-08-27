@@ -40,6 +40,9 @@ interface CliArgs {
    * (default 5.0). Disable with --loss-threshold 0.
    */
   lossThreshold?: number
+  /** Independent gold corpus path (--gold) — scored fail-loud, never co-mixed
+   *  with the curated default (T2). */
+  gold?: string
 }
 
 function parseArgs(): CliArgs {
@@ -89,6 +92,15 @@ function parseArgs(): CliArgs {
       case '--tag':
         opts.tag = args[++i]
         break
+      case '--gold': {
+        const p = args[++i]
+        if (!p || p.startsWith('--')) {
+          console.error('--gold requires a path argument (e.g. eval/gold-independent/gold-independent.json)')
+          process.exit(1)
+        }
+        opts.gold = p
+        break
+      }
     }
   }
 
@@ -171,7 +183,7 @@ Options:
       // and it keeps the cache metric identical to the single-run semantics.
       // S77: cachePlan.measure is false for runs >= 3 (the timeout guard), so
       // a --cache --runs 3 dispatch runs 3 cold passes with NO cache metric.
-      const rep = await runEval(queries, { measureCache: cachePlan.measure && i === 1 })
+      const rep = await runEval(queries, { measureCache: cachePlan.measure && i === 1, goldPath: opts.gold })
       reports.push(rep)
       // Wave 5 (B3): the memory cache TTL (1800s/300s) now exceeds the
       // inter-run gap (~20 min on the 500×3 median) — without clearing, runs
@@ -199,7 +211,7 @@ Options:
     // S77: use cachePlan.measure (not opts.cache) so the single-run path is
     // consistent with the guarded multi-run path — identical today (runs=1 →
     // measure when cache requested) but robust to future policy changes.
-    report = await runEval(queries, { measureCache: cachePlan.measure })
+    report = await runEval(queries, { measureCache: cachePlan.measure, goldPath: opts.gold })
   }
 
   // G2 (S73): with >=2 runs the regression gate requires at least 2 runs to

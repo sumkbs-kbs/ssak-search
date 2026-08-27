@@ -77,11 +77,14 @@ export async function runEval(
      *  CacheHitMetrics.skipped. Set false to keep the legacy behavior
      *  (warm run always fires, failed cold → long warm time → miss). */
     skipWarmOnColdError?: boolean
+    /** Independent-gold override path (--gold) — loaded fail-loud by metrics.
+     *  Undefined keeps the default eval/gold-standards.json. */
+    goldPath?: string
   } = {},
 ): Promise<EvalReport> {
   const results: EvalResult[] = []
   const runStartTime = Date.now()
-  const goldStandards = loadGoldStandards()
+  const goldStandards = loadGoldStandards(config.goldPath)
 
   // If a wikipedia-dependent query set is being evaluated, wait for the
   // wikipedia IP rate-limit window to recover before the first run — otherwise

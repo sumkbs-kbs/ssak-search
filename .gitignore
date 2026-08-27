@@ -64,4 +64,4 @@ local-index/logs/
 # Eval & benchmark dumps
 eval-results.json
 benchmark-results.json
-eval/results/
+

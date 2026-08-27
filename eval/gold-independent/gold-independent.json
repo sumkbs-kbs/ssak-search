@@ -1,0 +1,6137 @@
+{
+  "_meta": {
+    "_comment": "T2 independent gold — labels from static taxonomy (scripts/generate-gold-independent.ts), engine never consulted. Regenerate with the same command; do NOT hand-edit entries.",
+    "_methodology": "expected_domains = authoritative pools per (lang × qtype); must_not = content-farm/scraper domains; rationale present on every row for audit sampling."
+  },
+  "kr-stock-01": {
+    "relevantDomains": [
+      "m.stock.naver.com",
+      "finance.naver.com",
+      "krx.co.kr",
+      "samsung.com"
+    ],
+    "mustNotDomains": [
+      "pinterest.com",
+      "answers.yahoo.com",
+      "slideshare.net",
+      "scribd.com",
+      "academia.edu"
+    ],
+    "rationale": "삼성전자 공식 IR + 한국거래소 공인 공시 + 네이버금융 실시간 시세(외부 지식 기반)",
+    "source": "independent-taxonomy-v1",
+    "lang": "kr",
+    "qtype": "financial"
+  },
+  "kr-stock-02": {
+    "relevantDomains": [
+      "m.stock.naver.com",
+      "finance.naver.com",
+      "krx.co.kr",
+      "kakaocorp.com"
+    ],
+    "mustNotDomains": [
+      "pinterest.com",
+      "answers.yahoo.com",
+      "slideshare.net",
+      "scribd.com",
+      "academia.edu"
+    ],
+    "rationale": "카카오 공식 + 거래소 + 네이버금융",
+    "source": "independent-taxonomy-v1",
+    "lang": "kr",
+    "qtype": "financial"
+  },
+  "kr-stock-03": {
+    "relevantDomains": [
+      "krx.co.kr",
+      "finance.naver.com",
+      "finance.yahoo.com",
+      "dart.fss.or.kr",
+      "investing.com"
+    ],
+    "mustNotDomains": [
+      "pinterest.com",
+      "answers.yahoo.com",
+      "slideshare.net",
+      "scribd.com",
+      "academia.edu"
+    ],
+    "rationale": "taxonomy-rule: kr/financial authoritative pool",
+    "source": "independent-taxonomy-v1",
+    "lang": "kr",
+    "qtype": "financial"
+  },
+  "kr-stock-04": {
+    "relevantDomains": [
+      "krx.co.kr",
+      "finance.naver.com",
+      "finance.yahoo.com",
+      "dart.fss.or.kr",
+      "investing.com"
+    ],
+    "mustNotDomains": [
+      "pinterest.com",
+      "answers.yahoo.com",
+      "slideshare.net",
+      "scribd.com",
+      "academia.edu"
+    ],
+    "rationale": "taxonomy-rule: kr/financial authoritative pool",
+    "source": "independent-taxonomy-v1",
+    "lang": "kr",
+    "qtype": "financial"
+  },
+  "kr-stock-05": {
+    "relevantDomains": [
+      "krx.co.kr",
+      "finance.naver.com",
+      "m.stock.naver.com"
+    ],
+    "mustNotDomains": [
+      "pinterest.com",
+      "answers.yahoo.com",
+      "slideshare.net",
+      "scribd.com",
+      "academia.edu"
+    ],
+    "rationale": "KOSPI 지수 공식 출처는 한국거래소",
+    "source": "independent-taxonomy-v1",
+    "lang": "kr",
+    "qtype": "financial"
+  },
+  "kr-news-01": {
+    "relevantDomains": [
+      "yna.co.kr",
+      "yonhapnewstv.co.kr",
+      "hankyung.com",
+      "sedaily.com",
+      "chosun.com",
+      "donga.com",
+      "hani.co.kr",
+      "khan.co.kr",
+      "mk.co.kr",
+      "n.news.naver.com"
+    ],
+    "mustNotDomains": [
+      "pinterest.com",
+      "answers.yahoo.com",
+      "slideshare.net",
+      "scribd.com",
+      "academia.edu"
+    ],
+    "rationale": "taxonomy-rule: kr/news authoritative pool",
+    "source": "independent-taxonomy-v1",
+    "lang": "kr",
+    "qtype": "news"
+  },
+  "kr-news-02": {
+    "relevantDomains": [
+      "yna.co.kr",
+      "yonhapnewstv.co.kr",
+      "hankyung.com",
+      "sedaily.com",
+      "chosun.com",
+      "donga.com",
+      "hani.co.kr",
+      "khan.co.kr",
+      "mk.co.kr",
+      "n.news.naver.com"
+    ],
+    "mustNotDomains": [
+      "pinterest.com",
+      "answers.yahoo.com",
+      "slideshare.net",
+      "scribd.com",
+      "academia.edu"
+    ],
+    "rationale": "taxonomy-rule: kr/news authoritative pool",
+    "source": "independent-taxonomy-v1",
+    "lang": "kr",
+    "qtype": "news"
+  },
+  "kr-news-03": {
+    "relevantDomains": [
+      "yna.co.kr",
+      "yonhapnewstv.co.kr",
+      "hankyung.com",
+      "sedaily.com",
+      "chosun.com",
+      "donga.com",
+      "hani.co.kr",
+      "khan.co.kr",
+      "mk.co.kr",
+      "n.news.naver.com"
+    ],
+    "mustNotDomains": [
+      "pinterest.com",
+      "answers.yahoo.com",
+      "slideshare.net",
+      "scribd.com",
+      "academia.edu"
+    ],
+    "rationale": "taxonomy-rule: kr/news authoritative pool",
+    "source": "independent-taxonomy-v1",
+    "lang": "kr",
+    "qtype": "news"
+  },
+  "kr-news-04": {
+    "relevantDomains": [
+      "yna.co.kr",
+      "yonhapnewstv.co.kr",
+      "hankyung.com",
+      "sedaily.com",
+      "chosun.com",
+      "donga.com",
+      "hani.co.kr",
+      "khan.co.kr",
+      "mk.co.kr",
+      "n.news.naver.com"
+    ],
+    "mustNotDomains": [
+      "pinterest.com",
+      "answers.yahoo.com",
+      "slideshare.net",
+      "scribd.com",
+      "academia.edu"
+    ],
+    "rationale": "taxonomy-rule: kr/news authoritative pool",
+    "source": "independent-taxonomy-v1",
+    "lang": "kr",
+    "qtype": "news"
+  },
+  "kr-tech-01": {
+    "relevantDomains": [
+      "developer.mozilla.org",
+      "github.com",
+      "react.dev",
+      "nodejs.org",
+      "typescriptlang.org",
+      "kr.vuejs.org",
+      "developer.android.com"
+    ],
+    "mustNotDomains": [
+      "pinterest.com",
+      "answers.yahoo.com",
+      "slideshare.net",
+      "scribd.com",
+      "academia.edu"
+    ],
+    "rationale": "taxonomy-rule: kr/technical authoritative pool",
+    "source": "independent-taxonomy-v1",
+    "lang": "kr",
+    "qtype": "technical"
+  },
+  "kr-tech-02": {
+    "relevantDomains": [
+      "developer.mozilla.org",
+      "github.com",
+      "react.dev",
+      "nodejs.org",
+      "typescriptlang.org",
+      "kr.vuejs.org",
+      "developer.android.com"
+    ],
+    "mustNotDomains": [
+      "pinterest.com",
+      "answers.yahoo.com",
+      "slideshare.net",
+      "scribd.com",
+      "academia.edu"
+    ],
+    "rationale": "taxonomy-rule: kr/technical authoritative pool",
+    "source": "independent-taxonomy-v1",
+    "lang": "kr",
+    "qtype": "technical"
+  },
+  "kr-tech-03": {
+    "relevantDomains": [
+      "developer.mozilla.org",
+      "github.com",
+      "react.dev",
+      "nodejs.org",
+      "typescriptlang.org",
+      "kr.vuejs.org",
+      "developer.android.com"
+    ],
+    "mustNotDomains": [
+      "pinterest.com",
+      "answers.yahoo.com",
+      "slideshare.net",
+      "scribd.com",
+      "academia.edu"
+    ],
+    "rationale": "taxonomy-rule: kr/technical authoritative pool",
+    "source": "independent-taxonomy-v1",
+    "lang": "kr",
+    "qtype": "technical"
+  },
+  "kr-tech-04": {
+    "relevantDomains": [
+      "developer.mozilla.org",
+      "github.com",
+      "react.dev",
+      "nodejs.org",
+      "typescriptlang.org",
+      "kr.vuejs.org",
+      "developer.android.com"
+    ],
+    "mustNotDomains": [
+      "pinterest.com",
+      "answers.yahoo.com",
+      "slideshare.net",
+      "scribd.com",
+      "academia.edu"
+    ],
+    "rationale": "taxonomy-rule: kr/technical authoritative pool",
+    "source": "independent-taxonomy-v1",
+    "lang": "kr",
+    "qtype": "technical"
+  },
+  "kr-tech-05": {
+    "relevantDomains": [
+      "developer.mozilla.org",
+      "github.com",
+      "react.dev",
+      "nodejs.org",
+      "typescriptlang.org",
+      "kr.vuejs.org",
+      "developer.android.com"
+    ],
+    "mustNotDomains": [
+      "pinterest.com",
+      "answers.yahoo.com",
+      "slideshare.net",
+      "scribd.com",
+      "academia.edu"
+    ],
+    "rationale": "taxonomy-rule: kr/technical authoritative pool",
+    "source": "independent-taxonomy-v1",
+    "lang": "kr",
+    "qtype": "technical"
+  },
+  "kr-general-01": {
+    "relevantDomains": [
+      "wikipedia.org",
+      "terms.naver.com"
+    ],
+    "mustNotDomains": [
+      "pinterest.com",
+      "answers.yahoo.com",
+      "slideshare.net",
+      "scribd.com",
+      "academia.edu"
+    ],
+    "rationale": "taxonomy-rule: kr/general authoritative pool",
+    "source": "independent-taxonomy-v1",
+    "lang": "kr",
+    "qtype": "general"
+  },
+  "kr-general-02": {
+    "relevantDomains": [
+      "wikipedia.org",
+      "terms.naver.com"
+    ],
+    "mustNotDomains": [
+      "pinterest.com",
+      "answers.yahoo.com",
+      "slideshare.net",
+      "scribd.com",
+      "academia.edu"
+    ],
+    "rationale": "taxonomy-rule: kr/general authoritative pool",
+    "source": "independent-taxonomy-v1",
+    "lang": "kr",
+    "qtype": "general"
+  },
+  "kr-general-03": {
+    "relevantDomains": [
+      "wikipedia.org",
+      "terms.naver.com"
+    ],
+    "mustNotDomains": [
+      "pinterest.com",
+      "answers.yahoo.com",
+      "slideshare.net",
+      "scribd.com",
+      "academia.edu"
+    ],
+    "rationale": "taxonomy-rule: kr/general authoritative pool",
+    "source": "independent-taxonomy-v1",
+    "lang": "kr",
+    "qtype": "general"
+  },
+  "kr-general-04": {
+    "relevantDomains": [
+      "wikipedia.org",
+      "terms.naver.com"
+    ],
+    "mustNotDomains": [
+      "pinterest.com",
+      "answers.yahoo.com",
+      "slideshare.net",
+      "scribd.com",
+      "academia.edu"
+    ],
+    "rationale": "taxonomy-rule: kr/general authoritative pool",
+    "source": "independent-taxonomy-v1",
+    "lang": "kr",
+    "qtype": "general"
+  },
+  "kr-general-05": {
+    "relevantDomains": [
+      "wikipedia.org",
+      "terms.naver.com"
+    ],
+    "mustNotDomains": [
+      "pinterest.com",
+      "answers.yahoo.com",
+      "slideshare.net",
+      "scribd.com",
+      "academia.edu"
+    ],
+    "rationale": "taxonomy-rule: kr/general authoritative pool",
+    "source": "independent-taxonomy-v1",
+    "lang": "kr",
+    "qtype": "general"
+  },
+  "en-stock-01": {
+    "relevantDomains": [
+      "finance.yahoo.com",
+      "nasdaq.com",
+      "sec.gov",
+      "investing.com",
+      "marketwatch.com",
+      "wsj.com",
+      "bloomberg.com"
+    ],
+    "mustNotDomains": [
+      "pinterest.com",
+      "answers.yahoo.com",
+      "slideshare.net",
+      "scribd.com",
+      "academia.edu"
+    ],
+    "rationale": "taxonomy-rule: en/financial authoritative pool",
+    "source": "independent-taxonomy-v1",
+    "lang": "en",
+    "qtype": "financial"
+  },
+  "en-stock-02": {
+    "relevantDomains": [
+      "finance.yahoo.com",
+      "nasdaq.com",
+      "sec.gov",
+      "investing.com",
+      "marketwatch.com",
+      "wsj.com",
+      "bloomberg.com"
+    ],
+    "mustNotDomains": [
+      "pinterest.com",
+      "answers.yahoo.com",
+      "slideshare.net",
+      "scribd.com",
+      "academia.edu"
+    ],
+    "rationale": "taxonomy-rule: en/financial authoritative pool",
+    "source": "independent-taxonomy-v1",
+    "lang": "en",
+    "qtype": "financial"
+  },
+  "en-stock-03": {
+    "relevantDomains": [
+      "finance.yahoo.com",
+      "nasdaq.com",
+      "sec.gov",
+      "investing.com",
+      "marketwatch.com",
+      "wsj.com",
+      "bloomberg.com"
+    ],
+    "mustNotDomains": [
+      "pinterest.com",
+      "answers.yahoo.com",
+      "slideshare.net",
+      "scribd.com",
+      "academia.edu"
+    ],
+    "rationale": "taxonomy-rule: en/financial authoritative pool",
+    "source": "independent-taxonomy-v1",
+    "lang": "en",
+    "qtype": "financial"
+  },
+  "en-stock-04": {
+    "relevantDomains": [
+      "finance.yahoo.com",
+      "nasdaq.com",
+      "sec.gov",
+      "investing.com",
+      "marketwatch.com",
+      "wsj.com",
+      "bloomberg.com"
+    ],
+    "mustNotDomains": [
+      "pinterest.com",
+      "answers.yahoo.com",
+      "slideshare.net",
+      "scribd.com",
+      "academia.edu"
+    ],
+    "rationale": "taxonomy-rule: en/financial authoritative pool",
+    "source": "independent-taxonomy-v1",
+    "lang": "en",
+    "qtype": "financial"
+  },
+  "en-stock-05": {
+    "relevantDomains": [
+      "finance.yahoo.com",
+      "nasdaq.com",
+      "sec.gov",
+      "investing.com",
+      "marketwatch.com",
+      "wsj.com",
+      "bloomberg.com"
+    ],
+    "mustNotDomains": [
+      "pinterest.com",
+      "answers.yahoo.com",
+      "slideshare.net",
+      "scribd.com",
+      "academia.edu"
+    ],
+    "rationale": "taxonomy-rule: en/financial authoritative pool",
+    "source": "independent-taxonomy-v1",
+    "lang": "en",
+    "qtype": "financial"
+  },
+  "en-stock-06": {
+    "relevantDomains": [
+      "finance.yahoo.com",
+      "nasdaq.com",
+      "sec.gov",
+      "investing.com",
+      "marketwatch.com",
+      "wsj.com",
+      "bloomberg.com"
+    ],
+    "mustNotDomains": [
+      "pinterest.com",
+      "answers.yahoo.com",
+      "slideshare.net",
+      "scribd.com",
+      "academia.edu"
+    ],
+    "rationale": "taxonomy-rule: en/financial authoritative pool",
+    "source": "independent-taxonomy-v1",
+    "lang": "en",
+    "qtype": "financial"
+  },
+  "en-stock-07": {
+    "relevantDomains": [
+      "finance.yahoo.com",
+      "nasdaq.com",
+      "sec.gov",
+      "investing.com",
+      "marketwatch.com",
+      "wsj.com",
+      "bloomberg.com"
+    ],
+    "mustNotDomains": [
+      "pinterest.com",
+      "answers.yahoo.com",
+      "slideshare.net",
+      "scribd.com",
+      "academia.edu"
+    ],
+    "rationale": "taxonomy-rule: en/financial authoritative pool",
+    "source": "independent-taxonomy-v1",
+    "lang": "en",
+    "qtype": "financial"
+  },
+  "en-stock-08": {
+    "relevantDomains": [
+      "finance.yahoo.com",
+      "nasdaq.com",
+      "sec.gov",
+      "investing.com",
+      "marketwatch.com",
+      "wsj.com",
+      "bloomberg.com"
+    ],
+    "mustNotDomains": [
+      "pinterest.com",
+      "answers.yahoo.com",
+      "slideshare.net",
+      "scribd.com",
+      "academia.edu"
+    ],
+    "rationale": "taxonomy-rule: en/financial authoritative pool",
+    "source": "independent-taxonomy-v1",
+    "lang": "en",
+    "qtype": "financial"
+  },
+  "en-tech-01": {
+    "relevantDomains": [
+      "developer.mozilla.org",
+      "github.com",
+      "stackoverflow.com",
+      "react.dev",
+      "nodejs.org",
+      "typescriptlang.org",
+      "developer.android.com",
+      "docs.rs",
+      "pypi.org"
+    ],
+    "mustNotDomains": [
+      "pinterest.com",
+      "answers.yahoo.com",
+      "slideshare.net",
+      "scribd.com",
+      "academia.edu"
+    ],
+    "rationale": "taxonomy-rule: en/technical authoritative pool",
+    "source": "independent-taxonomy-v1",
+    "lang": "en",
+    "qtype": "technical"
+  },
+  "en-tech-02": {
+    "relevantDomains": [
+      "developer.mozilla.org",
+      "github.com",
+      "stackoverflow.com",
+      "react.dev",
+      "nodejs.org",
+      "typescriptlang.org",
+      "developer.android.com",
+      "docs.rs",
+      "pypi.org"
+    ],
+    "mustNotDomains": [
+      "pinterest.com",
+      "answers.yahoo.com",
+      "slideshare.net",
+      "scribd.com",
+      "academia.edu"
+    ],
+    "rationale": "taxonomy-rule: en/technical authoritative pool",
+    "source": "independent-taxonomy-v1",
+    "lang": "en",
+    "qtype": "technical"
+  },
+  "en-tech-03": {
+    "relevantDomains": [
+      "developer.mozilla.org",
+      "github.com",
+      "stackoverflow.com",
+      "react.dev",
+      "nodejs.org",
+      "typescriptlang.org",
+      "developer.android.com",
+      "docs.rs",
+      "pypi.org"
+    ],
+    "mustNotDomains": [
+      "pinterest.com",
+      "answers.yahoo.com",
+      "slideshare.net",
+      "scribd.com",
+      "academia.edu"
+    ],
+    "rationale": "taxonomy-rule: en/technical authoritative pool",
+    "source": "independent-taxonomy-v1",
+    "lang": "en",
+    "qtype": "technical"
+  },
+  "en-tech-04": {
+    "relevantDomains": [
+      "developer.mozilla.org",
+      "github.com",
+      "stackoverflow.com",
+      "react.dev",
+      "nodejs.org",
+      "typescriptlang.org",
+      "developer.android.com",
+      "docs.rs",
+      "pypi.org"
+    ],
+    "mustNotDomains": [
+      "pinterest.com",
+      "answers.yahoo.com",
+      "slideshare.net",
+      "scribd.com",
+      "academia.edu"
+    ],
+    "rationale": "taxonomy-rule: en/technical authoritative pool",
+    "source": "independent-taxonomy-v1",
+    "lang": "en",
+    "qtype": "technical"
+  },
+  "en-tech-05": {
+    "relevantDomains": [
+      "developer.mozilla.org",
+      "github.com",
+      "stackoverflow.com",
+      "react.dev",
+      "nodejs.org",
+      "typescriptlang.org",
+      "developer.android.com",
+      "docs.rs",
+      "pypi.org"
+    ],
+    "mustNotDomains": [
+      "pinterest.com",
+      "answers.yahoo.com",
+      "slideshare.net",
+      "scribd.com",
+      "academia.edu"
+    ],
+    "rationale": "taxonomy-rule: en/technical authoritative pool",
+    "source": "independent-taxonomy-v1",
+    "lang": "en",
+    "qtype": "technical"
+  },
+  "en-tech-06": {
+    "relevantDomains": [
+      "developer.mozilla.org",
+      "github.com",
+      "stackoverflow.com",
+      "react.dev",
+      "nodejs.org",
+      "typescriptlang.org",
+      "developer.android.com",
+      "docs.rs",
+      "pypi.org"
+    ],
+    "mustNotDomains": [
+      "pinterest.com",
+      "answers.yahoo.com",
+      "slideshare.net",
+      "scribd.com",
+      "academia.edu"
+    ],
+    "rationale": "taxonomy-rule: en/technical authoritative pool",
+    "source": "independent-taxonomy-v1",
+    "lang": "en",
+    "qtype": "technical"
+  },
+  "en-tech-07": {
+    "relevantDomains": [
+      "developer.mozilla.org",
+      "github.com",
+      "stackoverflow.com",
+      "react.dev",
+      "nodejs.org",
+      "typescriptlang.org",
+      "developer.android.com",
+      "docs.rs",
+      "pypi.org"
+    ],
+    "mustNotDomains": [
+      "pinterest.com",
+      "answers.yahoo.com",
+      "slideshare.net",
+      "scribd.com",
+      "academia.edu"
+    ],
+    "rationale": "taxonomy-rule: en/technical authoritative pool",
+    "source": "independent-taxonomy-v1",
+    "lang": "en",
+    "qtype": "technical"
+  },
+  "en-tech-08": {
+    "relevantDomains": [
+      "developer.mozilla.org",
+      "github.com",
+      "stackoverflow.com",
+      "react.dev",
+      "nodejs.org",
+      "typescriptlang.org",
+      "developer.android.com",
+      "docs.rs",
+      "pypi.org"
+    ],
+    "mustNotDomains": [
+      "pinterest.com",
+      "answers.yahoo.com",
+      "slideshare.net",
+      "scribd.com",
+      "academia.edu"
+    ],
+    "rationale": "taxonomy-rule: en/technical authoritative pool",
+    "source": "independent-taxonomy-v1",
+    "lang": "en",
+    "qtype": "technical"
+  },
+  "en-tech-09": {
+    "relevantDomains": [
+      "developer.mozilla.org",
+      "github.com",
+      "stackoverflow.com",
+      "react.dev",
+      "nodejs.org",
+      "typescriptlang.org",
+      "developer.android.com",
+      "docs.rs",
+      "pypi.org"
+    ],
+    "mustNotDomains": [
+      "pinterest.com",
+      "answers.yahoo.com",
+      "slideshare.net",
+      "scribd.com",
+      "academia.edu"
+    ],
+    "rationale": "taxonomy-rule: en/technical authoritative pool",
+    "source": "independent-taxonomy-v1",
+    "lang": "en",
+    "qtype": "technical"
+  },
+  "en-tech-10": {
+    "relevantDomains": [
+      "developer.mozilla.org",
+      "github.com",
+      "stackoverflow.com",
+      "react.dev",
+      "nodejs.org",
+      "typescriptlang.org",
+      "developer.android.com",
+      "docs.rs",
+      "pypi.org"
+    ],
+    "mustNotDomains": [
+      "pinterest.com",
+      "answers.yahoo.com",
+      "slideshare.net",
+      "scribd.com",
+      "academia.edu"
+    ],
+    "rationale": "taxonomy-rule: en/technical authoritative pool",
+    "source": "independent-taxonomy-v1",
+    "lang": "en",
+    "qtype": "technical"
+  },
+  "en-tech-11": {
+    "relevantDomains": [
+      "developer.mozilla.org",
+      "github.com",
+      "stackoverflow.com",
+      "react.dev",
+      "nodejs.org",
+      "typescriptlang.org",
+      "developer.android.com",
+      "docs.rs",
+      "pypi.org"
+    ],
+    "mustNotDomains": [
+      "pinterest.com",
+      "answers.yahoo.com",
+      "slideshare.net",
+      "scribd.com",
+      "academia.edu"
+    ],
+    "rationale": "taxonomy-rule: en/technical authoritative pool",
+    "source": "independent-taxonomy-v1",
+    "lang": "en",
+    "qtype": "technical"
+  },
+  "en-tech-12": {
+    "relevantDomains": [
+      "developer.mozilla.org",
+      "github.com",
+      "stackoverflow.com",
+      "react.dev",
+      "nodejs.org",
+      "typescriptlang.org",
+      "developer.android.com",
+      "docs.rs",
+      "pypi.org"
+    ],
+    "mustNotDomains": [
+      "pinterest.com",
+      "answers.yahoo.com",
+      "slideshare.net",
+      "scribd.com",
+      "academia.edu"
+    ],
+    "rationale": "taxonomy-rule: en/technical authoritative pool",
+    "source": "independent-taxonomy-v1",
+    "lang": "en",
+    "qtype": "technical"
+  },
+  "en-news-01": {
+    "relevantDomains": [
+      "reuters.com",
+      "apnews.com",
+      "bbc.com",
+      "bbc.co.uk",
+      "nytimes.com",
+      "theguardian.com",
+      "techcrunch.com",
+      "theverge.com"
+    ],
+    "mustNotDomains": [
+      "pinterest.com",
+      "answers.yahoo.com",
+      "slideshare.net",
+      "scribd.com",
+      "academia.edu"
+    ],
+    "rationale": "taxonomy-rule: en/news authoritative pool",
+    "source": "independent-taxonomy-v1",
+    "lang": "en",
+    "qtype": "news"
+  },
+  "en-news-02": {
+    "relevantDomains": [
+      "reuters.com",
+      "apnews.com",
+      "bbc.com",
+      "bbc.co.uk",
+      "nytimes.com",
+      "theguardian.com",
+      "techcrunch.com",
+      "theverge.com"
+    ],
+    "mustNotDomains": [
+      "pinterest.com",
+      "answers.yahoo.com",
+      "slideshare.net",
+      "scribd.com",
+      "academia.edu"
+    ],
+    "rationale": "taxonomy-rule: en/news authoritative pool",
+    "source": "independent-taxonomy-v1",
+    "lang": "en",
+    "qtype": "news"
+  },
+  "en-news-03": {
+    "relevantDomains": [
+      "reuters.com",
+      "apnews.com",
+      "bbc.com",
+      "bbc.co.uk",
+      "nytimes.com",
+      "theguardian.com",
+      "techcrunch.com",
+      "theverge.com"
+    ],
+    "mustNotDomains": [
+      "pinterest.com",
+      "answers.yahoo.com",
+      "slideshare.net",
+      "scribd.com",
+      "academia.edu"
+    ],
+    "rationale": "taxonomy-rule: en/news authoritative pool",
+    "source": "independent-taxonomy-v1",
+    "lang": "en",
+    "qtype": "news"
+  },
+  "en-news-04": {
+    "relevantDomains": [
+      "reuters.com",
+      "apnews.com",
+      "bbc.com",
+      "bbc.co.uk",
+      "nytimes.com",
+      "theguardian.com",
+      "techcrunch.com",
+      "theverge.com"
+    ],
+    "mustNotDomains": [
+      "pinterest.com",
+      "answers.yahoo.com",
+      "slideshare.net",
+      "scribd.com",
+      "academia.edu"
+    ],
+    "rationale": "taxonomy-rule: en/news authoritative pool",
+    "source": "independent-taxonomy-v1",
+    "lang": "en",
+    "qtype": "news"
+  },
+  "en-news-05": {
+    "relevantDomains": [
+      "reuters.com",
+      "apnews.com",
+      "bbc.com",
+      "bbc.co.uk",
+      "nytimes.com",
+      "theguardian.com",
+      "techcrunch.com",
+      "theverge.com"
+    ],
+    "mustNotDomains": [
+      "pinterest.com",
+      "answers.yahoo.com",
+      "slideshare.net",
+      "scribd.com",
+      "academia.edu"
+    ],
+    "rationale": "taxonomy-rule: en/news authoritative pool",
+    "source": "independent-taxonomy-v1",
+    "lang": "en",
+    "qtype": "news"
+  },
+  "en-news-06": {
+    "relevantDomains": [
+      "reuters.com",
+      "apnews.com",
+      "bbc.com",
+      "bbc.co.uk",
+      "nytimes.com",
+      "theguardian.com",
+      "techcrunch.com",
+      "theverge.com"
+    ],
+    "mustNotDomains": [
+      "pinterest.com",
+      "answers.yahoo.com",
+      "slideshare.net",
+      "scribd.com",
+      "academia.edu"
+    ],
+    "rationale": "taxonomy-rule: en/news authoritative pool",
+    "source": "independent-taxonomy-v1",
+    "lang": "en",
+    "qtype": "news"
+  },
+  "en-news-07": {
+    "relevantDomains": [
+      "reuters.com",
+      "apnews.com",
+      "bbc.com",
+      "bbc.co.uk",
+      "nytimes.com",
+      "theguardian.com",
+      "techcrunch.com",
+      "theverge.com"
+    ],
+    "mustNotDomains": [
+      "pinterest.com",
+      "answers.yahoo.com",
+      "slideshare.net",
+      "scribd.com",
+      "academia.edu"
+    ],
+    "rationale": "taxonomy-rule: en/news authoritative pool",
+    "source": "independent-taxonomy-v1",
+    "lang": "en",
+    "qtype": "news"
+  },
+  "en-news-08": {
+    "relevantDomains": [
+      "reuters.com",
+      "apnews.com",
+      "bbc.com",
+      "bbc.co.uk",
+      "nytimes.com",
+      "theguardian.com",
+      "techcrunch.com",
+      "theverge.com"
+    ],
+    "mustNotDomains": [
+      "pinterest.com",
+      "answers.yahoo.com",
+      "slideshare.net",
+      "scribd.com",
+      "academia.edu"
+    ],
+    "rationale": "taxonomy-rule: en/news authoritative pool",
+    "source": "independent-taxonomy-v1",
+    "lang": "en",
+    "qtype": "news"
+  },
+  "en-news-09": {
+    "relevantDomains": [
+      "reuters.com",
+      "apnews.com",
+      "bbc.com",
+      "bbc.co.uk",
+      "nytimes.com",
+      "theguardian.com",
+      "techcrunch.com",
+      "theverge.com"
+    ],
+    "mustNotDomains": [
+      "pinterest.com",
+      "answers.yahoo.com",
+      "slideshare.net",
+      "scribd.com",
+      "academia.edu"
+    ],
+    "rationale": "taxonomy-rule: en/news authoritative pool",
+    "source": "independent-taxonomy-v1",
+    "lang": "en",
+    "qtype": "news"
+  },
+  "en-news-10": {
+    "relevantDomains": [
+      "reuters.com",
+      "apnews.com",
+      "bbc.com",
+      "bbc.co.uk",
+      "nytimes.com",
+      "theguardian.com",
+      "techcrunch.com",
+      "theverge.com"
+    ],
+    "mustNotDomains": [
+      "pinterest.com",
+      "answers.yahoo.com",
+      "slideshare.net",
+      "scribd.com",
+      "academia.edu"
+    ],
+    "rationale": "taxonomy-rule: en/news authoritative pool",
+    "source": "independent-taxonomy-v1",
+    "lang": "en",
+    "qtype": "news"
+  },
+  "en-fact-01": {
+    "relevantDomains": [
+      "wikipedia.org",
+      "britannica.com"
+    ],
+    "mustNotDomains": [
+      "pinterest.com",
+      "answers.yahoo.com",
+      "slideshare.net",
+      "scribd.com",
+      "academia.edu"
+    ],
+    "rationale": "taxonomy-rule: en/factual authoritative pool",
+    "source": "independent-taxonomy-v1",
+    "lang": "en",
+    "qtype": "factual"
+  },
+  "en-fact-02": {
+    "relevantDomains": [
+      "wikipedia.org",
+      "britannica.com"
+    ],
+    "mustNotDomains": [
+      "pinterest.com",
+      "answers.yahoo.com",
+      "slideshare.net",
+      "scribd.com",
+      "academia.edu"
+    ],
+    "rationale": "taxonomy-rule: en/factual authoritative pool",
+    "source": "independent-taxonomy-v1",
+    "lang": "en",
+    "qtype": "factual"
+  },
+  "en-fact-03": {
+    "relevantDomains": [
+      "wikipedia.org",
+      "britannica.com"
+    ],
+    "mustNotDomains": [
+      "pinterest.com",
+      "answers.yahoo.com",
+      "slideshare.net",
+      "scribd.com",
+      "academia.edu"
+    ],
+    "rationale": "taxonomy-rule: en/factual authoritative pool",
+    "source": "independent-taxonomy-v1",
+    "lang": "en",
+    "qtype": "factual"
+  },
+  "en-fact-04": {
+    "relevantDomains": [
+      "wikipedia.org",
+      "britannica.com"
+    ],
+    "mustNotDomains": [
+      "pinterest.com",
+      "answers.yahoo.com",
+      "slideshare.net",
+      "scribd.com",
+      "academia.edu"
+    ],
+    "rationale": "taxonomy-rule: en/factual authoritative pool",
+    "source": "independent-taxonomy-v1",
+    "lang": "en",
+    "qtype": "factual"
+  },
+  "en-fact-05": {
+    "relevantDomains": [
+      "wikipedia.org",
+      "britannica.com"
+    ],
+    "mustNotDomains": [
+      "pinterest.com",
+      "answers.yahoo.com",
+      "slideshare.net",
+      "scribd.com",
+      "academia.edu"
+    ],
+    "rationale": "taxonomy-rule: en/factual authoritative pool",
+    "source": "independent-taxonomy-v1",
+    "lang": "en",
+    "qtype": "factual"
+  },
+  "en-fact-06": {
+    "relevantDomains": [
+      "wikipedia.org",
+      "britannica.com"
+    ],
+    "mustNotDomains": [
+      "pinterest.com",
+      "answers.yahoo.com",
+      "slideshare.net",
+      "scribd.com",
+      "academia.edu"
+    ],
+    "rationale": "taxonomy-rule: en/factual authoritative pool",
+    "source": "independent-taxonomy-v1",
+    "lang": "en",
+    "qtype": "factual"
+  },
+  "en-fact-07": {
+    "relevantDomains": [
+      "wikipedia.org",
+      "britannica.com"
+    ],
+    "mustNotDomains": [
+      "pinterest.com",
+      "answers.yahoo.com",
+      "slideshare.net",
+      "scribd.com",
+      "academia.edu"
+    ],
+    "rationale": "taxonomy-rule: en/factual authoritative pool",
+    "source": "independent-taxonomy-v1",
+    "lang": "en",
+    "qtype": "factual"
+  },
+  "en-fact-08": {
+    "relevantDomains": [
+      "wikipedia.org",
+      "britannica.com"
+    ],
+    "mustNotDomains": [
+      "pinterest.com",
+      "answers.yahoo.com",
+      "slideshare.net",
+      "scribd.com",
+      "academia.edu"
+    ],
+    "rationale": "taxonomy-rule: en/factual authoritative pool",
+    "source": "independent-taxonomy-v1",
+    "lang": "en",
+    "qtype": "factual"
+  },
+  "en-fact-09": {
+    "relevantDomains": [
+      "wikipedia.org",
+      "britannica.com"
+    ],
+    "mustNotDomains": [
+      "pinterest.com",
+      "answers.yahoo.com",
+      "slideshare.net",
+      "scribd.com",
+      "academia.edu"
+    ],
+    "rationale": "taxonomy-rule: en/factual authoritative pool",
+    "source": "independent-taxonomy-v1",
+    "lang": "en",
+    "qtype": "factual"
+  },
+  "en-fact-10": {
+    "relevantDomains": [
+      "wikipedia.org",
+      "britannica.com"
+    ],
+    "mustNotDomains": [
+      "pinterest.com",
+      "answers.yahoo.com",
+      "slideshare.net",
+      "scribd.com",
+      "academia.edu"
+    ],
+    "rationale": "taxonomy-rule: en/factual authoritative pool",
+    "source": "independent-taxonomy-v1",
+    "lang": "en",
+    "qtype": "factual"
+  },
+  "en-acad-01": {
+    "relevantDomains": [
+      "arxiv.org",
+      "pubmed.ncbi.nlm.nih.gov",
+      "scholar.google.com",
+      "doi.org",
+      "sciencedirect.com",
+      "nature.com"
+    ],
+    "mustNotDomains": [
+      "pinterest.com",
+      "answers.yahoo.com",
+      "slideshare.net",
+      "scribd.com",
+      "academia.edu"
+    ],
+    "rationale": "taxonomy-rule: en/academic authoritative pool",
+    "source": "independent-taxonomy-v1",
+    "lang": "en",
+    "qtype": "academic"
+  },
+  "en-acad-02": {
+    "relevantDomains": [
+      "arxiv.org",
+      "pubmed.ncbi.nlm.nih.gov",
+      "scholar.google.com",
+      "doi.org",
+      "sciencedirect.com",
+      "nature.com"
+    ],
+    "mustNotDomains": [
+      "pinterest.com",
+      "answers.yahoo.com",
+      "slideshare.net",
+      "scribd.com",
+      "academia.edu"
+    ],
+    "rationale": "taxonomy-rule: en/academic authoritative pool",
+    "source": "independent-taxonomy-v1",
+    "lang": "en",
+    "qtype": "academic"
+  },
+  "en-acad-03": {
+    "relevantDomains": [
+      "arxiv.org",
+      "pubmed.ncbi.nlm.nih.gov",
+      "scholar.google.com",
+      "doi.org",
+      "sciencedirect.com",
+      "nature.com"
+    ],
+    "mustNotDomains": [
+      "pinterest.com",
+      "answers.yahoo.com",
+      "slideshare.net",
+      "scribd.com",
+      "academia.edu"
+    ],
+    "rationale": "taxonomy-rule: en/academic authoritative pool",
+    "source": "independent-taxonomy-v1",
+    "lang": "en",
+    "qtype": "academic"
+  },
+  "en-acad-04": {
+    "relevantDomains": [
+      "arxiv.org",
+      "pubmed.ncbi.nlm.nih.gov",
+      "scholar.google.com",
+      "doi.org",
+      "sciencedirect.com",
+      "nature.com"
+    ],
+    "mustNotDomains": [
+      "pinterest.com",
+      "answers.yahoo.com",
+      "slideshare.net",
+      "scribd.com",
+      "academia.edu"
+    ],
+    "rationale": "taxonomy-rule: en/academic authoritative pool",
+    "source": "independent-taxonomy-v1",
+    "lang": "en",
+    "qtype": "academic"
+  },
+  "en-acad-05": {
+    "relevantDomains": [
+      "arxiv.org",
+      "pubmed.ncbi.nlm.nih.gov",
+      "scholar.google.com",
+      "doi.org",
+      "sciencedirect.com",
+      "nature.com"
+    ],
+    "mustNotDomains": [
+      "pinterest.com",
+      "answers.yahoo.com",
+      "slideshare.net",
+      "scribd.com",
+      "academia.edu"
+    ],
+    "rationale": "taxonomy-rule: en/academic authoritative pool",
+    "source": "independent-taxonomy-v1",
+    "lang": "en",
+    "qtype": "academic"
+  },
+  "kr-conv-01": {
+    "relevantDomains": [
+      "krx.co.kr",
+      "finance.naver.com",
+      "finance.yahoo.com",
+      "dart.fss.or.kr",
+      "investing.com"
+    ],
+    "mustNotDomains": [
+      "pinterest.com",
+      "answers.yahoo.com",
+      "slideshare.net",
+      "scribd.com",
+      "academia.edu"
+    ],
+    "rationale": "taxonomy-rule: kr/financial authoritative pool",
+    "source": "independent-taxonomy-v1",
+    "lang": "kr",
+    "qtype": "financial"
+  },
+  "kr-conv-02": {
+    "relevantDomains": [
+      "krx.co.kr",
+      "finance.naver.com",
+      "finance.yahoo.com",
+      "dart.fss.or.kr",
+      "investing.com"
+    ],
+    "mustNotDomains": [
+      "pinterest.com",
+      "answers.yahoo.com",
+      "slideshare.net",
+      "scribd.com",
+      "academia.edu"
+    ],
+    "rationale": "taxonomy-rule: kr/financial authoritative pool",
+    "source": "independent-taxonomy-v1",
+    "lang": "kr",
+    "qtype": "financial"
+  },
+  "kr-conv-03": {
+    "relevantDomains": [
+      "krx.co.kr",
+      "finance.naver.com",
+      "finance.yahoo.com",
+      "dart.fss.or.kr",
+      "investing.com"
+    ],
+    "mustNotDomains": [
+      "pinterest.com",
+      "answers.yahoo.com",
+      "slideshare.net",
+      "scribd.com",
+      "academia.edu"
+    ],
+    "rationale": "taxonomy-rule: kr/financial authoritative pool",
+    "source": "independent-taxonomy-v1",
+    "lang": "kr",
+    "qtype": "financial"
+  },
+  "kr-conv-04": {
+    "relevantDomains": [
+      "wikipedia.org",
+      "terms.naver.com"
+    ],
+    "mustNotDomains": [
+      "pinterest.com",
+      "answers.yahoo.com",
+      "slideshare.net",
+      "scribd.com",
+      "academia.edu"
+    ],
+    "rationale": "taxonomy-rule: kr/general authoritative pool",
+    "source": "independent-taxonomy-v1",
+    "lang": "kr",
+    "qtype": "general"
+  },
+  "kr-conv-05": {
+    "relevantDomains": [
+      "krx.co.kr",
+      "finance.naver.com",
+      "finance.yahoo.com",
+      "dart.fss.or.kr",
+      "investing.com"
+    ],
+    "mustNotDomains": [
+      "pinterest.com",
+      "answers.yahoo.com",
+      "slideshare.net",
+      "scribd.com",
+      "academia.edu"
+    ],
+    "rationale": "taxonomy-rule: kr/financial authoritative pool",
+    "source": "independent-taxonomy-v1",
+    "lang": "kr",
+    "qtype": "financial"
+  },
+  "kr-conv-06": {
+    "relevantDomains": [
+      "krx.co.kr",
+      "finance.naver.com",
+      "finance.yahoo.com",
+      "dart.fss.or.kr",
+      "investing.com"
+    ],
+    "mustNotDomains": [
+      "pinterest.com",
+      "answers.yahoo.com",
+      "slideshare.net",
+      "scribd.com",
+      "academia.edu"
+    ],
+    "rationale": "taxonomy-rule: kr/financial authoritative pool",
+    "source": "independent-taxonomy-v1",
+    "lang": "kr",
+    "qtype": "financial"
+  },
+  "kr-conv-07": {
+    "relevantDomains": [
+      "wikipedia.org",
+      "terms.naver.com"
+    ],
+    "mustNotDomains": [
+      "pinterest.com",
+      "answers.yahoo.com",
+      "slideshare.net",
+      "scribd.com",
+      "academia.edu"
+    ],
+    "rationale": "taxonomy-rule: kr/general authoritative pool",
+    "source": "independent-taxonomy-v1",
+    "lang": "kr",
+    "qtype": "general"
+  },
+  "kr-conv-08": {
+    "relevantDomains": [
+      "wikipedia.org",
+      "terms.naver.com"
+    ],
+    "mustNotDomains": [
+      "pinterest.com",
+      "answers.yahoo.com",
+      "slideshare.net",
+      "scribd.com",
+      "academia.edu"
+    ],
+    "rationale": "taxonomy-rule: kr/general authoritative pool",
+    "source": "independent-taxonomy-v1",
+    "lang": "kr",
+    "qtype": "general"
+  },
+  "zh-fact-01": {
+    "relevantDomains": [
+      "wikipedia.org",
+      "baike.baidu.com"
+    ],
+    "mustNotDomains": [
+      "pinterest.com",
+      "answers.yahoo.com",
+      "slideshare.net",
+      "scribd.com",
+      "academia.edu"
+    ],
+    "rationale": "taxonomy-rule: zh/factual authoritative pool",
+    "source": "independent-taxonomy-v1",
+    "lang": "zh",
+    "qtype": "factual"
+  },
+  "zh-fact-02": {
+    "relevantDomains": [
+      "wikipedia.org",
+      "baike.baidu.com"
+    ],
+    "mustNotDomains": [
+      "pinterest.com",
+      "answers.yahoo.com",
+      "slideshare.net",
+      "scribd.com",
+      "academia.edu"
+    ],
+    "rationale": "taxonomy-rule: zh/factual authoritative pool",
+    "source": "independent-taxonomy-v1",
+    "lang": "zh",
+    "qtype": "factual"
+  },
+  "zh-fact-03": {
+    "relevantDomains": [
+      "wikipedia.org",
+      "baike.baidu.com"
+    ],
+    "mustNotDomains": [
+      "pinterest.com",
+      "answers.yahoo.com",
+      "slideshare.net",
+      "scribd.com",
+      "academia.edu"
+    ],
+    "rationale": "taxonomy-rule: zh/factual authoritative pool",
+    "source": "independent-taxonomy-v1",
+    "lang": "zh",
+    "qtype": "factual"
+  },
+  "zh-fact-04": {
+    "relevantDomains": [
+      "wikipedia.org",
+      "baike.baidu.com"
+    ],
+    "mustNotDomains": [
+      "pinterest.com",
+      "answers.yahoo.com",
+      "slideshare.net",
+      "scribd.com",
+      "academia.edu"
+    ],
+    "rationale": "taxonomy-rule: zh/factual authoritative pool",
+    "source": "independent-taxonomy-v1",
+    "lang": "zh",
+    "qtype": "factual"
+  },
+  "zh-news-01": {
+    "relevantDomains": [
+      "news.sina.com.cn",
+      "thepaper.cn",
+      "caixin.com",
+      "people.com.cn",
+      "cctv.com",
+      "36kr.com"
+    ],
+    "mustNotDomains": [
+      "pinterest.com",
+      "answers.yahoo.com",
+      "slideshare.net",
+      "scribd.com",
+      "academia.edu"
+    ],
+    "rationale": "taxonomy-rule: zh/news authoritative pool",
+    "source": "independent-taxonomy-v1",
+    "lang": "zh",
+    "qtype": "news"
+  },
+  "zh-news-02": {
+    "relevantDomains": [
+      "news.sina.com.cn",
+      "thepaper.cn",
+      "caixin.com",
+      "people.com.cn",
+      "cctv.com",
+      "36kr.com"
+    ],
+    "mustNotDomains": [
+      "pinterest.com",
+      "answers.yahoo.com",
+      "slideshare.net",
+      "scribd.com",
+      "academia.edu"
+    ],
+    "rationale": "taxonomy-rule: zh/news authoritative pool",
+    "source": "independent-taxonomy-v1",
+    "lang": "zh",
+    "qtype": "news"
+  },
+  "zh-news-03": {
+    "relevantDomains": [
+      "news.sina.com.cn",
+      "thepaper.cn",
+      "caixin.com",
+      "people.com.cn",
+      "cctv.com",
+      "36kr.com"
+    ],
+    "mustNotDomains": [
+      "pinterest.com",
+      "answers.yahoo.com",
+      "slideshare.net",
+      "scribd.com",
+      "academia.edu"
+    ],
+    "rationale": "taxonomy-rule: zh/news authoritative pool",
+    "source": "independent-taxonomy-v1",
+    "lang": "zh",
+    "qtype": "news"
+  },
+  "zh-tech-01": {
+    "relevantDomains": [
+      "developer.mozilla.org",
+      "github.com",
+      "csdn.net",
+      "juejin.cn",
+      "segmentfault.com",
+      "react.dev"
+    ],
+    "mustNotDomains": [
+      "pinterest.com",
+      "answers.yahoo.com",
+      "slideshare.net",
+      "scribd.com",
+      "academia.edu"
+    ],
+    "rationale": "taxonomy-rule: zh/technical authoritative pool",
+    "source": "independent-taxonomy-v1",
+    "lang": "zh",
+    "qtype": "technical"
+  },
+  "zh-tech-02": {
+    "relevantDomains": [
+      "developer.mozilla.org",
+      "github.com",
+      "csdn.net",
+      "juejin.cn",
+      "segmentfault.com",
+      "react.dev"
+    ],
+    "mustNotDomains": [
+      "pinterest.com",
+      "answers.yahoo.com",
+      "slideshare.net",
+      "scribd.com",
+      "academia.edu"
+    ],
+    "rationale": "taxonomy-rule: zh/technical authoritative pool",
+    "source": "independent-taxonomy-v1",
+    "lang": "zh",
+    "qtype": "technical"
+  },
+  "zh-general-01": {
+    "relevantDomains": [
+      "baike.baidu.com",
+      "wikipedia.org",
+      "zhihu.com"
+    ],
+    "mustNotDomains": [
+      "pinterest.com",
+      "answers.yahoo.com",
+      "slideshare.net",
+      "scribd.com",
+      "academia.edu"
+    ],
+    "rationale": "taxonomy-rule: zh/general authoritative pool",
+    "source": "independent-taxonomy-v1",
+    "lang": "zh",
+    "qtype": "general"
+  },
+  "zh-general-02": {
+    "relevantDomains": [
+      "baike.baidu.com",
+      "wikipedia.org",
+      "zhihu.com"
+    ],
+    "mustNotDomains": [
+      "pinterest.com",
+      "answers.yahoo.com",
+      "slideshare.net",
+      "scribd.com",
+      "academia.edu"
+    ],
+    "rationale": "taxonomy-rule: zh/general authoritative pool",
+    "source": "independent-taxonomy-v1",
+    "lang": "zh",
+    "qtype": "general"
+  },
+  "zh-general-03": {
+    "relevantDomains": [
+      "baike.baidu.com",
+      "wikipedia.org",
+      "zhihu.com"
+    ],
+    "mustNotDomains": [
+      "pinterest.com",
+      "answers.yahoo.com",
+      "slideshare.net",
+      "scribd.com",
+      "academia.edu"
+    ],
+    "rationale": "taxonomy-rule: zh/general authoritative pool",
+    "source": "independent-taxonomy-v1",
+    "lang": "zh",
+    "qtype": "general"
+  },
+  "ja-fact-01": {
+    "relevantDomains": [
+      "wikipedia.org"
+    ],
+    "mustNotDomains": [
+      "pinterest.com",
+      "answers.yahoo.com",
+      "slideshare.net",
+      "scribd.com",
+      "academia.edu"
+    ],
+    "rationale": "taxonomy-rule: ja/factual authoritative pool",
+    "source": "independent-taxonomy-v1",
+    "lang": "ja",
+    "qtype": "factual"
+  },
+  "ja-fact-02": {
+    "relevantDomains": [
+      "wikipedia.org"
+    ],
+    "mustNotDomains": [
+      "pinterest.com",
+      "answers.yahoo.com",
+      "slideshare.net",
+      "scribd.com",
+      "academia.edu"
+    ],
+    "rationale": "taxonomy-rule: ja/factual authoritative pool",
+    "source": "independent-taxonomy-v1",
+    "lang": "ja",
+    "qtype": "factual"
+  },
+  "ja-news-01": {
+    "relevantDomains": [
+      "nhk.or.jp",
+      "asahi.com",
+      "mainichi.jp",
+      "nikkei.com",
+      "yomiuri.co.jp"
+    ],
+    "mustNotDomains": [
+      "pinterest.com",
+      "answers.yahoo.com",
+      "slideshare.net",
+      "scribd.com",
+      "academia.edu"
+    ],
+    "rationale": "taxonomy-rule: ja/news authoritative pool",
+    "source": "independent-taxonomy-v1",
+    "lang": "ja",
+    "qtype": "news"
+  },
+  "ja-news-02": {
+    "relevantDomains": [
+      "nhk.or.jp",
+      "asahi.com",
+      "mainichi.jp",
+      "nikkei.com",
+      "yomiuri.co.jp"
+    ],
+    "mustNotDomains": [
+      "pinterest.com",
+      "answers.yahoo.com",
+      "slideshare.net",
+      "scribd.com",
+      "academia.edu"
+    ],
+    "rationale": "taxonomy-rule: ja/news authoritative pool",
+    "source": "independent-taxonomy-v1",
+    "lang": "ja",
+    "qtype": "news"
+  },
+  "ja-tech-01": {
+    "relevantDomains": [
+      "developer.mozilla.org",
+      "github.com",
+      "qiita.com",
+      "zenn.dev",
+      "react.dev"
+    ],
+    "mustNotDomains": [
+      "pinterest.com",
+      "answers.yahoo.com",
+      "slideshare.net",
+      "scribd.com",
+      "academia.edu"
+    ],
+    "rationale": "taxonomy-rule: ja/technical authoritative pool",
+    "source": "independent-taxonomy-v1",
+    "lang": "ja",
+    "qtype": "technical"
+  },
+  "ja-tech-02": {
+    "relevantDomains": [
+      "developer.mozilla.org",
+      "github.com",
+      "qiita.com",
+      "zenn.dev",
+      "react.dev"
+    ],
+    "mustNotDomains": [
+      "pinterest.com",
+      "answers.yahoo.com",
+      "slideshare.net",
+      "scribd.com",
+      "academia.edu"
+    ],
+    "rationale": "taxonomy-rule: ja/technical authoritative pool",
+    "source": "independent-taxonomy-v1",
+    "lang": "ja",
+    "qtype": "technical"
+  },
+  "ja-travel-01": {
+    "relevantDomains": [
+      "wikipedia.org"
+    ],
+    "mustNotDomains": [
+      "pinterest.com",
+      "answers.yahoo.com",
+      "slideshare.net",
+      "scribd.com",
+      "academia.edu"
+    ],
+    "rationale": "taxonomy-rule: ja/general authoritative pool",
+    "source": "independent-taxonomy-v1",
+    "lang": "ja",
+    "qtype": "general"
+  },
+  "ja-travel-02": {
+    "relevantDomains": [
+      "wikipedia.org"
+    ],
+    "mustNotDomains": [
+      "pinterest.com",
+      "answers.yahoo.com",
+      "slideshare.net",
+      "scribd.com",
+      "academia.edu"
+    ],
+    "rationale": "taxonomy-rule: ja/general authoritative pool",
+    "source": "independent-taxonomy-v1",
+    "lang": "ja",
+    "qtype": "general"
+  },
+  "cmp-01": {
+    "relevantDomains": [
+      "developer.mozilla.org",
+      "github.com",
+      "stackoverflow.com",
+      "react.dev",
+      "nodejs.org",
+      "typescriptlang.org",
+      "developer.android.com",
+      "docs.rs",
+      "pypi.org"
+    ],
+    "mustNotDomains": [
+      "pinterest.com",
+      "answers.yahoo.com",
+      "slideshare.net",
+      "scribd.com",
+      "academia.edu"
+    ],
+    "rationale": "taxonomy-rule: en/technical authoritative pool",
+    "source": "independent-taxonomy-v1",
+    "lang": "en",
+    "qtype": "technical"
+  },
+  "cmp-02": {
+    "relevantDomains": [
+      "developer.mozilla.org",
+      "github.com",
+      "stackoverflow.com",
+      "react.dev",
+      "nodejs.org",
+      "typescriptlang.org",
+      "developer.android.com",
+      "docs.rs",
+      "pypi.org"
+    ],
+    "mustNotDomains": [
+      "pinterest.com",
+      "answers.yahoo.com",
+      "slideshare.net",
+      "scribd.com",
+      "academia.edu"
+    ],
+    "rationale": "taxonomy-rule: en/technical authoritative pool",
+    "source": "independent-taxonomy-v1",
+    "lang": "en",
+    "qtype": "technical"
+  },
+  "cmp-03": {
+    "relevantDomains": [
+      "developer.mozilla.org",
+      "github.com",
+      "stackoverflow.com",
+      "react.dev",
+      "nodejs.org",
+      "typescriptlang.org",
+      "developer.android.com",
+      "docs.rs",
+      "pypi.org"
+    ],
+    "mustNotDomains": [
+      "pinterest.com",
+      "answers.yahoo.com",
+      "slideshare.net",
+      "scribd.com",
+      "academia.edu"
+    ],
+    "rationale": "taxonomy-rule: en/technical authoritative pool",
+    "source": "independent-taxonomy-v1",
+    "lang": "en",
+    "qtype": "technical"
+  },
+  "cmp-04": {
+    "relevantDomains": [
+      "developer.mozilla.org",
+      "github.com",
+      "stackoverflow.com",
+      "react.dev",
+      "nodejs.org",
+      "typescriptlang.org",
+      "developer.android.com",
+      "docs.rs",
+      "pypi.org"
+    ],
+    "mustNotDomains": [
+      "pinterest.com",
+      "answers.yahoo.com",
+      "slideshare.net",
+      "scribd.com",
+      "academia.edu"
+    ],
+    "rationale": "taxonomy-rule: en/technical authoritative pool",
+    "source": "independent-taxonomy-v1",
+    "lang": "en",
+    "qtype": "technical"
+  },
+  "cmp-05": {
+    "relevantDomains": [
+      "developer.mozilla.org",
+      "github.com",
+      "stackoverflow.com",
+      "react.dev",
+      "nodejs.org",
+      "typescriptlang.org",
+      "developer.android.com",
+      "docs.rs",
+      "pypi.org"
+    ],
+    "mustNotDomains": [
+      "pinterest.com",
+      "answers.yahoo.com",
+      "slideshare.net",
+      "scribd.com",
+      "academia.edu"
+    ],
+    "rationale": "taxonomy-rule: en/technical authoritative pool",
+    "source": "independent-taxonomy-v1",
+    "lang": "en",
+    "qtype": "technical"
+  },
+  "lt-01": {
+    "relevantDomains": [
+      "developer.mozilla.org",
+      "github.com",
+      "stackoverflow.com",
+      "react.dev",
+      "nodejs.org",
+      "typescriptlang.org",
+      "developer.android.com",
+      "docs.rs",
+      "pypi.org"
+    ],
+    "mustNotDomains": [
+      "pinterest.com",
+      "answers.yahoo.com",
+      "slideshare.net",
+      "scribd.com",
+      "academia.edu"
+    ],
+    "rationale": "taxonomy-rule: en/technical authoritative pool",
+    "source": "independent-taxonomy-v1",
+    "lang": "en",
+    "qtype": "technical"
+  },
+  "lt-02": {
+    "relevantDomains": [
+      "developer.mozilla.org",
+      "github.com",
+      "stackoverflow.com",
+      "react.dev",
+      "nodejs.org",
+      "typescriptlang.org",
+      "developer.android.com",
+      "docs.rs",
+      "pypi.org"
+    ],
+    "mustNotDomains": [
+      "pinterest.com",
+      "answers.yahoo.com",
+      "slideshare.net",
+      "scribd.com",
+      "academia.edu"
+    ],
+    "rationale": "taxonomy-rule: en/technical authoritative pool",
+    "source": "independent-taxonomy-v1",
+    "lang": "en",
+    "qtype": "technical"
+  },
+  "lt-03": {
+    "relevantDomains": [
+      "developer.mozilla.org",
+      "github.com",
+      "stackoverflow.com",
+      "react.dev",
+      "nodejs.org",
+      "typescriptlang.org",
+      "developer.android.com",
+      "docs.rs",
+      "pypi.org"
+    ],
+    "mustNotDomains": [
+      "pinterest.com",
+      "answers.yahoo.com",
+      "slideshare.net",
+      "scribd.com",
+      "academia.edu"
+    ],
+    "rationale": "taxonomy-rule: en/technical authoritative pool",
+    "source": "independent-taxonomy-v1",
+    "lang": "en",
+    "qtype": "technical"
+  },
+  "lt-04": {
+    "relevantDomains": [
+      "developer.mozilla.org",
+      "github.com",
+      "stackoverflow.com",
+      "react.dev",
+      "nodejs.org",
+      "typescriptlang.org",
+      "developer.android.com",
+      "docs.rs",
+      "pypi.org"
+    ],
+    "mustNotDomains": [
+      "pinterest.com",
+      "answers.yahoo.com",
+      "slideshare.net",
+      "scribd.com",
+      "academia.edu"
+    ],
+    "rationale": "taxonomy-rule: en/technical authoritative pool",
+    "source": "independent-taxonomy-v1",
+    "lang": "en",
+    "qtype": "technical"
+  },
+  "lt-05": {
+    "relevantDomains": [
+      "developer.mozilla.org",
+      "github.com",
+      "stackoverflow.com",
+      "react.dev",
+      "nodejs.org",
+      "typescriptlang.org",
+      "developer.android.com",
+      "docs.rs",
+      "pypi.org"
+    ],
+    "mustNotDomains": [
+      "pinterest.com",
+      "answers.yahoo.com",
+      "slideshare.net",
+      "scribd.com",
+      "academia.edu"
+    ],
+    "rationale": "taxonomy-rule: en/technical authoritative pool",
+    "source": "independent-taxonomy-v1",
+    "lang": "en",
+    "qtype": "technical"
+  },
+  "gk-01": {
+    "relevantDomains": [
+      "wikipedia.org",
+      "britannica.com"
+    ],
+    "mustNotDomains": [
+      "pinterest.com",
+      "answers.yahoo.com",
+      "slideshare.net",
+      "scribd.com",
+      "academia.edu"
+    ],
+    "rationale": "taxonomy-rule: en/factual authoritative pool",
+    "source": "independent-taxonomy-v1",
+    "lang": "en",
+    "qtype": "factual"
+  },
+  "gk-02": {
+    "relevantDomains": [
+      "wikipedia.org",
+      "britannica.com"
+    ],
+    "mustNotDomains": [
+      "pinterest.com",
+      "answers.yahoo.com",
+      "slideshare.net",
+      "scribd.com",
+      "academia.edu"
+    ],
+    "rationale": "taxonomy-rule: en/factual authoritative pool",
+    "source": "independent-taxonomy-v1",
+    "lang": "en",
+    "qtype": "factual"
+  },
+  "gk-03": {
+    "relevantDomains": [
+      "wikipedia.org",
+      "britannica.com"
+    ],
+    "mustNotDomains": [
+      "pinterest.com",
+      "answers.yahoo.com",
+      "slideshare.net",
+      "scribd.com",
+      "academia.edu"
+    ],
+    "rationale": "taxonomy-rule: en/factual authoritative pool",
+    "source": "independent-taxonomy-v1",
+    "lang": "en",
+    "qtype": "factual"
+  },
+  "gk-04": {
+    "relevantDomains": [
+      "wikipedia.org",
+      "britannica.com"
+    ],
+    "mustNotDomains": [
+      "pinterest.com",
+      "answers.yahoo.com",
+      "slideshare.net",
+      "scribd.com",
+      "academia.edu"
+    ],
+    "rationale": "taxonomy-rule: en/factual authoritative pool",
+    "source": "independent-taxonomy-v1",
+    "lang": "en",
+    "qtype": "factual"
+  },
+  "gk-05": {
+    "relevantDomains": [
+      "wikipedia.org",
+      "britannica.com"
+    ],
+    "mustNotDomains": [
+      "pinterest.com",
+      "answers.yahoo.com",
+      "slideshare.net",
+      "scribd.com",
+      "academia.edu"
+    ],
+    "rationale": "taxonomy-rule: en/factual authoritative pool",
+    "source": "independent-taxonomy-v1",
+    "lang": "en",
+    "qtype": "factual"
+  },
+  "ca-01": {
+    "relevantDomains": [
+      "reuters.com",
+      "apnews.com",
+      "bbc.com",
+      "bbc.co.uk",
+      "nytimes.com",
+      "theguardian.com",
+      "techcrunch.com",
+      "theverge.com"
+    ],
+    "mustNotDomains": [
+      "pinterest.com",
+      "answers.yahoo.com",
+      "slideshare.net",
+      "scribd.com",
+      "academia.edu"
+    ],
+    "rationale": "taxonomy-rule: en/news authoritative pool",
+    "source": "independent-taxonomy-v1",
+    "lang": "en",
+    "qtype": "news"
+  },
+  "ca-02": {
+    "relevantDomains": [
+      "reuters.com",
+      "apnews.com",
+      "bbc.com",
+      "bbc.co.uk",
+      "nytimes.com",
+      "theguardian.com",
+      "techcrunch.com",
+      "theverge.com"
+    ],
+    "mustNotDomains": [
+      "pinterest.com",
+      "answers.yahoo.com",
+      "slideshare.net",
+      "scribd.com",
+      "academia.edu"
+    ],
+    "rationale": "taxonomy-rule: en/news authoritative pool",
+    "source": "independent-taxonomy-v1",
+    "lang": "en",
+    "qtype": "news"
+  },
+  "ca-03": {
+    "relevantDomains": [
+      "reuters.com",
+      "apnews.com",
+      "bbc.com",
+      "bbc.co.uk",
+      "nytimes.com",
+      "theguardian.com",
+      "techcrunch.com",
+      "theverge.com"
+    ],
+    "mustNotDomains": [
+      "pinterest.com",
+      "answers.yahoo.com",
+      "slideshare.net",
+      "scribd.com",
+      "academia.edu"
+    ],
+    "rationale": "taxonomy-rule: en/news authoritative pool",
+    "source": "independent-taxonomy-v1",
+    "lang": "en",
+    "qtype": "news"
+  },
+  "ca-04": {
+    "relevantDomains": [
+      "reuters.com",
+      "apnews.com",
+      "bbc.com",
+      "bbc.co.uk",
+      "nytimes.com",
+      "theguardian.com",
+      "techcrunch.com",
+      "theverge.com"
+    ],
+    "mustNotDomains": [
+      "pinterest.com",
+      "answers.yahoo.com",
+      "slideshare.net",
+      "scribd.com",
+      "academia.edu"
+    ],
+    "rationale": "taxonomy-rule: en/news authoritative pool",
+    "source": "independent-taxonomy-v1",
+    "lang": "en",
+    "qtype": "news"
+  },
+  "ca-05": {
+    "relevantDomains": [
+      "reuters.com",
+      "apnews.com",
+      "bbc.com",
+      "bbc.co.uk",
+      "nytimes.com",
+      "theguardian.com",
+      "techcrunch.com",
+      "theverge.com"
+    ],
+    "mustNotDomains": [
+      "pinterest.com",
+      "answers.yahoo.com",
+      "slideshare.net",
+      "scribd.com",
+      "academia.edu"
+    ],
+    "rationale": "taxonomy-rule: en/news authoritative pool",
+    "source": "independent-taxonomy-v1",
+    "lang": "en",
+    "qtype": "news"
+  },
+  "ds-01": {
+    "relevantDomains": [
+      "arxiv.org",
+      "pubmed.ncbi.nlm.nih.gov",
+      "scholar.google.com",
+      "doi.org",
+      "sciencedirect.com",
+      "nature.com"
+    ],
+    "mustNotDomains": [
+      "pinterest.com",
+      "answers.yahoo.com",
+      "slideshare.net",
+      "scribd.com",
+      "academia.edu"
+    ],
+    "rationale": "taxonomy-rule: en/academic authoritative pool",
+    "source": "independent-taxonomy-v1",
+    "lang": "en",
+    "qtype": "academic"
+  },
+  "ds-02": {
+    "relevantDomains": [
+      "developer.mozilla.org",
+      "github.com",
+      "stackoverflow.com",
+      "react.dev",
+      "nodejs.org",
+      "typescriptlang.org",
+      "developer.android.com",
+      "docs.rs",
+      "pypi.org"
+    ],
+    "mustNotDomains": [
+      "pinterest.com",
+      "answers.yahoo.com",
+      "slideshare.net",
+      "scribd.com",
+      "academia.edu"
+    ],
+    "rationale": "taxonomy-rule: en/technical authoritative pool",
+    "source": "independent-taxonomy-v1",
+    "lang": "en",
+    "qtype": "technical"
+  },
+  "ds-03": {
+    "relevantDomains": [
+      "arxiv.org",
+      "pubmed.ncbi.nlm.nih.gov",
+      "scholar.google.com",
+      "doi.org",
+      "sciencedirect.com",
+      "nature.com"
+    ],
+    "mustNotDomains": [
+      "pinterest.com",
+      "answers.yahoo.com",
+      "slideshare.net",
+      "scribd.com",
+      "academia.edu"
+    ],
+    "rationale": "taxonomy-rule: en/academic authoritative pool",
+    "source": "independent-taxonomy-v1",
+    "lang": "en",
+    "qtype": "academic"
+  },
+  "ds-04": {
+    "relevantDomains": [
+      "developer.mozilla.org",
+      "github.com",
+      "stackoverflow.com",
+      "react.dev",
+      "nodejs.org",
+      "typescriptlang.org",
+      "developer.android.com",
+      "docs.rs",
+      "pypi.org"
+    ],
+    "mustNotDomains": [
+      "pinterest.com",
+      "answers.yahoo.com",
+      "slideshare.net",
+      "scribd.com",
+      "academia.edu"
+    ],
+    "rationale": "taxonomy-rule: en/technical authoritative pool",
+    "source": "independent-taxonomy-v1",
+    "lang": "en",
+    "qtype": "technical"
+  },
+  "ds-05": {
+    "relevantDomains": [
+      "developer.mozilla.org",
+      "github.com",
+      "stackoverflow.com",
+      "react.dev",
+      "nodejs.org",
+      "typescriptlang.org",
+      "developer.android.com",
+      "docs.rs",
+      "pypi.org"
+    ],
+    "mustNotDomains": [
+      "pinterest.com",
+      "answers.yahoo.com",
+      "slideshare.net",
+      "scribd.com",
+      "academia.edu"
+    ],
+    "rationale": "taxonomy-rule: en/technical authoritative pool",
+    "source": "independent-taxonomy-v1",
+    "lang": "en",
+    "qtype": "technical"
+  },
+  "xl-01": {
+    "relevantDomains": [
+      "developer.mozilla.org",
+      "github.com",
+      "react.dev",
+      "nodejs.org",
+      "typescriptlang.org",
+      "kr.vuejs.org",
+      "developer.android.com"
+    ],
+    "mustNotDomains": [
+      "pinterest.com",
+      "answers.yahoo.com",
+      "slideshare.net",
+      "scribd.com",
+      "academia.edu"
+    ],
+    "rationale": "taxonomy-rule: kr/technical authoritative pool",
+    "source": "independent-taxonomy-v1",
+    "lang": "kr",
+    "qtype": "technical"
+  },
+  "xl-02": {
+    "relevantDomains": [
+      "news.sina.com.cn",
+      "thepaper.cn",
+      "caixin.com",
+      "people.com.cn",
+      "cctv.com",
+      "36kr.com"
+    ],
+    "mustNotDomains": [
+      "pinterest.com",
+      "answers.yahoo.com",
+      "slideshare.net",
+      "scribd.com",
+      "academia.edu"
+    ],
+    "rationale": "taxonomy-rule: zh/news authoritative pool",
+    "source": "independent-taxonomy-v1",
+    "lang": "zh",
+    "qtype": "news"
+  },
+  "xl-03": {
+    "relevantDomains": [
+      "nhk.or.jp",
+      "asahi.com",
+      "mainichi.jp",
+      "nikkei.com",
+      "yomiuri.co.jp"
+    ],
+    "mustNotDomains": [
+      "pinterest.com",
+      "answers.yahoo.com",
+      "slideshare.net",
+      "scribd.com",
+      "academia.edu"
+    ],
+    "rationale": "taxonomy-rule: ja/news authoritative pool",
+    "source": "independent-taxonomy-v1",
+    "lang": "ja",
+    "qtype": "news"
+  },
+  "adv-01": {
+    "relevantDomains": [
+      "developer.mozilla.org",
+      "github.com",
+      "stackoverflow.com",
+      "react.dev",
+      "nodejs.org",
+      "typescriptlang.org",
+      "developer.android.com",
+      "docs.rs",
+      "pypi.org"
+    ],
+    "mustNotDomains": [
+      "pinterest.com",
+      "answers.yahoo.com",
+      "slideshare.net",
+      "scribd.com",
+      "academia.edu"
+    ],
+    "rationale": "taxonomy-rule: en/technical authoritative pool",
+    "source": "independent-taxonomy-v1",
+    "lang": "en",
+    "qtype": "technical"
+  },
+  "adv-02": {
+    "relevantDomains": [
+      "wikipedia.org",
+      "britannica.com"
+    ],
+    "mustNotDomains": [
+      "pinterest.com",
+      "answers.yahoo.com",
+      "slideshare.net",
+      "scribd.com",
+      "academia.edu"
+    ],
+    "rationale": "taxonomy-rule: en/general authoritative pool",
+    "source": "independent-taxonomy-v1",
+    "lang": "en",
+    "qtype": "general"
+  },
+  "adv-03": {
+    "relevantDomains": [
+      "wikipedia.org",
+      "britannica.com"
+    ],
+    "mustNotDomains": [
+      "pinterest.com",
+      "answers.yahoo.com",
+      "slideshare.net",
+      "scribd.com",
+      "academia.edu"
+    ],
+    "rationale": "taxonomy-rule: en/general authoritative pool",
+    "source": "independent-taxonomy-v1",
+    "lang": "en",
+    "qtype": "general"
+  },
+  "adv-04": {
+    "relevantDomains": [
+      "developer.mozilla.org",
+      "github.com",
+      "stackoverflow.com",
+      "react.dev",
+      "nodejs.org",
+      "typescriptlang.org",
+      "developer.android.com",
+      "docs.rs",
+      "pypi.org"
+    ],
+    "mustNotDomains": [
+      "pinterest.com",
+      "answers.yahoo.com",
+      "slideshare.net",
+      "scribd.com",
+      "academia.edu"
+    ],
+    "rationale": "taxonomy-rule: en/technical authoritative pool",
+    "source": "independent-taxonomy-v1",
+    "lang": "en",
+    "qtype": "technical"
+  },
+  "ts-01": {
+    "relevantDomains": [
+      "reuters.com",
+      "apnews.com",
+      "bbc.com",
+      "bbc.co.uk",
+      "nytimes.com",
+      "theguardian.com",
+      "techcrunch.com",
+      "theverge.com"
+    ],
+    "mustNotDomains": [
+      "pinterest.com",
+      "answers.yahoo.com",
+      "slideshare.net",
+      "scribd.com",
+      "academia.edu"
+    ],
+    "rationale": "taxonomy-rule: en/news authoritative pool",
+    "source": "independent-taxonomy-v1",
+    "lang": "en",
+    "qtype": "news"
+  },
+  "ts-02": {
+    "relevantDomains": [
+      "reuters.com",
+      "apnews.com",
+      "bbc.com",
+      "bbc.co.uk",
+      "nytimes.com",
+      "theguardian.com",
+      "techcrunch.com",
+      "theverge.com"
+    ],
+    "mustNotDomains": [
+      "pinterest.com",
+      "answers.yahoo.com",
+      "slideshare.net",
+      "scribd.com",
+      "academia.edu"
+    ],
+    "rationale": "taxonomy-rule: en/news authoritative pool",
+    "source": "independent-taxonomy-v1",
+    "lang": "en",
+    "qtype": "news"
+  },
+  "ts-03": {
+    "relevantDomains": [
+      "reuters.com",
+      "apnews.com",
+      "bbc.com",
+      "bbc.co.uk",
+      "nytimes.com",
+      "theguardian.com",
+      "techcrunch.com",
+      "theverge.com"
+    ],
+    "mustNotDomains": [
+      "pinterest.com",
+      "answers.yahoo.com",
+      "slideshare.net",
+      "scribd.com",
+      "academia.edu"
+    ],
+    "rationale": "taxonomy-rule: en/news authoritative pool",
+    "source": "independent-taxonomy-v1",
+    "lang": "en",
+    "qtype": "news"
+  },
+  "ts-04": {
+    "relevantDomains": [
+      "reuters.com",
+      "apnews.com",
+      "bbc.com",
+      "bbc.co.uk",
+      "nytimes.com",
+      "theguardian.com",
+      "techcrunch.com",
+      "theverge.com"
+    ],
+    "mustNotDomains": [
+      "pinterest.com",
+      "answers.yahoo.com",
+      "slideshare.net",
+      "scribd.com",
+      "academia.edu"
+    ],
+    "rationale": "taxonomy-rule: en/news authoritative pool",
+    "source": "independent-taxonomy-v1",
+    "lang": "en",
+    "qtype": "news"
+  },
+  "kr-fin-06": {
+    "relevantDomains": [
+      "krx.co.kr",
+      "finance.naver.com",
+      "finance.yahoo.com",
+      "dart.fss.or.kr",
+      "investing.com"
+    ],
+    "mustNotDomains": [
+      "pinterest.com",
+      "answers.yahoo.com",
+      "slideshare.net",
+      "scribd.com",
+      "academia.edu"
+    ],
+    "rationale": "taxonomy-rule: kr/financial authoritative pool",
+    "source": "independent-taxonomy-v1",
+    "lang": "kr",
+    "qtype": "financial"
+  },
+  "kr-fin-07": {
+    "relevantDomains": [
+      "krx.co.kr",
+      "finance.naver.com",
+      "finance.yahoo.com",
+      "dart.fss.or.kr",
+      "investing.com"
+    ],
+    "mustNotDomains": [
+      "pinterest.com",
+      "answers.yahoo.com",
+      "slideshare.net",
+      "scribd.com",
+      "academia.edu"
+    ],
+    "rationale": "taxonomy-rule: kr/financial authoritative pool",
+    "source": "independent-taxonomy-v1",
+    "lang": "kr",
+    "qtype": "financial"
+  },
+  "kr-fin-08": {
+    "relevantDomains": [
+      "krx.co.kr",
+      "finance.naver.com",
+      "finance.yahoo.com",
+      "dart.fss.or.kr",
+      "investing.com"
+    ],
+    "mustNotDomains": [
+      "pinterest.com",
+      "answers.yahoo.com",
+      "slideshare.net",
+      "scribd.com",
+      "academia.edu"
+    ],
+    "rationale": "taxonomy-rule: kr/financial authoritative pool",
+    "source": "independent-taxonomy-v1",
+    "lang": "kr",
+    "qtype": "financial"
+  },
+  "kr-tech-06": {
+    "relevantDomains": [
+      "developer.mozilla.org",
+      "github.com",
+      "react.dev",
+      "nodejs.org",
+      "typescriptlang.org",
+      "kr.vuejs.org",
+      "developer.android.com"
+    ],
+    "mustNotDomains": [
+      "pinterest.com",
+      "answers.yahoo.com",
+      "slideshare.net",
+      "scribd.com",
+      "academia.edu"
+    ],
+    "rationale": "taxonomy-rule: kr/technical authoritative pool",
+    "source": "independent-taxonomy-v1",
+    "lang": "kr",
+    "qtype": "technical"
+  },
+  "kr-tech-07": {
+    "relevantDomains": [
+      "developer.mozilla.org",
+      "github.com",
+      "react.dev",
+      "nodejs.org",
+      "typescriptlang.org",
+      "kr.vuejs.org",
+      "developer.android.com"
+    ],
+    "mustNotDomains": [
+      "pinterest.com",
+      "answers.yahoo.com",
+      "slideshare.net",
+      "scribd.com",
+      "academia.edu"
+    ],
+    "rationale": "taxonomy-rule: kr/technical authoritative pool",
+    "source": "independent-taxonomy-v1",
+    "lang": "kr",
+    "qtype": "technical"
+  },
+  "kr-tech-08": {
+    "relevantDomains": [
+      "developer.mozilla.org",
+      "github.com",
+      "react.dev",
+      "nodejs.org",
+      "typescriptlang.org",
+      "kr.vuejs.org",
+      "developer.android.com"
+    ],
+    "mustNotDomains": [
+      "pinterest.com",
+      "answers.yahoo.com",
+      "slideshare.net",
+      "scribd.com",
+      "academia.edu"
+    ],
+    "rationale": "taxonomy-rule: kr/technical authoritative pool",
+    "source": "independent-taxonomy-v1",
+    "lang": "kr",
+    "qtype": "technical"
+  },
+  "kr-general-06": {
+    "relevantDomains": [
+      "wikipedia.org",
+      "terms.naver.com"
+    ],
+    "mustNotDomains": [
+      "pinterest.com",
+      "answers.yahoo.com",
+      "slideshare.net",
+      "scribd.com",
+      "academia.edu"
+    ],
+    "rationale": "taxonomy-rule: kr/general authoritative pool",
+    "source": "independent-taxonomy-v1",
+    "lang": "kr",
+    "qtype": "general"
+  },
+  "kr-general-07": {
+    "relevantDomains": [
+      "wikipedia.org",
+      "terms.naver.com"
+    ],
+    "mustNotDomains": [
+      "pinterest.com",
+      "answers.yahoo.com",
+      "slideshare.net",
+      "scribd.com",
+      "academia.edu"
+    ],
+    "rationale": "taxonomy-rule: kr/general authoritative pool",
+    "source": "independent-taxonomy-v1",
+    "lang": "kr",
+    "qtype": "general"
+  },
+  "kr-news-05": {
+    "relevantDomains": [
+      "yna.co.kr",
+      "yonhapnewstv.co.kr",
+      "hankyung.com",
+      "sedaily.com",
+      "chosun.com",
+      "donga.com",
+      "hani.co.kr",
+      "khan.co.kr",
+      "mk.co.kr",
+      "n.news.naver.com"
+    ],
+    "mustNotDomains": [
+      "pinterest.com",
+      "answers.yahoo.com",
+      "slideshare.net",
+      "scribd.com",
+      "academia.edu"
+    ],
+    "rationale": "taxonomy-rule: kr/news authoritative pool",
+    "source": "independent-taxonomy-v1",
+    "lang": "kr",
+    "qtype": "news"
+  },
+  "kr-news-06": {
+    "relevantDomains": [
+      "yna.co.kr",
+      "yonhapnewstv.co.kr",
+      "hankyung.com",
+      "sedaily.com",
+      "chosun.com",
+      "donga.com",
+      "hani.co.kr",
+      "khan.co.kr",
+      "mk.co.kr",
+      "n.news.naver.com"
+    ],
+    "mustNotDomains": [
+      "pinterest.com",
+      "answers.yahoo.com",
+      "slideshare.net",
+      "scribd.com",
+      "academia.edu"
+    ],
+    "rationale": "taxonomy-rule: kr/news authoritative pool",
+    "source": "independent-taxonomy-v1",
+    "lang": "kr",
+    "qtype": "news"
+  },
+  "en-stock-09": {
+    "relevantDomains": [
+      "finance.yahoo.com",
+      "nasdaq.com",
+      "sec.gov",
+      "investing.com",
+      "marketwatch.com",
+      "wsj.com",
+      "bloomberg.com"
+    ],
+    "mustNotDomains": [
+      "pinterest.com",
+      "answers.yahoo.com",
+      "slideshare.net",
+      "scribd.com",
+      "academia.edu"
+    ],
+    "rationale": "taxonomy-rule: en/financial authoritative pool",
+    "source": "independent-taxonomy-v1",
+    "lang": "en",
+    "qtype": "financial"
+  },
+  "en-stock-10": {
+    "relevantDomains": [
+      "finance.yahoo.com",
+      "nasdaq.com",
+      "sec.gov",
+      "investing.com",
+      "marketwatch.com",
+      "wsj.com",
+      "bloomberg.com"
+    ],
+    "mustNotDomains": [
+      "pinterest.com",
+      "answers.yahoo.com",
+      "slideshare.net",
+      "scribd.com",
+      "academia.edu"
+    ],
+    "rationale": "taxonomy-rule: en/financial authoritative pool",
+    "source": "independent-taxonomy-v1",
+    "lang": "en",
+    "qtype": "financial"
+  },
+  "en-tech-13": {
+    "relevantDomains": [
+      "developer.mozilla.org",
+      "github.com",
+      "stackoverflow.com",
+      "react.dev",
+      "nodejs.org",
+      "typescriptlang.org",
+      "developer.android.com",
+      "docs.rs",
+      "pypi.org"
+    ],
+    "mustNotDomains": [
+      "pinterest.com",
+      "answers.yahoo.com",
+      "slideshare.net",
+      "scribd.com",
+      "academia.edu"
+    ],
+    "rationale": "taxonomy-rule: en/technical authoritative pool",
+    "source": "independent-taxonomy-v1",
+    "lang": "en",
+    "qtype": "technical"
+  },
+  "en-tech-14": {
+    "relevantDomains": [
+      "developer.mozilla.org",
+      "github.com",
+      "stackoverflow.com",
+      "react.dev",
+      "nodejs.org",
+      "typescriptlang.org",
+      "developer.android.com",
+      "docs.rs",
+      "pypi.org"
+    ],
+    "mustNotDomains": [
+      "pinterest.com",
+      "answers.yahoo.com",
+      "slideshare.net",
+      "scribd.com",
+      "academia.edu"
+    ],
+    "rationale": "taxonomy-rule: en/technical authoritative pool",
+    "source": "independent-taxonomy-v1",
+    "lang": "en",
+    "qtype": "technical"
+  },
+  "en-tech-15": {
+    "relevantDomains": [
+      "developer.mozilla.org",
+      "github.com",
+      "stackoverflow.com",
+      "react.dev",
+      "nodejs.org",
+      "typescriptlang.org",
+      "developer.android.com",
+      "docs.rs",
+      "pypi.org"
+    ],
+    "mustNotDomains": [
+      "pinterest.com",
+      "answers.yahoo.com",
+      "slideshare.net",
+      "scribd.com",
+      "academia.edu"
+    ],
+    "rationale": "taxonomy-rule: en/technical authoritative pool",
+    "source": "independent-taxonomy-v1",
+    "lang": "en",
+    "qtype": "technical"
+  },
+  "en-tech-16": {
+    "relevantDomains": [
+      "developer.mozilla.org",
+      "github.com",
+      "stackoverflow.com",
+      "react.dev",
+      "nodejs.org",
+      "typescriptlang.org",
+      "developer.android.com",
+      "docs.rs",
+      "pypi.org"
+    ],
+    "mustNotDomains": [
+      "pinterest.com",
+      "answers.yahoo.com",
+      "slideshare.net",
+      "scribd.com",
+      "academia.edu"
+    ],
+    "rationale": "taxonomy-rule: en/technical authoritative pool",
+    "source": "independent-taxonomy-v1",
+    "lang": "en",
+    "qtype": "technical"
+  },
+  "en-tech-17": {
+    "relevantDomains": [
+      "developer.mozilla.org",
+      "github.com",
+      "stackoverflow.com",
+      "react.dev",
+      "nodejs.org",
+      "typescriptlang.org",
+      "developer.android.com",
+      "docs.rs",
+      "pypi.org"
+    ],
+    "mustNotDomains": [
+      "pinterest.com",
+      "answers.yahoo.com",
+      "slideshare.net",
+      "scribd.com",
+      "academia.edu"
+    ],
+    "rationale": "taxonomy-rule: en/technical authoritative pool",
+    "source": "independent-taxonomy-v1",
+    "lang": "en",
+    "qtype": "technical"
+  },
+  "en-tech-18": {
+    "relevantDomains": [
+      "developer.mozilla.org",
+      "github.com",
+      "stackoverflow.com",
+      "react.dev",
+      "nodejs.org",
+      "typescriptlang.org",
+      "developer.android.com",
+      "docs.rs",
+      "pypi.org"
+    ],
+    "mustNotDomains": [
+      "pinterest.com",
+      "answers.yahoo.com",
+      "slideshare.net",
+      "scribd.com",
+      "academia.edu"
+    ],
+    "rationale": "taxonomy-rule: en/technical authoritative pool",
+    "source": "independent-taxonomy-v1",
+    "lang": "en",
+    "qtype": "technical"
+  },
+  "en-news-11": {
+    "relevantDomains": [
+      "reuters.com",
+      "apnews.com",
+      "bbc.com",
+      "bbc.co.uk",
+      "nytimes.com",
+      "theguardian.com",
+      "techcrunch.com",
+      "theverge.com"
+    ],
+    "mustNotDomains": [
+      "pinterest.com",
+      "answers.yahoo.com",
+      "slideshare.net",
+      "scribd.com",
+      "academia.edu"
+    ],
+    "rationale": "taxonomy-rule: en/news authoritative pool",
+    "source": "independent-taxonomy-v1",
+    "lang": "en",
+    "qtype": "news"
+  },
+  "en-news-12": {
+    "relevantDomains": [
+      "reuters.com",
+      "apnews.com",
+      "bbc.com",
+      "bbc.co.uk",
+      "nytimes.com",
+      "theguardian.com",
+      "techcrunch.com",
+      "theverge.com"
+    ],
+    "mustNotDomains": [
+      "pinterest.com",
+      "answers.yahoo.com",
+      "slideshare.net",
+      "scribd.com",
+      "academia.edu"
+    ],
+    "rationale": "taxonomy-rule: en/news authoritative pool",
+    "source": "independent-taxonomy-v1",
+    "lang": "en",
+    "qtype": "news"
+  },
+  "en-news-13": {
+    "relevantDomains": [
+      "reuters.com",
+      "apnews.com",
+      "bbc.com",
+      "bbc.co.uk",
+      "nytimes.com",
+      "theguardian.com",
+      "techcrunch.com",
+      "theverge.com"
+    ],
+    "mustNotDomains": [
+      "pinterest.com",
+      "answers.yahoo.com",
+      "slideshare.net",
+      "scribd.com",
+      "academia.edu"
+    ],
+    "rationale": "taxonomy-rule: en/news authoritative pool",
+    "source": "independent-taxonomy-v1",
+    "lang": "en",
+    "qtype": "news"
+  },
+  "en-news-14": {
+    "relevantDomains": [
+      "reuters.com",
+      "apnews.com",
+      "bbc.com",
+      "bbc.co.uk",
+      "nytimes.com",
+      "theguardian.com",
+      "techcrunch.com",
+      "theverge.com"
+    ],
+    "mustNotDomains": [
+      "pinterest.com",
+      "answers.yahoo.com",
+      "slideshare.net",
+      "scribd.com",
+      "academia.edu"
+    ],
+    "rationale": "taxonomy-rule: en/news authoritative pool",
+    "source": "independent-taxonomy-v1",
+    "lang": "en",
+    "qtype": "news"
+  },
+  "en-news-15": {
+    "relevantDomains": [
+      "reuters.com",
+      "apnews.com",
+      "bbc.com",
+      "bbc.co.uk",
+      "nytimes.com",
+      "theguardian.com",
+      "techcrunch.com",
+      "theverge.com"
+    ],
+    "mustNotDomains": [
+      "pinterest.com",
+      "answers.yahoo.com",
+      "slideshare.net",
+      "scribd.com",
+      "academia.edu"
+    ],
+    "rationale": "taxonomy-rule: en/news authoritative pool",
+    "source": "independent-taxonomy-v1",
+    "lang": "en",
+    "qtype": "news"
+  },
+  "en-fact-11": {
+    "relevantDomains": [
+      "wikipedia.org",
+      "britannica.com"
+    ],
+    "mustNotDomains": [
+      "pinterest.com",
+      "answers.yahoo.com",
+      "slideshare.net",
+      "scribd.com",
+      "academia.edu"
+    ],
+    "rationale": "taxonomy-rule: en/factual authoritative pool",
+    "source": "independent-taxonomy-v1",
+    "lang": "en",
+    "qtype": "factual"
+  },
+  "en-fact-12": {
+    "relevantDomains": [
+      "wikipedia.org",
+      "britannica.com"
+    ],
+    "mustNotDomains": [
+      "pinterest.com",
+      "answers.yahoo.com",
+      "slideshare.net",
+      "scribd.com",
+      "academia.edu"
+    ],
+    "rationale": "taxonomy-rule: en/factual authoritative pool",
+    "source": "independent-taxonomy-v1",
+    "lang": "en",
+    "qtype": "factual"
+  },
+  "en-fact-13": {
+    "relevantDomains": [
+      "wikipedia.org",
+      "britannica.com"
+    ],
+    "mustNotDomains": [
+      "pinterest.com",
+      "answers.yahoo.com",
+      "slideshare.net",
+      "scribd.com",
+      "academia.edu"
+    ],
+    "rationale": "taxonomy-rule: en/factual authoritative pool",
+    "source": "independent-taxonomy-v1",
+    "lang": "en",
+    "qtype": "factual"
+  },
+  "en-fact-14": {
+    "relevantDomains": [
+      "wikipedia.org",
+      "britannica.com"
+    ],
+    "mustNotDomains": [
+      "pinterest.com",
+      "answers.yahoo.com",
+      "slideshare.net",
+      "scribd.com",
+      "academia.edu"
+    ],
+    "rationale": "taxonomy-rule: en/factual authoritative pool",
+    "source": "independent-taxonomy-v1",
+    "lang": "en",
+    "qtype": "factual"
+  },
+  "en-fact-15": {
+    "relevantDomains": [
+      "wikipedia.org",
+      "britannica.com"
+    ],
+    "mustNotDomains": [
+      "pinterest.com",
+      "answers.yahoo.com",
+      "slideshare.net",
+      "scribd.com",
+      "academia.edu"
+    ],
+    "rationale": "taxonomy-rule: en/factual authoritative pool",
+    "source": "independent-taxonomy-v1",
+    "lang": "en",
+    "qtype": "factual"
+  },
+  "en-acad-06": {
+    "relevantDomains": [
+      "arxiv.org",
+      "pubmed.ncbi.nlm.nih.gov",
+      "scholar.google.com",
+      "doi.org",
+      "sciencedirect.com",
+      "nature.com"
+    ],
+    "mustNotDomains": [
+      "pinterest.com",
+      "answers.yahoo.com",
+      "slideshare.net",
+      "scribd.com",
+      "academia.edu"
+    ],
+    "rationale": "taxonomy-rule: en/academic authoritative pool",
+    "source": "independent-taxonomy-v1",
+    "lang": "en",
+    "qtype": "academic"
+  },
+  "en-acad-07": {
+    "relevantDomains": [
+      "arxiv.org",
+      "pubmed.ncbi.nlm.nih.gov",
+      "scholar.google.com",
+      "doi.org",
+      "sciencedirect.com",
+      "nature.com"
+    ],
+    "mustNotDomains": [
+      "pinterest.com",
+      "answers.yahoo.com",
+      "slideshare.net",
+      "scribd.com",
+      "academia.edu"
+    ],
+    "rationale": "taxonomy-rule: en/academic authoritative pool",
+    "source": "independent-taxonomy-v1",
+    "lang": "en",
+    "qtype": "academic"
+  },
+  "en-general-01": {
+    "relevantDomains": [
+      "wikipedia.org",
+      "britannica.com"
+    ],
+    "mustNotDomains": [
+      "pinterest.com",
+      "answers.yahoo.com",
+      "slideshare.net",
+      "scribd.com",
+      "academia.edu"
+    ],
+    "rationale": "taxonomy-rule: en/general authoritative pool",
+    "source": "independent-taxonomy-v1",
+    "lang": "en",
+    "qtype": "general"
+  },
+  "en-general-02": {
+    "relevantDomains": [
+      "wikipedia.org",
+      "britannica.com"
+    ],
+    "mustNotDomains": [
+      "pinterest.com",
+      "answers.yahoo.com",
+      "slideshare.net",
+      "scribd.com",
+      "academia.edu"
+    ],
+    "rationale": "taxonomy-rule: en/general authoritative pool",
+    "source": "independent-taxonomy-v1",
+    "lang": "en",
+    "qtype": "general"
+  },
+  "zh-fact-05": {
+    "relevantDomains": [
+      "wikipedia.org",
+      "baike.baidu.com"
+    ],
+    "mustNotDomains": [
+      "pinterest.com",
+      "answers.yahoo.com",
+      "slideshare.net",
+      "scribd.com",
+      "academia.edu"
+    ],
+    "rationale": "taxonomy-rule: zh/factual authoritative pool",
+    "source": "independent-taxonomy-v1",
+    "lang": "zh",
+    "qtype": "factual"
+  },
+  "zh-fact-06": {
+    "relevantDomains": [
+      "wikipedia.org",
+      "baike.baidu.com"
+    ],
+    "mustNotDomains": [
+      "pinterest.com",
+      "answers.yahoo.com",
+      "slideshare.net",
+      "scribd.com",
+      "academia.edu"
+    ],
+    "rationale": "taxonomy-rule: zh/factual authoritative pool",
+    "source": "independent-taxonomy-v1",
+    "lang": "zh",
+    "qtype": "factual"
+  },
+  "zh-tech-03": {
+    "relevantDomains": [
+      "developer.mozilla.org",
+      "github.com",
+      "csdn.net",
+      "juejin.cn",
+      "segmentfault.com",
+      "react.dev"
+    ],
+    "mustNotDomains": [
+      "pinterest.com",
+      "answers.yahoo.com",
+      "slideshare.net",
+      "scribd.com",
+      "academia.edu"
+    ],
+    "rationale": "taxonomy-rule: zh/technical authoritative pool",
+    "source": "independent-taxonomy-v1",
+    "lang": "zh",
+    "qtype": "technical"
+  },
+  "zh-tech-04": {
+    "relevantDomains": [
+      "developer.mozilla.org",
+      "github.com",
+      "csdn.net",
+      "juejin.cn",
+      "segmentfault.com",
+      "react.dev"
+    ],
+    "mustNotDomains": [
+      "pinterest.com",
+      "answers.yahoo.com",
+      "slideshare.net",
+      "scribd.com",
+      "academia.edu"
+    ],
+    "rationale": "taxonomy-rule: zh/technical authoritative pool",
+    "source": "independent-taxonomy-v1",
+    "lang": "zh",
+    "qtype": "technical"
+  },
+  "zh-news-04": {
+    "relevantDomains": [
+      "news.sina.com.cn",
+      "thepaper.cn",
+      "caixin.com",
+      "people.com.cn",
+      "cctv.com",
+      "36kr.com"
+    ],
+    "mustNotDomains": [
+      "pinterest.com",
+      "answers.yahoo.com",
+      "slideshare.net",
+      "scribd.com",
+      "academia.edu"
+    ],
+    "rationale": "taxonomy-rule: zh/news authoritative pool",
+    "source": "independent-taxonomy-v1",
+    "lang": "zh",
+    "qtype": "news"
+  },
+  "zh-news-05": {
+    "relevantDomains": [
+      "news.sina.com.cn",
+      "thepaper.cn",
+      "caixin.com",
+      "people.com.cn",
+      "cctv.com",
+      "36kr.com"
+    ],
+    "mustNotDomains": [
+      "pinterest.com",
+      "answers.yahoo.com",
+      "slideshare.net",
+      "scribd.com",
+      "academia.edu"
+    ],
+    "rationale": "taxonomy-rule: zh/news authoritative pool",
+    "source": "independent-taxonomy-v1",
+    "lang": "zh",
+    "qtype": "news"
+  },
+  "zh-general-04": {
+    "relevantDomains": [
+      "baike.baidu.com",
+      "wikipedia.org",
+      "zhihu.com"
+    ],
+    "mustNotDomains": [
+      "pinterest.com",
+      "answers.yahoo.com",
+      "slideshare.net",
+      "scribd.com",
+      "academia.edu"
+    ],
+    "rationale": "taxonomy-rule: zh/general authoritative pool",
+    "source": "independent-taxonomy-v1",
+    "lang": "zh",
+    "qtype": "general"
+  },
+  "zh-general-05": {
+    "relevantDomains": [
+      "baike.baidu.com",
+      "wikipedia.org",
+      "zhihu.com"
+    ],
+    "mustNotDomains": [
+      "pinterest.com",
+      "answers.yahoo.com",
+      "slideshare.net",
+      "scribd.com",
+      "academia.edu"
+    ],
+    "rationale": "taxonomy-rule: zh/general authoritative pool",
+    "source": "independent-taxonomy-v1",
+    "lang": "zh",
+    "qtype": "general"
+  },
+  "ja-fact-03": {
+    "relevantDomains": [
+      "wikipedia.org"
+    ],
+    "mustNotDomains": [
+      "pinterest.com",
+      "answers.yahoo.com",
+      "slideshare.net",
+      "scribd.com",
+      "academia.edu"
+    ],
+    "rationale": "taxonomy-rule: ja/factual authoritative pool",
+    "source": "independent-taxonomy-v1",
+    "lang": "ja",
+    "qtype": "factual"
+  },
+  "ja-fact-04": {
+    "relevantDomains": [
+      "wikipedia.org"
+    ],
+    "mustNotDomains": [
+      "pinterest.com",
+      "answers.yahoo.com",
+      "slideshare.net",
+      "scribd.com",
+      "academia.edu"
+    ],
+    "rationale": "taxonomy-rule: ja/factual authoritative pool",
+    "source": "independent-taxonomy-v1",
+    "lang": "ja",
+    "qtype": "factual"
+  },
+  "ja-tech-03": {
+    "relevantDomains": [
+      "developer.mozilla.org",
+      "github.com",
+      "qiita.com",
+      "zenn.dev",
+      "react.dev"
+    ],
+    "mustNotDomains": [
+      "pinterest.com",
+      "answers.yahoo.com",
+      "slideshare.net",
+      "scribd.com",
+      "academia.edu"
+    ],
+    "rationale": "taxonomy-rule: ja/technical authoritative pool",
+    "source": "independent-taxonomy-v1",
+    "lang": "ja",
+    "qtype": "technical"
+  },
+  "ja-tech-04": {
+    "relevantDomains": [
+      "developer.mozilla.org",
+      "github.com",
+      "qiita.com",
+      "zenn.dev",
+      "react.dev"
+    ],
+    "mustNotDomains": [
+      "pinterest.com",
+      "answers.yahoo.com",
+      "slideshare.net",
+      "scribd.com",
+      "academia.edu"
+    ],
+    "rationale": "taxonomy-rule: ja/technical authoritative pool",
+    "source": "independent-taxonomy-v1",
+    "lang": "ja",
+    "qtype": "technical"
+  },
+  "ja-news-03": {
+    "relevantDomains": [
+      "nhk.or.jp",
+      "asahi.com",
+      "mainichi.jp",
+      "nikkei.com",
+      "yomiuri.co.jp"
+    ],
+    "mustNotDomains": [
+      "pinterest.com",
+      "answers.yahoo.com",
+      "slideshare.net",
+      "scribd.com",
+      "academia.edu"
+    ],
+    "rationale": "taxonomy-rule: ja/news authoritative pool",
+    "source": "independent-taxonomy-v1",
+    "lang": "ja",
+    "qtype": "news"
+  },
+  "ja-news-04": {
+    "relevantDomains": [
+      "nhk.or.jp",
+      "asahi.com",
+      "mainichi.jp",
+      "nikkei.com",
+      "yomiuri.co.jp"
+    ],
+    "mustNotDomains": [
+      "pinterest.com",
+      "answers.yahoo.com",
+      "slideshare.net",
+      "scribd.com",
+      "academia.edu"
+    ],
+    "rationale": "taxonomy-rule: ja/news authoritative pool",
+    "source": "independent-taxonomy-v1",
+    "lang": "ja",
+    "qtype": "news"
+  },
+  "ja-travel-03": {
+    "relevantDomains": [
+      "wikipedia.org"
+    ],
+    "mustNotDomains": [
+      "pinterest.com",
+      "answers.yahoo.com",
+      "slideshare.net",
+      "scribd.com",
+      "academia.edu"
+    ],
+    "rationale": "taxonomy-rule: ja/general authoritative pool",
+    "source": "independent-taxonomy-v1",
+    "lang": "ja",
+    "qtype": "general"
+  },
+  "ja-travel-04": {
+    "relevantDomains": [
+      "wikipedia.org"
+    ],
+    "mustNotDomains": [
+      "pinterest.com",
+      "answers.yahoo.com",
+      "slideshare.net",
+      "scribd.com",
+      "academia.edu"
+    ],
+    "rationale": "taxonomy-rule: ja/general authoritative pool",
+    "source": "independent-taxonomy-v1",
+    "lang": "ja",
+    "qtype": "general"
+  },
+  "kr-stock-06": {
+    "relevantDomains": [
+      "krx.co.kr",
+      "finance.naver.com",
+      "finance.yahoo.com",
+      "dart.fss.or.kr",
+      "investing.com"
+    ],
+    "mustNotDomains": [
+      "pinterest.com",
+      "answers.yahoo.com",
+      "slideshare.net",
+      "scribd.com",
+      "academia.edu"
+    ],
+    "rationale": "taxonomy-rule: kr/financial authoritative pool",
+    "source": "independent-taxonomy-v1",
+    "lang": "kr",
+    "qtype": "financial"
+  },
+  "kr-stock-07": {
+    "relevantDomains": [
+      "krx.co.kr",
+      "finance.naver.com",
+      "finance.yahoo.com",
+      "dart.fss.or.kr",
+      "investing.com"
+    ],
+    "mustNotDomains": [
+      "pinterest.com",
+      "answers.yahoo.com",
+      "slideshare.net",
+      "scribd.com",
+      "academia.edu"
+    ],
+    "rationale": "taxonomy-rule: kr/financial authoritative pool",
+    "source": "independent-taxonomy-v1",
+    "lang": "kr",
+    "qtype": "financial"
+  },
+  "kr-stock-08": {
+    "relevantDomains": [
+      "krx.co.kr",
+      "finance.naver.com",
+      "finance.yahoo.com",
+      "dart.fss.or.kr",
+      "investing.com"
+    ],
+    "mustNotDomains": [
+      "pinterest.com",
+      "answers.yahoo.com",
+      "slideshare.net",
+      "scribd.com",
+      "academia.edu"
+    ],
+    "rationale": "taxonomy-rule: kr/financial authoritative pool",
+    "source": "independent-taxonomy-v1",
+    "lang": "kr",
+    "qtype": "financial"
+  },
+  "kr-stock-09": {
+    "relevantDomains": [
+      "krx.co.kr",
+      "finance.naver.com",
+      "finance.yahoo.com",
+      "dart.fss.or.kr",
+      "investing.com"
+    ],
+    "mustNotDomains": [
+      "pinterest.com",
+      "answers.yahoo.com",
+      "slideshare.net",
+      "scribd.com",
+      "academia.edu"
+    ],
+    "rationale": "taxonomy-rule: kr/financial authoritative pool",
+    "source": "independent-taxonomy-v1",
+    "lang": "kr",
+    "qtype": "financial"
+  },
+  "kr-stock-10": {
+    "relevantDomains": [
+      "krx.co.kr",
+      "finance.naver.com",
+      "finance.yahoo.com",
+      "dart.fss.or.kr",
+      "investing.com"
+    ],
+    "mustNotDomains": [
+      "pinterest.com",
+      "answers.yahoo.com",
+      "slideshare.net",
+      "scribd.com",
+      "academia.edu"
+    ],
+    "rationale": "taxonomy-rule: kr/financial authoritative pool",
+    "source": "independent-taxonomy-v1",
+    "lang": "kr",
+    "qtype": "financial"
+  },
+  "kr-stock-11": {
+    "relevantDomains": [
+      "krx.co.kr",
+      "finance.naver.com",
+      "finance.yahoo.com",
+      "dart.fss.or.kr",
+      "investing.com"
+    ],
+    "mustNotDomains": [
+      "pinterest.com",
+      "answers.yahoo.com",
+      "slideshare.net",
+      "scribd.com",
+      "academia.edu"
+    ],
+    "rationale": "taxonomy-rule: kr/financial authoritative pool",
+    "source": "independent-taxonomy-v1",
+    "lang": "kr",
+    "qtype": "financial"
+  },
+  "kr-stock-12": {
+    "relevantDomains": [
+      "krx.co.kr",
+      "finance.naver.com",
+      "finance.yahoo.com",
+      "dart.fss.or.kr",
+      "investing.com"
+    ],
+    "mustNotDomains": [
+      "pinterest.com",
+      "answers.yahoo.com",
+      "slideshare.net",
+      "scribd.com",
+      "academia.edu"
+    ],
+    "rationale": "taxonomy-rule: kr/financial authoritative pool",
+    "source": "independent-taxonomy-v1",
+    "lang": "kr",
+    "qtype": "financial"
+  },
+  "kr-stock-13": {
+    "relevantDomains": [
+      "krx.co.kr",
+      "finance.naver.com",
+      "finance.yahoo.com",
+      "dart.fss.or.kr",
+      "investing.com"
+    ],
+    "mustNotDomains": [
+      "pinterest.com",
+      "answers.yahoo.com",
+      "slideshare.net",
+      "scribd.com",
+      "academia.edu"
+    ],
+    "rationale": "taxonomy-rule: kr/financial authoritative pool",
+    "source": "independent-taxonomy-v1",
+    "lang": "kr",
+    "qtype": "financial"
+  },
+  "kr-stock-14": {
+    "relevantDomains": [
+      "krx.co.kr",
+      "finance.naver.com",
+      "finance.yahoo.com",
+      "dart.fss.or.kr",
+      "investing.com"
+    ],
+    "mustNotDomains": [
+      "pinterest.com",
+      "answers.yahoo.com",
+      "slideshare.net",
+      "scribd.com",
+      "academia.edu"
+    ],
+    "rationale": "taxonomy-rule: kr/financial authoritative pool",
+    "source": "independent-taxonomy-v1",
+    "lang": "kr",
+    "qtype": "financial"
+  },
+  "kr-stock-15": {
+    "relevantDomains": [
+      "krx.co.kr",
+      "finance.naver.com",
+      "finance.yahoo.com",
+      "dart.fss.or.kr",
+      "investing.com"
+    ],
+    "mustNotDomains": [
+      "pinterest.com",
+      "answers.yahoo.com",
+      "slideshare.net",
+      "scribd.com",
+      "academia.edu"
+    ],
+    "rationale": "taxonomy-rule: kr/financial authoritative pool",
+    "source": "independent-taxonomy-v1",
+    "lang": "kr",
+    "qtype": "financial"
+  },
+  "kr-news-07": {
+    "relevantDomains": [
+      "yna.co.kr",
+      "yonhapnewstv.co.kr",
+      "hankyung.com",
+      "sedaily.com",
+      "chosun.com",
+      "donga.com",
+      "hani.co.kr",
+      "khan.co.kr",
+      "mk.co.kr",
+      "n.news.naver.com"
+    ],
+    "mustNotDomains": [
+      "pinterest.com",
+      "answers.yahoo.com",
+      "slideshare.net",
+      "scribd.com",
+      "academia.edu"
+    ],
+    "rationale": "taxonomy-rule: kr/news authoritative pool",
+    "source": "independent-taxonomy-v1",
+    "lang": "kr",
+    "qtype": "news"
+  },
+  "kr-news-08": {
+    "relevantDomains": [
+      "yna.co.kr",
+      "yonhapnewstv.co.kr",
+      "hankyung.com",
+      "sedaily.com",
+      "chosun.com",
+      "donga.com",
+      "hani.co.kr",
+      "khan.co.kr",
+      "mk.co.kr",
+      "n.news.naver.com"
+    ],
+    "mustNotDomains": [
+      "pinterest.com",
+      "answers.yahoo.com",
+      "slideshare.net",
+      "scribd.com",
+      "academia.edu"
+    ],
+    "rationale": "taxonomy-rule: kr/news authoritative pool",
+    "source": "independent-taxonomy-v1",
+    "lang": "kr",
+    "qtype": "news"
+  },
+  "kr-news-09": {
+    "relevantDomains": [
+      "yna.co.kr",
+      "yonhapnewstv.co.kr",
+      "hankyung.com",
+      "sedaily.com",
+      "chosun.com",
+      "donga.com",
+      "hani.co.kr",
+      "khan.co.kr",
+      "mk.co.kr",
+      "n.news.naver.com"
+    ],
+    "mustNotDomains": [
+      "pinterest.com",
+      "answers.yahoo.com",
+      "slideshare.net",
+      "scribd.com",
+      "academia.edu"
+    ],
+    "rationale": "taxonomy-rule: kr/news authoritative pool",
+    "source": "independent-taxonomy-v1",
+    "lang": "kr",
+    "qtype": "news"
+  },
+  "kr-news-10": {
+    "relevantDomains": [
+      "yna.co.kr",
+      "yonhapnewstv.co.kr",
+      "hankyung.com",
+      "sedaily.com",
+      "chosun.com",
+      "donga.com",
+      "hani.co.kr",
+      "khan.co.kr",
+      "mk.co.kr",
+      "n.news.naver.com"
+    ],
+    "mustNotDomains": [
+      "pinterest.com",
+      "answers.yahoo.com",
+      "slideshare.net",
+      "scribd.com",
+      "academia.edu"
+    ],
+    "rationale": "taxonomy-rule: kr/news authoritative pool",
+    "source": "independent-taxonomy-v1",
+    "lang": "kr",
+    "qtype": "news"
+  },
+  "kr-news-11": {
+    "relevantDomains": [
+      "yna.co.kr",
+      "yonhapnewstv.co.kr",
+      "hankyung.com",
+      "sedaily.com",
+      "chosun.com",
+      "donga.com",
+      "hani.co.kr",
+      "khan.co.kr",
+      "mk.co.kr",
+      "n.news.naver.com"
+    ],
+    "mustNotDomains": [
+      "pinterest.com",
+      "answers.yahoo.com",
+      "slideshare.net",
+      "scribd.com",
+      "academia.edu"
+    ],
+    "rationale": "taxonomy-rule: kr/news authoritative pool",
+    "source": "independent-taxonomy-v1",
+    "lang": "kr",
+    "qtype": "news"
+  },
+  "kr-news-12": {
+    "relevantDomains": [
+      "yna.co.kr",
+      "yonhapnewstv.co.kr",
+      "hankyung.com",
+      "sedaily.com",
+      "chosun.com",
+      "donga.com",
+      "hani.co.kr",
+      "khan.co.kr",
+      "mk.co.kr",
+      "n.news.naver.com"
+    ],
+    "mustNotDomains": [
+      "pinterest.com",
+      "answers.yahoo.com",
+      "slideshare.net",
+      "scribd.com",
+      "academia.edu"
+    ],
+    "rationale": "taxonomy-rule: kr/news authoritative pool",
+    "source": "independent-taxonomy-v1",
+    "lang": "kr",
+    "qtype": "news"
+  },
+  "kr-news-13": {
+    "relevantDomains": [
+      "yna.co.kr",
+      "yonhapnewstv.co.kr",
+      "hankyung.com",
+      "sedaily.com",
+      "chosun.com",
+      "donga.com",
+      "hani.co.kr",
+      "khan.co.kr",
+      "mk.co.kr",
+      "n.news.naver.com"
+    ],
+    "mustNotDomains": [
+      "pinterest.com",
+      "answers.yahoo.com",
+      "slideshare.net",
+      "scribd.com",
+      "academia.edu"
+    ],
+    "rationale": "taxonomy-rule: kr/news authoritative pool",
+    "source": "independent-taxonomy-v1",
+    "lang": "kr",
+    "qtype": "news"
+  },
+  "kr-news-14": {
+    "relevantDomains": [
+      "yna.co.kr",
+      "yonhapnewstv.co.kr",
+      "hankyung.com",
+      "sedaily.com",
+      "chosun.com",
+      "donga.com",
+      "hani.co.kr",
+      "khan.co.kr",
+      "mk.co.kr",
+      "n.news.naver.com"
+    ],
+    "mustNotDomains": [
+      "pinterest.com",
+      "answers.yahoo.com",
+      "slideshare.net",
+      "scribd.com",
+      "academia.edu"
+    ],
+    "rationale": "taxonomy-rule: kr/news authoritative pool",
+    "source": "independent-taxonomy-v1",
+    "lang": "kr",
+    "qtype": "news"
+  },
+  "kr-news-15": {
+    "relevantDomains": [
+      "yna.co.kr",
+      "yonhapnewstv.co.kr",
+      "hankyung.com",
+      "sedaily.com",
+      "chosun.com",
+      "donga.com",
+      "hani.co.kr",
+      "khan.co.kr",
+      "mk.co.kr",
+      "n.news.naver.com"
+    ],
+    "mustNotDomains": [
+      "pinterest.com",
+      "answers.yahoo.com",
+      "slideshare.net",
+      "scribd.com",
+      "academia.edu"
+    ],
+    "rationale": "taxonomy-rule: kr/news authoritative pool",
+    "source": "independent-taxonomy-v1",
+    "lang": "kr",
+    "qtype": "news"
+  },
+  "kr-news-16": {
+    "relevantDomains": [
+      "yna.co.kr",
+      "yonhapnewstv.co.kr",
+      "hankyung.com",
+      "sedaily.com",
+      "chosun.com",
+      "donga.com",
+      "hani.co.kr",
+      "khan.co.kr",
+      "mk.co.kr",
+      "n.news.naver.com"
+    ],
+    "mustNotDomains": [
+      "pinterest.com",
+      "answers.yahoo.com",
+      "slideshare.net",
+      "scribd.com",
+      "academia.edu"
+    ],
+    "rationale": "taxonomy-rule: kr/news authoritative pool",
+    "source": "independent-taxonomy-v1",
+    "lang": "kr",
+    "qtype": "news"
+  },
+  "kr-tech-09": {
+    "relevantDomains": [
+      "developer.mozilla.org",
+      "github.com",
+      "react.dev",
+      "nodejs.org",
+      "typescriptlang.org",
+      "kr.vuejs.org",
+      "developer.android.com"
+    ],
+    "mustNotDomains": [
+      "pinterest.com",
+      "answers.yahoo.com",
+      "slideshare.net",
+      "scribd.com",
+      "academia.edu"
+    ],
+    "rationale": "taxonomy-rule: kr/technical authoritative pool",
+    "source": "independent-taxonomy-v1",
+    "lang": "kr",
+    "qtype": "technical"
+  },
+  "kr-tech-10": {
+    "relevantDomains": [
+      "developer.mozilla.org",
+      "github.com",
+      "react.dev",
+      "nodejs.org",
+      "typescriptlang.org",
+      "kr.vuejs.org",
+      "developer.android.com"
+    ],
+    "mustNotDomains": [
+      "pinterest.com",
+      "answers.yahoo.com",
+      "slideshare.net",
+      "scribd.com",
+      "academia.edu"
+    ],
+    "rationale": "taxonomy-rule: kr/technical authoritative pool",
+    "source": "independent-taxonomy-v1",
+    "lang": "kr",
+    "qtype": "technical"
+  },
+  "kr-tech-11": {
+    "relevantDomains": [
+      "developer.mozilla.org",
+      "github.com",
+      "react.dev",
+      "nodejs.org",
+      "typescriptlang.org",
+      "kr.vuejs.org",
+      "developer.android.com"
+    ],
+    "mustNotDomains": [
+      "pinterest.com",
+      "answers.yahoo.com",
+      "slideshare.net",
+      "scribd.com",
+      "academia.edu"
+    ],
+    "rationale": "taxonomy-rule: kr/technical authoritative pool",
+    "source": "independent-taxonomy-v1",
+    "lang": "kr",
+    "qtype": "technical"
+  },
+  "kr-tech-12": {
+    "relevantDomains": [
+      "developer.mozilla.org",
+      "github.com",
+      "react.dev",
+      "nodejs.org",
+      "typescriptlang.org",
+      "kr.vuejs.org",
+      "developer.android.com"
+    ],
+    "mustNotDomains": [
+      "pinterest.com",
+      "answers.yahoo.com",
+      "slideshare.net",
+      "scribd.com",
+      "academia.edu"
+    ],
+    "rationale": "taxonomy-rule: kr/technical authoritative pool",
+    "source": "independent-taxonomy-v1",
+    "lang": "kr",
+    "qtype": "technical"
+  },
+  "kr-tech-13": {
+    "relevantDomains": [
+      "developer.mozilla.org",
+      "github.com",
+      "react.dev",
+      "nodejs.org",
+      "typescriptlang.org",
+      "kr.vuejs.org",
+      "developer.android.com"
+    ],
+    "mustNotDomains": [
+      "pinterest.com",
+      "answers.yahoo.com",
+      "slideshare.net",
+      "scribd.com",
+      "academia.edu"
+    ],
+    "rationale": "taxonomy-rule: kr/technical authoritative pool",
+    "source": "independent-taxonomy-v1",
+    "lang": "kr",
+    "qtype": "technical"
+  },
+  "kr-tech-14": {
+    "relevantDomains": [
+      "developer.mozilla.org",
+      "github.com",
+      "react.dev",
+      "nodejs.org",
+      "typescriptlang.org",
+      "kr.vuejs.org",
+      "developer.android.com"
+    ],
+    "mustNotDomains": [
+      "pinterest.com",
+      "answers.yahoo.com",
+      "slideshare.net",
+      "scribd.com",
+      "academia.edu"
+    ],
+    "rationale": "taxonomy-rule: kr/technical authoritative pool",
+    "source": "independent-taxonomy-v1",
+    "lang": "kr",
+    "qtype": "technical"
+  },
+  "kr-tech-15": {
+    "relevantDomains": [
+      "developer.mozilla.org",
+      "github.com",
+      "react.dev",
+      "nodejs.org",
+      "typescriptlang.org",
+      "kr.vuejs.org",
+      "developer.android.com"
+    ],
+    "mustNotDomains": [
+      "pinterest.com",
+      "answers.yahoo.com",
+      "slideshare.net",
+      "scribd.com",
+      "academia.edu"
+    ],
+    "rationale": "taxonomy-rule: kr/technical authoritative pool",
+    "source": "independent-taxonomy-v1",
+    "lang": "kr",
+    "qtype": "technical"
+  },
+  "kr-tech-16": {
+    "relevantDomains": [
+      "developer.mozilla.org",
+      "github.com",
+      "react.dev",
+      "nodejs.org",
+      "typescriptlang.org",
+      "kr.vuejs.org",
+      "developer.android.com"
+    ],
+    "mustNotDomains": [
+      "pinterest.com",
+      "answers.yahoo.com",
+      "slideshare.net",
+      "scribd.com",
+      "academia.edu"
+    ],
+    "rationale": "taxonomy-rule: kr/technical authoritative pool",
+    "source": "independent-taxonomy-v1",
+    "lang": "kr",
+    "qtype": "technical"
+  },
+  "kr-tech-17": {
+    "relevantDomains": [
+      "developer.mozilla.org",
+      "github.com",
+      "react.dev",
+      "nodejs.org",
+      "typescriptlang.org",
+      "kr.vuejs.org",
+      "developer.android.com"
+    ],
+    "mustNotDomains": [
+      "pinterest.com",
+      "answers.yahoo.com",
+      "slideshare.net",
+      "scribd.com",
+      "academia.edu"
+    ],
+    "rationale": "taxonomy-rule: kr/technical authoritative pool",
+    "source": "independent-taxonomy-v1",
+    "lang": "kr",
+    "qtype": "technical"
+  },
+  "kr-tech-18": {
+    "relevantDomains": [
+      "developer.mozilla.org",
+      "github.com",
+      "react.dev",
+      "nodejs.org",
+      "typescriptlang.org",
+      "kr.vuejs.org",
+      "developer.android.com"
+    ],
+    "mustNotDomains": [
+      "pinterest.com",
+      "answers.yahoo.com",
+      "slideshare.net",
+      "scribd.com",
+      "academia.edu"
+    ],
+    "rationale": "taxonomy-rule: kr/technical authoritative pool",
+    "source": "independent-taxonomy-v1",
+    "lang": "kr",
+    "qtype": "technical"
+  },
+  "kr-tech-19": {
+    "relevantDomains": [
+      "developer.mozilla.org",
+      "github.com",
+      "react.dev",
+      "nodejs.org",
+      "typescriptlang.org",
+      "kr.vuejs.org",
+      "developer.android.com"
+    ],
+    "mustNotDomains": [
+      "pinterest.com",
+      "answers.yahoo.com",
+      "slideshare.net",
+      "scribd.com",
+      "academia.edu"
+    ],
+    "rationale": "taxonomy-rule: kr/technical authoritative pool",
+    "source": "independent-taxonomy-v1",
+    "lang": "kr",
+    "qtype": "technical"
+  },
+  "kr-tech-20": {
+    "relevantDomains": [
+      "developer.mozilla.org",
+      "github.com",
+      "react.dev",
+      "nodejs.org",
+      "typescriptlang.org",
+      "kr.vuejs.org",
+      "developer.android.com"
+    ],
+    "mustNotDomains": [
+      "pinterest.com",
+      "answers.yahoo.com",
+      "slideshare.net",
+      "scribd.com",
+      "academia.edu"
+    ],
+    "rationale": "taxonomy-rule: kr/technical authoritative pool",
+    "source": "independent-taxonomy-v1",
+    "lang": "kr",
+    "qtype": "technical"
+  },
+  "kr-tech-21": {
+    "relevantDomains": [
+      "developer.mozilla.org",
+      "github.com",
+      "react.dev",
+      "nodejs.org",
+      "typescriptlang.org",
+      "kr.vuejs.org",
+      "developer.android.com"
+    ],
+    "mustNotDomains": [
+      "pinterest.com",
+      "answers.yahoo.com",
+      "slideshare.net",
+      "scribd.com",
+      "academia.edu"
+    ],
+    "rationale": "taxonomy-rule: kr/technical authoritative pool",
+    "source": "independent-taxonomy-v1",
+    "lang": "kr",
+    "qtype": "technical"
+  },
+  "kr-tech-22": {
+    "relevantDomains": [
+      "developer.mozilla.org",
+      "github.com",
+      "react.dev",
+      "nodejs.org",
+      "typescriptlang.org",
+      "kr.vuejs.org",
+      "developer.android.com"
+    ],
+    "mustNotDomains": [
+      "pinterest.com",
+      "answers.yahoo.com",
+      "slideshare.net",
+      "scribd.com",
+      "academia.edu"
+    ],
+    "rationale": "taxonomy-rule: kr/technical authoritative pool",
+    "source": "independent-taxonomy-v1",
+    "lang": "kr",
+    "qtype": "technical"
+  },
+  "kr-tech-23": {
+    "relevantDomains": [
+      "developer.mozilla.org",
+      "github.com",
+      "react.dev",
+      "nodejs.org",
+      "typescriptlang.org",
+      "kr.vuejs.org",
+      "developer.android.com"
+    ],
+    "mustNotDomains": [
+      "pinterest.com",
+      "answers.yahoo.com",
+      "slideshare.net",
+      "scribd.com",
+      "academia.edu"
+    ],
+    "rationale": "taxonomy-rule: kr/technical authoritative pool",
+    "source": "independent-taxonomy-v1",
+    "lang": "kr",
+    "qtype": "technical"
+  },
+  "kr-general-08": {
+    "relevantDomains": [
+      "wikipedia.org",
+      "terms.naver.com"
+    ],
+    "mustNotDomains": [
+      "pinterest.com",
+      "answers.yahoo.com",
+      "slideshare.net",
+      "scribd.com",
+      "academia.edu"
+    ],
+    "rationale": "taxonomy-rule: kr/general authoritative pool",
+    "source": "independent-taxonomy-v1",
+    "lang": "kr",
+    "qtype": "general"
+  },
+  "kr-general-09": {
+    "relevantDomains": [
+      "wikipedia.org",
+      "terms.naver.com"
+    ],
+    "mustNotDomains": [
+      "pinterest.com",
+      "answers.yahoo.com",
+      "slideshare.net",
+      "scribd.com",
+      "academia.edu"
+    ],
+    "rationale": "taxonomy-rule: kr/general authoritative pool",
+    "source": "independent-taxonomy-v1",
+    "lang": "kr",
+    "qtype": "general"
+  },
+  "kr-general-10": {
+    "relevantDomains": [
+      "wikipedia.org",
+      "terms.naver.com"
+    ],
+    "mustNotDomains": [
+      "pinterest.com",
+      "answers.yahoo.com",
+      "slideshare.net",
+      "scribd.com",
+      "academia.edu"
+    ],
+    "rationale": "taxonomy-rule: kr/general authoritative pool",
+    "source": "independent-taxonomy-v1",
+    "lang": "kr",
+    "qtype": "general"
+  },
+  "kr-general-11": {
+    "relevantDomains": [
+      "wikipedia.org",
+      "terms.naver.com"
+    ],
+    "mustNotDomains": [
+      "pinterest.com",
+      "answers.yahoo.com",
+      "slideshare.net",
+      "scribd.com",
+      "academia.edu"
+    ],
+    "rationale": "taxonomy-rule: kr/general authoritative pool",
+    "source": "independent-taxonomy-v1",
+    "lang": "kr",
+    "qtype": "general"
+  },
+  "kr-general-12": {
+    "relevantDomains": [
+      "wikipedia.org",
+      "terms.naver.com"
+    ],
+    "mustNotDomains": [
+      "pinterest.com",
+      "answers.yahoo.com",
+      "slideshare.net",
+      "scribd.com",
+      "academia.edu"
+    ],
+    "rationale": "taxonomy-rule: kr/general authoritative pool",
+    "source": "independent-taxonomy-v1",
+    "lang": "kr",
+    "qtype": "general"
+  },
+  "kr-general-13": {
+    "relevantDomains": [
+      "wikipedia.org",
+      "terms.naver.com"
+    ],
+    "mustNotDomains": [
+      "pinterest.com",
+      "answers.yahoo.com",
+      "slideshare.net",
+      "scribd.com",
+      "academia.edu"
+    ],
+    "rationale": "taxonomy-rule: kr/general authoritative pool",
+    "source": "independent-taxonomy-v1",
+    "lang": "kr",
+    "qtype": "general"
+  },
+  "kr-general-14": {
+    "relevantDomains": [
+      "wikipedia.org",
+      "terms.naver.com"
+    ],
+    "mustNotDomains": [
+      "pinterest.com",
+      "answers.yahoo.com",
+      "slideshare.net",
+      "scribd.com",
+      "academia.edu"
+    ],
+    "rationale": "taxonomy-rule: kr/general authoritative pool",
+    "source": "independent-taxonomy-v1",
+    "lang": "kr",
+    "qtype": "general"
+  },
+  "kr-general-15": {
+    "relevantDomains": [
+      "wikipedia.org",
+      "terms.naver.com"
+    ],
+    "mustNotDomains": [
+      "pinterest.com",
+      "answers.yahoo.com",
+      "slideshare.net",
+      "scribd.com",
+      "academia.edu"
+    ],
+    "rationale": "taxonomy-rule: kr/general authoritative pool",
+    "source": "independent-taxonomy-v1",
+    "lang": "kr",
+    "qtype": "general"
+  },
+  "kr-general-16": {
+    "relevantDomains": [
+      "wikipedia.org",
+      "terms.naver.com"
+    ],
+    "mustNotDomains": [
+      "pinterest.com",
+      "answers.yahoo.com",
+      "slideshare.net",
+      "scribd.com",
+      "academia.edu"
+    ],
+    "rationale": "taxonomy-rule: kr/general authoritative pool",
+    "source": "independent-taxonomy-v1",
+    "lang": "kr",
+    "qtype": "general"
+  },
+  "kr-general-17": {
+    "relevantDomains": [
+      "wikipedia.org",
+      "terms.naver.com"
+    ],
+    "mustNotDomains": [
+      "pinterest.com",
+      "answers.yahoo.com",
+      "slideshare.net",
+      "scribd.com",
+      "academia.edu"
+    ],
+    "rationale": "taxonomy-rule: kr/general authoritative pool",
+    "source": "independent-taxonomy-v1",
+    "lang": "kr",
+    "qtype": "general"
+  },
+  "kr-special-01": {
+    "relevantDomains": [
+      "wikipedia.org",
+      "terms.naver.com"
+    ],
+    "mustNotDomains": [
+      "pinterest.com",
+      "answers.yahoo.com",
+      "slideshare.net",
+      "scribd.com",
+      "academia.edu"
+    ],
+    "rationale": "taxonomy-rule: kr/general authoritative pool",
+    "source": "independent-taxonomy-v1",
+    "lang": "kr",
+    "qtype": "general"
+  },
+  "kr-special-02": {
+    "relevantDomains": [
+      "wikipedia.org",
+      "terms.naver.com"
+    ],
+    "mustNotDomains": [
+      "pinterest.com",
+      "answers.yahoo.com",
+      "slideshare.net",
+      "scribd.com",
+      "academia.edu"
+    ],
+    "rationale": "taxonomy-rule: kr/general authoritative pool",
+    "source": "independent-taxonomy-v1",
+    "lang": "kr",
+    "qtype": "general"
+  },
+  "kr-special-03": {
+    "relevantDomains": [
+      "krx.co.kr",
+      "finance.naver.com",
+      "finance.yahoo.com",
+      "dart.fss.or.kr",
+      "investing.com"
+    ],
+    "mustNotDomains": [
+      "pinterest.com",
+      "answers.yahoo.com",
+      "slideshare.net",
+      "scribd.com",
+      "academia.edu"
+    ],
+    "rationale": "taxonomy-rule: kr/financial authoritative pool",
+    "source": "independent-taxonomy-v1",
+    "lang": "kr",
+    "qtype": "financial"
+  },
+  "kr-special-04": {
+    "relevantDomains": [
+      "krx.co.kr",
+      "finance.naver.com",
+      "finance.yahoo.com",
+      "dart.fss.or.kr",
+      "investing.com"
+    ],
+    "mustNotDomains": [
+      "pinterest.com",
+      "answers.yahoo.com",
+      "slideshare.net",
+      "scribd.com",
+      "academia.edu"
+    ],
+    "rationale": "taxonomy-rule: kr/financial authoritative pool",
+    "source": "independent-taxonomy-v1",
+    "lang": "kr",
+    "qtype": "financial"
+  },
+  "kr-special-05": {
+    "relevantDomains": [
+      "wikipedia.org",
+      "terms.naver.com"
+    ],
+    "mustNotDomains": [
+      "pinterest.com",
+      "answers.yahoo.com",
+      "slideshare.net",
+      "scribd.com",
+      "academia.edu"
+    ],
+    "rationale": "taxonomy-rule: kr/general authoritative pool",
+    "source": "independent-taxonomy-v1",
+    "lang": "kr",
+    "qtype": "general"
+  },
+  "zh-fact-07": {
+    "relevantDomains": [
+      "wikipedia.org",
+      "baike.baidu.com"
+    ],
+    "mustNotDomains": [
+      "pinterest.com",
+      "answers.yahoo.com",
+      "slideshare.net",
+      "scribd.com",
+      "academia.edu"
+    ],
+    "rationale": "taxonomy-rule: zh/factual authoritative pool",
+    "source": "independent-taxonomy-v1",
+    "lang": "zh",
+    "qtype": "factual"
+  },
+  "zh-fact-08": {
+    "relevantDomains": [
+      "wikipedia.org",
+      "baike.baidu.com"
+    ],
+    "mustNotDomains": [
+      "pinterest.com",
+      "answers.yahoo.com",
+      "slideshare.net",
+      "scribd.com",
+      "academia.edu"
+    ],
+    "rationale": "taxonomy-rule: zh/factual authoritative pool",
+    "source": "independent-taxonomy-v1",
+    "lang": "zh",
+    "qtype": "factual"
+  },
+  "zh-fact-09": {
+    "relevantDomains": [
+      "wikipedia.org",
+      "baike.baidu.com"
+    ],
+    "mustNotDomains": [
+      "pinterest.com",
+      "answers.yahoo.com",
+      "slideshare.net",
+      "scribd.com",
+      "academia.edu"
+    ],
+    "rationale": "taxonomy-rule: zh/factual authoritative pool",
+    "source": "independent-taxonomy-v1",
+    "lang": "zh",
+    "qtype": "factual"
+  },
+  "zh-fact-10": {
+    "relevantDomains": [
+      "wikipedia.org",
+      "baike.baidu.com"
+    ],
+    "mustNotDomains": [
+      "pinterest.com",
+      "answers.yahoo.com",
+      "slideshare.net",
+      "scribd.com",
+      "academia.edu"
+    ],
+    "rationale": "taxonomy-rule: zh/factual authoritative pool",
+    "source": "independent-taxonomy-v1",
+    "lang": "zh",
+    "qtype": "factual"
+  },
+  "zh-fact-11": {
+    "relevantDomains": [
+      "wikipedia.org",
+      "baike.baidu.com"
+    ],
+    "mustNotDomains": [
+      "pinterest.com",
+      "answers.yahoo.com",
+      "slideshare.net",
+      "scribd.com",
+      "academia.edu"
+    ],
+    "rationale": "taxonomy-rule: zh/factual authoritative pool",
+    "source": "independent-taxonomy-v1",
+    "lang": "zh",
+    "qtype": "factual"
+  },
+  "zh-fact-12": {
+    "relevantDomains": [
+      "wikipedia.org",
+      "baike.baidu.com"
+    ],
+    "mustNotDomains": [
+      "pinterest.com",
+      "answers.yahoo.com",
+      "slideshare.net",
+      "scribd.com",
+      "academia.edu"
+    ],
+    "rationale": "taxonomy-rule: zh/factual authoritative pool",
+    "source": "independent-taxonomy-v1",
+    "lang": "zh",
+    "qtype": "factual"
+  },
+  "zh-fact-13": {
+    "relevantDomains": [
+      "wikipedia.org",
+      "baike.baidu.com"
+    ],
+    "mustNotDomains": [
+      "pinterest.com",
+      "answers.yahoo.com",
+      "slideshare.net",
+      "scribd.com",
+      "academia.edu"
+    ],
+    "rationale": "taxonomy-rule: zh/factual authoritative pool",
+    "source": "independent-taxonomy-v1",
+    "lang": "zh",
+    "qtype": "factual"
+  },
+  "zh-fact-14": {
+    "relevantDomains": [
+      "wikipedia.org",
+      "baike.baidu.com"
+    ],
+    "mustNotDomains": [
+      "pinterest.com",
+      "answers.yahoo.com",
+      "slideshare.net",
+      "scribd.com",
+      "academia.edu"
+    ],
+    "rationale": "taxonomy-rule: zh/factual authoritative pool",
+    "source": "independent-taxonomy-v1",
+    "lang": "zh",
+    "qtype": "factual"
+  },
+  "zh-fact-15": {
+    "relevantDomains": [
+      "wikipedia.org",
+      "baike.baidu.com"
+    ],
+    "mustNotDomains": [
+      "pinterest.com",
+      "answers.yahoo.com",
+      "slideshare.net",
+      "scribd.com",
+      "academia.edu"
+    ],
+    "rationale": "taxonomy-rule: zh/factual authoritative pool",
+    "source": "independent-taxonomy-v1",
+    "lang": "zh",
+    "qtype": "factual"
+  },
+  "zh-fact-16": {
+    "relevantDomains": [
+      "wikipedia.org",
+      "baike.baidu.com"
+    ],
+    "mustNotDomains": [
+      "pinterest.com",
+      "answers.yahoo.com",
+      "slideshare.net",
+      "scribd.com",
+      "academia.edu"
+    ],
+    "rationale": "taxonomy-rule: zh/factual authoritative pool",
+    "source": "independent-taxonomy-v1",
+    "lang": "zh",
+    "qtype": "factual"
+  },
+  "zh-tech-05": {
+    "relevantDomains": [
+      "developer.mozilla.org",
+      "github.com",
+      "csdn.net",
+      "juejin.cn",
+      "segmentfault.com",
+      "react.dev"
+    ],
+    "mustNotDomains": [
+      "pinterest.com",
+      "answers.yahoo.com",
+      "slideshare.net",
+      "scribd.com",
+      "academia.edu"
+    ],
+    "rationale": "taxonomy-rule: zh/technical authoritative pool",
+    "source": "independent-taxonomy-v1",
+    "lang": "zh",
+    "qtype": "technical"
+  },
+  "zh-tech-06": {
+    "relevantDomains": [
+      "developer.mozilla.org",
+      "github.com",
+      "csdn.net",
+      "juejin.cn",
+      "segmentfault.com",
+      "react.dev"
+    ],
+    "mustNotDomains": [
+      "pinterest.com",
+      "answers.yahoo.com",
+      "slideshare.net",
+      "scribd.com",
+      "academia.edu"
+    ],
+    "rationale": "taxonomy-rule: zh/technical authoritative pool",
+    "source": "independent-taxonomy-v1",
+    "lang": "zh",
+    "qtype": "technical"
+  },
+  "zh-tech-07": {
+    "relevantDomains": [
+      "developer.mozilla.org",
+      "github.com",
+      "csdn.net",
+      "juejin.cn",
+      "segmentfault.com",
+      "react.dev"
+    ],
+    "mustNotDomains": [
+      "pinterest.com",
+      "answers.yahoo.com",
+      "slideshare.net",
+      "scribd.com",
+      "academia.edu"
+    ],
+    "rationale": "taxonomy-rule: zh/technical authoritative pool",
+    "source": "independent-taxonomy-v1",
+    "lang": "zh",
+    "qtype": "technical"
+  },
+  "zh-tech-08": {
+    "relevantDomains": [
+      "developer.mozilla.org",
+      "github.com",
+      "csdn.net",
+      "juejin.cn",
+      "segmentfault.com",
+      "react.dev"
+    ],
+    "mustNotDomains": [
+      "pinterest.com",
+      "answers.yahoo.com",
+      "slideshare.net",
+      "scribd.com",
+      "academia.edu"
+    ],
+    "rationale": "taxonomy-rule: zh/technical authoritative pool",
+    "source": "independent-taxonomy-v1",
+    "lang": "zh",
+    "qtype": "technical"
+  },
+  "zh-tech-09": {
+    "relevantDomains": [
+      "developer.mozilla.org",
+      "github.com",
+      "csdn.net",
+      "juejin.cn",
+      "segmentfault.com",
+      "react.dev"
+    ],
+    "mustNotDomains": [
+      "pinterest.com",
+      "answers.yahoo.com",
+      "slideshare.net",
+      "scribd.com",
+      "academia.edu"
+    ],
+    "rationale": "taxonomy-rule: zh/technical authoritative pool",
+    "source": "independent-taxonomy-v1",
+    "lang": "zh",
+    "qtype": "technical"
+  },
+  "zh-tech-10": {
+    "relevantDomains": [
+      "developer.mozilla.org",
+      "github.com",
+      "csdn.net",
+      "juejin.cn",
+      "segmentfault.com",
+      "react.dev"
+    ],
+    "mustNotDomains": [
+      "pinterest.com",
+      "answers.yahoo.com",
+      "slideshare.net",
+      "scribd.com",
+      "academia.edu"
+    ],
+    "rationale": "taxonomy-rule: zh/technical authoritative pool",
+    "source": "independent-taxonomy-v1",
+    "lang": "zh",
+    "qtype": "technical"
+  },
+  "zh-tech-11": {
+    "relevantDomains": [
+      "developer.mozilla.org",
+      "github.com",
+      "csdn.net",
+      "juejin.cn",
+      "segmentfault.com",
+      "react.dev"
+    ],
+    "mustNotDomains": [
+      "pinterest.com",
+      "answers.yahoo.com",
+      "slideshare.net",
+      "scribd.com",
+      "academia.edu"
+    ],
+    "rationale": "taxonomy-rule: zh/technical authoritative pool",
+    "source": "independent-taxonomy-v1",
+    "lang": "zh",
+    "qtype": "technical"
+  },
+  "zh-tech-12": {
+    "relevantDomains": [
+      "developer.mozilla.org",
+      "github.com",
+      "csdn.net",
+      "juejin.cn",
+      "segmentfault.com",
+      "react.dev"
+    ],
+    "mustNotDomains": [
+      "pinterest.com",
+      "answers.yahoo.com",
+      "slideshare.net",
+      "scribd.com",
+      "academia.edu"
+    ],
+    "rationale": "taxonomy-rule: zh/technical authoritative pool",
+    "source": "independent-taxonomy-v1",
+    "lang": "zh",
+    "qtype": "technical"
+  },
+  "zh-tech-13": {
+    "relevantDomains": [
+      "developer.mozilla.org",
+      "github.com",
+      "csdn.net",
+      "juejin.cn",
+      "segmentfault.com",
+      "react.dev"
+    ],
+    "mustNotDomains": [
+      "pinterest.com",
+      "answers.yahoo.com",
+      "slideshare.net",
+      "scribd.com",
+      "academia.edu"
+    ],
+    "rationale": "taxonomy-rule: zh/technical authoritative pool",
+    "source": "independent-taxonomy-v1",
+    "lang": "zh",
+    "qtype": "technical"
+  },
+  "zh-tech-14": {
+    "relevantDomains": [
+      "developer.mozilla.org",
+      "github.com",
+      "csdn.net",
+      "juejin.cn",
+      "segmentfault.com",
+      "react.dev"
+    ],
+    "mustNotDomains": [
+      "pinterest.com",
+      "answers.yahoo.com",
+      "slideshare.net",
+      "scribd.com",
+      "academia.edu"
+    ],
+    "rationale": "taxonomy-rule: zh/technical authoritative pool",
+    "source": "independent-taxonomy-v1",
+    "lang": "zh",
+    "qtype": "technical"
+  },
+  "zh-news-06": {
+    "relevantDomains": [
+      "news.sina.com.cn",
+      "thepaper.cn",
+      "caixin.com",
+      "people.com.cn",
+      "cctv.com",
+      "36kr.com"
+    ],
+    "mustNotDomains": [
+      "pinterest.com",
+      "answers.yahoo.com",
+      "slideshare.net",
+      "scribd.com",
+      "academia.edu"
+    ],
+    "rationale": "taxonomy-rule: zh/news authoritative pool",
+    "source": "independent-taxonomy-v1",
+    "lang": "zh",
+    "qtype": "news"
+  },
+  "zh-news-07": {
+    "relevantDomains": [
+      "news.sina.com.cn",
+      "thepaper.cn",
+      "caixin.com",
+      "people.com.cn",
+      "cctv.com",
+      "36kr.com"
+    ],
+    "mustNotDomains": [
+      "pinterest.com",
+      "answers.yahoo.com",
+      "slideshare.net",
+      "scribd.com",
+      "academia.edu"
+    ],
+    "rationale": "taxonomy-rule: zh/news authoritative pool",
+    "source": "independent-taxonomy-v1",
+    "lang": "zh",
+    "qtype": "news"
+  },
+  "zh-news-08": {
+    "relevantDomains": [
+      "news.sina.com.cn",
+      "thepaper.cn",
+      "caixin.com",
+      "people.com.cn",
+      "cctv.com",
+      "36kr.com"
+    ],
+    "mustNotDomains": [
+      "pinterest.com",
+      "answers.yahoo.com",
+      "slideshare.net",
+      "scribd.com",
+      "academia.edu"
+    ],
+    "rationale": "taxonomy-rule: zh/news authoritative pool",
+    "source": "independent-taxonomy-v1",
+    "lang": "zh",
+    "qtype": "news"
+  },
+  "zh-news-09": {
+    "relevantDomains": [
+      "news.sina.com.cn",
+      "thepaper.cn",
+      "caixin.com",
+      "people.com.cn",
+      "cctv.com",
+      "36kr.com"
+    ],
+    "mustNotDomains": [
+      "pinterest.com",
+      "answers.yahoo.com",
+      "slideshare.net",
+      "scribd.com",
+      "academia.edu"
+    ],
+    "rationale": "taxonomy-rule: zh/news authoritative pool",
+    "source": "independent-taxonomy-v1",
+    "lang": "zh",
+    "qtype": "news"
+  },
+  "zh-news-10": {
+    "relevantDomains": [
+      "news.sina.com.cn",
+      "thepaper.cn",
+      "caixin.com",
+      "people.com.cn",
+      "cctv.com",
+      "36kr.com"
+    ],
+    "mustNotDomains": [
+      "pinterest.com",
+      "answers.yahoo.com",
+      "slideshare.net",
+      "scribd.com",
+      "academia.edu"
+    ],
+    "rationale": "taxonomy-rule: zh/news authoritative pool",
+    "source": "independent-taxonomy-v1",
+    "lang": "zh",
+    "qtype": "news"
+  },
+  "zh-news-11": {
+    "relevantDomains": [
+      "news.sina.com.cn",
+      "thepaper.cn",
+      "caixin.com",
+      "people.com.cn",
+      "cctv.com",
+      "36kr.com"
+    ],
+    "mustNotDomains": [
+      "pinterest.com",
+      "answers.yahoo.com",
+      "slideshare.net",
+      "scribd.com",
+      "academia.edu"
+    ],
+    "rationale": "taxonomy-rule: zh/news authoritative pool",
+    "source": "independent-taxonomy-v1",
+    "lang": "zh",
+    "qtype": "news"
+  },
+  "zh-news-12": {
+    "relevantDomains": [
+      "news.sina.com.cn",
+      "thepaper.cn",
+      "caixin.com",
+      "people.com.cn",
+      "cctv.com",
+      "36kr.com"
+    ],
+    "mustNotDomains": [
+      "pinterest.com",
+      "answers.yahoo.com",
+      "slideshare.net",
+      "scribd.com",
+      "academia.edu"
+    ],
+    "rationale": "taxonomy-rule: zh/news authoritative pool",
+    "source": "independent-taxonomy-v1",
+    "lang": "zh",
+    "qtype": "news"
+  },
+  "zh-news-13": {
+    "relevantDomains": [
+      "news.sina.com.cn",
+      "thepaper.cn",
+      "caixin.com",
+      "people.com.cn",
+      "cctv.com",
+      "36kr.com"
+    ],
+    "mustNotDomains": [
+      "pinterest.com",
+      "answers.yahoo.com",
+      "slideshare.net",
+      "scribd.com",
+      "academia.edu"
+    ],
+    "rationale": "taxonomy-rule: zh/news authoritative pool",
+    "source": "independent-taxonomy-v1",
+    "lang": "zh",
+    "qtype": "news"
+  },
+  "zh-news-14": {
+    "relevantDomains": [
+      "news.sina.com.cn",
+      "thepaper.cn",
+      "caixin.com",
+      "people.com.cn",
+      "cctv.com",
+      "36kr.com"
+    ],
+    "mustNotDomains": [
+      "pinterest.com",
+      "answers.yahoo.com",
+      "slideshare.net",
+      "scribd.com",
+      "academia.edu"
+    ],
+    "rationale": "taxonomy-rule: zh/news authoritative pool",
+    "source": "independent-taxonomy-v1",
+    "lang": "zh",
+    "qtype": "news"
+  },
+  "zh-news-15": {
+    "relevantDomains": [
+      "news.sina.com.cn",
+      "thepaper.cn",
+      "caixin.com",
+      "people.com.cn",
+      "cctv.com",
+      "36kr.com"
+    ],
+    "mustNotDomains": [
+      "pinterest.com",
+      "answers.yahoo.com",
+      "slideshare.net",
+      "scribd.com",
+      "academia.edu"
+    ],
+    "rationale": "taxonomy-rule: zh/news authoritative pool",
+    "source": "independent-taxonomy-v1",
+    "lang": "zh",
+    "qtype": "news"
+  },
+  "zh-general-06": {
+    "relevantDomains": [
+      "baike.baidu.com",
+      "wikipedia.org",
+      "zhihu.com"
+    ],
+    "mustNotDomains": [
+      "pinterest.com",
+      "answers.yahoo.com",
+      "slideshare.net",
+      "scribd.com",
+      "academia.edu"
+    ],
+    "rationale": "taxonomy-rule: zh/general authoritative pool",
+    "source": "independent-taxonomy-v1",
+    "lang": "zh",
+    "qtype": "general"
+  },
+  "zh-general-07": {
+    "relevantDomains": [
+      "baike.baidu.com",
+      "wikipedia.org",
+      "zhihu.com"
+    ],
+    "mustNotDomains": [
+      "pinterest.com",
+      "answers.yahoo.com",
+      "slideshare.net",
+      "scribd.com",
+      "academia.edu"
+    ],
+    "rationale": "taxonomy-rule: zh/general authoritative pool",
+    "source": "independent-taxonomy-v1",
+    "lang": "zh",
+    "qtype": "general"
+  },
+  "zh-general-08": {
+    "relevantDomains": [
+      "baike.baidu.com",
+      "wikipedia.org",
+      "zhihu.com"
+    ],
+    "mustNotDomains": [
+      "pinterest.com",
+      "answers.yahoo.com",
+      "slideshare.net",
+      "scribd.com",
+      "academia.edu"
+    ],
+    "rationale": "taxonomy-rule: zh/general authoritative pool",
+    "source": "independent-taxonomy-v1",
+    "lang": "zh",
+    "qtype": "general"
+  },
+  "zh-general-09": {
+    "relevantDomains": [
+      "baike.baidu.com",
+      "wikipedia.org",
+      "zhihu.com"
+    ],
+    "mustNotDomains": [
+      "pinterest.com",
+      "answers.yahoo.com",
+      "slideshare.net",
+      "scribd.com",
+      "academia.edu"
+    ],
+    "rationale": "taxonomy-rule: zh/general authoritative pool",
+    "source": "independent-taxonomy-v1",
+    "lang": "zh",
+    "qtype": "general"
+  },
+  "zh-general-10": {
+    "relevantDomains": [
+      "baike.baidu.com",
+      "wikipedia.org",
+      "zhihu.com"
+    ],
+    "mustNotDomains": [
+      "pinterest.com",
+      "answers.yahoo.com",
+      "slideshare.net",
+      "scribd.com",
+      "academia.edu"
+    ],
+    "rationale": "taxonomy-rule: zh/general authoritative pool",
+    "source": "independent-taxonomy-v1",
+    "lang": "zh",
+    "qtype": "general"
+  },
+  "zh-general-11": {
+    "relevantDomains": [
+      "baike.baidu.com",
+      "wikipedia.org",
+      "zhihu.com"
+    ],
+    "mustNotDomains": [
+      "pinterest.com",
+      "answers.yahoo.com",
+      "slideshare.net",
+      "scribd.com",
+      "academia.edu"
+    ],
+    "rationale": "taxonomy-rule: zh/general authoritative pool",
+    "source": "independent-taxonomy-v1",
+    "lang": "zh",
+    "qtype": "general"
+  },
+  "zh-general-12": {
+    "relevantDomains": [
+      "baike.baidu.com",
+      "wikipedia.org",
+      "zhihu.com"
+    ],
+    "mustNotDomains": [
+      "pinterest.com",
+      "answers.yahoo.com",
+      "slideshare.net",
+      "scribd.com",
+      "academia.edu"
+    ],
+    "rationale": "taxonomy-rule: zh/general authoritative pool",
+    "source": "independent-taxonomy-v1",
+    "lang": "zh",
+    "qtype": "general"
+  },
+  "zh-general-13": {
+    "relevantDomains": [
+      "baike.baidu.com",
+      "wikipedia.org",
+      "zhihu.com"
+    ],
+    "mustNotDomains": [
+      "pinterest.com",
+      "answers.yahoo.com",
+      "slideshare.net",
+      "scribd.com",
+      "academia.edu"
+    ],
+    "rationale": "taxonomy-rule: zh/general authoritative pool",
+    "source": "independent-taxonomy-v1",
+    "lang": "zh",
+    "qtype": "general"
+  },
+  "zh-general-14": {
+    "relevantDomains": [
+      "baike.baidu.com",
+      "wikipedia.org",
+      "zhihu.com"
+    ],
+    "mustNotDomains": [
+      "pinterest.com",
+      "answers.yahoo.com",
+      "slideshare.net",
+      "scribd.com",
+      "academia.edu"
+    ],
+    "rationale": "taxonomy-rule: zh/general authoritative pool",
+    "source": "independent-taxonomy-v1",
+    "lang": "zh",
+    "qtype": "general"
+  },
+  "ja-fact-05": {
+    "relevantDomains": [
+      "wikipedia.org"
+    ],
+    "mustNotDomains": [
+      "pinterest.com",
+      "answers.yahoo.com",
+      "slideshare.net",
+      "scribd.com",
+      "academia.edu"
+    ],
+    "rationale": "taxonomy-rule: ja/factual authoritative pool",
+    "source": "independent-taxonomy-v1",
+    "lang": "ja",
+    "qtype": "factual"
+  },
+  "ja-fact-06": {
+    "relevantDomains": [
+      "wikipedia.org"
+    ],
+    "mustNotDomains": [
+      "pinterest.com",
+      "answers.yahoo.com",
+      "slideshare.net",
+      "scribd.com",
+      "academia.edu"
+    ],
+    "rationale": "taxonomy-rule: ja/factual authoritative pool",
+    "source": "independent-taxonomy-v1",
+    "lang": "ja",
+    "qtype": "factual"
+  },
+  "ja-fact-07": {
+    "relevantDomains": [
+      "wikipedia.org"
+    ],
+    "mustNotDomains": [
+      "pinterest.com",
+      "answers.yahoo.com",
+      "slideshare.net",
+      "scribd.com",
+      "academia.edu"
+    ],
+    "rationale": "taxonomy-rule: ja/factual authoritative pool",
+    "source": "independent-taxonomy-v1",
+    "lang": "ja",
+    "qtype": "factual"
+  },
+  "ja-fact-08": {
+    "relevantDomains": [
+      "wikipedia.org"
+    ],
+    "mustNotDomains": [
+      "pinterest.com",
+      "answers.yahoo.com",
+      "slideshare.net",
+      "scribd.com",
+      "academia.edu"
+    ],
+    "rationale": "taxonomy-rule: ja/factual authoritative pool",
+    "source": "independent-taxonomy-v1",
+    "lang": "ja",
+    "qtype": "factual"
+  },
+  "ja-fact-09": {
+    "relevantDomains": [
+      "wikipedia.org"
+    ],
+    "mustNotDomains": [
+      "pinterest.com",
+      "answers.yahoo.com",
+      "slideshare.net",
+      "scribd.com",
+      "academia.edu"
+    ],
+    "rationale": "taxonomy-rule: ja/factual authoritative pool",
+    "source": "independent-taxonomy-v1",
+    "lang": "ja",
+    "qtype": "factual"
+  },
+  "ja-fact-10": {
+    "relevantDomains": [
+      "wikipedia.org"
+    ],
+    "mustNotDomains": [
+      "pinterest.com",
+      "answers.yahoo.com",
+      "slideshare.net",
+      "scribd.com",
+      "academia.edu"
+    ],
+    "rationale": "taxonomy-rule: ja/factual authoritative pool",
+    "source": "independent-taxonomy-v1",
+    "lang": "ja",
+    "qtype": "factual"
+  },
+  "ja-fact-11": {
+    "relevantDomains": [
+      "wikipedia.org"
+    ],
+    "mustNotDomains": [
+      "pinterest.com",
+      "answers.yahoo.com",
+      "slideshare.net",
+      "scribd.com",
+      "academia.edu"
+    ],
+    "rationale": "taxonomy-rule: ja/factual authoritative pool",
+    "source": "independent-taxonomy-v1",
+    "lang": "ja",
+    "qtype": "factual"
+  },
+  "ja-fact-12": {
+    "relevantDomains": [
+      "wikipedia.org"
+    ],
+    "mustNotDomains": [
+      "pinterest.com",
+      "answers.yahoo.com",
+      "slideshare.net",
+      "scribd.com",
+      "academia.edu"
+    ],
+    "rationale": "taxonomy-rule: ja/factual authoritative pool",
+    "source": "independent-taxonomy-v1",
+    "lang": "ja",
+    "qtype": "factual"
+  },
+  "ja-tech-05": {
+    "relevantDomains": [
+      "developer.mozilla.org",
+      "github.com",
+      "qiita.com",
+      "zenn.dev",
+      "react.dev"
+    ],
+    "mustNotDomains": [
+      "pinterest.com",
+      "answers.yahoo.com",
+      "slideshare.net",
+      "scribd.com",
+      "academia.edu"
+    ],
+    "rationale": "taxonomy-rule: ja/technical authoritative pool",
+    "source": "independent-taxonomy-v1",
+    "lang": "ja",
+    "qtype": "technical"
+  },
+  "ja-tech-06": {
+    "relevantDomains": [
+      "developer.mozilla.org",
+      "github.com",
+      "qiita.com",
+      "zenn.dev",
+      "react.dev"
+    ],
+    "mustNotDomains": [
+      "pinterest.com",
+      "answers.yahoo.com",
+      "slideshare.net",
+      "scribd.com",
+      "academia.edu"
+    ],
+    "rationale": "taxonomy-rule: ja/technical authoritative pool",
+    "source": "independent-taxonomy-v1",
+    "lang": "ja",
+    "qtype": "technical"
+  },
+  "ja-tech-07": {
+    "relevantDomains": [
+      "developer.mozilla.org",
+      "github.com",
+      "qiita.com",
+      "zenn.dev",
+      "react.dev"
+    ],
+    "mustNotDomains": [
+      "pinterest.com",
+      "answers.yahoo.com",
+      "slideshare.net",
+      "scribd.com",
+      "academia.edu"
+    ],
+    "rationale": "taxonomy-rule: ja/technical authoritative pool",
+    "source": "independent-taxonomy-v1",
+    "lang": "ja",
+    "qtype": "technical"
+  },
+  "ja-tech-08": {
+    "relevantDomains": [
+      "developer.mozilla.org",
+      "github.com",
+      "qiita.com",
+      "zenn.dev",
+      "react.dev"
+    ],
+    "mustNotDomains": [
+      "pinterest.com",
+      "answers.yahoo.com",
+      "slideshare.net",
+      "scribd.com",
+      "academia.edu"
+    ],
+    "rationale": "taxonomy-rule: ja/technical authoritative pool",
+    "source": "independent-taxonomy-v1",
+    "lang": "ja",
+    "qtype": "technical"
+  },
+  "ja-tech-09": {
+    "relevantDomains": [
+      "developer.mozilla.org",
+      "github.com",
+      "qiita.com",
+      "zenn.dev",
+      "react.dev"
+    ],
+    "mustNotDomains": [
+      "pinterest.com",
+      "answers.yahoo.com",
+      "slideshare.net",
+      "scribd.com",
+      "academia.edu"
+    ],
+    "rationale": "taxonomy-rule: ja/technical authoritative pool",
+    "source": "independent-taxonomy-v1",
+    "lang": "ja",
+    "qtype": "technical"
+  },
+  "ja-tech-10": {
+    "relevantDomains": [
+      "developer.mozilla.org",
+      "github.com",
+      "qiita.com",
+      "zenn.dev",
+      "react.dev"
+    ],
+    "mustNotDomains": [
+      "pinterest.com",
+      "answers.yahoo.com",
+      "slideshare.net",
+      "scribd.com",
+      "academia.edu"
+    ],
+    "rationale": "taxonomy-rule: ja/technical authoritative pool",
+    "source": "independent-taxonomy-v1",
+    "lang": "ja",
+    "qtype": "technical"
+  },
+  "ja-tech-11": {
+    "relevantDomains": [
+      "developer.mozilla.org",
+      "github.com",
+      "qiita.com",
+      "zenn.dev",
+      "react.dev"
+    ],
+    "mustNotDomains": [
+      "pinterest.com",
+      "answers.yahoo.com",
+      "slideshare.net",
+      "scribd.com",
+      "academia.edu"
+    ],
+    "rationale": "taxonomy-rule: ja/technical authoritative pool",
+    "source": "independent-taxonomy-v1",
+    "lang": "ja",
+    "qtype": "technical"
+  },
+  "ja-tech-12": {
+    "relevantDomains": [
+      "developer.mozilla.org",
+      "github.com",
+      "qiita.com",
+      "zenn.dev",
+      "react.dev"
+    ],
+    "mustNotDomains": [
+      "pinterest.com",
+      "answers.yahoo.com",
+      "slideshare.net",
+      "scribd.com",
+      "academia.edu"
+    ],
+    "rationale": "taxonomy-rule: ja/technical authoritative pool",
+    "source": "independent-taxonomy-v1",
+    "lang": "ja",
+    "qtype": "technical"
+  },
+  "ja-news-05": {
+    "relevantDomains": [
+      "nhk.or.jp",
+      "asahi.com",
+      "mainichi.jp",
+      "nikkei.com",
+      "yomiuri.co.jp"
+    ],
+    "mustNotDomains": [
+      "pinterest.com",
+      "answers.yahoo.com",
+      "slideshare.net",
+      "scribd.com",
+      "academia.edu"
+    ],
+    "rationale": "taxonomy-rule: ja/news authoritative pool",
+    "source": "independent-taxonomy-v1",
+    "lang": "ja",
+    "qtype": "news"
+  },
+  "ja-news-06": {
+    "relevantDomains": [
+      "nhk.or.jp",
+      "asahi.com",
+      "mainichi.jp",
+      "nikkei.com",
+      "yomiuri.co.jp"
+    ],
+    "mustNotDomains": [
+      "pinterest.com",
+      "answers.yahoo.com",
+      "slideshare.net",
+      "scribd.com",
+      "academia.edu"
+    ],
+    "rationale": "taxonomy-rule: ja/news authoritative pool",
+    "source": "independent-taxonomy-v1",
+    "lang": "ja",
+    "qtype": "news"
+  },
+  "ja-news-07": {
+    "relevantDomains": [
+      "nhk.or.jp",
+      "asahi.com",
+      "mainichi.jp",
+      "nikkei.com",
+      "yomiuri.co.jp"
+    ],
+    "mustNotDomains": [
+      "pinterest.com",
+      "answers.yahoo.com",
+      "slideshare.net",
+      "scribd.com",
+      "academia.edu"
+    ],
+    "rationale": "taxonomy-rule: ja/news authoritative pool",
+    "source": "independent-taxonomy-v1",
+    "lang": "ja",
+    "qtype": "news"
+  },
+  "ja-news-08": {
+    "relevantDomains": [
+      "nhk.or.jp",
+      "asahi.com",
+      "mainichi.jp",
+      "nikkei.com",
+      "yomiuri.co.jp"
+    ],
+    "mustNotDomains": [
+      "pinterest.com",
+      "answers.yahoo.com",
+      "slideshare.net",
+      "scribd.com",
+      "academia.edu"
+    ],
+    "rationale": "taxonomy-rule: ja/news authoritative pool",
+    "source": "independent-taxonomy-v1",
+    "lang": "ja",
+    "qtype": "news"
+  },
+  "ja-news-09": {
+    "relevantDomains": [
+      "nhk.or.jp",
+      "asahi.com",
+      "mainichi.jp",
+      "nikkei.com",
+      "yomiuri.co.jp"
+    ],
+    "mustNotDomains": [
+      "pinterest.com",
+      "answers.yahoo.com",
+      "slideshare.net",
+      "scribd.com",
+      "academia.edu"
+    ],
+    "rationale": "taxonomy-rule: ja/news authoritative pool",
+    "source": "independent-taxonomy-v1",
+    "lang": "ja",
+    "qtype": "news"
+  },
+  "ja-news-10": {
+    "relevantDomains": [
+      "nhk.or.jp",
+      "asahi.com",
+      "mainichi.jp",
+      "nikkei.com",
+      "yomiuri.co.jp"
+    ],
+    "mustNotDomains": [
+      "pinterest.com",
+      "answers.yahoo.com",
+      "slideshare.net",
+      "scribd.com",
+      "academia.edu"
+    ],
+    "rationale": "taxonomy-rule: ja/news authoritative pool",
+    "source": "independent-taxonomy-v1",
+    "lang": "ja",
+    "qtype": "news"
+  },
+  "ja-news-11": {
+    "relevantDomains": [
+      "nhk.or.jp",
+      "asahi.com",
+      "mainichi.jp",
+      "nikkei.com",
+      "yomiuri.co.jp"
+    ],
+    "mustNotDomains": [
+      "pinterest.com",
+      "answers.yahoo.com",
+      "slideshare.net",
+      "scribd.com",
+      "academia.edu"
+    ],
+    "rationale": "taxonomy-rule: ja/news authoritative pool",
+    "source": "independent-taxonomy-v1",
+    "lang": "ja",
+    "qtype": "news"
+  },
+  "xl-06": {
+    "relevantDomains": [
+      "yna.co.kr",
+      "yonhapnewstv.co.kr",
+      "hankyung.com",
+      "sedaily.com",
+      "chosun.com",
+      "donga.com",
+      "hani.co.kr",
+      "khan.co.kr",
+      "mk.co.kr",
+      "n.news.naver.com"
+    ],
+    "mustNotDomains": [
+      "pinterest.com",
+      "answers.yahoo.com",
+      "slideshare.net",
+      "scribd.com",
+      "academia.edu"
+    ],
+    "rationale": "taxonomy-rule: kr/news authoritative pool",
+    "source": "independent-taxonomy-v1",
+    "lang": "kr",
+    "qtype": "news"
+  },
+  "kr-news-17": {
+    "relevantDomains": [
+      "yna.co.kr",
+      "yonhapnewstv.co.kr",
+      "hankyung.com",
+      "sedaily.com",
+      "chosun.com",
+      "donga.com",
+      "hani.co.kr",
+      "khan.co.kr",
+      "mk.co.kr",
+      "n.news.naver.com"
+    ],
+    "mustNotDomains": [
+      "pinterest.com",
+      "answers.yahoo.com",
+      "slideshare.net",
+      "scribd.com",
+      "academia.edu"
+    ],
+    "rationale": "taxonomy-rule: kr/news authoritative pool",
+    "source": "independent-taxonomy-v1",
+    "lang": "kr",
+    "qtype": "news"
+  },
+  "kr-news-18": {
+    "relevantDomains": [
+      "yna.co.kr",
+      "yonhapnewstv.co.kr",
+      "hankyung.com",
+      "sedaily.com",
+      "chosun.com",
+      "donga.com",
+      "hani.co.kr",
+      "khan.co.kr",
+      "mk.co.kr",
+      "n.news.naver.com"
+    ],
+    "mustNotDomains": [
+      "pinterest.com",
+      "answers.yahoo.com",
+      "slideshare.net",
+      "scribd.com",
+      "academia.edu"
+    ],
+    "rationale": "taxonomy-rule: kr/news authoritative pool",
+    "source": "independent-taxonomy-v1",
+    "lang": "kr",
+    "qtype": "news"
+  },
+  "kr-news-19": {
+    "relevantDomains": [
+      "yna.co.kr",
+      "yonhapnewstv.co.kr",
+      "hankyung.com",
+      "sedaily.com",
+      "chosun.com",
+      "donga.com",
+      "hani.co.kr",
+      "khan.co.kr",
+      "mk.co.kr",
+      "n.news.naver.com"
+    ],
+    "mustNotDomains": [
+      "pinterest.com",
+      "answers.yahoo.com",
+      "slideshare.net",
+      "scribd.com",
+      "academia.edu"
+    ],
+    "rationale": "taxonomy-rule: kr/news authoritative pool",
+    "source": "independent-taxonomy-v1",
+    "lang": "kr",
+    "qtype": "news"
+  },
+  "kr-news-20": {
+    "relevantDomains": [
+      "yna.co.kr",
+      "yonhapnewstv.co.kr",
+      "hankyung.com",
+      "sedaily.com",
+      "chosun.com",
+      "donga.com",
+      "hani.co.kr",
+      "khan.co.kr",
+      "mk.co.kr",
+      "n.news.naver.com"
+    ],
+    "mustNotDomains": [
+      "pinterest.com",
+      "answers.yahoo.com",
+      "slideshare.net",
+      "scribd.com",
+      "academia.edu"
+    ],
+    "rationale": "taxonomy-rule: kr/news authoritative pool",
+    "source": "independent-taxonomy-v1",
+    "lang": "kr",
+    "qtype": "news"
+  },
+  "kr-stock-16": {
+    "relevantDomains": [
+      "krx.co.kr",
+      "finance.naver.com",
+      "finance.yahoo.com",
+      "dart.fss.or.kr",
+      "investing.com"
+    ],
+    "mustNotDomains": [
+      "pinterest.com",
+      "answers.yahoo.com",
+      "slideshare.net",
+      "scribd.com",
+      "academia.edu"
+    ],
+    "rationale": "taxonomy-rule: kr/financial authoritative pool",
+    "source": "independent-taxonomy-v1",
+    "lang": "kr",
+    "qtype": "financial"
+  },
+  "kr-stock-17": {
+    "relevantDomains": [
+      "krx.co.kr",
+      "finance.naver.com",
+      "finance.yahoo.com",
+      "dart.fss.or.kr",
+      "investing.com"
+    ],
+    "mustNotDomains": [
+      "pinterest.com",
+      "answers.yahoo.com",
+      "slideshare.net",
+      "scribd.com",
+      "academia.edu"
+    ],
+    "rationale": "taxonomy-rule: kr/financial authoritative pool",
+    "source": "independent-taxonomy-v1",
+    "lang": "kr",
+    "qtype": "financial"
+  },
+  "kr-stock-18": {
+    "relevantDomains": [
+      "krx.co.kr",
+      "finance.naver.com",
+      "finance.yahoo.com",
+      "dart.fss.or.kr",
+      "investing.com"
+    ],
+    "mustNotDomains": [
+      "pinterest.com",
+      "answers.yahoo.com",
+      "slideshare.net",
+      "scribd.com",
+      "academia.edu"
+    ],
+    "rationale": "taxonomy-rule: kr/financial authoritative pool",
+    "source": "independent-taxonomy-v1",
+    "lang": "kr",
+    "qtype": "financial"
+  },
+  "kr-stock-19": {
+    "relevantDomains": [
+      "krx.co.kr",
+      "finance.naver.com",
+      "finance.yahoo.com",
+      "dart.fss.or.kr",
+      "investing.com"
+    ],
+    "mustNotDomains": [
+      "pinterest.com",
+      "answers.yahoo.com",
+      "slideshare.net",
+      "scribd.com",
+      "academia.edu"
+    ],
+    "rationale": "taxonomy-rule: kr/financial authoritative pool",
+    "source": "independent-taxonomy-v1",
+    "lang": "kr",
+    "qtype": "financial"
+  },
+  "kr-stock-20": {
+    "relevantDomains": [
+      "krx.co.kr",
+      "finance.naver.com",
+      "finance.yahoo.com",
+      "dart.fss.or.kr",
+      "investing.com"
+    ],
+    "mustNotDomains": [
+      "pinterest.com",
+      "answers.yahoo.com",
+      "slideshare.net",
+      "scribd.com",
+      "academia.edu"
+    ],
+    "rationale": "taxonomy-rule: kr/financial authoritative pool",
+    "source": "independent-taxonomy-v1",
+    "lang": "kr",
+    "qtype": "financial"
+  },
+  "kr-stock-21": {
+    "relevantDomains": [
+      "krx.co.kr",
+      "finance.naver.com",
+      "finance.yahoo.com",
+      "dart.fss.or.kr",
+      "investing.com"
+    ],
+    "mustNotDomains": [
+      "pinterest.com",
+      "answers.yahoo.com",
+      "slideshare.net",
+      "scribd.com",
+      "academia.edu"
+    ],
+    "rationale": "taxonomy-rule: kr/financial authoritative pool",
+    "source": "independent-taxonomy-v1",
+    "lang": "kr",
+    "qtype": "financial"
+  },
+  "kr-stock-22": {
+    "relevantDomains": [
+      "krx.co.kr",
+      "finance.naver.com",
+      "finance.yahoo.com",
+      "dart.fss.or.kr",
+      "investing.com"
+    ],
+    "mustNotDomains": [
+      "pinterest.com",
+      "answers.yahoo.com",
+      "slideshare.net",
+      "scribd.com",
+      "academia.edu"
+    ],
+    "rationale": "taxonomy-rule: kr/financial authoritative pool",
+    "source": "independent-taxonomy-v1",
+    "lang": "kr",
+    "qtype": "financial"
+  }
+}

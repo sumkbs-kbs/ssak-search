@@ -51,13 +51,23 @@ export function parseGoldStandards(data: unknown): Record<string, string[]> {
   return result
 }
 
-export function loadGoldStandards(): Record<string, string[]> {
+export function loadGoldStandards(overridePath?: string): Record<string, string[]> {
   try {
-    const path = resolve(process.cwd(), 'eval', 'gold-standards.json')
+    // Gold path is overridable (--gold) so an independent adjudicated corpus can
+    // be scored against the same queries without touching the curated default —
+    // the two NDCG numbers must be comparable, never silently swapped.
+    const path = overridePath ?? resolve(process.cwd(), 'eval', 'gold-standards.json')
     const raw = readFileSync(path, 'utf-8')
     return parseGoldStandards(JSON.parse(raw))
-  } catch {
-    // Gold standards not available — ranking metrics will be skipped
+  } catch (err) {
+    // Default-path failure keeps the legacy soft-skip; an EXPLICIT override must
+    // fail loudly — silently scoring zero queries with the wrong gold is the
+    // exact self-referential metric bug this option exists to prevent.
+    if (overridePath) {
+      throw new Error(
+        `[eval] independent gold load failed: ${overridePath} (${err instanceof Error ? err.message : String(err)})`,
+      )
+    }
     return {}
   }
 }

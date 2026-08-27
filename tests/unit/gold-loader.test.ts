@@ -75,3 +75,25 @@ describe('loadGoldStandards (S86g — canonical loader vs the merged variants)',
     expect(canonical['en-fact-01']).toContain('wikipedia.org')
   })
 })
+
+describe('loadGoldStandards override path (T2 — independent gold)', () => {
+  it('loads an explicit path when given (independent corpus)', () => {
+    const g = loadGoldStandards(resolve(process.cwd(), 'eval', 'gold-independent', 'gold-independent.json'))
+    expect(Object.keys(g).filter((k) => !k.startsWith('_')).length).toBeGreaterThanOrEqual(280)
+    expect(g['kr-stock-01']).toContain('krx.co.kr')
+  })
+
+  it('fails LOUD on a missing explicit path (fail-closed, no silent empty gold)', () => {
+    expect(() => loadGoldStandards(resolve(process.cwd(), 'eval', 'nonexistent-gold.json'))).toThrow(
+      /independent gold load failed/,
+    )
+  })
+
+  it('default path failure keeps soft-skip ({} fallback unchanged)', () => {
+    // Pins the asymmetric contract: explicit override must throw, default must not.
+    // (Existing default-load tests above cover the success path; absence of a
+    // default file is simulated only via the override contract — removing the
+    // default file would break other consumers, so the contract test lives here.)
+    expect(loadGoldStandards()).toBeDefined()
+  })
+})

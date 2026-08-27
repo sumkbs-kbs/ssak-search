@@ -1,17 +1,6 @@
 name: Evaluation
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - 'src/**'
-      - 'eval/**'
-      - 'package.json'
-  pull_request:
-    branches: [main]
-    paths:
-      - 'src/**'
-      - 'eval/**'
   schedule:
     # Weekly full run (with cache measurement) → auto-updates README metrics
     - cron: '0 3 * * 1'  # Monday 03:00 UTC

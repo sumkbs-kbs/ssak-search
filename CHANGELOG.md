@@ -5,6 +5,28 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.8.1] — 중앙 인증 게이트 + CI-실행 가능 평가 샘플 (2026-08-28)
+
+### Security
+- **14개 무인증 라우트 봉인**: 라우트 전수 감사에서 research(4.5s/15소스 풀 파이프라인
+  무료 동작 실측)/suggest/chat/video/products/news-hub/spaces/pages/library/profile/
+  canary/monitor/queue/upload가 인증 없이 노출된 것을 발견. index.tsx의 단일 정책
+  테이블(`API_AUTH_GATED_PREFIXES`) + 공유 `requireApiAuth` 미들웨어로 게이트 —
+  21개 라우트 401을 workerd 통합 테스트 7개로 고정, 공개 라우트(health/metrics)는 개방 유지.
+
+### Added
+- **평가 샘플 게이트** (`--sample <n>`): 608쿼리 풀스uite(16분+)을 언어 층화 결정적
+  샘플링으로 CI-실행 가능하게. `npm run eval:sample`. 첫 실측에서 환경 노이즈와
+  실제 회귀를 분리: en-travel/en-stock nDCG 하락은 재실행 소멸(일시), ja-fact-01은
+  변경 전 커밋 워크트리 A/B로 라이브 백엔드 상태 귀속 확정(변경 전 코드가 동일
+  조건에서 158 회귀).
+- **아티팩트 오염 방지**: 샘플 실행이 공식 `latest.json`/`run-N.json`을 덮어쓰지
+  않도록 가드 확장(`sample-latest.json` 분리 기록).
+
+### Changed
+- `truncateToTokens`는 전 언어 4 chars/token 유지(메인 파이프라인 스니펫 보수적),
+  `estimateTokens`(보고)와 에이전트 마크다운 예산만 언어 인식 유지.
+
 ## [2.8.0] — Agent 도구 최적화 5개 배치: 신뢰성·토큰 경제·보안 (2026-08-28)
 
 ### Security

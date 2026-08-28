@@ -2,6 +2,7 @@ import { z } from 'zod'
 import { isSidecarAvailable, sidecarExtract } from './sidecar-client'
 import { jinaExtract } from './jina-search'
 import { safeFetchWithRedirects, estimateTokens, charsPerToken } from './util'
+import { registrableDomain } from './security/phishing-guard'
 import type { Env } from '../types'
 
 export const AgentToolInputSchema = z.object({
@@ -52,6 +53,8 @@ export interface AgentToolOutput {
     content_type: 'article' | 'documentation' | 'forum' | 'structured_json_ld' | 'unknown'
     is_deprecated?: boolean
     freshness_warning?: string
+    /** Phishing/cloaking signal — e.g. the fetch landed on a different registrable domain than requested */
+    security_warning?: string
   }
   error?: {
     code:
@@ -400,6 +403,7 @@ export async function extractWithStealthEscalation(
   let lastStatus = 0
   let lastErr = ''
   let sawSparseContent = false
+  let redirectWarning: string | undefined
 
   // -------------------------------------------------------------
   // Tier 1: 초고속 정적 Fetch (스텔스 헤더 및 Client Hints 탑재)
@@ -427,6 +431,20 @@ export async function extractWithStealthEscalation(
       { timeoutMs: 5000, maxRedirects: 3 },
     )
     lastStatus = res.status
+
+    // Cloaking signal (boannews 145457 campaign shape): the fetched page
+    // settled on a DIFFERENT registrable domain than the one requested —
+    // classic phishing redirect chains. Detected for free here because we
+    // follow redirects manually with our own no-referrer fetcher.
+    try {
+      const finalHost = new URL(res.url || url).hostname.toLowerCase()
+      const requestedHost = new URL(url).hostname.toLowerCase()
+      if (registrableDomain(finalHost) !== registrableDomain(requestedHost)) {
+        redirectWarning = `Redirected from ${requestedHost} to a different registrable domain (${registrableDomain(finalHost)}) — verify this is the official site before trusting credentials or content.`
+      }
+    } catch {
+      // res.url unavailable — skip the check
+    }
 
     // 404/410(자원 소실)·401(인증 게이트)은 프록시/브라우저 티어로도 회복 불가한 확정 실패 —
     // 즉시 반환하지 않으면 Jina 7s + sidecar 10s를 낭비한다.
@@ -459,7 +477,11 @@ export async function extractWithStealthEscalation(
             token_count: estimateTokens(JSON.stringify(jsonLd.data)),
             took_ms: Math.round(performance.now() - startTime),
             escalation_tier: 'TIER_1_STATIC',
-            metadata: { content_type: 'structured_json_ld', ...freshness },
+            metadata: {
+              content_type: 'structured_json_ld',
+              ...freshness,
+              ...(redirectWarning ? { security_warning: redirectWarning } : {}),
+            },
           }
         }
 
@@ -473,7 +495,11 @@ export async function extractWithStealthEscalation(
             token_count: estimateTokens((toc || []).join('\n')),
             took_ms: Math.round(performance.now() - startTime),
             escalation_tier: 'TIER_1_STATIC',
-            metadata: { content_type: 'documentation', ...freshness },
+            metadata: {
+              content_type: 'documentation',
+              ...freshness,
+              ...(redirectWarning ? { security_warning: redirectWarning } : {}),
+            },
           }
         }
 
@@ -491,7 +517,11 @@ export async function extractWithStealthEscalation(
             token_count: estimateTokens(symbolMarkdown),
             took_ms: Math.round(performance.now() - startTime),
             escalation_tier: 'TIER_1_STATIC',
-            metadata: { content_type: 'documentation', ...freshness },
+            metadata: {
+              content_type: 'documentation',
+              ...freshness,
+              ...(redirectWarning ? { security_warning: redirectWarning } : {}),
+            },
           }
         }
 
@@ -505,7 +535,11 @@ export async function extractWithStealthEscalation(
             token_count: estimateTokens(markdown),
             took_ms: Math.round(performance.now() - startTime),
             escalation_tier: 'TIER_1_STATIC',
-            metadata: { content_type: jsonLd ? 'structured_json_ld' : 'article', ...freshness },
+            metadata: {
+              content_type: jsonLd ? 'structured_json_ld' : 'article',
+              ...freshness,
+              ...(redirectWarning ? { security_warning: redirectWarning } : {}),
+            },
           }
         }
         // 정적 파싱은 됐으나 본문이 50자 미만 — JS 렌더링 필요 신호
@@ -619,7 +653,8 @@ export function handleExtractionError(url: string, status: number, rawError: str
       error: {
         code: 'PAGE_NOT_FOUND',
         detail: `Page not found (HTTP ${status}).`,
-        agent_hint: 'The link is dead. Re-run web search with refined keywords.',
+        agent_hint:
+          'The link is dead — or cloaked: SEO-poisoned phishing pages serve 404 to automated fetchers and fake login portals only to search-referrer traffic. Prefer the official domain or a bookmarked URL for login destinations.',
         retryable: false,
         suggested_action: 'USE_SEARCH_SNIPPET',
       },

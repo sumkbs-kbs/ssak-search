@@ -20,6 +20,7 @@ import { bm25Score, tokenize as bm25Tokenize } from '../retrieval/bm25'
 import { logger, toError } from '../logger'
 import { applyLtrRankingV2 } from '../ltr/ranker-v2'
 import { expandQuery } from '../understanding/query-expander'
+import { assessUrlRisk, toSecurityWarning } from '../security/phishing-guard'
 
 /** Extract normalized domain from a search result (URL host or domain field). */
 function extractDomainFromResult(r: SearchResult): string {
@@ -57,6 +58,21 @@ export function applyFilters(results: SearchResult[], ctx: SearchContext): Searc
       return !isNaN(d.getTime()) && d.getTime() >= cutoff
     })
   }
+
+  // Phishing / SEO-poisoning screen (cloaked finance-login campaign,
+  // boannews 145457): block-risk results (hostname claims a finance brand it
+  // doesn't own) are dropped; warn-risk results stay visible with the reason
+  // attached so agents can weigh them. Runs LAST so include_domains cannot
+  // re-admit a blocked URL by matching its scraped host.
+  filtered = filtered.flatMap((r) => {
+    const assessment = assessUrlRisk(r.url, { title: r.title })
+    if (assessment.risk === 'block') {
+      logger.warn('[PhishingGuard] blocked result', { url: r.url, codes: assessment.codes })
+      return []
+    }
+    const warning = toSecurityWarning(assessment)
+    return warning ? [{ ...r, security_warning: warning }] : [r]
+  })
 
   return filtered
 }

@@ -116,6 +116,12 @@ export interface SearchResult {
   stock_data?: StockData
   /** Rich snippet (rating, price, FAQ, etc.) */
   rich_snippet?: RichSnippet
+  /**
+   * Phishing/SEO-poisoning screen (lib/security/phishing-guard). Present on
+   * warn-level results that stay visible — block-level results are removed
+   * from the pool entirely.
+   */
+  security_warning?: { code: string; detail: string }
 }
 
 /** Rich snippet / structured metadata */

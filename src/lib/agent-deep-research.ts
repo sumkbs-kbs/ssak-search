@@ -39,6 +39,8 @@ export interface DeepResearchSource {
   toc: string[]
   success: boolean
   error?: AgentToolOutput['error']
+  /** Extractor security signal (redirect-domain mismatch, cloaking hints) */
+  security_warning?: string
 }
 
 export interface DeepResearchResult {
@@ -82,6 +84,7 @@ export async function executeDeepResearch(
           toc: extRes.table_of_contents || [],
           success: extRes.success,
           ...(extRes.error ? { error: extRes.error } : {}),
+          ...(extRes.metadata.security_warning ? { security_warning: extRes.metadata.security_warning } : {}),
         }
       }),
     )

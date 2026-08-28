@@ -5,6 +5,30 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.9.0] — 피싱/SEO 포이즈닝 방어 계층 (cloaked finance-login 캠페인 대응) (2026-08-28)
+
+### Added
+- **phishing-guard** (`src/lib/security/phishing-guard.ts`): 구글·빙 상단 SEO 포이즈닝 + 클로킹
+  금융 피싱 캠페인(보안뉴스 145457 / Fortra FIRE) 대응 순수 로컬 휴리스틱 — 외부 피드 무의존:
+  - **block**: 호스트명이 소유하지 않은 금융 브랜드 주장(타이포스쿼팅·장식 라벨), 공유 2차
+    접미사 내 브랜드 스쿼팅(`kbstar.ph.com` 계열 — 캠페인 핑거프린트), 제목 브랜드 자칭 승격
+    ("KB스타 인증센터" + `.ph.com` 호스트)
+  - **warn**: 퓌니코드/IDN 호스트, 공유 접미사 비브랜드, URL 단축기, 의심 호스트 형태의
+    로그인 경로 — 결과는 유지되되 이유가 `security_warning`으로 부착
+  - 금융 브랜드 22개(한국 금융 우선 + 글로벌 결제), 공식 도메인 화이트리스트, 한국어 별칭
+- **3계층 통합**: 메인 파이프라인 `applyFilters`(block 제거/warn 주석), fast-path 히트
+  스크리닝(`phishing_filtered` 카운터), 추출기 클로킹 신호(리다이렉트 도메인 불일치
+  `metadata.security_warning` + PAGE_NOT_FOUND 에이전트 힌트에 클로킹 경보) 및
+  deep-research 소스로 전달.
+- `SearchResult.security_warning` / `AgentSearchHit.security_warning` / AgentToolOutput
+  `metadata.security_warning` 스키마 확장(선택 필드).
+
+### 검증
+- 단위 18신규(총 3,181): 브랜드 모방 차단/공식 도메인 통과/경로 브랜드 언급 무시/
+  접미사 승격/리다이렉트 불일치 탐지
+- 라이브: 한국 금융 쿼리 2종에서 공식 서브도메인(okbfex.kbstar.com, bank.shinhan.com 등)
+  전부 clean 통과 — **오탐 0 실증**
+
 ## [2.8.3] — fast-path 단일-플라이트 + DDG 평판 회복 후 ja 수치 복원 확인 (2026-08-28)
 
 ### Fixed

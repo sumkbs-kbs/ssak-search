@@ -3,6 +3,7 @@ import { naverSearch } from './naver-search'
 import { bingSearch } from './bing-search'
 import { duckDuckGoSearch, isDuckDuckGoCoolingDown } from './duckduckgo'
 import { wikipediaBackboneSearch } from './wikipedia-backbone'
+import { assessUrlRisk, toSecurityWarning } from './security/phishing-guard'
 import type { Env } from '../types'
 
 export interface AgentSearchHit {
@@ -12,6 +13,8 @@ export interface AgentSearchHit {
   score: number
   source: string
   authority_boost?: boolean
+  /** Phishing/SEO-poisoning screen — present on warn-level hits (block-level are dropped) */
+  security_warning?: { code: string; detail: string }
 }
 
 export interface AgentSearchResult {
@@ -25,6 +28,8 @@ export interface AgentSearchResult {
   cached?: boolean
   /** Age of the cached copy in ms (freshness signal for agents) */
   cache_age_ms?: number
+  /** Count of results removed by the phishing/SEO-poisoning screen */
+  phishing_filtered?: number
 }
 
 export interface AgentSearchOptions {
@@ -203,6 +208,7 @@ export async function executeFastAgentSearch(
     const hits: AgentSearchHit[] = []
     const seenUrls = new Set<string>()
     const abortedBackends: string[] = []
+    let phishingFiltered = 0
 
     const queriesToRun = decomposeSubqueries ? generateSubqueries(query, topic) : [query]
 
@@ -268,6 +274,16 @@ export async function executeFastAgentSearch(
 
               if (score < FAST_PATH_NOISE_FLOOR) continue
 
+              // Phishing / SEO-poisoning screen (cloaked finance-login
+              // campaign): block-risk hostnames (claim a finance brand they
+              // don't own) are dropped; warn-risk hits stay with the reason.
+              const risk = assessUrlRisk(item.url, { title: item.title })
+              if (risk.risk === 'block') {
+                phishingFiltered++
+                continue
+              }
+              const warning = toSecurityWarning(risk)
+
               batch.push({
                 title: item.title,
                 url: item.url,
@@ -275,6 +291,7 @@ export async function executeFastAgentSearch(
                 score,
                 source: name,
                 authority_boost: authorityBoost,
+                ...(warning ? { security_warning: warning } : {}),
               })
             }
             if (batch.length > 0) {
@@ -341,6 +358,7 @@ export async function executeFastAgentSearch(
       aborted_backends: abortedBackends,
       signal_confidence: signalConfidence,
       decomposed_subqueries: decomposeSubqueries ? queriesToRun : undefined,
+      ...(phishingFiltered > 0 ? { phishing_filtered: phishingFiltered } : {}),
     }
     setInFastPathCache(cacheKey, result)
     return result

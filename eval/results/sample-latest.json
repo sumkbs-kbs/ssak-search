@@ -1,0 +1,1515 @@
+{
+  "report": {
+    "timestamp": "2026-08-28T04:01:52.081Z",
+    "totalQueries": 12,
+    "passedQueries": 10,
+    "failedQueries": 2,
+    "passRate": 0.8333333333333334,
+    "avgTimeMs": 2217,
+    "avgResultCount": 7.7,
+    "backendCoverage": {
+      "bing": 12,
+      "csdn": 3,
+      "duckduckgo": 2,
+      "wikidata": 2,
+      "wikipedia": 4,
+      "yahoo": 3,
+      "hackernews": 4,
+      "google": 1,
+      "dbpedia": 1,
+      "reddit": 1,
+      "github": 1,
+      "qiita": 1,
+      "naver": 4
+    },
+    "latencyPercentiles": {
+      "p50": 2067,
+      "p75": 3313,
+      "p90": 3718,
+      "p95": 4047,
+      "p99": 4363,
+      "max": 4442,
+      "min": 893
+    },
+    "qps": {
+      "avgQps": 0.29,
+      "totalQueries": 12,
+      "totalDurationMs": 41005,
+      "byTag": {
+        "chinese": 0.53,
+        "factual": 0.41,
+        "general": 0.63,
+        "technical": 0.68,
+        "english": 0.35,
+        "financial": 0.37,
+        "news": 0.43,
+        "japanese": 0.63,
+        "korean": 0.6
+      },
+      "peakQps": 1.12
+    },
+    "ranking": {
+      "queriesWithGoldStandard": 12,
+      "avgNdcgAt10": 0.5167535051521811,
+      "avgMrr": 0.9333333333333332,
+      "avgPrecisionAt10": 0.6678240740740741
+    },
+    "results": [
+      {
+        "query": {
+          "id": "zh-fact-01",
+          "query": "什么是量子计算",
+          "topic": "general",
+          "minResults": 3,
+          "maxTimeMs": 14000,
+          "tags": [
+            "chinese",
+            "factual"
+          ]
+        },
+        "response": {
+          "query": "什么是量子计算",
+          "results": [
+            {
+              "title": "丽台科普丨什么是量子计算？看完这篇就懂了! - 知乎",
+              "url": "https://zhuanlan.zhihu.com/p/12820769566",
+              "content": "量子计算利用 量子物理学 原理解锁了一种全新计算方式。随着 量子计算机 逐渐成熟，它们将与超级计算机进行集成，解决世界上最难处理的一些计算问题。 如今，汽车、制药、化工和金融服务等行业正在探索如何将量子计算作为传统 超级计算 的加速器。 1 什么是量子计算？ 量子计算是一种范式 ...",
+              "score": 0.7763328175858639,
+              "domain": "zhuanlan.zhihu.com"
+            },
+            {
+              "title": "【一文看懂】什么是量子计算？-csdn博客",
+              "url": "https://blog.csdn.net/weixin_49393016/article/details/144898812",
+              "content": "量子计算代表了一种突破性的计算方法，它利用量子力学的基本原理，能够在某些复杂问题上实现超越传统计算机的计算能力。从药物研发到气候模拟，量子计算在多个领域展示了巨大的潜力。 但量子计算究竟是什么？它如何工作？它为什么能够解决传统计算机无法应对的挑战？在这篇文章中 ...",
+              "score": 0.7371402857142857,
+              "domain": "blog.csdn.net"
+            },
+            {
+              "title": "什么是量子计算？ - Azure Quantum | Microsoft Learn",
+              "url": "https://learn.microsoft.com/zh-cn/azure/quantum/overview-understanding-quantum-computing",
+              "content": "👉 了解 Microsoft Quantum 的新增功能 量子计算有望解决我们星球上一些最大的挑战——在环境、农业、健康、能源、气候、材料科学等领域。 对于其中某些问题，随着系统规模的增长，经典计算受到越来越多的挑战。 当被设计为扩展时，量子系统可能具备超过当今最强大超级计算机的能力。 本文 ...",
+              "score": 0.7118347142857142,
+              "domain": "learn.microsoft.com"
+            },
+            {
+              "title": "什么是量子计算？- 量子计算简介 - Aws",
+              "url": "https://aws.amazon.com/cn/what-is/quantum-computing/",
+              "content": "量子计算是一个多学科领域，涵盖计算机科学、物理学和数学的各个方面，它利用量子力学，可以比传统计算机更快地解决复杂问题。量子计算领域包括硬件研究和应用程序开发。通过利用量子力学效应，例如叠加和量子干涉，量子计算机能够比传统计算机更快地解决某些类型的问题。量子计算机 ...",
+              "score": 0.7106107142857143,
+              "domain": "aws.amazon.com"
+            },
+            {
+              "title": "什么是量子计算？| Ibm",
+              "url": "https://www.ibm.com/cn-zh/think/topics/quantum-computing",
+              "content": "量子比特本身并没有什么用处。但它可以将它所保存的量子信息置于叠加状态，这种叠加状态代表了量子比特所有可能配置的组合。叠加的量子比特组可以创建复杂的多维计算空间。复杂的问题可以在这些空间中以新的方式表现出来。 当测量量子系统时，其状态会从可能性叠加态坍缩为二进制状态 ...",
+              "score": 0.7080097142857142,
+              "domain": "ibm.com"
+            },
+            {
+              "title": "量子计算机_百度百科",
+              "url": "https://baike.baidu.com/item/%E9%87%8F%E5%AD%90%E8%AE%A1%E7%AE%97%E6%9C%BA/363335",
+              "content": "量子计算机（quantum computer）是一类遵循量子力学规律进行高速数学和逻辑运算、存储及处理量子信息的物理装置。广义上，当某个装置处理和计算的是量子信息，运行的是量子算法时，就可称之为量子计算机。量子计算机的特点主要有运行速度较快、处置信息能力较强、应用范围较广等。与一般 ...",
+              "score": 0.5349985242269869,
+              "domain": "baike.baidu.com"
+            },
+            {
+              "title": "【量子计算】量子计算入门，适合本科毕业生入门原理讲解",
+              "url": "https://blog.csdn.net/u014357575/article/details/144565956",
+              "content": "[mc112611] 【量子计算】量子计算入门，适合本科毕业生入门原理讲解 — 本文是量子计算入门教程，介绍了所需的数学和计算机基础，包括狄拉克符号、内积、外积等。阐述了量子计算原理，如量子寄存器、量子位、量子测量等。还介绍了量子电路模拟器和多种量子算法，如Deutsch - Jozsa算法、格罗弗算法等，帮助读者初步了解量子计算。",
+              "score": 0.5246532649746334,
+              "domain": "blog.csdn.net",
+              "author": "mc112611",
+              "published_date": "2024-12-18"
+            },
+            {
+              "title": "量子计算（遵循量子力学规律的计算模式）_百度百科",
+              "url": "https://baike.baidu.com/item/%E9%87%8F%E5%AD%90%E8%AE%A1%E7%AE%97/11035661",
+              "content": "量子计算（Quantum Computing，QC），是一种遵循量子力学规律调控量子信息单元进行计算的新型计算模式。与经典计算不同，量子计算遵循量子力学规律，它是能突破经典算力瓶颈的新型计算模式。量子计算机，作为执行量子计算任务的设备，以量子比特（qubit）为基本运算单元。在量子计算中，基于 ...",
+              "score": 0.4704938721888291,
+              "domain": "baike.baidu.com"
+            },
+            {
+              "title": "2024年大数据最全量子计算（十六）：其他类型体系的量子计算体系_量子计算分类",
+              "url": "https://blog.csdn.net/2401_84170623/article/details/138399150",
+              "content": "[2401_84170623] 2024年大数据最全量子计算（十六）：其他类型体系的量子计算体系_量子计算分类 — 本文介绍了离子阱、原子、核自旋和拓扑等不同类型的量子计算体系。离子阱量子计算发展迅速，国内外均有进展；原子量子计算可通过里德堡阻塞机制实现两比特操控；核自旋量子计算保真度较高，但依赖分子结构；拓扑量子计算对噪声有极大免疫。中国在各体系均有研究，未来有望领先。",
+              "score": 0.465504913911192,
+              "domain": "blog.csdn.net",
+              "author": "2401_84170623",
+              "published_date": "2024-05-02"
+            },
+            {
+              "title": "【量子计算】开辟全新计算范式",
+              "url": "https://blog.csdn.net/2302_80269373/article/details/142732758",
+              "content": "[熔光] 【量子计算】开辟全新计算范式 — 量子计算作为新兴计算范式正渗透各领域。本文介绍了量子计算的基本概念、发展历程、核心技术，如量子比特、量子纠缠等，还阐述了其在科学研究、化学模拟、优化问题等多领域的应用，同时探讨了未来发展方向、技术挑战及社会伦理问题。",
+              "score": 0.4571720142087211,
+              "domain": "blog.csdn.net",
+              "author": "熔光",
+              "published_date": "2024-10-06"
+            }
+          ],
+          "response_time_ms": 3724,
+          "backend": "bing+csdn+duckduckgo+wikidata",
+          "fallback_used": false,
+          "related_queries": [
+            "什么是量子计算 guide",
+            "什么是量子计算 explained",
+            "what is 什么是量子计算",
+            "best 什么是量子计算",
+            "什么是量子计算 examples",
+            "什么是量子计算 2026",
+            "什么是量子计算 vs",
+            "how does 什么是量子计算 work"
+          ],
+          "page": 1,
+          "page_size": 10,
+          "total_results": 19,
+          "total_pages": 2,
+          "subrequest_estimate": 8,
+          "no_results": false
+        },
+        "resultCount": 10,
+        "responseTimeMs": 3724,
+        "backends": [
+          "bing",
+          "csdn",
+          "duckduckgo",
+          "wikidata"
+        ],
+        "passed": true,
+        "failures": [],
+        "warnings": [],
+        "ranking": {
+          "ndcgAt10": 0.8051628502199798,
+          "mrr": 1,
+          "precisionAt10": 0.8,
+          "relevantHits": 8
+        }
+      },
+      {
+        "query": {
+          "id": "zh-general-12",
+          "query": "考研复习计划",
+          "topic": "general",
+          "minResults": 3,
+          "maxTimeMs": 14000,
+          "tags": [
+            "chinese",
+            "general"
+          ]
+        },
+        "response": {
+          "query": "考研复习计划",
+          "results": [
+            {
+              "title": "考研每天学几个小时比较好，考研复习计划时间表【拿走不谢】",
+              "url": "https://blog.csdn.net/beikaoyi/article/details/130688084",
+              "content": "[读研资料笔记] 考研每天学几个小时比较好，考研复习计划时间表【拿走不谢】 — 考研学习时间应根据个人情况制定，考虑备考时间、学科知识储备、学习状态和效率。不应盲目追求长时间学习，而应注重效率。文章提供了考研复习的三个阶段及每个阶段的重点，强调了制定个性化复习计划的重要性。",
+              "score": 0.7125429999999999,
+              "domain": "blog.csdn.net",
+              "author": "读研资料笔记",
+              "published_date": "2023-05-15"
+            },
+            {
+              "title": "LangFlow考研专业课复习计划制定助手",
+              "url": "https://blog.csdn.net/weixin_36019375/article/details/156171705",
+              "content": "[国营窝窝乡蛮大人] LangFlow考研专业课复习计划制定助手 — 本文介绍如何利用LangFlow结合LangChain与RAG技术，构建可视化、可迭代的考研专业课复习计划助手。系统可根据用户基础、目标院校和时间安排，动态生成并调整个性化学习方案，支持本地模型部署与知识库存储，提升复习效率与精准度。",
+              "score": 0.5382683515723842,
+              "domain": "blog.csdn.net",
+              "author": "国营窝窝乡蛮大人",
+              "published_date": "2025-12-23"
+            },
+            {
+              "title": "25计算机考研408专业课复习计划",
+              "url": "https://blog.csdn.net/weixin_55922953/article/details/135721100",
+              "content": "[ZL研知己] 25计算机考研408专业课复习计划 — 本文提供了详细的计算机考研408专业课复习计划，包括统考与自命题的区别，考试内容，复习阶段的时间分配，以及C语言、数据结构等科目的重要性。同时推荐了网课和教材资源，强调了早开始和自我笔记的重要性。",
+              "score": 0.5277116859216993,
+              "domain": "blog.csdn.net",
+              "author": "ZL研知己",
+              "published_date": "2024-01-20"
+            },
+            {
+              "title": "25 考研 ｜ 考研 具体流程是什么样的？（该怎么选择学校 ...",
+              "url": "https://www.zhihu.com/tardis/bd/art/541303306",
+              "content": "学长写了这篇实操性的考研教程，系统性的讲解 必备的考研常识、怎样根据自身情况选择适合自己的院校专业选择、各科的高分复习 …",
+              "score": 0.29131407652745844,
+              "domain": "zhihu.com"
+            },
+            {
+              "title": "福州市初中畢業會考、高級中等學校招生考試",
+              "url": "https://zh.wikipedia.org/wiki/%E7%A6%8F%E5%B7%9E%E5%B8%82%E5%88%9D%E4%B8%AD%E7%95%A2%E6%A5%AD%E6%9C%83%E8%80%83%E3%80%81%E9%AB%98%E7%B4%9A%E4%B8%AD%E7%AD%89%E5%AD%B8%E6%A0%A1%E6%8B%9B%E7%94%9F%E8%80%83%E8%A9%A6",
+              "content": "福州由完成九年义务教育者参加的统考. 质检结束后，福州教育学院组织网络统一改卷，以模拟中 考 网上评卷的形式，此举措起始于2012年。改卷采取双评制度——即若两位改卷者的评分超出误差值，就引入第三方评分。 之后，福州市中等学校招生委员会办公室会向全市公布福州市区市质检排名表。 质检成绩与结果既可暴露出学习 复习 中的问题，揭示下一阶段的 复习 方向； 又可作为中 考 结束后估分的重要参考依据之一。",
+              "score": 0.25030286425213466,
+              "domain": "zh.wikipedia.org"
+            },
+            {
+              "title": "文理分科",
+              "url": "https://zh.wikipedia.org/wiki/%E6%96%87%E7%90%86%E5%88%86%E7%A7%91",
+              "content": "考 的科目上。 高中文理分科实际上解除了学生的厌学感，重新认识学习之必要，进而“术业有专攻”。 由于文理分科存在着弊端，因此部分人士提出改革方案或直接取消文理分科，支持改革者一般倾向认为应将文理分科推迟进行，不宜在高二，而是在高三总 复习 时期，由学生自由地作出选择。 复习",
+              "score": 0.24665538930865555,
+              "domain": "zh.wikipedia.org"
+            },
+            {
+              "title": "掌上 考研 -研究生招生信息网",
+              "url": "https://www.kaoyan.cn/",
+              "content": "掌上考研是EOL教育在线旗下考研信息服务平台,平台聚合了900余所高校及科研院所研招信息,提供包括招生简章、招生专业、录取分 …",
+              "score": 0.21560979217273954,
+              "domain": "kaoyan.cn"
+            },
+            {
+              "title": "中国研究生招生信息网",
+              "url": "https://yzst.chsi.com.cn/index2.html",
+              "content": "2026年研招调剂服务系统4月8日开通 考研动态 教育部部署2026年研考复试录取工作 考研复试流程图 2026年对调剂考生的基本要 …",
+              "score": 0.20461465251531624,
+              "domain": "yzst.chsi.com.cn"
+            }
+          ],
+          "response_time_ms": 1074,
+          "backend": "bing+csdn+wikipedia",
+          "fallback_used": false,
+          "related_queries": [
+            "考研复习计划 guide",
+            "考研复习计划 explained",
+            "what is 考研复习计划",
+            "best 考研复习计划",
+            "考研复习计划 examples",
+            "考研复习计划 2026",
+            "考研复习计划 vs",
+            "how does 考研复习计划 work"
+          ],
+          "page": 1,
+          "page_size": 10,
+          "total_results": 8,
+          "total_pages": 1,
+          "subrequest_estimate": 6,
+          "no_results": false
+        },
+        "resultCount": 8,
+        "responseTimeMs": 1074,
+        "backends": [
+          "bing",
+          "csdn",
+          "wikipedia"
+        ],
+        "passed": true,
+        "failures": [],
+        "warnings": [],
+        "ranking": {
+          "ndcgAt10": 0.5922216874835863,
+          "mrr": 1,
+          "precisionAt10": 0.625,
+          "relevantHits": 5
+        }
+      },
+      {
+        "query": {
+          "id": "zh-tech-27",
+          "query": "Spark大数据处理",
+          "topic": "general",
+          "minResults": 5,
+          "maxTimeMs": 10000,
+          "tags": [
+            "chinese",
+            "technical"
+          ]
+        },
+        "response": {
+          "query": "Spark大数据处理",
+          "results": [
+            {
+              "title": "Spark大数据处理实战指南",
+              "url": "https://blog.csdn.net/keny88888/article/details/150005636",
+              "content": "[KENYCHEN奉孝] Spark大数据处理实战指南 — 本文是Spark大数据处理实战指南，介绍了Spark的核心特性、主要组件和应用场景，给出Spark SQL示例。还展示了基于C++与Spark、Spark AI、Spark-RAPIDS AI等的实用示例，以及C++和Horovod、MXNet的相关实例，此外包含Spark与Kafka、Flume的集成实例。",
+              "score": 0.7116549999999999,
+              "domain": "blog.csdn.net",
+              "author": "KENYCHEN奉孝",
+              "published_date": "2025-08-07"
+            },
+            {
+              "title": "Java在大数据处理中的应用：从MapReduce到Spark",
+              "url": "https://blog.csdn.net/shrgegrb/article/details/145571678",
+              "content": "[向哆哆] Java在大数据处理中的应用：从MapReduce到Spark — 本文探讨Java在大数据处理中的应用，从MapReduce到Spark的演进。介绍了MapReduce和Spark的工作原理、优缺点，对比了两者性能、扩展性、易用性等。还阐述了Java与Spark结合的实践案例、在大数据生态系统中的整合，以及与其他大数据工具的高级集成，展望了Java与大数据的深度融合。",
+              "score": 0.601948,
+              "domain": "blog.csdn.net",
+              "author": "向哆哆",
+              "published_date": "2025-02-11"
+            },
+            {
+              "title": "大数据处理实战：Hadoop/Spark深度解析",
+              "url": "https://blog.csdn.net/shejizuopin/article/details/146472525",
+              "content": "[喜欢编程就关注我] 大数据处理实战：Hadoop/Spark深度解析 — 本文聚焦大数据处理，深入解析Hadoop和Spark两大主流框架的实战技巧。介绍了Hadoop的HDFS存储管理、MapReduce模型及生态系统组件，阐述了Spark的RDD操作、DataFrame与SQL操作及Spark Streaming。还提及二者融合应用，助读者高效处理大规模数据集。",
+              "score": 0.600955,
+              "domain": "blog.csdn.net",
+              "author": "喜欢编程就关注我",
+              "published_date": "2025-03-24"
+            },
+            {
+              "title": "Apache Hadoop",
+              "url": "https://zh.wikipedia.org/wiki/Apache_Hadoop",
+              "content": "Hadoop是一款支持 數據 密集型分佈式應用程序并以Apache 2.0許可協議發佈的開源軟體框架，有助于使用许多计算机组成的网络来解决 数据 、计算密集型的问题。基于MapReduce计算模型，它为 大 数据 的分布式存储与 处理 提供了一个软件框架。所有的Hadoop模块都有一个基本假设，即硬件故障是常见情况，应该由框架自动 处理 。",
+              "score": 0.3418166669859264,
+              "domain": "zh.wikipedia.org"
+            },
+            {
+              "title": "Kafka",
+              "url": "https://zh.wikipedia.org/wiki/Kafka",
+              "content": "fka运行在一个由一台或多台服务器组成的集群上，并且分区可以跨集群结点分布。 Kafka高效地 处理 实时流式 数据 ，可以实现与Storm、HBase和 Spark 的集成。作为群集部署到多台服务器上，Kafka 处理 它所有的发布和订阅消息系统使用了四个API，即生产者API、消费者API、Stream API和Connector",
+              "score": 0.33014506069823446,
+              "domain": "zh.wikipedia.org"
+            }
+          ],
+          "response_time_ms": 893,
+          "backend": "bing+csdn+wikipedia",
+          "fallback_used": false,
+          "related_queries": [
+            "Spark大数据处理 guide",
+            "Spark大数据处理 explained",
+            "what is Spark大数据处理",
+            "best Spark大数据处理",
+            "Spark大数据处理 examples",
+            "Spark大数据处理 2026",
+            "Spark大数据处理 vs",
+            "how does Spark大数据处理 work"
+          ],
+          "page": 1,
+          "page_size": 10,
+          "total_results": 5,
+          "total_pages": 1,
+          "subrequest_estimate": 6,
+          "no_results": false
+        },
+        "resultCount": 5,
+        "responseTimeMs": 893,
+        "backends": [
+          "bing",
+          "csdn",
+          "wikipedia"
+        ],
+        "passed": true,
+        "failures": [],
+        "warnings": [],
+        "ranking": {
+          "ndcgAt10": 0.3932591258696538,
+          "mrr": 1,
+          "precisionAt10": 1,
+          "relevantHits": 5
+        }
+      },
+      {
+        "query": {
+          "id": "en-stock-01",
+          "query": "Apple stock price",
+          "topic": "finance",
+          "minResults": 5,
+          "maxTimeMs": 12000,
+          "tags": [
+            "english",
+            "financial"
+          ]
+        },
+        "response": {
+          "query": "Apple stock price",
+          "results": [
+            {
+              "title": "Apple Inc. (AAPL)",
+              "url": "https://finance.yahoo.com/quote/AAPL",
+              "content": "Apple Inc. · Price: 314.58 USD · Prev Close: 313.45 · Volume: 32,248,789 · 52W Range: 225.95 - 344.57 · Exchange: NMS · Sector: Technology · Industry: Consumer Electronics",
+              "score": 1,
+              "domain": "finance.yahoo.com",
+              "stock_data": {
+                "name": "Apple Inc.",
+                "ticker": "AAPL",
+                "exchange": "NMS",
+                "price": 314.58,
+                "currency": "USD",
+                "change": 1.1299999999999955,
+                "change_percent": 0.36,
+                "direction": "up",
+                "volume": 32248789,
+                "high_price": 315.4,
+                "low_price": 309.4,
+                "prev_close": 313.45,
+                "fifty_two_week_high": 344.57,
+                "fifty_two_week_low": 225.95,
+                "market_status": "closed",
+                "source": "yahoo"
+              }
+            },
+            {
+              "title": "Who cares what Apple's stock price is?",
+              "url": "http://www.bloombergview.com/articles/2014-04-25/who-cares-what-apple-s-stock-price-is",
+              "content": "Who cares what Apple's stock price is? ↑8 (10 comments)",
+              "score": 0.6905557231010476,
+              "domain": "bloombergview.com"
+            },
+            {
+              "title": "Another theory on Apple’s stock price",
+              "url": "http://www.marco.org/2013/01/14/seeking-alpha-aapl-theory",
+              "content": "Another theory on Apple’s stock price ↑3 (1 comments)",
+              "score": 0.6758177231010476,
+              "domain": "marco.org"
+            },
+            {
+              "title": "Apple’s Stock Price Is Crashing And There’s No Bottom In Sight",
+              "url": "http://techcrunch.com/2012/11/15/apples-stock-price-is-crashing-and-the-bottom-is-not-in-sight/",
+              "content": "Apple’s Stock Price Is Crashing And There’s No Bottom In Sight ↑16 (16 comments)",
+              "score": 0.6726707231010476,
+              "domain": "techcrunch.com"
+            },
+            {
+              "title": "Apple’s Stock Price After Product Announcements",
+              "url": "http://daringfireball.net/2013/10/apples_stock_price_product_announcements",
+              "content": "Apple’s Stock Price After Product Announcements ↑5 (1 comments)",
+              "score": 0.6717077231010476,
+              "domain": "daringfireball.net"
+            },
+            {
+              "title": "Apple’s stock price falls to lowest point in six months",
+              "url": "http://arstechnica.com/apple/2012/11/apples-stock-price-falls-to-lowest-point-in-six-months/",
+              "content": "Apple’s stock price falls to lowest point in six months ↑41 (49 comments)",
+              "score": 0.6716777231010476,
+              "domain": "arstechnica.com"
+            },
+            {
+              "title": "Apple (대한민국)",
+              "url": "https://www.apple.com/kr/",
+              "content": "Apple이 제시하는 혁신적인 세상을 만나고, iPhone, iPad, Apple Watch, Mac, Apple TV 등을 구입하는 것은 물론, 액세서리, 엔터테인먼트, 전문가 기기 지원에 대해서도 살펴볼 수 있습니다.",
+              "score": 0.46159174165610906,
+              "domain": "apple.com"
+            },
+            {
+              "title": "Apple",
+              "url": "https://www.apple.com/",
+              "content": "Discover the innovative world of Apple and shop everything iPhone, iPad, Apple Watch, Mac, and Apple TV, plus explore …",
+              "score": 0.4590859065452813,
+              "domain": "apple.com"
+            },
+            {
+              "title": "Apple 계정 관리",
+              "url": "https://appleid.apple.com/kr/",
+              "content": "Your Apple Account is the account you use for all Apple services.",
+              "score": 0.4164124266852758,
+              "domain": "appleid.apple.com"
+            },
+            {
+              "title": "iCloud",
+              "url": "https://www.icloud.com/",
+              "content": "Log in to iCloud to access your photos, mail, notes, documents and more. Sign in with your Apple Account or create a new …",
+              "score": 0.23722157436701585,
+              "domain": "icloud.com"
+            }
+          ],
+          "response_time_ms": 4442,
+          "backend": "bing+yahoo-finance+hackernews",
+          "fallback_used": false,
+          "related_queries": [
+            "Apple stock price forecast",
+            "Apple stock price analysis",
+            "Apple stock price earnings",
+            "Apple stock price price target",
+            "Apple stock price dividend",
+            "Apple stock price stock chart",
+            "Apple stock price apples",
+            "Apple stock price is"
+          ],
+          "page": 1,
+          "page_size": 10,
+          "total_results": 10,
+          "total_pages": 1,
+          "subrequest_estimate": 6,
+          "no_results": false
+        },
+        "resultCount": 10,
+        "responseTimeMs": 4442,
+        "backends": [
+          "bing",
+          "yahoo-finance",
+          "hackernews"
+        ],
+        "passed": true,
+        "failures": [],
+        "warnings": [],
+        "ranking": {
+          "ndcgAt10": 0.45221360703148816,
+          "mrr": 1,
+          "precisionAt10": 0.4,
+          "relevantHits": 4
+        }
+      },
+      {
+        "query": {
+          "id": "en-stock-10",
+          "query": "Netflix subscriber growth Q1",
+          "topic": "finance",
+          "minResults": 5,
+          "maxTimeMs": 12000,
+          "tags": [
+            "english",
+            "financial"
+          ]
+        },
+        "response": {
+          "query": "Netflix subscriber growth Q1",
+          "results": [
+            {
+              "title": "Netflix, Inc. (NFLX)",
+              "url": "https://finance.yahoo.com/quote/NFLX",
+              "content": "Netflix, Inc. · Price: 79.84 USD · Prev Close: 81.46 · Volume: 27,058,234 · 52W Range: 65.08 - 126.71 · Exchange: NMS · Sector: Communication Services · Industry: Entertainment",
+              "score": 1,
+              "domain": "finance.yahoo.com",
+              "stock_data": {
+                "name": "Netflix, Inc.",
+                "ticker": "NFLX",
+                "exchange": "NMS",
+                "price": 79.84,
+                "currency": "USD",
+                "change": -1.6199999999999903,
+                "change_percent": -1.99,
+                "direction": "down",
+                "volume": 27058234,
+                "high_price": 81.15,
+                "low_price": 79.29,
+                "prev_close": 81.46,
+                "fifty_two_week_high": 126.71,
+                "fifty_two_week_low": 65.08,
+                "market_status": "closed",
+                "source": "yahoo"
+              }
+            },
+            {
+              "title": "Netflix Brushes Off Warner Bros. Deal Loss, Growth Concerns as Profits, Revenue Soar in Q1",
+              "url": "https://news.google.com/rss/articles/CBMifEFVX3lxTE05eVEtYVdUN05SaWhKMmlBNmNweVQ3dlRxVG4yQmJMa0RmSW04MnBFLTVwdEI0M0RuQjl5R2ZleWRQdTJXUWdJb0NKVldwSVNkZGUwVjhIeWZVMTNUbFNzZjFVSUdRTmQ4N0pDdjFDSDZqV19MSXo4bURvVWw?oc=5",
+              "content": "[TheWrap] Netflix Brushes Off Warner Bros. Deal Loss, Growth Concerns as Profits, Revenue Soar in Q1",
+              "score": 0.6791245320518131,
+              "domain": "thewrap.com",
+              "published_date": "2026-04-16T07:00:00.000Z"
+            },
+            {
+              "title": "Netflix Q1 2026 Earnings: $12.25B Revenue and 325M Subscribers",
+              "url": "https://news.google.com/rss/articles/CBMilAFBVV95cUxNRUMzU0FrU1JLVDlQd0RRRkpwREFqSjFlVEVxMVBka2RqdVRuV01HaXk2NkEzNzhxN19XTEFwQXAtWW41NzdyU0FRZUpGRGpQWmtTM1NUQlBHamlFZTlVRU1kRncxMXRpSGdVR0pCa24wR3ppdkpBTFJoYVR2TE9wek1UWXctOE5scEk3a3dKeFAzczI1?oc=5",
+              "content": "[tech-insider.org] Netflix Q1 2026 Earnings: $12.25B Revenue and 325M Subscribers",
+              "score": 0.670245234838195,
+              "domain": "tech-insider.org",
+              "published_date": "2026-04-18T07:00:00.000Z"
+            },
+            {
+              "title": "Is Netflix Stock a Buy Ahead of Its Q1 Earnings Report on April 16",
+              "url": "https://news.google.com/rss/articles/CBMilgFBVV95cUxQWVNmdzZFQkZBTy1UcU42TWlZMmRNZ1ZWSTJSMTdHdEh6TmRJM0dGUkVoSExqNXJVeUNYMWtjVVZEdU9XQmM5Zk5ZaWFxRnU2bWZiQ1U1SnJjbEQtdzRIN1ZueHVyOHRDdjhpRkhUTzI3M0VmdkF2YVB3dXBFalhqYkxOdUFjYWR5MEhad3o2UmJkLUZ1VlE?oc=5",
+              "content": "[Yahoo Finance] Is Netflix Stock a Buy Ahead of Its Q1 Earnings Report on April 16",
+              "score": 0.6362746239395874,
+              "domain": "finance.yahoo.com",
+              "published_date": "2026-04-13T07:00:00.000Z"
+            },
+            {
+              "title": "Netflix Statistics 2026: Subscribers, Revenue, Ad Tier & Streaming Data",
+              "url": "https://axis-intelligence.com/netflix-statistics/",
+              "content": "Netflix crossed 325M paid memberships and $12.25B in Q1 2026 revenue. Axis Intelligence Research tracks subscribers , ad tier, content spend & the NSGI™ index. Netflix Statistics 2026: Subscribers , Revenue & Ads.",
+              "score": 0.6176845313513473,
+              "domain": "axis-intelligence.com"
+            },
+            {
+              "title": "Netflix beats growth predictions with 15.77M net new subscribers",
+              "url": "https://techcrunch.com/2020/04/21/neflix-q1-earnings/",
+              "content": "Netflix beats growth predictions with 15.77M net new subscribers ↑7",
+              "score": 0.5760583615505238,
+              "domain": "techcrunch.com"
+            },
+            {
+              "title": "Netflix, With Warner Bros. Off the Table, Tops Q1 Revenue Expectations With 16% Increase",
+              "url": "https://news.google.com/rss/articles/CBMieEFVX3lxTE1UYWJsWmx6NE5YZnQ3TzI3ek9lNWZPMm5nVEJ6YlZlbGZYSXluNkIzSy1KRlFyaFFoUGxpaVBncWtMYTZEUjVKODRMdHhQRmNXSFktbDJTZG10OWo5RXVxSmRnZXdKUWdubzVFREs1MUhrSnNRMkdFdw?oc=5",
+              "content": "[Variety] Netflix, With Warner Bros. Off the Table, Tops Q1 Revenue Expectations With 16% Increase",
+              "score": 0.5069069087066572,
+              "domain": "variety.com",
+              "published_date": "2026-04-16T07:00:00.000Z"
+            },
+            {
+              "title": "Netflix Q1 Revenue And Earnings Beat Street Expectations, But Shares Still Plunge",
+              "url": "https://news.google.com/rss/articles/CBMigwFBVV95cUxOaXRYSGJGTDFTb0F3QkI2ZndBSnV3b2dDTkctZmRWOWcydUQ4MEpOdjRSN3dZLXRjczdRdU9sZF9zOE1WdXVXQ1hLR0ZLY2N3UmRHNjdMSWpmbHItcmFBcjJHMUxscDEtNFo3T0lIZW1rb0Y1cFJlX0JpdGRrZGFKbEdkVQ?oc=5",
+              "content": "[Deadline] Netflix Q1 Revenue And Earnings Beat Street Expectations, But Shares Still Plunge",
+              "score": 0.5038083287852018,
+              "domain": "deadline.com",
+              "published_date": "2026-04-16T07:00:00.000Z"
+            },
+            {
+              "title": "Netflix Stock Crash: Q1 2026 Earnings Miss Sparks 10% Plunge",
+              "url": "https://news.google.com/rss/articles/CBMifkFVX3lxTE9jbTc0UVoxVG9XUmVVSnJSN1o5SlV4UXRwczFHWkhHTGdnU2ZzVG5kRXRHUU1PZVltT0dMUFBLYkV2Y2V1MUgxaXFnRGc3dk0tX0dlZXdydnZuVVFUbGlrUk5pX0o2dVJUNDI5Vk9HVHpuM2ZpN05ockIwNFdsZw?oc=5",
+              "content": "[Intellectia AI] Netflix Stock Crash: Q1 2026 Earnings Miss Sparks 10% Plunge",
+              "score": 0.5026143607673914,
+              "domain": "intellectia.ai",
+              "published_date": "2026-04-19T07:00:00.000Z"
+            },
+            {
+              "title": "Netflix Drops on Weak Guidance Despite Strong Q1 Results",
+              "url": "https://news.google.com/rss/articles/CBMivwFBVV95cUxQaHpVMFdQSUl5b3RGZ1lDdW1yTElVZlNOR2I5Mm5rZlVOeFAwYVpTT1hZVXVHa2pNeVFRSU5weXpqc05sc2hzdVlDOHdLNWRzdFFkVjRRaDh2d0gxVElNQ0hUVFZjalFsNk1qb1VLYk1TalJqT25Lc3BYX0doSVhMczlPdEg3cUhTWGlJOC12MDVjWDB5ak9qaWNfVDZQU2lXd3NHOXoyUWdBZnQ1dU5mdmViX29BQVFzS0ItUVFPWQ?oc=5",
+              "content": "[TradingView] Netflix Drops on Weak Guidance Despite Strong Q1 Results",
+              "score": 0.4999596920660324,
+              "domain": "tradingview.com",
+              "published_date": "2026-04-21T07:00:00.000Z"
+            }
+          ],
+          "response_time_ms": 3194,
+          "backend": "bing+yahoo-finance+hackernews+google-news-rss+duckduckgo+dbpedia",
+          "fallback_used": false,
+          "related_queries": [
+            "Netflix subscriber growth Q1 guide",
+            "Netflix subscriber growth Q1 explained",
+            "what is Netflix subscriber growth Q1",
+            "best Netflix subscriber growth Q1",
+            "Netflix subscriber growth Q1 examples",
+            "Netflix subscriber growth Q1 2026",
+            "Netflix subscriber growth Q1 vs",
+            "how does Netflix subscriber growth Q1 work"
+          ],
+          "page": 1,
+          "page_size": 10,
+          "total_results": 17,
+          "total_pages": 2,
+          "subrequest_estimate": 12,
+          "no_results": false
+        },
+        "resultCount": 10,
+        "responseTimeMs": 3194,
+        "backends": [
+          "bing",
+          "yahoo-finance",
+          "hackernews",
+          "google-news-rss",
+          "duckduckgo",
+          "dbpedia"
+        ],
+        "passed": true,
+        "failures": [],
+        "warnings": [],
+        "ranking": {
+          "ndcgAt10": 0.6366824387328317,
+          "mrr": 1,
+          "precisionAt10": 0.8,
+          "relevantHits": 8
+        }
+      },
+      {
+        "query": {
+          "id": "en-news-17",
+          "query": "Meta earnings latest",
+          "topic": "news",
+          "minResults": 5,
+          "maxTimeMs": 10000,
+          "tags": [
+            "english",
+            "news"
+          ]
+        },
+        "response": {
+          "query": "Meta earnings latest",
+          "results": [
+            {
+              "title": "Meta Platforms, Inc. (META)",
+              "url": "https://finance.yahoo.com/quote/META",
+              "content": "Meta Platforms, Inc. · Price: 571.1 USD · Prev Close: 576.14 · Volume: 15,160,180 · 52W Range: 520.26 - 790.8 · Exchange: NMS · Sector: Communication Services · Industry: Internet Content & Information",
+              "score": 1,
+              "domain": "finance.yahoo.com",
+              "stock_data": {
+                "name": "Meta Platforms, Inc.",
+                "ticker": "META",
+                "exchange": "NMS",
+                "price": 571.1,
+                "currency": "USD",
+                "change": -5.039999999999964,
+                "change_percent": -0.87,
+                "direction": "down",
+                "volume": 15160180,
+                "high_price": 588.39,
+                "low_price": 567.62,
+                "prev_close": 576.14,
+                "fifty_two_week_high": 790.8,
+                "fifty_two_week_low": 520.26,
+                "market_status": "closed",
+                "source": "yahoo"
+              }
+            },
+            {
+              "title": "Meta's Upbeat Earnings Buy Time for AI Investment to Pay Off",
+              "url": "https://www.bloomberg.com/news/articles/2024-07-31/meta-reports-better-than-expected-quarterly-advertising-sales",
+              "content": "Meta's Upbeat Earnings Buy Time for AI Investment to Pay Off ↑2 (1 comments)",
+              "score": 0.7295244820673651,
+              "domain": "bloomberg.com"
+            },
+            {
+              "title": "Facebook Parent Meta’s Earnings Fall Short as Revenue Decline Accelerates",
+              "url": "https://www.wsj.com/articles/meta-facebook-q3-earnings-report-2022-11666753938",
+              "content": "Facebook Parent Meta’s Earnings Fall Short as Revenue Decline Accelerates ↑2",
+              "score": 0.6922044820673651,
+              "domain": "wsj.com"
+            },
+            {
+              "title": "Meta Q4 Earnings",
+              "url": "https://www.cnbc.com/2023/02/01/facebook-parent-meta-earnings-q4-2022.html",
+              "content": "Meta Q4 Earnings ↑6",
+              "score": 0.6904614820673651,
+              "domain": "cnbc.com"
+            },
+            {
+              "title": "Meta earnings call: Threads has \"just under\" 100M monthly users",
+              "url": "https://www.threads.net/@alexheath/post/Cy1iSTXyFa-",
+              "content": "Meta earnings call: Threads has \"just under\" 100M monthly users ↑3 (3 comments)",
+              "score": 0.6208938515229869,
+              "domain": "threads.net"
+            },
+            {
+              "title": "Meta earnings presentation Q1 2022 [pdf]",
+              "url": "https://s21.q4cdn.com/399680738/files/doc_financials/2022/q1/Q1-2022_Earnings-Presentation_Final.pdf",
+              "content": "Meta earnings presentation Q1 2022 [pdf] ↑96 (171 comments)",
+              "score": 0.6131156049358538,
+              "domain": "s21.q4cdn.com"
+            },
+            {
+              "title": "Principal Place",
+              "url": "https://en.wikipedia.org/wiki/Principal_Place",
+              "content": "Mixed-use building in London, England. siliquae; roughly equivalent to some 12 years' earnings for a late 4th-century legionary). The latest coin was dated to AD 397–402, and the hoard is thought",
+              "score": 0.4585667144441086,
+              "domain": "en.wikipedia.org"
+            },
+            {
+              "title": "Meta Platforms",
+              "url": "https://en.wikipedia.org/wiki/Meta_Platforms",
+              "content": "American multinational technology conglomerate. Meta Platforms, Inc. (doing business as Meta ) is an American multinational technology company headquartered in Menlo Park, California. Meta owns and operates",
+              "score": 0.44740146996907254,
+              "domain": "en.wikipedia.org"
+            },
+            {
+              "title": "Meta - Facebook",
+              "url": "https://www.facebook.com/Meta/home/",
+              "content": "Meta has always believed in giving people the power to share, connect, and shape your world in the ways you want. As we …",
+              "score": 0.39817128070416896,
+              "domain": "facebook.com"
+            },
+            {
+              "title": "About Meta | Social Technology, VR, AR, and Innovation",
+              "url": "https://www.meta.com/about/",
+              "content": "Learn more about Meta and stay updated on our role in social technology, virtual reality, augmented reality, and the future of …",
+              "score": 0.3882079112264746,
+              "domain": "meta.com"
+            }
+          ],
+          "response_time_ms": 988,
+          "backend": "bing+yahoo-finance+wikipedia+hackernews",
+          "fallback_used": false,
+          "related_queries": [
+            "Meta earnings latest guide",
+            "Meta earnings latest explained",
+            "what is Meta earnings latest",
+            "best Meta earnings latest",
+            "Meta earnings latest examples",
+            "Meta earnings latest 2026",
+            "Meta earnings latest vs",
+            "how does Meta earnings latest work"
+          ],
+          "page": 1,
+          "page_size": 10,
+          "total_results": 13,
+          "total_pages": 2,
+          "subrequest_estimate": 8,
+          "no_results": false
+        },
+        "resultCount": 10,
+        "responseTimeMs": 988,
+        "backends": [
+          "bing",
+          "yahoo-finance",
+          "wikipedia",
+          "hackernews"
+        ],
+        "passed": true,
+        "failures": [],
+        "warnings": [],
+        "ranking": {
+          "ndcgAt10": 0.5637884576902256,
+          "mrr": 1,
+          "precisionAt10": 0.4,
+          "relevantHits": 4
+        }
+      },
+      {
+        "query": {
+          "id": "en-travel-02",
+          "query": "southeast asia backpacking route",
+          "topic": "general",
+          "minResults": 5,
+          "maxTimeMs": 12000,
+          "tags": [
+            "english",
+            "general"
+          ]
+        },
+        "response": {
+          "query": "southeast asia backpacking route",
+          "results": [
+            {
+              "title": "Banana Pancake Trail",
+              "url": "https://en.wikipedia.org/wiki/Banana_Pancake_Trail",
+              "content": "Backpacking areas in Southeast Asia. Pancake Circuit\" is the name given to growing routes around Southeast Asia , and to some extent South Asia , travelled by backpackers and other tourists",
+              "score": 0.5901136080358627,
+              "domain": "en.wikipedia.org"
+            },
+            {
+              "title": "Cambodia",
+              "url": "https://en.wikipedia.org/wiki/Cambodia",
+              "content": "Country in Southeast Asia. original on 6 April 2021. Retrieved 8 April 2021. \"Popular Backpacking Destinations in Southeast Asia \". Archived from the original on 30 October 2014. Retrieved",
+              "score": 0.5175808979621526,
+              "domain": "en.wikipedia.org"
+            }
+          ],
+          "response_time_ms": 2100,
+          "backend": "bing+wikipedia+reddit",
+          "fallback_used": false,
+          "related_queries": [
+            "southeast asia backpacking route guide",
+            "southeast asia backpacking route explained",
+            "what is southeast asia backpacking route",
+            "best southeast asia backpacking route",
+            "southeast asia backpacking route examples",
+            "southeast asia backpacking route 2026",
+            "southeast asia backpacking route vs",
+            "how does southeast asia backpacking route work"
+          ],
+          "page": 1,
+          "page_size": 10,
+          "total_results": 2,
+          "total_pages": 1,
+          "subrequest_estimate": 6,
+          "no_results": false
+        },
+        "resultCount": 2,
+        "responseTimeMs": 2100,
+        "backends": [
+          "bing",
+          "wikipedia",
+          "reddit"
+        ],
+        "passed": false,
+        "failures": [
+          "resultCount: got 2, expected >= 5"
+        ],
+        "warnings": [],
+        "ranking": {
+          "ndcgAt10": 0.3391602052736161,
+          "mrr": 1,
+          "precisionAt10": 1,
+          "relevantHits": 2
+        }
+      },
+      {
+        "query": {
+          "id": "en-news-41",
+          "query": "us federal reserve interest rate decision latest",
+          "topic": "news",
+          "minResults": 5,
+          "maxTimeMs": 14000,
+          "tags": [
+            "english",
+            "news"
+          ]
+        },
+        "response": {
+          "query": "us federal reserve interest rate decision latest",
+          "results": [
+            {
+              "title": "US Federal Reserve raises interest rates for first time since 2018",
+              "url": "https://www.theguardian.com/business/2022/mar/16/us-federal-reserve-interest-rates-inflation",
+              "content": "US Federal Reserve raises interest rates for first time since 2018 ↑436 (669 comments)",
+              "score": 0.7073258417720272,
+              "domain": "theguardian.com"
+            },
+            {
+              "title": "Federal Reserve pushes interest rates above 5% for first time since 2007",
+              "url": "https://finance.yahoo.com/news/federal-reserve-interest-rate-decision-may-3-155524134.html",
+              "content": "Federal Reserve pushes interest rates above 5% for first time since 2007 ↑75 (109 comments)",
+              "score": 0.6698804734152967,
+              "domain": "finance.yahoo.com"
+            },
+            {
+              "title": "The Federal Reserve Raises Interest Rates by 0.75 of a Percentage Point",
+              "url": "https://www.nytimes.com/live/2022/06/15/business/fed-reserve-interest-rates-inflation",
+              "content": "The Federal Reserve Raises Interest Rates by 0.75 of a Percentage Point ↑31 (15 comments)",
+              "score": 0.6561056692837557,
+              "domain": "nytimes.com"
+            },
+            {
+              "title": "Federal Reserve slashes interest rates to zero",
+              "url": "https://www.washingtonpost.com/business/2020/03/15/federal-reserve-slashes-interest-rates-zero-part-wide-ranging-emergency-intervention/",
+              "content": "Federal Reserve slashes interest rates to zero ↑286 (300 comments)",
+              "score": 0.6187970705703572,
+              "domain": "washingtonpost.com"
+            },
+            {
+              "title": "Federal Reserve cuts interest rates by 50 bps",
+              "url": "https://www.cnbc.com/2024/09/18/fed-cuts-rates-september-2024-.html",
+              "content": "Federal Reserve cuts interest rates by 50 bps ↑47 (18 comments)",
+              "score": 0.6029137934761087,
+              "domain": "cnbc.com"
+            },
+            {
+              "title": "rsvp/fecon235 ★1275",
+              "url": "https://github.com/rsvp/fecon235",
+              "content": "Notebooks for financial economics. Keywords:  Jupyter notebook pandas Federal Reserve FRED Ferbus GDP CPI PCE inflation unemployment wage income debt Case-Shiller housing asset portfolio equities SPX bonds TIPS rates currency FX euro EUR USD JPY yen XAU gold Brent WTI oil Holt-Winters time-series forecasting statistics econometrics [Jupyter Notebook] ★1275",
+              "score": 0.4384422920236378,
+              "domain": "github.com"
+            },
+            {
+              "title": "avelkoski/FRB ★181",
+              "url": "https://github.com/avelkoski/FRB",
+              "content": "Python Client for Interfacing with the Federal Reserve Bank of St. Louis' Economic Data API (FRED®) [Python] ★181",
+              "score": 0.30580748659609047,
+              "domain": "github.com"
+            },
+            {
+              "title": "stefanoamorelli/fred-mcp-server ★117",
+              "url": "https://github.com/stefanoamorelli/fred-mcp-server",
+              "content": "Open-source FRED MCP Server (Federal Reserve Economic Data) [TypeScript] ★117",
+              "score": 0.3057834865960905,
+              "domain": "github.com"
+            },
+            {
+              "title": "연방준비제도 - 위키백과, 우리 모두의 백과사전",
+              "url": "https://ko.wikipedia.org/wiki/%EC%97%B0%EB%B0%A9%EC%A4%80%EB%B9%84%EC%A0%9C%EB%8F%84",
+              "content": "중앙이사회는 워싱턴 D. C. 에 위치하고 현재 의장은 제롬 파월 이다. 미국 각지에 연방준비은행 (Federal Reserve Banks) 12개 지점 (보스턴, 뉴욕, 필라델피아, 시카고, 샌프란시스코, 클리블랜드, 리치먼드, …",
+              "score": 0.2605302066002993,
+              "domain": "ko.wikipedia.org"
+            }
+          ],
+          "response_time_ms": 3668,
+          "backend": "bing+github+hackernews",
+          "fallback_used": false,
+          "related_queries": [
+            "us federal reserve interest rate decision latest guide",
+            "us federal reserve interest rate decision latest explained",
+            "what is us federal reserve interest rate decision latest",
+            "best us federal reserve interest rate decision latest",
+            "us federal reserve interest rate decision latest examples",
+            "us federal reserve interest rate decision latest 2026",
+            "us federal reserve interest rate decision latest vs",
+            "how does us federal reserve interest rate decision latest work"
+          ],
+          "page": 1,
+          "page_size": 10,
+          "total_results": 9,
+          "total_pages": 1,
+          "subrequest_estimate": 6,
+          "no_results": false
+        },
+        "resultCount": 9,
+        "responseTimeMs": 3668,
+        "backends": [
+          "bing",
+          "github",
+          "hackernews"
+        ],
+        "passed": true,
+        "failures": [],
+        "warnings": [],
+        "ranking": {
+          "ndcgAt10": 0.6105858728157117,
+          "mrr": 1,
+          "precisionAt10": 0.3333333333333333,
+          "relevantHits": 3
+        }
+      },
+      {
+        "query": {
+          "id": "ja-fact-01",
+          "query": "量子コンピュータとは",
+          "topic": "general",
+          "minResults": 3,
+          "maxTimeMs": 14000,
+          "tags": [
+            "japanese",
+            "factual"
+          ]
+        },
+        "response": {
+          "query": "量子コンピュータとは",
+          "results": [
+            {
+              "title": "量子 コンピュータとは？仕組み・従来技術との違い・最新動向 ...",
+              "url": "https://www.dir.co.jp/world/entry/solution/quantum-computer",
+              "content": "2025年12月10日 · 量子コンピュータとは、量子力学の原理を計算に応用したコンピュータです。 従来のコンピュータでは実現でき …",
+              "score": 0.7114620723101047,
+              "domain": "dir.co.jp"
+            },
+            {
+              "title": "量子 コンピュータとは？中学生にもわかりやすく解説 ...",
+              "url": "https://spaceshipearth.jp/quantum-computer/",
+              "content": "2026年3月26日 · 量子コンピュータとは、量子力学の原理を応用して膨大な計算を可能にする次世代技術です。 量子ビットの仕組 …",
+              "score": 0.7108830723101047,
+              "domain": "spaceshipearth.jp"
+            },
+            {
+              "title": "「 量子 」知っておきたい基礎知識 | NEDO",
+              "url": "https://www.nedo.go.jp/page/field27_01.html",
+              "content": "2025年12月22日 · 1．いま注目の量子技術 量子コンピュータ、量子暗号、量子センサーなど、私たちの身近なところで「量子」と …",
+              "score": 0.6140220723101047,
+              "domain": "nedo.go.jp"
+            },
+            {
+              "title": "量子コンピュータ",
+              "url": "https://ja.wikipedia.org/wiki/%E9%87%8F%E5%AD%90%E3%82%B3%E3%83%B3%E3%83%94%E3%83%A5%E3%83%BC%E3%82%BF",
+              "content": "量子力学的な重ね合わせを用いて並列性を実現するとされるコンピュータ",
+              "score": 0.5930384285714286,
+              "domain": "ja.wikipedia.org"
+            },
+            {
+              "title": "量子 - Wikipedia",
+              "url": "https://ja.wikipedia.org/wiki/%E9%87%8F%E5%AD%90",
+              "content": "量子 （りょうし、quantum）は、 物理学 において用いられる、様々な物理現象における 物理量 の最小 単位 である。 主に巨視的 …",
+              "score": 0.5705715008815334,
+              "domain": "ja.wikipedia.org"
+            },
+            {
+              "title": "量子 （现代物理概念）_百度百科",
+              "url": "https://baike.baidu.com/item/%E9%87%8F%E5%AD%90/135660",
+              "content": "“量子” 是微观世界能量、物质的最小离散基本单元，是现代量子理论的核心基础概念。 对“量子”的最早研究始于1900 年，普朗克为 …",
+              "score": 0.5493030723101048,
+              "domain": "baike.baidu.com"
+            },
+            {
+              "title": "量子 力学とは？知識がゼロでも大丈夫！簡単に解説します│WQ…",
+              "url": "https://lqe-master.com/%E9%87%8F%E5%AD%90%E5%8A%9B%E5%AD%A6%E3%81%A8%E3%81%AF%EF%BC%9F%E7%9F%A5%E8%AD%98%E3%81%8C%E3%82%BC%E3%83%AD%E3%81%A7%E3%82%82%E5%A4%A7%E4%B8%88%E5%A4%AB%EF%BC%81%E7%B0%A1%E5%8D%98%E3%81%AB%E8%A7%A3/",
+              "content": "2024年1月21日 · この「不確定さ」が量子の世界です。 この量子の法則を量子力学と言うのです。 古典力学とは、量子力学が誕生 …",
+              "score": 0.532473,
+              "domain": "lqe-master.com"
+            },
+            {
+              "title": "ズバリ「 量子 」の正体とは粒？ 波長？ その特徴と 量子 を使った ...",
+              "url": "https://hugkum.sho.jp/601935",
+              "content": "2024年5月18日 · 近年は、量子科学技術の研究が進んでいます。 量子は、物質を構成する極小の単位で、従来の物理法則では説明 …",
+              "score": 0.522354,
+              "domain": "hugkum.sho.jp"
+            },
+            {
+              "title": "（1） 量子 ってなあに？：文部科学省",
+              "url": "https://www.mext.go.jp/a_menu/shinkou/ryoushi/detail/1316005.htm",
+              "content": "光を粒子としてみたときの光子やニュートリノやクォーク、ミュオンなどといった素粒子も量子に含まれます。 量子の世界は、原 …",
+              "score": 0.521019,
+              "domain": "mext.go.jp"
+            }
+          ],
+          "response_time_ms": 1163,
+          "backend": "bing+wikidata",
+          "fallback_used": false,
+          "related_queries": [
+            "量子コンピュータとは guide",
+            "量子コンピュータとは explained",
+            "what is 量子コンピュータとは",
+            "best 量子コンピュータとは",
+            "量子コンピュータとは examples",
+            "量子コンピュータとは 2026",
+            "量子コンピュータとは vs",
+            "how does 量子コンピュータとは work"
+          ],
+          "page": 1,
+          "page_size": 10,
+          "total_results": 9,
+          "total_pages": 1,
+          "subrequest_estimate": 4,
+          "no_results": false
+        },
+        "resultCount": 9,
+        "responseTimeMs": 1163,
+        "backends": [
+          "bing",
+          "wikidata"
+        ],
+        "passed": true,
+        "failures": [],
+        "warnings": [],
+        "ranking": {
+          "ndcgAt10": 0.7751482523375255,
+          "mrr": 1,
+          "precisionAt10": 0.5555555555555556,
+          "relevantHits": 5
+        }
+      },
+      {
+        "query": {
+          "id": "ja-tech-14",
+          "query": "Elasticsearch検索エンジン",
+          "topic": "general",
+          "minResults": 5,
+          "maxTimeMs": 10000,
+          "tags": [
+            "japanese",
+            "technical"
+          ]
+        },
+        "response": {
+          "query": "Elasticsearch検索エンジン",
+          "results": [
+            {
+              "title": "Google Colabで日本語の検索とテキスト分析を試す ― nlp4j-local-search 0.5.0",
+              "url": "https://qiita.com/oyahiroki/items/408fc3e15b3a8f463ea6",
+              "content": "[oyahiroki] Google Colabで日本語の検索とテキスト分析を試す ― nlp4j-local-search 0.5.0 [Python, NLP, lucene]",
+              "score": 0.4805655263505482,
+              "domain": "qiita.com",
+              "author": "oyahiroki",
+              "published_date": "2026-08-23T19:06:45+09:00"
+            },
+            {
+              "title": "Zilliz Cloud が GCP 東京リージョン（asia-northeast1）に対応しました 〜 GCP 上で始めるベクトル検索・ハンズオン付き",
+              "url": "https://qiita.com/sphereSky/items/beb402b1ec3c3c222e70",
+              "content": "[sphereSky] Zilliz Cloud が GCP 東京リージョン（asia-northeast1）に対応しました 〜 GCP 上で始めるベクトル検索・ハンズオン付き ♥3 [GoogleCloud, VectorDatabase, Milvus]",
+              "score": 0.48601348263726696,
+              "domain": "qiita.com",
+              "author": "sphereSky",
+              "published_date": "2026-08-19T23:15:13+09:00"
+            },
+            {
+              "title": "Elasticsearch ：公式分散検索および分析エンジン | Elastic",
+              "url": "https://www.elastic.co/jp/elasticsearch",
+              "content": "Elasticsearchは、分散型でRESTfulなオープンソースの検索/分析エンジンです。 スピードや水平スケール性、信頼性、管理の …",
+              "score": 0.46969132894014276,
+              "domain": "elastic.co"
+            },
+            {
+              "title": "Elasticsearch についての基礎知識 - Qiita",
+              "url": "https://qiita.com/koizumi_rikako/items/519fa2cf690de9f232c1",
+              "content": "2025年11月19日 · 1. Elasticsearchとは Elasticsearch は、分散環境で大容量データを高速に検索・分析できる分散型全文検索 …",
+              "score": 0.35401729327615833,
+              "domain": "qiita.com"
+            },
+            {
+              "title": "Elasticsearch - Wikipedia",
+              "url": "https://ja.wikipedia.org/wiki/Elasticsearch",
+              "content": "2021年 にElastic社はElasticsearchのライセンスを変更し、商用マネージドサービスでのElasticsearchの利用を制限する行為に踏 …",
+              "score": 0.08997142857142858,
+              "domain": "ja.wikipedia.org"
+            }
+          ],
+          "response_time_ms": 2034,
+          "backend": "bing+qiita",
+          "fallback_used": false,
+          "related_queries": [
+            "Elasticsearch検索エンジン guide",
+            "Elasticsearch検索エンジン explained",
+            "what is Elasticsearch検索エンジン",
+            "best Elasticsearch検索エンジン",
+            "Elasticsearch検索エンジン examples",
+            "Elasticsearch検索エンジン 2026",
+            "Elasticsearch検索エンジン vs",
+            "how does Elasticsearch検索エンジン work"
+          ],
+          "page": 1,
+          "page_size": 10,
+          "total_results": 5,
+          "total_pages": 1,
+          "subrequest_estimate": 4,
+          "no_results": false
+        },
+        "resultCount": 5,
+        "responseTimeMs": 2034,
+        "backends": [
+          "bing",
+          "qiita"
+        ],
+        "passed": true,
+        "failures": [],
+        "warnings": [],
+        "ranking": {
+          "ndcgAt10": 0.11706259313796354,
+          "mrr": 0.2,
+          "precisionAt10": 0.2,
+          "relevantHits": 1
+        }
+      },
+      {
+        "query": {
+          "id": "kr-stock-01",
+          "query": "삼성전자 주가",
+          "topic": "finance",
+          "minResults": 0,
+          "maxTimeMs": 10000,
+          "requiredBackends": [
+            "naver"
+          ],
+          "tags": [
+            "korean",
+            "financial"
+          ]
+        },
+        "response": {
+          "query": "삼성전자 주가",
+          "results": [
+            {
+              "title": "삼성전자 주가 정보 (KOSPI 005930)",
+              "url": "https://m.stock.naver.com/domestic/stock/005930/total",
+              "content": "삼성전자 | KOSPI 005930",
+              "score": 0.7649104062311269,
+              "domain": "m.stock.naver.com"
+            },
+            {
+              "title": "동의할 수 없는 주가 \n줄일 때가 아니라 늘릴 때다AI 시대, 삼성전자의 성장 전략을 명확하게 제시해준 실적발표. 그럼에도, 당일 주가는 부진. 다만, 이는 사이클에 대한 오해에서 비롯된 과도한 하락.1 \n \n 대신",
+              "url": "https://m.stock.naver.com/domestic/stock/005930/research/94876",
+              "content": "동의할 수 없는 주가 \n줄일 때가 아니라 늘릴 때다AI 시대, 삼성전자의 성장 전략을 명확하게 제시해준 실적발표. 그럼에도, 당일 주가는 부진. 다만, 이는 사이클에 대한 오해에서 비롯된 과도한 하락.1 \n \n 대신증권 2026.07.31.",
+              "score": 0.7243954062311271,
+              "domain": "m.stock.naver.com"
+            },
+            {
+              "title": "삼성전자 증권사 리서치 — 네이버증권",
+              "url": "https://m.stock.naver.com/domestic/stock/005930/research",
+              "content": "삼성전자 증권사 투자의견, 목표주가, 리서치 리포트",
+              "score": 0.696561406231127,
+              "domain": "m.stock.naver.com"
+            },
+            {
+              "title": "삼성전자 재무제표 — 네이버증권",
+              "url": "https://m.stock.naver.com/domestic/stock/005930/finance/quarter",
+              "content": "삼성전자 분기 재무제표, 매출액, 영업이익, 당기순이익 조회",
+              "score": 0.6782764062311271,
+              "domain": "m.stock.naver.com"
+            },
+            {
+              "title": "공급과 수요 모두 변화 / HBM 시장 점유율 확대 예상 \n투자포인트 및 결론-삼성전자에 대해 6개월 목표주가 440,000원 (2026년 예상 P/E 10배와 2026년 예상 P/B 3배 산술평균)에 투자의견 매수",
+              "url": "https://m.stock.naver.com/domestic/stock/005930/research/95044",
+              "content": "공급과 수요 모두 변화 / HBM 시장 점유율 확대 예상 \n투자포인트 및 결론-삼성전자에 대해 6개월 목표주가 440,000원 (2026년 예상 P/E 10배와 2026년 예상 P/B 3배 산술평균)에 투자의견 매수 유지. 삼성전자의 2분 \n \n 현대차증권 2026.08.05.",
+              "score": 0.6350992857142858,
+              "domain": "m.stock.naver.com"
+            },
+            {
+              "title": "무시할 실적이 아니다 \n실적 부진은 꿈도 꾸지 않는다삼성전자의 분기별 실적은 역사적 최대 규모를 이어갈 것으로 전망한다. 실적은 DS가 주도할 것으로 예상한다. 디스플레이 이익 비중은 1%를 하회하고, \n \n IBK",
+              "url": "https://m.stock.naver.com/domestic/stock/005930/research/94851",
+              "content": "무시할 실적이 아니다 \n실적 부진은 꿈도 꾸지 않는다삼성전자의 분기별 실적은 역사적 최대 규모를 이어갈 것으로 전망한다. 실적은 DS가 주도할 것으로 예상한다. 디스플레이 이익 비중은 1%를 하회하고, \n \n IBK투자증권 2026.07.31.",
+              "score": 0.6025582857142857,
+              "domain": "m.stock.naver.com"
+            },
+            {
+              "title": "품격을 보여줬다 \n\" 삼성전자의 2Q26 실적은 매출액 171.5조원(+28%qoq), 영업이익 89.5원(+57%qoq)을 기록했다. 부문별 영업이익은 DS 89.2조원(DRAM 68.4조원, N \n \n 유진투자증",
+              "url": "https://m.stock.naver.com/domestic/stock/005930/research/94847",
+              "content": "품격을 보여줬다 \n\" 삼성전자의 2Q26 실적은 매출액 171.5조원(+28%qoq), 영업이익 89.5원(+57%qoq)을 기록했다. 부문별 영업이익은 DS 89.2조원(DRAM 68.4조원, N \n \n 유진투자증권 2026.07.31.",
+              "score": 0.6018412857142857,
+              "domain": "m.stock.naver.com"
+            },
+            {
+              "title": "3Q26 실적 전망치 상향 \n2Q26 HBM4 판매량 급증삼성전자의 2Q26 사업 부문별 세부 실적은 당사 예상치에 대체로 부합했다. 범용 DRAM은 가격 상승률이 예상보다 부진 했지만 출하량이 기대치를 넘어 \n \n",
+              "url": "https://m.stock.naver.com/domestic/stock/005930/research/94803",
+              "content": "3Q26 실적 전망치 상향 \n2Q26 HBM4 판매량 급증삼성전자의 2Q26 사업 부문별 세부 실적은 당사 예상치에 대체로 부합했다. 범용 DRAM은 가격 상승률이 예상보다 부진 했지만 출하량이 기대치를 넘어 \n \n 키움증권 2026.07.31.",
+              "score": 0.6016972857142857,
+              "domain": "m.stock.naver.com"
+            },
+            {
+              "title": "삼성 전자서비스",
+              "url": "https://www.samsungsvc.co.kr/",
+              "content": "주소 : 경기도 수원시 영통구 삼성로 290 삼성전자서비스주식회사 대표이사 : 김영호 사업자등록번호 : 124-81-58485 통신판매업신고번호 : 제2005-406호 사업자번호확인 호스팅서비스제공자 : …",
+              "score": 0.4955526682694352,
+              "domain": "samsungsvc.co.kr"
+            },
+            {
+              "title": "Samsung 대한민국",
+              "url": "https://www.samsung.com/sec/portal/home/",
+              "content": "삼성닷컴 FAQ 삼성스토어 삼성스토어 찾기 서비스센터 찾기 오늘보장 & 시간 맞춤 설치 서비스 비즈니스 협력제안 (DX) 비즈니스 협력제안 (DS) E-카탈로그 공지사항 계정 삼성계정을 만들어야 하는 이유 삼성전자 …",
+              "score": 0.4279696936096636,
+              "domain": "samsung.com"
+            }
+          ],
+          "response_time_ms": 2183,
+          "backend": "bing+naver+naver-finance",
+          "fallback_used": false,
+          "related_queries": [
+            "삼성전자 주가 전망",
+            "삼성전자 주가 분석",
+            "삼성전자 주가 실적",
+            "삼성전자 주가 목표주가",
+            "삼성전자 주가 배당",
+            "삼성전자 주가 차트",
+            "삼성전자 주가 투자",
+            "삼성전자 주가 예상"
+          ],
+          "page": 1,
+          "page_size": 10,
+          "total_results": 16,
+          "total_pages": 2,
+          "subrequest_estimate": 6,
+          "no_results": false
+        },
+        "resultCount": 10,
+        "responseTimeMs": 2183,
+        "backends": [
+          "bing",
+          "naver",
+          "naver-finance"
+        ],
+        "passed": true,
+        "failures": [],
+        "warnings": [],
+        "ranking": {
+          "ndcgAt10": 0.5032251913410369,
+          "mrr": 1,
+          "precisionAt10": 0.9,
+          "relevantHits": 9
+        }
+      },
+      {
+        "query": {
+          "id": "kr-stock-16",
+          "query": "현대차 전기차 관련주",
+          "topic": "finance",
+          "minResults": 5,
+          "maxTimeMs": 10000,
+          "tags": [
+            "korean",
+            "financial"
+          ]
+        },
+        "response": {
+          "query": "현대차 전기차 관련주",
+          "results": [
+            {
+              "title": "중국 전기차 관련주 영향은? 현대차 ·기아·2차전지주 2026년 대응 전략",
+              "url": "https://m.blog.naver.com/aoutworld/224382887345",
+              "content": "중국 전기차 관련주 영향은? 현대차 ·기아·2차전지주 2026년 대응 전략",
+              "score": 0.5643453011054805,
+              "domain": "m.blog.naver.com"
+            },
+            {
+              "title": "현대차 관련주 , 전기차 ·자율주행 시대 주목해야 할 핵심 수혜주와 투자 포인트 총정리",
+              "url": "https://m.blog.naver.com/estateagent3/224335824897",
+              "content": "현대차 관련주 , 전기차 ·자율주행 시대 주목해야 할 핵심 수혜주와 투자 포인트 총정리",
+              "score": 0.5335383011054805,
+              "domain": "m.blog.naver.com"
+            },
+            {
+              "title": "현대 전기차 관련주 TOP10, 2026년 전망과 대장주 알아보니",
+              "url": "https://m.blog.naver.com/qntmxj7898/224381556910",
+              "content": "현대 전기차 관련주 TOP10, 2026년 전망과 대장주 알아보니",
+              "score": 0.4383014667371612,
+              "domain": "m.blog.naver.com"
+            },
+            {
+              "title": "국내 전기차 관련주 TOP10, 26년 전망과 대장주 분석 해보니",
+              "url": "https://m.blog.naver.com/qntmxj7898/224381551688",
+              "content": "국내 전기차 관련주 TOP10, 26년 전망과 대장주 분석 해보니",
+              "score": 0.3719084265802119,
+              "domain": "m.blog.naver.com"
+            }
+          ],
+          "response_time_ms": 1137,
+          "backend": "bing+naver+naver-finance",
+          "fallback_used": false,
+          "related_queries": [
+            "현대차 전기차 관련주 정리",
+            "현대차 전기차 관련주 설명",
+            "현대차 전기차 관련주 최신",
+            "현대차 전기차 관련주 가이드",
+            "현대차 전기차 관련주 2026",
+            "무엇인가 현대차 전기차 관련주",
+            "현대차 전기차 관련주 2026년",
+            "현대차 전기차 관련주 관련주 top10"
+          ],
+          "page": 1,
+          "page_size": 10,
+          "total_results": 4,
+          "total_pages": 1,
+          "subrequest_estimate": 6,
+          "no_results": false
+        },
+        "resultCount": 4,
+        "responseTimeMs": 1137,
+        "backends": [
+          "bing",
+          "naver",
+          "naver-finance"
+        ],
+        "passed": false,
+        "failures": [
+          "resultCount: got 4, expected >= 5"
+        ],
+        "warnings": [],
+        "ranking": {
+          "ndcgAt10": 0.41253177989255346,
+          "mrr": 1,
+          "precisionAt10": 1,
+          "relevantHits": 4
+        }
+      }
+    ]
+  },
+  "regressions": [
+    {
+      "queryId": "zh-fact-01",
+      "metric": "responseTimeMs",
+      "baseline": 2275,
+      "current": 3724,
+      "delta": "64%",
+      "regressed": true
+    },
+    {
+      "queryId": "zh-general-12",
+      "metric": "resultCount",
+      "baseline": 10,
+      "current": 8,
+      "delta": -2,
+      "regressed": true
+    },
+    {
+      "queryId": "zh-tech-27",
+      "metric": "resultCount",
+      "baseline": 10,
+      "current": 5,
+      "delta": -5,
+      "regressed": true
+    },
+    {
+      "queryId": "en-stock-10",
+      "metric": "ndcgAt10",
+      "baseline": "0.7495",
+      "current": "0.6367",
+      "delta": "-0.1128",
+      "regressed": true
+    },
+    {
+      "queryId": "en-travel-02",
+      "metric": "resultCount",
+      "baseline": 3,
+      "current": 2,
+      "delta": -1,
+      "regressed": true
+    },
+    {
+      "queryId": "en-news-41",
+      "metric": "resultCount",
+      "baseline": 10,
+      "current": 9,
+      "delta": -1,
+      "regressed": true
+    },
+    {
+      "queryId": "ja-fact-01",
+      "metric": "ndcgAt10",
+      "baseline": "0.8922",
+      "current": "0.7751",
+      "delta": "-0.1171",
+      "regressed": true
+    },
+    {
+      "queryId": "kr-stock-16",
+      "metric": "resultCount",
+      "baseline": 10,
+      "current": 4,
+      "delta": -6,
+      "regressed": true
+    },
+    {
+      "queryId": "kr-stock-16",
+      "metric": "responseTimeMs",
+      "baseline": 835,
+      "current": 1137,
+      "delta": "36%",
+      "regressed": true
+    },
+    {
+      "queryId": "kr-stock-16",
+      "metric": "passStatus",
+      "baseline": "pass",
+      "current": "fail",
+      "delta": "pass→fail",
+      "regressed": true
+    }
+  ]
+}

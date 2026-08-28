@@ -57,6 +57,7 @@ import { createLoggingMiddleware } from './lib/logger'
 import { createTracingMiddleware } from './middleware/tracing'
 import { securityMiddleware } from './lib/security-middleware'
 import { wrapApp, sentryMiddleware } from './lib/sentry'
+import { requireApiAuth } from './middleware/api-auth'
 import { agentApi } from './routes/agent'
 import type { AppBindings, ErrorResponse } from './types'
 import openapiSpec from '../openapi.yaml?raw'
@@ -115,6 +116,37 @@ app.use('*', async (c, next) => {
 
 // Serve static files
 app.use('/static/*', serveStatic({ root: './public' }))
+
+// ============================================================
+// Central auth gate — the single policy table for every backend-driving
+// or data-bearing route. Routes listed here enforce the same guard as
+// /api/search (validateApiKeyAsync + client rate limit). Routes carrying
+// their own inline auth (search/extract/keys/images/news/usage, plus the
+// requireAuth-based operational routes) are NOT listed to avoid double
+// charging the rate-limit window.
+// ============================================================
+const API_AUTH_GATED_PREFIXES = [
+  '/api/agent',
+  '/api/research',
+  '/api/chat',
+  '/api/suggest',
+  '/api/video',
+  '/api/products',
+  '/api/news-hub',
+  '/api/spaces',
+  '/api/pages',
+  '/api/library',
+  '/api/profile',
+  '/api/canary',
+  '/api/monitor',
+  '/api/queue',
+  '/api/upload',
+] as const
+
+for (const prefix of API_AUTH_GATED_PREFIXES) {
+  app.use(prefix, requireApiAuth)
+  app.use(`${prefix}/*`, requireApiAuth)
+}
 
 // ============================================================
 // API Routes

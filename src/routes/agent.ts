@@ -3,73 +3,15 @@ import { streamSSE } from 'hono/streaming'
 import type { AppBindings } from '../types'
 import { AgentToolInputSchema, extractWithStealthEscalation, handleExtractionError } from '../lib/agent-extractor'
 import { executeFastAgentSearch } from '../lib/agent-search-orchestrator'
-import { validateApiKeyAsync, checkClientRateLimit, getClientIp } from '../lib/auth'
-import { auditAuthFailure, auditRateLimit } from '../lib/audit'
 import { executeDeepResearch, SsakDeepResearchArgsSchema } from '../lib/agent-deep-research'
 
 export const agentApi = new Hono<{ Bindings: AppBindings }>()
 
 /**
- * Auth + rate limit for every agent endpoint.
- *
- * These routes drive bing/naver/DDG scraping from the deployment's egress
- * IPs — an unauthenticated hammer here gets those IPs banned for every other
- * user. Mirrors the /api/search guard (validateApiKeyAsync honors
- * AUTH_OPEN_MODE=1 for local dev; closed by default).
+ * Auth + rate limit is applied centrally in index.tsx (API_AUTH_GATED_PREFIXES
+ * covers /api/agent) — keeping a local gate here would charge the rate-limit
+ * window twice per request.
  */
-agentApi.use('*', async (c, next) => {
-  const clientIp = getClientIp(c.req.raw.headers)
-
-  const authResult = await validateApiKeyAsync(c.req.raw.headers, c.env)
-  if (!authResult.valid) {
-    auditAuthFailure({
-      reason: authResult.reason || 'Invalid or missing API key',
-      clientIp,
-      resource: c.req.path,
-      attempt: c.req.raw.headers.get('Authorization')?.startsWith('Bearer ')
-        ? 'bearer'
-        : c.req.raw.headers.get('X-API-Key')
-          ? 'x-api-key'
-          : 'none',
-    })
-    return c.json(
-      {
-        error: {
-          code: 'UNAUTHORIZED',
-          detail: authResult.reason || 'Unauthorized',
-          agent_hint: 'Provide Authorization: Bearer <key> or X-API-Key: <key>.',
-          retryable: false,
-          suggested_action: 'RETRY_WITH_AUTH',
-        },
-      },
-      401,
-    )
-  }
-
-  const rateLimit = checkClientRateLimit(clientIp, {
-    tenantId: authResult.tenant?.id,
-    tenantsConfig: c.env.TENANTS_CONFIG,
-    env: c.env,
-  })
-  if (!rateLimit.allowed) {
-    auditRateLimit(clientIp, c.req.path, rateLimit.remaining)
-    return c.json(
-      {
-        error: {
-          code: 'RATE_LIMITED',
-          detail: 'Rate limit exceeded. Try again later.',
-          agent_hint: 'Wait for the window to reset, or batch queries less aggressively.',
-          retryable: true,
-          suggested_action: 'RETRY_WITH_BACKOFF',
-        },
-      },
-      429,
-      { 'Retry-After': '60' },
-    )
-  }
-
-  await next()
-})
 
 /**
  * 1. 초고속 에이전트 검색 엔드포인트

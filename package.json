@@ -110,7 +110,9 @@
     "eval:monitor:report": "npx tsx eval/monitor.ts --report",
     "eval:monitor:alert": "npx tsx eval/monitor.ts --alert",
     "eval:monitor:diff": "npx tsx eval/monitor.ts --diff",
-    "test:e2e": "vitest run --config vitest.e2e.config.ts"
+    "test:e2e": "vitest run --config vitest.e2e.config.ts",
+    "eval:sample": "npx tsx eval/index.ts --sample 12 --ci --summary",
+    "eval:sample:gate": "npx tsx eval/index.ts --sample 12 --ci --summary && npx tsx scripts/verify-ndcg-gate.ts"
   },
   "dependencies": {
     "@sentry/cloudflare": "^10.67.0",

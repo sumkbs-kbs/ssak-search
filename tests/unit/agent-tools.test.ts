@@ -47,14 +47,15 @@ describe('language-aware token estimation', () => {
     expect(estimateTokens('')).toBe(0)
   })
 
-  it('truncateToTokens cuts Korean within the real token budget', () => {
+  it('truncateToTokens stays at 4 chars/token for ALL languages (snippet quality)', () => {
+    // Main-pipeline snippets keep the original conservative budget: an A/B
+    // against the sampling eval exonerated truncation of the ja nDCG drop
+    // (live backend state was the cause), so shorter CJK snippets have no
+    // proven upside. estimateTokens (reporting) stays language-aware.
     const korean = '한'.repeat(1000)
     const out = truncateToTokens(korean, 100)
-    expect(out.length).toBeLessThan(250) // ~150 chars + ellipsis, not 400
-  })
-
-  it('truncateToTokens keeps English behavior unchanged', () => {
-    expect(truncateToTokens('a'.repeat(390), 100)).toBe('a'.repeat(390)) // under 400-char budget
+    expect(out.length).toBeLessThanOrEqual(401) // 400-char budget + ellipsis
+    expect(truncateToTokens('a'.repeat(390), 100)).toBe('a'.repeat(390))
   })
 })
 

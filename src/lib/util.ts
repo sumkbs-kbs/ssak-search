@@ -432,9 +432,20 @@ export function estimateTokens(text: string): number {
   return Math.ceil(text.length / charsPerToken(text))
 }
 
-/** Truncate text to maxTokens approximate (language-aware; English ≈ 4 chars/token) */
+/**
+ * Truncate text to maxTokens approximate (1 token ≈ 4 chars).
+ *
+ * Deliberately NOT language-aware, even though CJK really does tokenize
+ * denser: an A/B against the sampling eval attributed the ja-fact nDCG drop
+ * to live backend state, NOT truncation — so shorter CJK snippets have no
+ * proven quality upside, and main-pipeline snippets stay at the original
+ * conservative budget. Token-count HONESTY lives in estimateTokens (used by
+ * agent-facing reporting), and the agent markdown budget
+ * (sanitizeToDenseMarkdown) keeps the language-aware cap where token
+ * overrun actually costs the caller money.
+ */
 export function truncateToTokens(text: string, maxTokens: number): string {
-  const maxChars = maxTokens * charsPerToken(text)
+  const maxChars = maxTokens * 4
   if (text.length <= maxChars) return text
   const truncated = text.slice(0, maxChars)
   // Try to cut at a sentence/word boundary

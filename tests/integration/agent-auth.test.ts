@@ -1,10 +1,11 @@
 /**
- * Integration tests — /api/agent auth + rate-limit middleware.
+ * Integration tests — central API auth gate (API_AUTH_GATED_PREFIXES).
  *
- * The agent routes drive bing/naver/DDG scraping from the deployment's egress
- * IPs; before the middleware they were fully unauthenticated, which is an IP-ban
- * lever for anyone who finds the endpoint. These tests pin the guard:
- * 401 without a key, 200 with the test key, and the agent-shaped error payload.
+ * The gate covers every backend-driving or data-bearing route that used to
+ * leak unauthenticated (research ran a 4.5s/15-source pipeline for anyone).
+ * These tests pin the gate: 401 without a key on every gated prefix, and the
+ * handler actually reached with one (invalid bodies 400 before any backend
+ * is driven — no live network from these tests).
  *
  * Run: npx vitest run --config vitest.integration.config.ts
  */
@@ -19,11 +20,30 @@ const worker = (exports as unknown as { default: WorkerModule }).default
 
 const BASE = 'https://ssak-search.pages.dev'
 
-describe('/api/agent auth guard', () => {
+// Unique client IP per request: the global securityMiddleware rate-limits by
+// IP (~17 rapid requests → pre-auth 429). Sharing one IP across the probe
+// loops trips that limiter and masks the 401s these tests assert on.
+const uniqueIp = () => `10.${(Math.random() * 250) | 1}.${(Math.random() * 250) | 1}.${(Math.random() * 250) | 1}`
+
+const GATED_POST_ROUTES = [
+  '/api/agent/search',
+  '/api/agent/deep-research',
+  '/api/research',
+  '/api/chat',
+  '/api/suggest',
+  '/api/video',
+  '/api/products',
+  '/api/news-hub',
+  '/api/queue',
+]
+
+const GATED_GET_ROUTES = ['/api/spaces', '/api/pages', '/api/library', '/api/profile', '/api/canary', '/api/monitor']
+
+describe('central API auth gate', () => {
   it('rejects missing API key with 401 and an agent-shaped error payload', async () => {
     const res = await worker.fetch(`${BASE}/api/agent/search`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'X-Forwarded-For': `10.7.0.${(Math.random() * 250) | 1}` },
+      headers: { 'Content-Type': 'application/json', 'X-Forwarded-For': uniqueIp() },
       body: JSON.stringify({ query: 'test' }),
     })
     expect(res.status).toBe(401)
@@ -33,13 +53,31 @@ describe('/api/agent auth guard', () => {
     expect(body.error.retryable).toBe(false)
   })
 
+  it('blocks every gated POST route without a key', async () => {
+    for (const path of GATED_POST_ROUTES) {
+      const res = await worker.fetch(`${BASE}${path}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-Forwarded-For': uniqueIp() },
+        body: JSON.stringify({}),
+      })
+      expect(res.status, `${path} should be 401`).toBe(401)
+    }
+  })
+
+  it('blocks every gated GET route without a key', async () => {
+    for (const path of GATED_GET_ROUTES) {
+      const res = await worker.fetch(`${BASE}${path}`, { headers: { 'X-Forwarded-For': uniqueIp() } })
+      expect(res.status, `${path} should be 401`).toBe(401)
+    }
+  })
+
   it('accepts a valid API key and reaches the search handler', async () => {
     const res = await worker.fetch(`${BASE}/api/agent/search`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         'X-API-Key': 'test-key',
-        'X-Forwarded-For': `10.8.0.${(Math.random() * 250) | 1}`,
+        'X-Forwarded-For': uniqueIp(),
       },
       body: JSON.stringify({ query: '' }), // invalid on purpose — 400 from the handler proves we got past auth
     })
@@ -48,10 +86,23 @@ describe('/api/agent auth guard', () => {
     expect(body.error.code).toBe('MISSING_QUERY')
   })
 
+  it('reaches the research handler with a key (validation 400, no backend driven)', async () => {
+    const res = await worker.fetch(`${BASE}/api/research`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-API-Key': 'test-key',
+        'X-Forwarded-For': uniqueIp(),
+      },
+      body: JSON.stringify({}), // validation rejects before any fan-out
+    })
+    expect(res.status).toBe(400)
+  })
+
   it('guards the SSE stream endpoint too', async () => {
     const res = await worker.fetch(`${BASE}/api/agent/stream-search`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', 'X-Forwarded-For': uniqueIp() },
       body: JSON.stringify({ query: 'test' }),
     })
     expect(res.status).toBe(401)
@@ -60,7 +111,7 @@ describe('/api/agent auth guard', () => {
   it('guards the extract endpoint too', async () => {
     const res = await worker.fetch(`${BASE}/api/agent/extract`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', 'X-Forwarded-For': uniqueIp() },
       body: JSON.stringify({ url: 'https://example.com' }),
     })
     expect(res.status).toBe(401)

@@ -34,6 +34,12 @@ interface CliArgs {
   /** Run the eval N times and report per-query MEDIAN values (default: 1) */
   runs?: number
   /**
+   * Deterministic stratified sample of N queries (language-stratified, evenly
+   * spaced) — a CI-able quality gate. The full 608-query suite runs 16min+,
+   * too slow to gate deploys, so regressions went unmeasured.
+   */
+  sample?: number
+  /**
    * S37: after a median run (--runs > 1), compute the S34 wikipedia-429
    * weighted NDCG loss from the persisted run-*.json and emit a GitHub
    * Actions `::warning::` annotation when it exceeds this threshold
@@ -92,6 +98,15 @@ function parseArgs(): CliArgs {
       case '--tag':
         opts.tag = args[++i]
         break
+      case '--sample': {
+        const n = Number(args[++i])
+        if (!Number.isInteger(n) || n < 2 || n > 100) {
+          console.error('--sample must be an integer between 2 and 100')
+          process.exit(1)
+        }
+        opts.sample = n
+        break
+      }
       case '--gold': {
         const p = args[++i]
         if (!p || p.startsWith('--')) {
@@ -105,6 +120,56 @@ function parseArgs(): CliArgs {
   }
 
   return opts
+}
+
+const SAMPLE_LANGUAGE_TAGS = ['korean', 'english', 'japanese', 'chinese'] as const
+
+/**
+ * Deterministic stratified sample: group by language tag, allocate
+ * proportionally (min 1 per non-empty stratum), pick evenly spaced entries.
+ * No randomness — the same invocation always samples the same queries, so a
+ * failing gate reruns identically.
+ */
+function stratifiedSample<T extends { tags?: string[] }>(pool: T[], n: number): T[] {
+  const groups = new Map<string, T[]>()
+  for (const q of pool) {
+    const lang = q.tags?.find((t) => (SAMPLE_LANGUAGE_TAGS as readonly string[]).includes(t)) ?? 'other'
+    const list = groups.get(lang) ?? []
+    list.push(q)
+    groups.set(lang, list)
+  }
+  const langs = [...groups.keys()].sort()
+  const sizes = new Map<string, number>(langs.map((l) => [l, groups.get(l)?.length ?? 0]))
+  const alloc = new Map<string, number>()
+  let remaining = Math.min(n, pool.length)
+  for (const lang of langs) {
+    const size = sizes.get(lang) ?? 0
+    const share = Math.max(1, Math.floor((size / pool.length) * n))
+    const take = Math.min(share, size, remaining)
+    alloc.set(lang, take)
+    remaining -= take
+  }
+  let progressed = true
+  while (remaining > 0 && progressed) {
+    progressed = false
+    for (const lang of langs) {
+      if (remaining === 0) break
+      if ((alloc.get(lang) ?? 0) < (sizes.get(lang) ?? 0)) {
+        alloc.set(lang, (alloc.get(lang) ?? 0) + 1)
+        remaining--
+        progressed = true
+      }
+    }
+  }
+  const out: T[] = []
+  for (const lang of langs) {
+    const list = groups.get(lang) ?? []
+    const take = alloc.get(lang) ?? 0
+    if (take <= 0 || list.length === 0) continue
+    const stride = list.length / take
+    for (let i = 0; i < take; i++) out.push(list[Math.floor(i * stride)])
+  }
+  return out
 }
 
 async function main() {
@@ -127,6 +192,9 @@ Options:
   --tag <tag>  Run only queries with the specified tag (e.g. 'korean', 'english')
   --runs <n>   Run the eval n times (1-9) and report per-query MEDIAN values,
                robust to backend availability noise (default: 1)
+  --sample <n> Deterministic stratified sample of n queries (2-100,
+               language-stratified) — a CI-able gate when the full suite
+               is too slow to block a deploy
   --loss-threshold <n>
                S37: after a median run, warn (::warning::) when the S34
                wikipedia-429 weighted NDCG loss exceeds n (default 5.0;
@@ -137,11 +205,26 @@ Options:
 
   // Filter queries by tag if specified
   const tag = opts.tag
-  const queries = tag ? EVAL_QUERIES.filter((q) => q.tags?.includes(tag)) : EVAL_QUERIES
+  const tagged = tag ? EVAL_QUERIES.filter((q) => q.tags?.includes(tag)) : EVAL_QUERIES
 
-  if (queries.length === 0) {
+  if (tagged.length === 0) {
     console.error(`No queries found for tag "${opts.tag}"`)
     process.exit(1)
+  }
+
+  const queries = opts.sample ? stratifiedSample(tagged, opts.sample) : tagged
+  if (opts.sample) {
+    const langs = new Map<string, number>()
+    for (const q of queries) {
+      const lang =
+        q.tags?.find((t) => t === 'korean' || t === 'english' || t === 'japanese' || t === 'chinese') ?? 'other'
+      langs.set(lang, (langs.get(lang) ?? 0) + 1)
+    }
+    console.error(
+      `Sampling ${queries.length}/${tagged.length} queries (stratified: ${[...langs.entries()]
+        .map(([l, n]) => `${l}=${n}`)
+        .join(', ')})\n`,
+    )
   }
 
   const runCount = opts.runs ?? 1
@@ -196,13 +279,15 @@ Options:
       // Persist each raw run for auditability (run-1.json … run-N.json).
       // Regressions are intentionally NOT computed here — per-run diffs against
       // a moving baseline are ambiguous; the median report is the signal.
-      // Same full-pool-only contract as latest.json: tag-run subsets must not
-      // clobber the official median artifacts.
+      // Same full-pool-only contract as latest.json: tag AND sample subsets
+      // must not clobber the official median artifacts (sample writes
+      // sample-run-N.json instead).
+      const runFile = opts.sample ? `sample-run-${i}.json` : `run-${i}.json`
       if (!opts.tag) {
         try {
-          fs.writeFileSync(path.join(resultsDir, `run-${i}.json`), JSON.stringify({ report: rep }, null, 2), 'utf-8')
+          fs.writeFileSync(path.join(resultsDir, runFile), JSON.stringify({ report: rep }, null, 2), 'utf-8')
         } catch (e) {
-          console.error(`Failed to write eval/results/run-${i}.json:`, e)
+          console.error(`Failed to write eval/results/${runFile}:`, e)
         }
       }
     }
@@ -245,8 +330,20 @@ Options:
   // Phase H fix: --tag runs are diagnostic subsets — persisting them here let
   // an 18-query conversational report overwrite the official 921-query
   // artifact, which the absolute NDCG gate (verify-ndcg-gate.ts) then judges
-  // out of context. Full-pool runs only; tag runs keep stdout as their record.
-  if (!opts.tag) {
+  // out of context. Full-pool runs only; tag AND sample runs keep stdout as
+  // their record (a 12-query --sample once clobbered latest.json the same
+  // way — sample reports go to sample-latest.json for auditability instead).
+  if (opts.sample) {
+    try {
+      const fs = await import('node:fs')
+      const path = await import('node:path')
+      const resultsDir = path.join(process.cwd(), 'eval', 'results')
+      fs.mkdirSync(resultsDir, { recursive: true })
+      fs.writeFileSync(path.join(resultsDir, 'sample-latest.json'), formatReportJSON(report, regressions), 'utf-8')
+    } catch (e) {
+      console.error('Failed to write eval/results/sample-latest.json:', e)
+    }
+  } else if (!opts.tag) {
     try {
       const fs = await import('node:fs')
       const path = await import('node:path')

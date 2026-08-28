@@ -17,7 +17,12 @@ import { naverSearch } from '../../src/lib/naver-search'
 import { bingSearch } from '../../src/lib/bing-search'
 import { duckDuckGoSearch, isDuckDuckGoCoolingDown } from '../../src/lib/duckduckgo'
 import { wikipediaBackboneSearch } from '../../src/lib/wikipedia-backbone'
-import { executeFastAgentSearch, generateSubqueries, resetFastPathCache } from '../../src/lib/agent-search-orchestrator'
+import {
+  executeFastAgentSearch,
+  generateSubqueries,
+  resetFastPathCache,
+  resetFastPathInflight,
+} from '../../src/lib/agent-search-orchestrator'
 import type { SearchResult } from '../../src/types'
 
 const mockNaver = vi.mocked(naverSearch)
@@ -46,6 +51,7 @@ beforeEach(() => {
   mockWiki.mockReset()
   mockWiki.mockResolvedValue([]) // default: no backbone results
   resetFastPathCache() // tests reuse the same query strings
+  resetFastPathInflight()
 })
 
 describe('generateSubqueries — language-matched augmentation', () => {
@@ -307,6 +313,66 @@ describe('micro cache', () => {
 
     await executeFastAgentSearch('empty', 5)
     await executeFastAgentSearch('empty', 5)
+    expect(mockBing).toHaveBeenCalledTimes(2)
+  })
+})
+
+describe('single-flight (concurrent duplicate collapse)', () => {
+  it('collapses simultaneous identical queries into one backend fan-out', async () => {
+    let resolveFirst: () => void
+    const gate = new Promise<void>((r) => {
+      resolveFirst = r
+    })
+    mockBing.mockImplementation(async () => {
+      await gate
+      return [hit('bing', 0)]
+    })
+    mockDdg.mockResolvedValue([])
+
+    // Start both synchronously: the leader registers its inflight slot in
+    // its synchronous prefix, so the second call joins instead of racing.
+    const p1 = executeFastAgentSearch('dup query', 5)
+    const p2 = executeFastAgentSearch('dup query', 5)
+    resolveFirst!()
+    const [a, b] = await Promise.all([p1, p2])
+
+    expect(mockBing).toHaveBeenCalledTimes(1) // one fan-out, not two
+    expect(a.hits).toEqual(b.hits)
+    expect(a.took_ms).toBeGreaterThanOrEqual(0)
+    expect(b.took_ms).toBeGreaterThanOrEqual(0)
+  })
+
+  it('replays hits to a joiner with its own onHits listener', async () => {
+    let resolveFirst: () => void
+    const gate = new Promise<void>((r) => {
+      resolveFirst = r
+    })
+    mockBing.mockImplementation(async () => {
+      await gate
+      return [hit('bing', 0)]
+    })
+    mockDdg.mockResolvedValue([])
+
+    const joinerSources: string[] = []
+    const p1 = executeFastAgentSearch('stream dup', 5)
+    const p2 = executeFastAgentSearch('stream dup', 5, 2500, undefined, 'general', false, (_batch, src) => {
+      joinerSources.push(src)
+    })
+    resolveFirst!()
+    const [a, b] = await Promise.all([p1, p2])
+
+    expect(a.hits).toEqual(b.hits)
+    expect(joinerSources).toContain('bing_mobile') // joiner streamed the settled hits
+  })
+
+  it('clears the inflight slot after completion (sequential reruns re-execute)', async () => {
+    mockBing.mockResolvedValue([hit('bing', 0)])
+    mockDdg.mockResolvedValue([])
+
+    await executeFastAgentSearch('clears', 5)
+    // evict the micro cache entry so the second call must execute, not serve
+    resetFastPathCache()
+    await executeFastAgentSearch('clears', 5)
     expect(mockBing).toHaveBeenCalledTimes(2)
   })
 })

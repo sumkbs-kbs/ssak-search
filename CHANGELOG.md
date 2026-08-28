@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.8.3] — fast-path 단일-플라이트 + DDG 평판 회복 후 ja 수치 복원 확인 (2026-08-28)
+
+### Fixed
+- **fast-path 단일-플라이트**: 동시 중복 쿼리(에이전트 루프의 서브에이전트 팬아웃)가 마이크로
+  캐시 저장 전에 레이스해 백엔드를 N중 타격하던 것을 하나의 팬아웃으로 병합(메인
+  오케스트레이터의 INFLIGHT 패턴 미러). 조인 호출자는 자체 onHits 리스너로 결과 재생 +
+  자체 벽시간 보고. 실패 시 슬롯 정리(finally).
+- **환경 가설 최종 입증**: DDG 평판 회복 후 샘플 평가에서 ja-fact-01 nDCG 0.4935 → **0.8278**
+  복원(10결과, bing+duckduckgo+wikidata) — 코드 무관 확인으로 사건 종결.
+
 ## [2.8.2] — ja/zh 평가 하락 근본 원인 규명 + 로컬 레이트리밋 프로덕션-동등화 (2026-08-28)
 
 ### Fixed

@@ -144,6 +144,30 @@ export function generateSubqueries(query: string, topic: string): string[] {
   return subqueries.slice(0, 3)
 }
 
+// Single-flight: concurrent identical queries collapse into one fan-out.
+// Agent loops fan out subagents that fire duplicate queries in the same
+// instant — without this, each duplicate races the micro cache (stores only
+// on completion) and pays full backend latency, doubling scraping pressure
+// and arming anti-bot. Mirrors orchestrator.ts's INFLIGHT_SEARCHES.
+const INFLIGHT_SEARCHES = new Map<string, Promise<AgentSearchResult>>()
+
+/** Test hook — isolate the single-flight map between tests. */
+export function resetFastPathInflight(): void {
+  INFLIGHT_SEARCHES.clear()
+}
+
+async function replayHits(hits: AgentSearchHit[], onHits: AgentHitsListener): Promise<void> {
+  const bySource = new Map<string, AgentSearchHit[]>()
+  for (const h of hits) {
+    const list = bySource.get(h.source) ?? []
+    list.push(h)
+    bySource.set(h.source, list)
+  }
+  for (const [source, batch] of bySource) {
+    await onHits(batch, source)
+  }
+}
+
 export async function executeFastAgentSearch(
   query: string,
   maxResults = 5,
@@ -161,162 +185,171 @@ export async function executeFastAgentSearch(
   const cacheKey = fastPathCacheKey(query, maxResults, topic, decomposeSubqueries)
   const cached = getFromFastPathCache(cacheKey)
   if (cached) {
-    if (onHits) {
-      const bySource = new Map<string, AgentSearchHit[]>()
-      for (const h of cached.result.hits) {
-        const list = bySource.get(h.source) ?? []
-        list.push(h)
-        bySource.set(h.source, list)
-      }
-      for (const [source, batch] of bySource) {
-        await onHits(batch, source)
-      }
-    }
+    if (onHits) await replayHits(cached.result.hits, onHits)
     return { ...cached.result, cached: true, cache_age_ms: cached.ageMs }
   }
 
-  const hits: AgentSearchHit[] = []
-  const seenUrls = new Set<string>()
-  const abortedBackends: string[] = []
-
-  const queriesToRun = decomposeSubqueries ? generateSubqueries(query, topic) : [query]
-
-  const tasks: Array<() => Promise<void>> = []
-
-  for (const q of queriesToRun) {
-    // Korean: naver first-class + bing ko-KR. Non-Korean: bing en-US + DDG —
-    // naver returns noise for English queries and bing-only left the fast path
-    // with a single point of scraping failure.
-    const providers = isKorean
-      ? [
-          {
-            name: 'naver_mobile',
-            fn: () => naverSearch(q, { maxResults, timeoutMs, env }),
-          },
-          {
-            name: 'bing_mobile',
-            fn: () => bingSearch(q, { maxResults, timeoutMs, region: 'ko-KR', env }),
-          },
-        ]
-      : [
-          {
-            name: 'bing_mobile',
-            fn: () => bingSearch(q, { maxResults, timeoutMs, region: 'en-US', env }),
-          },
-          {
-            name: 'duckduckgo',
-            fn: () => duckDuckGoSearch(q, { maxResults, timeoutMs, region: 'wt-wt', env }),
-          },
-        ]
-
-    for (const { name, fn } of providers) {
-      tasks.push(async () => {
-        try {
-          const rawResults = await fn()
-          if (rawResults.length === 0 && name === 'duckduckgo' && isDuckDuckGoCoolingDown()) {
-            // Empty DDG during the 202 cooldown is a provider outage, not a
-            // "no results" — report it so agents don't trust bing-only output
-            // as full coverage.
-            if (!abortedBackends.includes('duckduckgo(antibot-cooldown)')) {
-              abortedBackends.push('duckduckgo(antibot-cooldown)')
-            }
-          }
-          const batch: AgentSearchHit[] = []
-          for (let i = 0; i < rawResults.length; i++) {
-            const item = rawResults[i]
-            const norm = normalizeUrl(item.url)
-            if (seenUrls.has(norm)) continue
-            seenUrls.add(norm)
-
-            // Backends without a lexical score get a rank-decayed prior
-            // (first hit 0.80, −0.05 per rank, floor 0.50). The previous flat
-            // 0.85 seed made almost every batch read as HIGH confidence.
-            const fallback = Math.max(0.5, 0.8 - i * 0.05)
-            let score = typeof item.score === 'number' && item.score > 0 ? item.score : fallback
-
-            // Code Authority Boosting
-            let authorityBoost = false
-            if (topic === 'code' && isCodeAuthorityUrl(item.url)) {
-              score = Math.min(score + 0.1, 1.0)
-              authorityBoost = true
-            }
-
-            if (score < FAST_PATH_NOISE_FLOOR) continue
-
-            batch.push({
-              title: item.title,
-              url: item.url,
-              snippet: item.content || '',
-              score,
-              source: name,
-              authority_boost: authorityBoost,
-            })
-          }
-          if (batch.length > 0) {
-            hits.push(...batch)
-            await onHits?.(batch, name)
-          }
-        } catch (_err) {
-          if (!abortedBackends.includes(name)) {
-            abortedBackends.push(name)
-          }
-        }
-      })
-    }
+  // Single-flight: join an identical in-flight query instead of racing it.
+  // The joiner replays the settled hits through its own onHits listener and
+  // reports its own wall time (the leader's took_ms is not the joiner's).
+  const inflight = INFLIGHT_SEARCHES.get(cacheKey)
+  if (inflight) {
+    const result = await inflight
+    if (onHits) await replayHits(result.hits, onHits)
+    return { ...result, took_ms: Math.round(performance.now() - start) }
   }
 
-  await Promise.allSettled(tasks.map((t) => t()))
+  const execution = (async (): Promise<AgentSearchResult> => {
+    const hits: AgentSearchHit[] = []
+    const seenUrls = new Set<string>()
+    const abortedBackends: string[] = []
 
-  // Knowledge backbone: when every provider came back empty (scrapers
-  // blocked/cooling-down, or genuinely nothing), Wikipedia's official keyless
-  // API keeps the agent unblocked instead of returning a bare LOW. This only
-  // fires on the empty path, so p50 is untouched.
-  if (hits.length === 0) {
-    try {
-      const wikiResults = await wikipediaBackboneSearch(query, {
-        maxResults,
-        language: isKorean ? 'ko' : 'en',
-        env,
-      })
-      const batch: AgentSearchHit[] = []
-      for (const item of wikiResults) {
-        if (typeof item.score !== 'number' || item.score < FAST_PATH_NOISE_FLOOR) continue
-        batch.push({
-          title: item.title,
-          url: item.url,
-          snippet: item.content || '',
-          score: item.score,
-          source: 'wikipedia',
+    const queriesToRun = decomposeSubqueries ? generateSubqueries(query, topic) : [query]
+
+    const tasks: Array<() => Promise<void>> = []
+
+    for (const q of queriesToRun) {
+      // Korean: naver first-class + bing ko-KR. Non-Korean: bing en-US + DDG —
+      // naver returns noise for English queries and bing-only left the fast path
+      // with a single point of scraping failure.
+      const providers = isKorean
+        ? [
+            {
+              name: 'naver_mobile',
+              fn: () => naverSearch(q, { maxResults, timeoutMs, env }),
+            },
+            {
+              name: 'bing_mobile',
+              fn: () => bingSearch(q, { maxResults, timeoutMs, region: 'ko-KR', env }),
+            },
+          ]
+        : [
+            {
+              name: 'bing_mobile',
+              fn: () => bingSearch(q, { maxResults, timeoutMs, region: 'en-US', env }),
+            },
+            {
+              name: 'duckduckgo',
+              fn: () => duckDuckGoSearch(q, { maxResults, timeoutMs, region: 'wt-wt', env }),
+            },
+          ]
+
+      for (const { name, fn } of providers) {
+        tasks.push(async () => {
+          try {
+            const rawResults = await fn()
+            if (rawResults.length === 0 && name === 'duckduckgo' && isDuckDuckGoCoolingDown()) {
+              // Empty DDG during the 202 cooldown is a provider outage, not a
+              // "no results" — report it so agents don't trust bing-only output
+              // as full coverage.
+              if (!abortedBackends.includes('duckduckgo(antibot-cooldown)')) {
+                abortedBackends.push('duckduckgo(antibot-cooldown)')
+              }
+            }
+            const batch: AgentSearchHit[] = []
+            for (let i = 0; i < rawResults.length; i++) {
+              const item = rawResults[i]
+              const norm = normalizeUrl(item.url)
+              if (seenUrls.has(norm)) continue
+              seenUrls.add(norm)
+
+              // Backends without a lexical score get a rank-decayed prior
+              // (first hit 0.80, −0.05 per rank, floor 0.50). The previous flat
+              // 0.85 seed made almost every batch read as HIGH confidence.
+              const fallback = Math.max(0.5, 0.8 - i * 0.05)
+              let score = typeof item.score === 'number' && item.score > 0 ? item.score : fallback
+
+              // Code Authority Boosting
+              let authorityBoost = false
+              if (topic === 'code' && isCodeAuthorityUrl(item.url)) {
+                score = Math.min(score + 0.1, 1.0)
+                authorityBoost = true
+              }
+
+              if (score < FAST_PATH_NOISE_FLOOR) continue
+
+              batch.push({
+                title: item.title,
+                url: item.url,
+                snippet: item.content || '',
+                score,
+                source: name,
+                authority_boost: authorityBoost,
+              })
+            }
+            if (batch.length > 0) {
+              hits.push(...batch)
+              await onHits?.(batch, name)
+            }
+          } catch (_err) {
+            if (!abortedBackends.includes(name)) {
+              abortedBackends.push(name)
+            }
+          }
         })
       }
-      if (batch.length > 0) {
-        hits.push(...batch)
-        await onHits?.(batch, 'wikipedia')
-      }
-    } catch (_err) {
-      if (!abortedBackends.includes('wikipedia')) {
-        abortedBackends.push('wikipedia')
+    }
+
+    await Promise.allSettled(tasks.map((t) => t()))
+
+    // Knowledge backbone: when every provider came back empty (scrapers
+    // blocked/cooling-down, or genuinely nothing), Wikipedia's official keyless
+    // API keeps the agent unblocked instead of returning a bare LOW. This only
+    // fires on the empty path, so p50 is untouched.
+    if (hits.length === 0) {
+      try {
+        const wikiResults = await wikipediaBackboneSearch(query, {
+          maxResults,
+          language: isKorean ? 'ko' : 'en',
+          env,
+        })
+        const batch: AgentSearchHit[] = []
+        for (const item of wikiResults) {
+          if (typeof item.score !== 'number' || item.score < FAST_PATH_NOISE_FLOOR) continue
+          batch.push({
+            title: item.title,
+            url: item.url,
+            snippet: item.content || '',
+            score: item.score,
+            source: 'wikipedia',
+          })
+        }
+        if (batch.length > 0) {
+          hits.push(...batch)
+          await onHits?.(batch, 'wikipedia')
+        }
+      } catch (_err) {
+        if (!abortedBackends.includes('wikipedia')) {
+          abortedBackends.push('wikipedia')
+        }
       }
     }
-  }
 
-  hits.sort((a, b) => b.score - a.score)
-  const finalHits = hits.slice(0, maxResults)
+    hits.sort((a, b) => b.score - a.score)
+    const finalHits = hits.slice(0, maxResults)
 
-  // Confidence is derived from scored evidence only: HIGH needs at least two
-  // hits at ≥0.75, MEDIUM means usable results, LOW means nothing arrived.
-  const strongHits = finalHits.filter((h) => h.score >= 0.75).length
-  const signalConfidence: AgentSearchResult['signal_confidence'] =
-    finalHits.length === 0 ? 'LOW' : strongHits >= 2 ? 'HIGH' : 'MEDIUM'
+    // Confidence is derived from scored evidence only: HIGH needs at least two
+    // hits at ≥0.75, MEDIUM means usable results, LOW means nothing arrived.
+    const strongHits = finalHits.filter((h) => h.score >= 0.75).length
+    const signalConfidence: AgentSearchResult['signal_confidence'] =
+      finalHits.length === 0 ? 'LOW' : strongHits >= 2 ? 'HIGH' : 'MEDIUM'
 
-  const result: AgentSearchResult = {
-    query,
-    took_ms: Math.round(performance.now() - start),
-    hits: finalHits,
-    aborted_backends: abortedBackends,
-    signal_confidence: signalConfidence,
-    decomposed_subqueries: decomposeSubqueries ? queriesToRun : undefined,
-  }
-  setInFastPathCache(cacheKey, result)
-  return result
+    const result: AgentSearchResult = {
+      query,
+      took_ms: Math.round(performance.now() - start),
+      hits: finalHits,
+      aborted_backends: abortedBackends,
+      signal_confidence: signalConfidence,
+      decomposed_subqueries: decomposeSubqueries ? queriesToRun : undefined,
+    }
+    setInFastPathCache(cacheKey, result)
+    return result
+  })()
+
+  INFLIGHT_SEARCHES.set(cacheKey, execution)
+  // finally (not only-then): the slot must clear on rejection too, or a
+  // single throw would wedge this query for the isolate's lifetime.
+  return execution.finally(() => {
+    INFLIGHT_SEARCHES.delete(cacheKey)
+  })
 }

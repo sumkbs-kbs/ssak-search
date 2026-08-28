@@ -92,6 +92,17 @@ function isWikipediaHost(host: string): boolean {
   return host === 'wikipedia.org' || host.endsWith('.wikipedia.org')
 }
 
+/**
+ * True for DuckDuckGo endpoints (html/lite). DDG burst-bans under sustained
+ * sequential load exactly like wikipedia (~16 rapid requests → HTTP 202 for
+ * 10-30s+, re-armed by continuous traffic) — measured while diagnosing why
+ * eval runs lost the DDG backend mid-run (ja gold queries dropped from
+ * nDCG 0.89 to 0.49 as DDG's ja results vanished from later queries).
+ */
+function isDuckDuckGoHost(host: string): boolean {
+  return host === 'duckduckgo.com' || host.endsWith('.duckduckgo.com')
+}
+
 function getConfig(host: string): HostConfig {
   // All Wikipedia language subdomains (en/ko/zh/ja/…) resolve to the same
   // upstream IP and burst-ban together (~17 rapid requests → 429 for 60s+,
@@ -254,24 +265,34 @@ export async function canRequest(env: AppBindings, url: string): Promise<boolean
   }
 
   // Per-minute sliding-window rate limit (mirrors RateLimiterDO.canRequest).
-  // Enforced in the local fallback ONLY for wikipedia hosts: local dev runs
-  // without the DO binding, and wikipedia is the one backend that burst-bans
-  // under sustained sequential load (17 rapid requests → 429 for a minute+).
-  // Other hosts keep concurrency-only enforcement, preserving eval dynamics.
+  // Enforced in the local fallback for the burst-ban backends: wikipedia and
+  // DuckDuckGo. Local dev/eval runs without the DO binding, and both backends
+  // ban the shared egress IP under sustained sequential load (wikipedia:
+  // ~17 rapid requests → 429 for 60s+; DDG: ~16 → HTTP 202, re-armed by
+  // continuous traffic). Other hosts keep concurrency-only enforcement.
   //
-  // SKIPPED in eval mode: the eval harness supplies its OWN pacing
-  // (EVAL_QUERY_DELAY_MS, default 400ms between queries) and passes EVAL_MODE
-  // via runner.ts, so a per-minute window here would starve later queries
-  // (wikipedia contributes 2-6 requests per query; a 500×3 eval dwarfs the
-  // 100/min budget and would zero out wikipedia for the rest of the run — the
-  // exact regression seen when this check lacked the isEvalMode guard).
-  if (!isEvalMode(env) && config.rateLimitPerMinute && isWikipediaHost(host)) {
-    const window = LOCAL_RATE_WINDOWS.get(WIKIPEDIA_RATE_KEY) ?? []
+  // Wikipedia window SKIPPED in eval mode: the harness pacing (400ms/query)
+  // plus wikipedia's 2-6 requests per query would starve later queries
+  // against the 100/min budget on a 500×3 run — the exact regression seen
+  // when this check lacked the isEvalMode guard.
+  //
+  // DDG window applies in eval mode TOO, deliberately: DDG costs 1 request
+  // per query (plus rare site: variants) against a 20/min budget, so the
+  // window rarely binds — but when it does, blocking LOCALLY preserves the
+  // server relationship (the 60s window rolls over and later queries get
+  // real results again), whereas letting requests through just re-arms the
+  // server-side 202 ban for the rest of the run. Measured: eval runs without
+  // this window lost DDG mid-run and ja gold queries fell to nDCG 0.49
+  // because DDG carried the missing gold domains.
+  const enforceWindow = isDuckDuckGoHost(host) || (!isEvalMode(env) && isWikipediaHost(host))
+  if (enforceWindow && config.rateLimitPerMinute) {
+    const key = isWikipediaHost(host) ? WIKIPEDIA_RATE_KEY : host
+    const window = LOCAL_RATE_WINDOWS.get(key) ?? []
     const recent = window.filter((ts) => ts > now - 60_000)
     if (recent.length >= config.rateLimitPerMinute) {
       return false
     }
-    LOCAL_RATE_WINDOWS.set(WIKIPEDIA_RATE_KEY, [...recent, now])
+    LOCAL_RATE_WINDOWS.set(key, [...recent, now])
   }
 
   return true

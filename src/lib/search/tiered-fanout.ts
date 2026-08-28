@@ -17,7 +17,7 @@ import type { BackendTask } from './context'
 import { BACKEND_TIERS, TierManager } from './backend-tiers'
 import type { CircuitBreaker } from '../resilience/circuit-breaker'
 import { logger } from '../logger'
-import { backendTimeoutMs, FREE_PLAN_TIMEOUT_OVERRIDES } from './fanout'
+import { backendTimeoutMs } from './fanout'
 import { recordHarvestJunkSuppressed } from '../metrics'
 
 // ============================================================
@@ -130,7 +130,7 @@ export class TieredFanout {
     const launchTask = (t: BackendTask, tierLatencyMs: number) => {
       let p = inflight.get(t.name)
       if (!p) {
-        p = this.executeTask(t, tierLatencyMs, options.breakerMap, options.freePlan)
+        p = this.executeTask(t, tierLatencyMs, options.breakerMap)
         inflight.set(t.name, p)
       }
       return p
@@ -243,7 +243,6 @@ export class TieredFanout {
     task: BackendTask,
     timeoutMs: number,
     breakerMap?: Record<string, CircuitBreaker>,
-    freePlan?: boolean,
   ): Promise<{
     backend: string
     results: SearchResult[]
@@ -265,12 +264,16 @@ export class TieredFanout {
     // Use the larger of tier timeout and backend timeout
     // This ensures backends with higher timeouts (e.g., CSDN/Juejin at 4000ms)
     // are not prematurely killed by the tier's latency target
-    const ceiling = freePlan
-      ? (FREE_PLAN_TIMEOUT_OVERRIDES[task.name] ?? backendTimeoutMs(task.name, 0))
-      : backendTimeoutMs(task.name, 0)
-    // The tier latency still floors the value — an override below the tier's
-    // own target (e.g. duckduckgo 1500ms in a 2000ms tier) cannot bite here.
-    const effectiveTimeout = Math.max(timeoutMs, ceiling)
+    //
+    // FREE_PLAN_TIMEOUT_OVERRIDES is deliberately NOT applied here. isFreePlan
+    // defaults to true when env is unset (local eval, default deployments),
+    // so applying the overrides would silently shrink wikipedia/openalex
+    // ceilings in environments never tuned for them — a starvation risk with
+    // no measured benefit. (An initial ja-fact nDCG drop was suspected here
+    // but A/B disproved it — the real cause was DDG's sequential-burst ban;
+    // see the DDG window note in rate-limiter.ts.) The overrides remain
+    // exported for explicitly-instrumented deployments.
+    const effectiveTimeout = Math.max(timeoutMs, backendTimeoutMs(task.name, 0))
 
     try {
       const results = await Promise.race([

@@ -5,6 +5,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.8.2] — ja/zh 평가 하락 근본 원인 규명 + 로컬 레이트리밋 프로덕션-동등화 (2026-08-28)
+
+### Fixed
+- **ja/zh 골드 평가 하락(nDCG 0.89→0.49) 근본 원인 규명**: 단발 휴식 상태에선 파이프라인이
+  `bing+duckduckgo+wikidata` 10결과를 정상 생산하나, 순차 평가 트래픽이 이 IP의 DDG
+  안티봇 평판을 소진시켜 첫 쿼리 직후 202 차단 — ja 쿼리가 DDG 소싱 골드 도메인
+  3개를 잃는 것이 원인. 코드 무관 확인(freePlan 타임아웃 가설 A/B 기각, 변경 전
+  커밋 워크트리에서 동일 재현). 잘못된 귀속 주석 정정.
+- **로컬 레이트리밋 폴백이 DDG 창 강제**: 프로덕션(DO)은 전 호스트 분당 창을 강제하나
+  로컬/평가는 wikipedia만 강제 — 로컬 실행이 DDG 서버 관계를 손상시키는 구조적 격차
+  해소. 로컬 차단은 60s 창 롤오버 후 실결과 회복을 보존(서버 202 재무장과 다름).
+- **샘플 게이트 층화 인터리브**: 언어 블록 순차 실행이 마지막 스트라텀(japanese)에
+  버스트 밴을 체계적으로 전가 — 라운드로빈으로 분산(결정성 유지).
+
 ## [2.8.1] — 중앙 인증 게이트 + CI-실행 가능 평가 샘플 (2026-08-28)
 
 ### Security

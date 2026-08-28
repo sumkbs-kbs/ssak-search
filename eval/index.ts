@@ -161,13 +161,34 @@ function stratifiedSample<T extends { tags?: string[] }>(pool: T[], n: number): 
       }
     }
   }
-  const out: T[] = []
+  // Interleave round-robin across strata instead of concatenating language
+  // blocks. Sequential blocks meant the LAST stratum always ran against
+  // backends exhausted by the earlier ones — DDG's sequential-burst 202 ban
+  // reliably fired by the japanese block, deterministically costing ja
+  // queries their DDG results (ja-fact-01 nDCG 0.89 → 0.49, root-caused).
+  // Round-robin distributes burst pressure evenly across strata and keeps
+  // the sample deterministic.
+  const perLang: Array<T[]> = []
   for (const lang of langs) {
     const list = groups.get(lang) ?? []
     const take = alloc.get(lang) ?? 0
     if (take <= 0 || list.length === 0) continue
     const stride = list.length / take
-    for (let i = 0; i < take; i++) out.push(list[Math.floor(i * stride)])
+    const picks: T[] = []
+    for (let i = 0; i < take; i++) picks.push(list[Math.floor(i * stride)])
+    perLang.push(picks)
+  }
+  const out: T[] = []
+  let emitted = true
+  while (emitted) {
+    emitted = false
+    for (const picks of perLang) {
+      const next = picks.shift()
+      if (next !== undefined) {
+        out.push(next)
+        emitted = true
+      }
+    }
   }
   return out
 }

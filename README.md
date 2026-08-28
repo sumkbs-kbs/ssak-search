@@ -133,6 +133,8 @@ LLM Function Calling / Tool Use(LangChain, AutoGen, CrewAI, OpenAI)에 최적화
 
 > **인증**: `/api/agent/*`를 포함한 모든 백엔드 구동 라우트는 `Authorization: Bearer <key>` 또는 `X-API-Key: <key>`가 필요합니다 (전체 정책 테이블: `src/index.tsx`의 `API_AUTH_GATED_PREFIXERS` 참조 — `AUTH_OPEN_MODE=1` 시 로컬 개방).
 
+> 📜 이 에이전트 도구 체계의 경화 과정(평가→9개 배치→검증)은 [docs/22_AGENT_HARDENING_SESSION.md](docs/22_AGENT_HARDENING_SESSION.md)에 세션 기록으로 정리되어 있습니다.
+
 ### 1. POST /api/agent/search (초저지연 병렬 검색)
 - **특징:** 병렬 프로바이더 레이스 및 조기 반환(Early Return) 메커니즘으로 P95 레이턴시 **< 800ms** 달성.
 - **백엔드:** 한국어 쿼리 → naver+bing(ko-KR), 그 외 → bing+DDG. 전 프로바이더 공백 시 위키피디아 백본(ko/en)이 구조.

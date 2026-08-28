@@ -18,6 +18,8 @@
 
 **알려진 한계**: 백엔드는 HTML 스크래퍼 3개 + 단일 egress IP(브랜드 API 키·프록시 풀이 근본 해법), 무인증 IP 레이트리밋은 per-isolate(볼류메트릭 방어는 CF WAF 룰 권장), 스탠더얼론 바이너리의 Tier-3 사이드카는 `SIDECAR_URL` 설정 시 활성.
 
+> 상세 경과·버그 목록·방법론: [docs/22_AGENT_HARDENING_SESSION.md](docs/22_AGENT_HARDENING_SESSION.md)
+
 ---
 
 ## 🏗️ 아키텍처 개요

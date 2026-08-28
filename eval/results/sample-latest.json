@@ -1,57 +1,57 @@
 {
   "report": {
-    "timestamp": "2026-08-28T04:28:04.616Z",
+    "timestamp": "2026-08-28T04:59:38.837Z",
     "totalQueries": 12,
-    "passedQueries": 10,
-    "failedQueries": 2,
-    "passRate": 0.8333333333333334,
-    "avgTimeMs": 2745,
-    "avgResultCount": 8.2,
+    "passedQueries": 9,
+    "failedQueries": 3,
+    "passRate": 0.75,
+    "avgTimeMs": 2404,
+    "avgResultCount": 6.7,
     "backendCoverage": {
       "bing": 12,
       "csdn": 3,
-      "duckduckgo": 3,
+      "duckduckgo": 1,
       "wikidata": 2,
       "yahoo": 3,
       "hackernews": 4,
       "naver": 4,
       "google": 1,
       "dbpedia": 2,
-      "wikipedia": 2,
+      "wikipedia": 3,
       "qiita": 1,
       "github": 1
     },
     "latencyPercentiles": {
-      "p50": 2901,
-      "p75": 3604,
-      "p90": 4368,
-      "p95": 4572,
-      "p99": 4720,
-      "max": 4757,
-      "min": 723
+      "p50": 2176,
+      "p75": 3580,
+      "p90": 4344,
+      "p95": 4433,
+      "p99": 4456,
+      "max": 4462,
+      "min": 778
     },
     "qps": {
-      "avgQps": 0.25,
+      "avgQps": 0.28,
       "totalQueries": 12,
-      "totalDurationMs": 47301,
+      "totalDurationMs": 43265,
       "byTag": {
-        "chinese": 0.33,
-        "factual": 0.3,
-        "english": 0.31,
-        "financial": 0.31,
-        "japanese": 0.47,
-        "korean": 0.56,
-        "general": 0.43,
-        "technical": 0.72,
-        "news": 0.33
+        "chinese": 0.4,
+        "factual": 0.25,
+        "english": 0.41,
+        "financial": 0.34,
+        "japanese": 0.36,
+        "korean": 0.57,
+        "general": 0.67,
+        "technical": 0.69,
+        "news": 0.6
       },
-      "peakQps": 1.38
+      "peakQps": 1.29
     },
     "ranking": {
       "queriesWithGoldStandard": 12,
-      "avgNdcgAt10": 0.5107603153968484,
+      "avgNdcgAt10": 0.5181273138749966,
       "avgMrr": 0.9375,
-      "avgPrecisionAt10": 0.6541666666666667
+      "avgPrecisionAt10": 0.7263888888888891
     },
     "results": [
       {
@@ -73,14 +73,14 @@
               "title": "丽台科普丨什么是量子计算？看完这篇就懂了! - 知乎",
               "url": "https://zhuanlan.zhihu.com/p/12820769566",
               "content": "量子计算利用 量子物理学 原理解锁了一种全新计算方式。随着 量子计算机 逐渐成熟，它们将与超级计算机进行集成，解决世界上最难处理的一些计算问题。 如今，汽车、制药、化工和金融服务等行业正在探索如何将量子计算作为传统 超级计算 的加速器。 1 什么是量子计算？ 量子计算是一种范式 ...",
-              "score": 0.776032817585864,
+              "score": 0.7763328175858639,
               "domain": "zhuanlan.zhihu.com"
             },
             {
               "title": "【一文看懂】什么是量子计算？-csdn博客",
               "url": "https://blog.csdn.net/weixin_49393016/article/details/144898812",
               "content": "量子计算代表了一种突破性的计算方法，它利用量子力学的基本原理，能够在某些复杂问题上实现超越传统计算机的计算能力。从药物研发到气候模拟，量子计算在多个领域展示了巨大的潜力。 但量子计算究竟是什么？它如何工作？它为什么能够解决传统计算机无法应对的挑战？在这篇文章中 ...",
-              "score": 0.7374402857142857,
+              "score": 0.7371402857142857,
               "domain": "blog.csdn.net"
             },
             {
@@ -124,7 +124,7 @@
               "title": "量子计算（遵循量子力学规律的计算模式）_百度百科",
               "url": "https://baike.baidu.com/item/%E9%87%8F%E5%AD%90%E8%AE%A1%E7%AE%97/11035661",
               "content": "量子计算（Quantum Computing，QC），是一种遵循量子力学规律调控量子信息单元进行计算的新型计算模式。与经典计算不同，量子计算遵循量子力学规律，它是能突破经典算力瓶颈的新型计算模式。量子计算机，作为执行量子计算任务的设备，以量子比特（qubit）为基本运算单元。在量子计算中，基于 ...",
-              "score": 0.4704938721888291,
+              "score": 0.470193872188829,
               "domain": "baike.baidu.com"
             },
             {
@@ -146,7 +146,7 @@
               "published_date": "2024-10-06"
             }
           ],
-          "response_time_ms": 3510,
+          "response_time_ms": 3521,
           "backend": "bing+csdn+duckduckgo+wikidata",
           "fallback_used": false,
           "related_queries": [
@@ -167,7 +167,7 @@
           "no_results": false
         },
         "resultCount": 10,
-        "responseTimeMs": 3510,
+        "responseTimeMs": 3522,
         "backends": [
           "bing",
           "csdn",
@@ -288,7 +288,7 @@
               "domain": "icloud.com"
             }
           ],
-          "response_time_ms": 4421,
+          "response_time_ms": 4462,
           "backend": "bing+yahoo-finance+hackernews",
           "fallback_used": false,
           "related_queries": [
@@ -309,7 +309,7 @@
           "no_results": false
         },
         "resultCount": 10,
-        "responseTimeMs": 4421,
+        "responseTimeMs": 4462,
         "backends": [
           "bing",
           "yahoo-finance",
@@ -341,78 +341,43 @@
           "query": "量子コンピュータとは",
           "results": [
             {
-              "title": "量子コンピュータとは？仕組み・種類・活用事例をわかり ...",
+              "title": "量子コンピュータとは ？仕組み・種類・活用事例をわかり ...",
               "url": "https://japan-ai.co.jp/media/7041/",
-              "content": "量子コンピュータとは、 量子力学の原理を応用して計算を行う次世代のコンピュータ です。 従来のコンピュータが「0」か「1」のビットで情報を処理するのに対し、量子コンピュータは「量子ビット」と呼ばれる情報単位を使います。 量子ビットは「重ね合わせ」という量子力学特有の性質により、0と1を同時に保持できます。 この性質を活かすことで、量子コンピュータは膨大な数の計算パターンを扱うことができ、組み合わせ最適化や分子シミュレーションなど、従来のコンピュータでは天文学的な時間を要する計算を効率的に処理できる可能性を持ちます。",
-              "score": 0.8124090723101046,
+              "content": "2026年6月8日 · 量子コンピュータとは、 量子力学の原理を応用して計算を行う次世代のコンピュータ です。 従来のコンピュー …",
+              "score": 0.8052030723101047,
               "domain": "japan-ai.co.jp"
             },
             {
-              "title": "量子コンピュータとは？中学生にもわかりやすく解説 ...",
+              "title": "量子コンピュータとは ？中学生にもわかりやすく解説 ...",
               "url": "https://spaceshipearth.jp/quantum-computer/",
-              "content": "量子コンピュータとは、量子力学の原理を応用して膨大な計算を可能にする次世代技術です。 量子ビットの仕組みや歴史、現在の開発動向からSDGsとの関係まで、量子コンピュータが注目される理由を中学生にもわかるように解説します。",
-              "score": 0.8079390723101048,
+              "content": "2026年3月26日 · 量子コンピュータとは、量子力学の原理を応用して膨大な計算を可能にする次世代技術です。 量子ビットの仕組 …",
+              "score": 0.8047830723101046,
               "domain": "spaceshipearth.jp"
             },
             {
-              "title": "量子コンピュータとは？仕組み・従来技術との違い・最新動向 ...",
+              "title": "量子コンピュータとは ？仕組み・従来技術との違い・最新動向 ...",
               "url": "https://www.dir.co.jp/world/entry/solution/quantum-computer",
-              "content": "量子コンピュータとは、量子力学の原理を計算に応用したコンピュータです。 従来のコンピュータでは実現できない大規模計算の可能性に注目が集まっています。 本記事では、その仕組みや従来技術との違い、最新動向について解説します。",
-              "score": 0.8078790723101047,
+              "content": "2025年12月10日 · 量子コンピュータとは、量子力学の原理を計算に応用したコンピュータです。 従来のコンピュータでは実現でき …",
+              "score": 0.8047620723101047,
               "domain": "dir.co.jp"
-            },
-            {
-              "title": "量子コンピュータとは：用語解説｜富士通",
-              "url": "https://global.fujitsu/ja-jp/library/quantum-computing",
-              "content": "量子コンピュータは、物質やエネルギーの最小単位である「量子」の持つ特別な性質、量子力学の原理を応用して計算を行うコンピュータです。 量子が同時に複数の状態をとる「重ね合わせ」や、離れた量子同士が瞬時に影響しあう「量子もつれ」といった現象が計算に活用されています。 量子コンピュータのハードウェアには、超伝導方式、ダイヤモンドスピン方式、冷却原子方式、シリコン方式、イオントラップ方式など多様な実装方式があり、現在様々な企業が研究開発を進めています。 しかし実はまだ、量子コンピュータの実用化に向けてどの方式が有望なのか判っていません。 それぞれの方式には利点と課題があり、利点を伸ばし、課題を克服する研究が行われています。",
-              "score": 0.7810080723101047,
-              "domain": "global.fujitsu"
-            },
-            {
-              "title": "量子コンピュータとは？仕組みや課題、応用事例までわかり ...",
-              "url": "https://www.scsk.jp/sp/itpnavi/article/2026/03/quantumcompuing.html",
-              "content": "近年、ニュースやメディアなどで「量子コンピュータ」という言葉を耳にする機会が増えてきました。 量子コンピュータは、従来のコンピュータとは比べものにならない計算能力を秘めた、最先端のテクノロジーです。",
-              "score": 0.759021,
-              "domain": "scsk.jp"
-            },
-            {
-              "title": "量子コンピュータとは？仕組みや種類と企業での活用事例を ...",
-              "url": "https://www.nextech-week.jp/hub/ja-jp/blog/article_16.html",
-              "content": "量子コンピュータは、従来のコンピュータの限界を超える新しい計算技術として注目されています。 この技術は、量子力学の原理を活用し、計算能力の飛躍的向上や複雑な最適化問題の解決を可能にします。 現在は実用化に向けた研究段階ですが、医療や金融、物流、製造業など、幅広い分野での応用が期待されています。 一方で、まだまだ課題もあり、克服すべきハードルは多い状況です。 本記事では、量子コンピュータの仕組みや応用例、技術課題、そして今後の展望について詳しく解説します。 記事監修者：藤吉 栄二氏 野村総合研究所 IT基盤技術戦略室 チーフリサーチャー. メーカー系ソフトハウスを経て、2001年より野村総合研究所に勤務。 最新ITの動向調査、システムコンサルティングに従事。",
-              "score": 0.7434480000000001,
-              "domain": "nextech-week.jp"
-            },
-            {
-              "title": "量子コンピュータとは？",
-              "url": "https://www.aist.go.jp/aist_j/magazine/20220518.html",
-              "content": "この0と1の重ね合わせ状態を用いて並列計算を行うコンピュータが量子コンピュータなのです。 スーパーコンピュータを使っても膨大な時間のかかる計算を、はるかに短い時間で行うことができるのではないか？ と期待される量子コンピュータ。 現在、量子コンピュータに対して世界中の政府や産業界から大きな期待が寄せられています。 しかし、量子コンピュータを用いることでスーパーコンピュータなどの「古典コンピュータ」よりも高速に計算できる問題は限られています。 また、量子コンピュータの社会実装までには最低でも20〜30年の長い時間が必要だと考えられています。",
-              "score": 0.741099,
-              "domain": "aist.go.jp"
-            },
-            {
-              "title": "「 量子 」知っておきたい基礎知識 | NEDO",
-              "url": "https://www.nedo.go.jp/page/field27_01.html",
-              "content": "2025年12月22日 · 1．いま注目の量子技術 量子コンピュータ、量子暗号、量子センサーなど、私たちの身近なところで「量子」と …",
-              "score": 0.6140220723101047,
-              "domain": "nedo.go.jp"
-            },
-            {
-              "title": "量子コンピューティングとは | Ibm",
-              "url": "https://www.ibm.com/jp-ja/think/topics/quantum-computing",
-              "content": "量子コンピューターとは何でしょうか。 古典的コンピューティングとどのように違うのでしょうか。 この動画では、Jessie Yuが、量子コンピューターの5つの基本要素や、量子コンピューティングに対する影響について説明しています。",
-              "score": 0.595947,
-              "domain": "ibm.com"
             },
             {
               "title": "量子コンピュータ",
               "url": "https://ja.wikipedia.org/wiki/%E9%87%8F%E5%AD%90%E3%82%B3%E3%83%B3%E3%83%94%E3%83%A5%E3%83%BC%E3%82%BF",
               "content": "量子力学的な重ね合わせを用いて並列性を実現するとされるコンピュータ",
-              "score": 0.5915384285714286,
+              "score": 0.5860384285714286,
               "domain": "ja.wikipedia.org"
+            },
+            {
+              "title": "「量子」知っておきたい基礎知識 | NEDO",
+              "url": "https://www.nedo.go.jp/page/field27_01.html",
+              "content": "2025年12月22日 · 量子コンピュータは、量子力学の特性を活用した次世代技術の一つとして、大きな注目を集めています。 実は、 …",
+              "score": 0.576033,
+              "domain": "nedo.go.jp"
             }
           ],
-          "response_time_ms": 3249,
-          "backend": "bing+duckduckgo+wikidata",
+          "response_time_ms": 4410,
+          "backend": "bing+wikidata",
           "fallback_used": false,
           "related_queries": [
             "量子コンピュータとは guide",
@@ -426,25 +391,24 @@
           ],
           "page": 1,
           "page_size": 10,
-          "total_results": 13,
-          "total_pages": 2,
-          "subrequest_estimate": 6,
+          "total_results": 5,
+          "total_pages": 1,
+          "subrequest_estimate": 4,
           "no_results": false
         },
-        "resultCount": 10,
-        "responseTimeMs": 3249,
+        "resultCount": 5,
+        "responseTimeMs": 4410,
         "backends": [
           "bing",
-          "duckduckgo",
           "wikidata"
         ],
         "passed": true,
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.8277566336180304,
+          "ndcgAt10": 0.892210845475489,
           "mrr": 1,
-          "precisionAt10": 0.5,
+          "precisionAt10": 1,
           "relevantHits": 5
         }
       },
@@ -470,74 +434,25 @@
               "title": "삼성전자 주가 정보 (KOSPI 005930)",
               "url": "https://m.stock.naver.com/domestic/stock/005930/total",
               "content": "삼성전자 | KOSPI 005930",
-              "score": 0.7649104062311269,
-              "domain": "m.stock.naver.com"
-            },
-            {
-              "title": "동의할 수 없는 주가 \n \n줄일 때가 아니라 늘릴 때다AI 시대, 삼성전자의 성장 전략을 명확하게 제시해준 실적발표. 그럼에도, 당일 주가는 부진. 다만, 이는 사이클에 대한 오해에서 비롯된 과도한 하락.1 \n \n\n",
-              "url": "https://m.stock.naver.com/domestic/stock/005930/research/94876",
-              "content": "동의할 수 없는 주가 \n \n줄일 때가 아니라 늘릴 때다AI 시대, 삼성전자의 성장 전략을 명확하게 제시해준 실적발표. 그럼에도, 당일 주가는 부진. 다만, 이는 사이클에 대한 오해에서 비롯된 과도한 하락.1 \n \n\n \n\n 대신증권 \n 2026.07.31.",
-              "score": 0.724707406231127,
+              "score": 0.7637104062311271,
               "domain": "m.stock.naver.com"
             },
             {
               "title": "삼성전자 증권사 리서치 — 네이버증권",
               "url": "https://m.stock.naver.com/domestic/stock/005930/research",
               "content": "삼성전자 증권사 투자의견, 목표주가, 리서치 리포트",
-              "score": 0.696561406231127,
+              "score": 0.6953614062311271,
               "domain": "m.stock.naver.com"
             },
             {
               "title": "삼성전자 재무제표 — 네이버증권",
               "url": "https://m.stock.naver.com/domestic/stock/005930/finance/quarter",
               "content": "삼성전자 분기 재무제표, 매출액, 영업이익, 당기순이익 조회",
-              "score": 0.6782764062311271,
+              "score": 0.6687027834924456,
               "domain": "m.stock.naver.com"
-            },
-            {
-              "title": "공급과 수요 모두 변화 / HBM 시장 점유율 확대 예상 \n \n투자포인트 및 결론-삼성전자에 대해 6개월 목표주가 440,000원 (2026년 예상 P/E 10배와 2026년 예상 P/B 3배 산술평균)에 투자의견 ",
-              "url": "https://m.stock.naver.com/domestic/stock/005930/research/95044",
-              "content": "공급과 수요 모두 변화 / HBM 시장 점유율 확대 예상 \n \n투자포인트 및 결론-삼성전자에 대해 6개월 목표주가 440,000원 (2026년 예상 P/E 10배와 2026년 예상 P/B 3배 산술평균)에 투자의견 매수 유지. 삼성전자의 2분 \n \n\n \n\n 현대차증권 \n 2026.08.05.",
-              "score": 0.6354112857142857,
-              "domain": "m.stock.naver.com"
-            },
-            {
-              "title": "무시할 실적이 아니다 \n \n실적 부진은 꿈도 꾸지 않는다삼성전자의 분기별 실적은 역사적 최대 규모를 이어갈 것으로 전망한다. 실적은 DS가 주도할 것으로 예상한다. 디스플레이 이익 비중은 1%를 하회하고, \n \n\n ",
-              "url": "https://m.stock.naver.com/domestic/stock/005930/research/94851",
-              "content": "무시할 실적이 아니다 \n \n실적 부진은 꿈도 꾸지 않는다삼성전자의 분기별 실적은 역사적 최대 규모를 이어갈 것으로 전망한다. 실적은 DS가 주도할 것으로 예상한다. 디스플레이 이익 비중은 1%를 하회하고, \n \n\n \n\n IBK투자증권 \n 2026.07.31.",
-              "score": 0.6028702857142858,
-              "domain": "m.stock.naver.com"
-            },
-            {
-              "title": "품격을 보여줬다 \n \n\" 삼성전자의 2Q26 실적은 매출액 171.5조원(+28%qoq), 영업이익 89.5원(+57%qoq)을 기록했다. 부문별 영업이익은 DS 89.2조원(DRAM 68.4조원, N \n \n\n \n\n",
-              "url": "https://m.stock.naver.com/domestic/stock/005930/research/94847",
-              "content": "품격을 보여줬다 \n \n\" 삼성전자의 2Q26 실적은 매출액 171.5조원(+28%qoq), 영업이익 89.5원(+57%qoq)을 기록했다. 부문별 영업이익은 DS 89.2조원(DRAM 68.4조원, N \n \n\n \n\n 유진투자증권 \n 2026.07.31.",
-              "score": 0.6021532857142857,
-              "domain": "m.stock.naver.com"
-            },
-            {
-              "title": "3Q26 실적 전망치 상향 \n \n2Q26 HBM4 판매량 급증삼성전자의 2Q26 사업 부문별 세부 실적은 당사 예상치에 대체로 부합했다. 범용 DRAM은 가격 상승률이 예상보다 부진 했지만 출하량이 기대치를 넘어 \n",
-              "url": "https://m.stock.naver.com/domestic/stock/005930/research/94803",
-              "content": "3Q26 실적 전망치 상향 \n \n2Q26 HBM4 판매량 급증삼성전자의 2Q26 사업 부문별 세부 실적은 당사 예상치에 대체로 부합했다. 범용 DRAM은 가격 상승률이 예상보다 부진 했지만 출하량이 기대치를 넘어 \n \n\n \n\n 키움증권 \n 2026.07.31.",
-              "score": 0.6020092857142858,
-              "domain": "m.stock.naver.com"
-            },
-            {
-              "title": "삼성 전자서비스",
-              "url": "https://www.samsungsvc.co.kr/",
-              "content": "주소 : 경기도 수원시 영통구 삼성로 290 삼성전자서비스주식회사 대표이사 : 김영호 사업자등록번호 : 124-81-58485 통신판매업신고번호 : 제2005-406호 사업자번호확인 호스팅서비스제공자 : …",
-              "score": 0.4955526682694352,
-              "domain": "samsungsvc.co.kr"
-            },
-            {
-              "title": "Samsung 대한민국",
-              "url": "https://www.samsung.com/sec/portal/home/",
-              "content": "삼성닷컴 FAQ 삼성스토어 삼성스토어 찾기 서비스센터 찾기 오늘보장 & 시간 맞춤 설치 서비스 비즈니스 협력제안 (DX) 비즈니스 협력제안 (DS) E-카탈로그 공지사항 계정 삼성계정을 만들어야 하는 이유 삼성전자 …",
-              "score": 0.4279696936096636,
-              "domain": "samsung.com"
             }
           ],
-          "response_time_ms": 2169,
+          "response_time_ms": 2129,
           "backend": "bing+naver+naver-finance",
           "fallback_used": false,
           "related_queries": [
@@ -548,17 +463,17 @@
             "삼성전자 주가 배당",
             "삼성전자 주가 차트",
             "삼성전자 주가 투자",
-            "삼성전자 주가 예상"
+            "삼성전자 주가 네이버증권"
           ],
           "page": 1,
           "page_size": 10,
-          "total_results": 16,
-          "total_pages": 2,
+          "total_results": 3,
+          "total_pages": 1,
           "subrequest_estimate": 6,
           "no_results": false
         },
-        "resultCount": 10,
-        "responseTimeMs": 2169,
+        "resultCount": 3,
+        "responseTimeMs": 2129,
         "backends": [
           "bing",
           "naver",
@@ -568,10 +483,10 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.5032251913410369,
+          "ndcgAt10": 0.3903800499921017,
           "mrr": 1,
-          "precisionAt10": 0.9,
-          "relevantHits": 9
+          "precisionAt10": 1,
+          "relevantHits": 3
         }
       },
       {
@@ -599,75 +514,47 @@
               "published_date": "2023-05-15"
             },
             {
-              "title": "考研复习全攻略：详细计划表助你高效备考 _考研_新东方在线",
-              "url": "https://kaoyan.koolearn.com/20251106/1894177.html",
-              "content": "考研 是一场漫长而艰辛的旅程，制定一个科学、全面的复习计划是成功的关键。合理规划时间，分阶段进行复习，能够帮助考生有效掌握知识点，同时避免复习效率低下。以下是一个详细的 考研复习 计划表，助力每位考生高效备战。 一、复习阶段划分 考研复习通常分为三个阶段：基础阶段 (3月至6 ...",
-              "score": 0.6690131205168413,
-              "domain": "kaoyan.koolearn.com"
-            },
-            {
               "title": "LangFlow考研专业课复习计划制定助手",
               "url": "https://blog.csdn.net/weixin_36019375/article/details/156171705",
               "content": "[国营窝窝乡蛮大人] LangFlow考研专业课复习计划制定助手 — 本文介绍如何利用LangFlow结合LangChain与RAG技术，构建可视化、可迭代的考研专业课复习计划助手。系统可根据用户基础、目标院校和时间安排，动态生成并调整个性化学习方案，支持本地模型部署与知识库存储，提升复习效率与精准度。",
-              "score": 0.5432472963991565,
+              "score": 0.538265041014926,
               "domain": "blog.csdn.net",
               "author": "国营窝窝乡蛮大人",
               "published_date": "2025-12-23"
             },
             {
-              "title": "收藏 | 26考研人必备的备考计划表!_复习_示例_可以在",
-              "url": "https://www.sohu.com/a/871356442_121124032",
-              "content": "相信有很多同学到现在还是没有一个专属于自己的时间表，还发愁时间表怎么制定，今天学姐就给大家分享26考研的备考计划表，供需要的小伙伴参考~ 复习计划表 （一）考研每日计划表 这份计划，能让你考研的复习更加有条不紊，更有效率。",
-              "score": 0.5402639314800185,
-              "domain": "sohu.com"
-            },
-            {
               "title": "25计算机考研408专业课复习计划",
               "url": "https://blog.csdn.net/weixin_55922953/article/details/135721100",
               "content": "[ZL研知己] 25计算机考研408专业课复习计划 — 本文提供了详细的计算机考研408专业课复习计划，包括统考与自命题的区别，考试内容，复习阶段的时间分配，以及C语言、数据结构等科目的重要性。同时推荐了网课和教材资源，强调了早开始和自我笔记的重要性。",
-              "score": 0.5326921359130454,
+              "score": 0.5277116859216993,
               "domain": "blog.csdn.net",
               "author": "ZL研知己",
               "published_date": "2024-01-20"
             },
             {
-              "title": "考研，怎么给自己设定复习计划？ - 知乎",
-              "url": "https://www.zhihu.com/question/507697728",
-              "content": "考研准备周期：大三下开学开始看经验贴，大三下的5月份开始正式复习，暑假留校复习，整个考研跨度7个月左右。 每天大约维持在10个小时左右复习时间（有课就去上，没课就去图书馆看书），每周日休息半天时间，7个月的复习走的是很踏实的复习路线。",
-              "score": 0.5305796248201478,
+              "title": "25 考研 ｜ 考研 具体流程是什么样的？（该怎么选择学校 ...",
+              "url": "https://www.zhihu.com/tardis/bd/art/541303306",
+              "content": "学长写了这篇实操性的考研教程，系统性的讲解 必备的考研常识、怎样根据自身情况选择适合自己的院校专业选择、各科的高分复习 …",
+              "score": 0.29131407652745844,
               "domain": "zhihu.com"
             },
             {
-              "title": "26考研全年复习安排+时间规划 - 知乎",
-              "url": "https://zhuanlan.zhihu.com/p/1931008798232934299",
-              "content": "今天将为大家分享26考研的全年复习安排，系统梳理从当前至12月份的详细学习计划。 内容包括各科目各阶段的进度安排、学习任务、推荐课程及辅导资料，以及每日学习时长规划。 这可能是全网最详尽的考研复习指南，建议收藏以便后续查阅。",
-              "score": 0.5150348762036823,
-              "domain": "zhuanlan.zhihu.com"
+              "title": "掌上 考研 -研究生招生信息网",
+              "url": "https://www.kaoyan.cn/",
+              "content": "掌上考研是EOL教育在线旗下考研信息服务平台,平台聚合了900余所高校及科研院所研招信息,提供包括招生简章、招生专业、录取分 …",
+              "score": 0.21560979217273954,
+              "domain": "kaoyan.cn"
             },
             {
-              "title": "2025考研备考时间管理指南：从规划到执行 - 英飞思想家",
-              "url": "https://infi.cn/articles/2025-ky-review-plan.html",
-              "content": "融入日常：时间管理小窍门 考研备考像一场马拉松，时间散了，精力就跟不上。 别担心，这篇指南帮你梳理2025考研复习计划，重点聊聊怎么用时间管理技巧，让备考更稳当。 理解你的起点：评估与初步规划 先别急着埋头苦读，花一周时间审视自己。",
-              "score": 0.510084,
-              "domain": "infi.cn"
-            },
-            {
-              "title": "考研该怎么给自己设定复习计划？ - 知乎",
-              "url": "https://www.zhihu.com/question/627715965",
-              "content": "这样做的好处是： 1）可以量化复习任务，让自己每一阶段的目标都很明确并每个月都有新动力， 宏观把控自己的复习进度，不会出岔子； 2）每个月或者每一阶段都可以清楚的知道自己完成了什么，没完成什么，对于复盘回顾自己的复习情况提供了一个核心的数据日志支撑，这个讲究的数据的时代 ...",
-              "score": 0.4567779790953893,
-              "domain": "zhihu.com"
-            },
-            {
-              "title": "考研复习全年规划 - Csdn博客",
-              "url": "https://blog.csdn.net/weixin_52593633/article/details/147929290",
-              "content": "文章浏览阅读2.2k次，点赞10次，收藏18次。25考研以330分成功上岸。我精心整理了一份初试备考时间线任务规划，希望能为正在备考的同学们提供参考。如果你对如何规划学习路线仍感迷茫，不妨参考这份时间表，合理分配时间，缓解备考焦虑。祝愿各位考生都能一战成硕，顺利上岸!",
-              "score": 0.3707605054991025,
-              "domain": "blog.csdn.net"
+              "title": "中国研究生招生信息网",
+              "url": "https://yzst.chsi.com.cn/index2.html",
+              "content": "2026年研招调剂服务系统4月8日开通 考研动态 教育部部署2026年研考复试录取工作 考研复试流程图 2026年对调剂考生的基本要 …",
+              "score": 0.20461465251531624,
+              "domain": "yzst.chsi.com.cn"
             }
           ],
-          "response_time_ms": 3886,
-          "backend": "bing+csdn+duckduckgo",
+          "response_time_ms": 2223,
+          "backend": "bing+csdn",
           "fallback_used": false,
           "related_queries": [
             "考研复习计划 guide",
@@ -681,26 +568,25 @@
           ],
           "page": 1,
           "page_size": 10,
-          "total_results": 16,
-          "total_pages": 2,
-          "subrequest_estimate": 6,
+          "total_results": 6,
+          "total_pages": 1,
+          "subrequest_estimate": 4,
           "no_results": false
         },
-        "resultCount": 10,
-        "responseTimeMs": 3887,
+        "resultCount": 6,
+        "responseTimeMs": 2223,
         "backends": [
           "bing",
-          "csdn",
-          "duckduckgo"
+          "csdn"
         ],
         "passed": true,
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.4599715079731103,
+          "ndcgAt10": 0.6060398578158167,
           "mrr": 1,
-          "precisionAt10": 0.7,
-          "relevantHits": 7
+          "precisionAt10": 0.8333333333333334,
+          "relevantHits": 5
         }
       },
       {
@@ -747,7 +633,7 @@
               "title": "Netflix Brushes Off Warner Bros. Deal Loss, Growth Concerns as Profits, Revenue Soar in Q1",
               "url": "https://news.google.com/rss/articles/CBMifEFVX3lxTE05eVEtYVdUN05SaWhKMmlBNmNweVQ3dlRxVG4yQmJMa0RmSW04MnBFLTVwdEI0M0RuQjl5R2ZleWRQdTJXUWdJb0NKVldwSVNkZGUwVjhIeWZVMTNUbFNzZjFVSUdRTmQ4N0pDdjFDSDZqV19MSXo4bURvVWw?oc=5",
               "content": "[TheWrap] Netflix Brushes Off Warner Bros. Deal Loss, Growth Concerns as Profits, Revenue Soar in Q1",
-              "score": 0.6794230327595756,
+              "score": 0.6794212283227414,
               "domain": "thewrap.com",
               "published_date": "2026-04-16T07:00:00.000Z"
             },
@@ -755,7 +641,7 @@
               "title": "Netflix Q1 2026 Earnings: $12.25B Revenue and 325M Subscribers",
               "url": "https://news.google.com/rss/articles/CBMilAFBVV95cUxNRUMzU0FrU1JLVDlQd0RRRkpwREFqSjFlVEVxMVBka2RqdVRuV01HaXk2NkEzNzhxN19XTEFwQXAtWW41NzdyU0FRZUpGRGpQWmtTM1NUQlBHamlFZTlVRU1kRncxMXRpSGdVR0pCa24wR3ppdkpBTFJoYVR2TE9wek1UWXctOE5scEk3a3dKeFAzczI1?oc=5",
               "content": "[tech-insider.org] Netflix Q1 2026 Earnings: $12.25B Revenue and 325M Subscribers",
-              "score": 0.6705437355459576,
+              "score": 0.6705419311091234,
               "domain": "tech-insider.org",
               "published_date": "2026-04-18T07:00:00.000Z"
             },
@@ -763,7 +649,7 @@
               "title": "Is Netflix Stock a Buy Ahead of Its Q1 Earnings Report on April 16",
               "url": "https://news.google.com/rss/articles/CBMilgFBVV95cUxQWVNmdzZFQkZBTy1UcU42TWlZMmRNZ1ZWSTJSMTdHdEh6TmRJM0dGUkVoSExqNXJVeUNYMWtjVVZEdU9XQmM5Zk5ZaWFxRnU2bWZiQ1U1SnJjbEQtdzRIN1ZueHVyOHRDdjhpRkhUTzI3M0VmdkF2YVB3dXBFalhqYkxOdUFjYWR5MEhad3o2UmJkLUZ1VlE?oc=5",
               "content": "[Yahoo Finance] Is Netflix Stock a Buy Ahead of Its Q1 Earnings Report on April 16",
-              "score": 0.63657312464735,
+              "score": 0.6365713202105159,
               "domain": "finance.yahoo.com",
               "published_date": "2026-04-13T07:00:00.000Z"
             },
@@ -778,7 +664,7 @@
               "title": "Netflix, With Warner Bros. Off the Table, Tops Q1 Revenue Expectations With 16% Increase",
               "url": "https://news.google.com/rss/articles/CBMieEFVX3lxTE1UYWJsWmx6NE5YZnQ3TzI3ek9lNWZPMm5nVEJ6YlZlbGZYSXluNkIzSy1KRlFyaFFoUGxpaVBncWtMYTZEUjVKODRMdHhQRmNXSFktbDJTZG10OWo5RXVxSmRnZXdKUWdubzVFREs1MUhrSnNRMkdFdw?oc=5",
               "content": "[Variety] Netflix, With Warner Bros. Off the Table, Tops Q1 Revenue Expectations With 16% Increase",
-              "score": 0.5072054094144198,
+              "score": 0.5072036049775857,
               "domain": "variety.com",
               "published_date": "2026-04-16T07:00:00.000Z"
             },
@@ -786,7 +672,7 @@
               "title": "Netflix Q1 Revenue And Earnings Beat Street Expectations, But Shares Still Plunge",
               "url": "https://news.google.com/rss/articles/CBMigwFBVV95cUxOaXRYSGJGTDFTb0F3QkI2ZndBSnV3b2dDTkctZmRWOWcydUQ4MEpOdjRSN3dZLXRjczdRdU9sZF9zOE1WdXVXQ1hLR0ZLY2N3UmRHNjdMSWpmbHItcmFBcjJHMUxscDEtNFo3T0lIZW1rb0Y1cFJlX0JpdGRrZGFKbEdkVQ?oc=5",
               "content": "[Deadline] Netflix Q1 Revenue And Earnings Beat Street Expectations, But Shares Still Plunge",
-              "score": 0.5041068294929643,
+              "score": 0.5041050250561302,
               "domain": "deadline.com",
               "published_date": "2026-04-16T07:00:00.000Z"
             },
@@ -794,7 +680,7 @@
               "title": "Netflix Stock Crash: Q1 2026 Earnings Miss Sparks 10% Plunge",
               "url": "https://news.google.com/rss/articles/CBMifkFVX3lxTE9jbTc0UVoxVG9XUmVVSnJSN1o5SlV4UXRwczFHWkhHTGdnU2ZzVG5kRXRHUU1PZVltT0dMUFBLYkV2Y2V1MUgxaXFnRGc3dk0tX0dlZXdydnZuVVFUbGlrUk5pX0o2dVJUNDI5Vk9HVHpuM2ZpN05ockIwNFdsZw?oc=5",
               "content": "[Intellectia AI] Netflix Stock Crash: Q1 2026 Earnings Miss Sparks 10% Plunge",
-              "score": 0.502912861475154,
+              "score": 0.50291105703832,
               "domain": "intellectia.ai",
               "published_date": "2026-04-19T07:00:00.000Z"
             },
@@ -802,7 +688,7 @@
               "title": "Netflix Drops on Weak Guidance Despite Strong Q1 Results",
               "url": "https://news.google.com/rss/articles/CBMivwFBVV95cUxQaHpVMFdQSUl5b3RGZ1lDdW1yTElVZlNOR2I5Mm5rZlVOeFAwYVpTT1hZVXVHa2pNeVFRSU5weXpqc05sc2hzdVlDOHdLNWRzdFFkVjRRaDh2d0gxVElNQ0hUVFZjalFsNk1qb1VLYk1TalJqT25Lc3BYX0doSVhMczlPdEg3cUhTWGlJOC12MDVjWDB5ak9qaWNfVDZQU2lXd3NHOXoyUWdBZnQ1dU5mdmViX29BQVFzS0ItUVFPWQ?oc=5",
               "content": "[TradingView] Netflix Drops on Weak Guidance Despite Strong Q1 Results",
-              "score": 0.500258192773795,
+              "score": 0.5002563883369608,
               "domain": "tradingview.com",
               "published_date": "2026-04-21T07:00:00.000Z"
             },
@@ -814,7 +700,7 @@
               "domain": "netflix.com"
             }
           ],
-          "response_time_ms": 4757,
+          "response_time_ms": 3754,
           "backend": "bing+yahoo-finance+hackernews+google-news-rss+dbpedia",
           "fallback_used": false,
           "related_queries": [
@@ -835,7 +721,7 @@
           "no_results": false
         },
         "resultCount": 10,
-        "responseTimeMs": 4757,
+        "responseTimeMs": 3754,
         "backends": [
           "bing",
           "yahoo-finance",
@@ -872,7 +758,7 @@
               "title": "Google Colabで日本語の検索とテキスト分析を試す ― nlp4j-local-search 0.5.0",
               "url": "https://qiita.com/oyahiroki/items/408fc3e15b3a8f463ea6",
               "content": "[oyahiroki] Google Colabで日本語の検索とテキスト分析を試す ― nlp4j-local-search 0.5.0 [Python, NLP, lucene]",
-              "score": 0.4823640393756624,
+              "score": 0.4817622348379912,
               "domain": "qiita.com",
               "author": "oyahiroki",
               "published_date": "2026-08-23T19:06:45+09:00"
@@ -881,7 +767,7 @@
               "title": "Zilliz Cloud が GCP 東京リージョン（asia-northeast1）に対応しました 〜 GCP 上で始めるベクトル検索・ハンズオン付き",
               "url": "https://qiita.com/sphereSky/items/beb402b1ec3c3c222e70",
               "content": "[sphereSky] Zilliz Cloud が GCP 東京リージョン（asia-northeast1）に対応しました 〜 GCP 上で始めるベクトル検索・ハンズオン付き ♥3 [GoogleCloud, VectorDatabase, Milvus]",
-              "score": 0.48781199566238115,
+              "score": 0.4872101911247099,
               "domain": "qiita.com",
               "author": "sphereSky",
               "published_date": "2026-08-19T23:15:13+09:00"
@@ -897,22 +783,15 @@
               "title": "シャード (データベース・アーキテクチャ)",
               "url": "https://ja.wikipedia.org/wiki/%E3%82%B7%E3%83%A3%E3%83%BC%E3%83%89_(%E3%83%87%E3%83%BC%E3%82%BF%E3%83%99%E3%83%BC%E3%82%B9%E3%83%BB%E3%82%A2%E3%83%BC%E3%82%AD%E3%83%86%E3%82%AF%E3%83%81%E3%83%A3)",
               "content": "データベースまたは検索エンジン内のデータの水平分割. データベース・シャード (database shard、または単にシャード(shard)) は、データベースまたは 検索 エンジン 内のデータの水平分割(パーティショニング)である。 負荷を分散するために、各シャードは別個のen:データベース・サーバーのインスタンスに保持される。",
-              "score": 0.45140142949442275,
+              "score": 0.4508014294944227,
               "domain": "ja.wikipedia.org"
             },
             {
               "title": "OnlyOffice",
               "url": "https://ja.wikipedia.org/wiki/OnlyOffice",
               "content": "Schule）で使用されている。 日本のファイル共有・ 検索 システム開発会社である株式会社鉄飛テクノロジーは、OnlyOfficeをFileBlogという企業向け 検索 エンジン に統合した。 OnlyOfficeのテキスト文書、表計算、プレゼンテーションエディタは、ロ",
-              "score": 0.43129951977497294,
+              "score": 0.4306995197749729,
               "domain": "ja.wikipedia.org"
-            },
-            {
-              "title": "【入門】 Elasticsearch とは？用途や使い方をわかりやすく解説 ...",
-              "url": "https://hogetech.info/bigdata/elasticsearch",
-              "content": "2025年9月17日 · Elasticsearch Elasticsearch とは、データを検索する検索エンジンです。 以下のように ウェブサイトの商品検索 や …",
-              "score": 0.35990534203371405,
-              "domain": "hogetech.info"
             },
             {
               "title": "Elasticsearch についての基礎知識 - Qiita",
@@ -920,16 +799,9 @@
               "content": "2025年11月19日 · 1. Elasticsearchとは Elasticsearch は、分散環境で大容量データを高速に検索・分析できる分散型全文検索 …",
               "score": 0.35401729327615833,
               "domain": "qiita.com"
-            },
-            {
-              "title": "Elasticsearch （エラスティックサーチ）｜日立ソリューションズ ...",
-              "url": "https://www.hitachi-solutions.co.jp/elastic/",
-              "content": "Elasticsearchなら、BoxやGoogleなどの主要なクラウドストレージに対し、キーワード検索からベクトル検索まで、優れた検索エ …",
-              "score": 0.301877044077135,
-              "domain": "hitachi-solutions.co.jp"
             }
           ],
-          "response_time_ms": 1009,
+          "response_time_ms": 1114,
           "backend": "bing+wikipedia+qiita",
           "fallback_used": false,
           "related_queries": [
@@ -944,13 +816,13 @@
           ],
           "page": 1,
           "page_size": 10,
-          "total_results": 8,
+          "total_results": 6,
           "total_pages": 1,
           "subrequest_estimate": 6,
           "no_results": false
         },
-        "resultCount": 8,
-        "responseTimeMs": 1009,
+        "resultCount": 6,
+        "responseTimeMs": 1114,
         "backends": [
           "bing",
           "wikipedia",
@@ -962,7 +834,7 @@
         "ranking": {
           "ndcgAt10": 0.13032376591037062,
           "mrr": 0.25,
-          "precisionAt10": 0.25,
+          "precisionAt10": 0.3333333333333333,
           "relevantHits": 2
         }
       },
@@ -985,46 +857,32 @@
               "title": "중국 전기차 관련주 영향은? 현대차 ·기아·2차전지주 2026년 대응 전략",
               "url": "https://m.blog.naver.com/aoutworld/224382887345",
               "content": "중국 전기차 관련주 영향은? 현대차 ·기아·2차전지주 2026년 대응 전략",
-              "score": 0.5649453011054805,
+              "score": 0.5643453011054805,
               "domain": "m.blog.naver.com"
             },
             {
               "title": "현대차 관련주 , 전기차 ·자율주행 시대 주목해야 할 핵심 수혜주와 투자 포인트 총정리",
               "url": "https://m.blog.naver.com/estateagent3/224335824897",
               "content": "현대차 관련주 , 전기차 ·자율주행 시대 주목해야 할 핵심 수혜주와 투자 포인트 총정리",
-              "score": 0.5341383011054806,
+              "score": 0.5335383011054805,
               "domain": "m.blog.naver.com"
             },
             {
               "title": "현대 전기차 관련주 TOP10, 2026년 전망과 대장주 알아보니",
               "url": "https://m.blog.naver.com/qntmxj7898/224381556910",
               "content": "현대 전기차 관련주 TOP10, 2026년 전망과 대장주 알아보니",
-              "score": 0.43890146673716124,
+              "score": 0.4383014667371612,
               "domain": "m.blog.naver.com"
             },
             {
               "title": "국내 전기차 관련주 TOP10, 26년 전망과 대장주 분석 해보니",
               "url": "https://m.blog.naver.com/qntmxj7898/224381551688",
               "content": "국내 전기차 관련주 TOP10, 26년 전망과 대장주 분석 해보니",
-              "score": 0.37250842658021194,
+              "score": 0.3719084265802119,
               "domain": "m.blog.naver.com"
-            },
-            {
-              "title": "Accident du téléphérique Stresa-Alpino-Mottarone — Wikipédia",
-              "url": "https://fr.wikipedia.org/wiki/Accident_du_t%C3%A9l%C3%A9ph%C3%A9rique_Stresa-Alpino-Mottarone",
-              "content": "Quatorze personnes sont tuées et un enfant est gravement blessé. Le téléphérique reliait la ville de Stresa au sommet du …",
-              "score": 0.09694942857142856,
-              "domain": "fr.wikipedia.org"
-            },
-            {
-              "title": "Liste des principaux accidents de remontées mécaniques",
-              "url": "https://fr.wikipedia.org/wiki/Liste_des_principaux_accidents_de_remont%C3%A9es_m%C3%A9caniques",
-              "content": "Même si la cabine elle-même ne se s'écrase pas au sol, y sont précipités mortellement sept personnes, dont un couple de …",
-              "score": 0.09625042857142857,
-              "domain": "fr.wikipedia.org"
             }
           ],
-          "response_time_ms": 1389,
+          "response_time_ms": 1356,
           "backend": "bing+naver+naver-finance",
           "fallback_used": false,
           "related_queries": [
@@ -1039,25 +897,27 @@
           ],
           "page": 1,
           "page_size": 10,
-          "total_results": 6,
+          "total_results": 4,
           "total_pages": 1,
           "subrequest_estimate": 6,
           "no_results": false
         },
-        "resultCount": 6,
-        "responseTimeMs": 1390,
+        "resultCount": 4,
+        "responseTimeMs": 1357,
         "backends": [
           "bing",
           "naver",
           "naver-finance"
         ],
-        "passed": true,
-        "failures": [],
+        "passed": false,
+        "failures": [
+          "resultCount: got 4, expected >= 5"
+        ],
         "warnings": [],
         "ranking": {
           "ndcgAt10": 0.41253177989255346,
           "mrr": 1,
-          "precisionAt10": 0.6666666666666666,
+          "precisionAt10": 1,
           "relevantHits": 4
         }
       },
@@ -1080,7 +940,7 @@
               "title": "Spark大数据处理实战指南",
               "url": "https://blog.csdn.net/keny88888/article/details/150005636",
               "content": "[KENYCHEN奉孝] Spark大数据处理实战指南 — 本文是Spark大数据处理实战指南，介绍了Spark的核心特性、主要组件和应用场景，给出Spark SQL示例。还展示了基于C++与Spark、Spark AI、Spark-RAPIDS AI等的实用示例，以及C++和Horovod、MXNet的相关实例，此外包含Spark与Kafka、Flume的集成实例。",
-              "score": 0.7116549999999999,
+              "score": 0.711955,
               "domain": "blog.csdn.net",
               "author": "KENYCHEN奉孝",
               "published_date": "2025-08-07"
@@ -1089,7 +949,7 @@
               "title": "Java在大数据处理中的应用：从MapReduce到Spark",
               "url": "https://blog.csdn.net/shrgegrb/article/details/145571678",
               "content": "[向哆哆] Java在大数据处理中的应用：从MapReduce到Spark — 本文探讨Java在大数据处理中的应用，从MapReduce到Spark的演进。介绍了MapReduce和Spark的工作原理、优缺点，对比了两者性能、扩展性、易用性等。还阐述了Java与Spark结合的实践案例、在大数据生态系统中的整合，以及与其他大数据工具的高级集成，展望了Java与大数据的深度融合。",
-              "score": 0.601948,
+              "score": 0.602248,
               "domain": "blog.csdn.net",
               "author": "向哆哆",
               "published_date": "2025-02-11"
@@ -1098,13 +958,20 @@
               "title": "大数据处理实战：Hadoop/Spark深度解析",
               "url": "https://blog.csdn.net/shejizuopin/article/details/146472525",
               "content": "[喜欢编程就关注我] 大数据处理实战：Hadoop/Spark深度解析 — 本文聚焦大数据处理，深入解析Hadoop和Spark两大主流框架的实战技巧。介绍了Hadoop的HDFS存储管理、MapReduce模型及生态系统组件，阐述了Spark的RDD操作、DataFrame与SQL操作及Spark Streaming。还提及二者融合应用，助读者高效处理大规模数据集。",
-              "score": 0.600955,
+              "score": 0.6012550000000001,
               "domain": "blog.csdn.net",
               "author": "喜欢编程就关注我",
               "published_date": "2025-03-24"
+            },
+            {
+              "title": "WPS 365 教育版 - 一体化数字 教育 体验，专为 教育 打造的 ...",
+              "url": "https://edu.wps.cn/",
+              "content": "Office 文档 专业级文档处理 智能文档 智能文稿创作 智能表格 智能数据分析 智能表单 收集统计效率翻倍 多维表格 快速搭建业务系统 …",
+              "score": 0.226909,
+              "domain": "edu.wps.cn"
             }
           ],
-          "response_time_ms": 1787,
+          "response_time_ms": 1788,
           "backend": "bing+csdn",
           "fallback_used": false,
           "related_queries": [
@@ -1119,26 +986,26 @@
           ],
           "page": 1,
           "page_size": 10,
-          "total_results": 3,
+          "total_results": 4,
           "total_pages": 1,
           "subrequest_estimate": 4,
           "no_results": false
         },
-        "resultCount": 3,
-        "responseTimeMs": 1787,
+        "resultCount": 4,
+        "responseTimeMs": 1788,
         "backends": [
           "bing",
           "csdn"
         ],
         "passed": false,
         "failures": [
-          "resultCount: got 3, expected >= 5"
+          "resultCount: got 4, expected >= 5"
         ],
         "warnings": [],
         "ranking": {
           "ndcgAt10": 0.27487633291429087,
           "mrr": 1,
-          "precisionAt10": 1,
+          "precisionAt10": 0.75,
           "relevantHits": 3
         }
       },
@@ -1246,7 +1113,7 @@
               "domain": "meta.com"
             }
           ],
-          "response_time_ms": 2552,
+          "response_time_ms": 2430,
           "backend": "bing+yahoo-finance+hackernews+dbpedia",
           "fallback_used": false,
           "related_queries": [
@@ -1267,7 +1134,7 @@
           "no_results": false
         },
         "resultCount": 10,
-        "responseTimeMs": 2552,
+        "responseTimeMs": 2430,
         "backends": [
           "bing",
           "yahoo-finance",
@@ -1314,7 +1181,7 @@
               "domain": "en.wikipedia.org"
             }
           ],
-          "response_time_ms": 723,
+          "response_time_ms": 778,
           "backend": "bing+wikipedia",
           "fallback_used": false,
           "related_queries": [
@@ -1335,7 +1202,7 @@
           "no_results": false
         },
         "resultCount": 2,
-        "responseTimeMs": 723,
+        "responseTimeMs": 778,
         "backends": [
           "bing",
           "wikipedia"
@@ -1371,68 +1238,75 @@
               "title": "US Federal Reserve raises interest rates for first time since 2018",
               "url": "https://www.theguardian.com/business/2022/mar/16/us-federal-reserve-interest-rates-inflation",
               "content": "US Federal Reserve raises interest rates for first time since 2018 ↑436 (669 comments)",
-              "score": 0.7073258417720272,
+              "score": 0.7088258417720272,
               "domain": "theguardian.com"
             },
             {
               "title": "Federal Reserve pushes interest rates above 5% for first time since 2007",
               "url": "https://finance.yahoo.com/news/federal-reserve-interest-rate-decision-may-3-155524134.html",
               "content": "Federal Reserve pushes interest rates above 5% for first time since 2007 ↑75 (109 comments)",
-              "score": 0.6698804734152967,
+              "score": 0.6713804734152967,
               "domain": "finance.yahoo.com"
             },
             {
               "title": "The Federal Reserve Raises Interest Rates by 0.75 of a Percentage Point",
               "url": "https://www.nytimes.com/live/2022/06/15/business/fed-reserve-interest-rates-inflation",
               "content": "The Federal Reserve Raises Interest Rates by 0.75 of a Percentage Point ↑31 (15 comments)",
-              "score": 0.6561056692837557,
+              "score": 0.6576056692837557,
               "domain": "nytimes.com"
             },
             {
               "title": "Federal Reserve slashes interest rates to zero",
               "url": "https://www.washingtonpost.com/business/2020/03/15/federal-reserve-slashes-interest-rates-zero-part-wide-ranging-emergency-intervention/",
               "content": "Federal Reserve slashes interest rates to zero ↑286 (300 comments)",
-              "score": 0.6187970705703572,
+              "score": 0.6202970705703571,
               "domain": "washingtonpost.com"
+            },
+            {
+              "title": "Federal Reserve",
+              "url": "https://en.wikipedia.org/wiki/Federal_Reserve",
+              "content": "Central banking system of the US. monetary policy in the Federal Reserve Act: maximizing employment, stabilizing prices, and moderating long-term interest rates . The first two objectives",
+              "score": 0.6084029020691281,
+              "domain": "en.wikipedia.org"
             },
             {
               "title": "Federal Reserve cuts interest rates by 50 bps",
               "url": "https://www.cnbc.com/2024/09/18/fed-cuts-rates-september-2024-.html",
               "content": "Federal Reserve cuts interest rates by 50 bps ↑47 (18 comments)",
-              "score": 0.6029137934761087,
+              "score": 0.6044137934761087,
               "domain": "cnbc.com"
+            },
+            {
+              "title": "List of countries by central bank interest rates",
+              "url": "https://en.wikipedia.org/wiki/List_of_countries_by_central_bank_interest_rates",
+              "content": "December 2025. \"Cash Rate Target\". Reserve Bank of Australia. Retrieved 5 May 2026. \"Central Bank cuts refinancing rate and other interest rate corridor parameters",
+              "score": 0.5479026399328895,
+              "domain": "en.wikipedia.org"
             },
             {
               "title": "rsvp/fecon235 ★1275",
               "url": "https://github.com/rsvp/fecon235",
               "content": "Notebooks for financial economics. Keywords:  Jupyter notebook pandas Federal Reserve FRED Ferbus GDP CPI PCE inflation unemployment wage income debt Case-Shiller housing asset portfolio equities SPX bonds TIPS rates currency FX euro EUR USD JPY yen XAU gold Brent WTI oil Holt-Winters time-series forecasting statistics econometrics [Jupyter Notebook] ★1275",
-              "score": 0.4384422920236378,
+              "score": 0.4399422920236378,
               "domain": "github.com"
             },
             {
               "title": "avelkoski/FRB ★181",
               "url": "https://github.com/avelkoski/FRB",
               "content": "Python Client for Interfacing with the Federal Reserve Bank of St. Louis' Economic Data API (FRED®) [Python] ★181",
-              "score": 0.30580748659609047,
+              "score": 0.3073074865960905,
               "domain": "github.com"
             },
             {
               "title": "stefanoamorelli/fred-mcp-server ★117",
               "url": "https://github.com/stefanoamorelli/fred-mcp-server",
               "content": "Open-source FRED MCP Server (Federal Reserve Economic Data) [TypeScript] ★117",
-              "score": 0.3057834865960905,
+              "score": 0.3072834865960905,
               "domain": "github.com"
-            },
-            {
-              "title": "연방준비제도 - 위키백과, 우리 모두의 백과사전",
-              "url": "https://ko.wikipedia.org/wiki/%EC%97%B0%EB%B0%A9%EC%A4%80%EB%B9%84%EC%A0%9C%EB%8F%84",
-              "content": "중앙이사회는 워싱턴 D. C. 에 위치하고 현재 의장은 제롬 파월 이다. 미국 각지에 연방준비은행 (Federal Reserve Banks) 12개 지점 (보스턴, 뉴욕, 필라델피아, 시카고, 샌프란시스코, 클리블랜드, 리치먼드, …",
-              "score": 0.2605302066002993,
-              "domain": "ko.wikipedia.org"
             }
           ],
-          "response_time_ms": 3488,
-          "backend": "bing+github+hackernews",
+          "response_time_ms": 884,
+          "backend": "bing+wikipedia+github+hackernews",
           "fallback_used": false,
           "related_queries": [
             "us federal reserve interest rate decision latest guide",
@@ -1446,15 +1320,16 @@
           ],
           "page": 1,
           "page_size": 10,
-          "total_results": 9,
+          "total_results": 10,
           "total_pages": 1,
-          "subrequest_estimate": 6,
+          "subrequest_estimate": 8,
           "no_results": false
         },
-        "resultCount": 9,
-        "responseTimeMs": 3488,
+        "resultCount": 10,
+        "responseTimeMs": 884,
         "backends": [
           "bing",
+          "wikipedia",
           "github",
           "hackernews"
         ],
@@ -1462,9 +1337,9 @@
         "failures": [],
         "warnings": [],
         "ranking": {
-          "ndcgAt10": 0.6105858728157117,
+          "ndcgAt10": 0.601312434202259,
           "mrr": 1,
-          "precisionAt10": 0.3333333333333333,
+          "precisionAt10": 0.3,
           "relevantHits": 3
         }
       }
@@ -1475,44 +1350,28 @@
       "queryId": "zh-fact-01",
       "metric": "responseTimeMs",
       "baseline": 2275,
-      "current": 3510,
-      "delta": "54%",
+      "current": 3522,
+      "delta": "55%",
       "regressed": true
     },
     {
       "queryId": "ja-fact-01",
       "metric": "responseTimeMs",
       "baseline": 2085,
-      "current": 3249,
-      "delta": "56%",
+      "current": 4410,
+      "delta": "112%",
       "regressed": true
     },
     {
-      "queryId": "ja-fact-01",
-      "metric": "ndcgAt10",
-      "baseline": "0.8922",
-      "current": "0.8278",
-      "delta": "-0.0645",
+      "queryId": "kr-stock-01",
+      "metric": "resultCount",
+      "baseline": 10,
+      "current": 3,
+      "delta": -7,
       "regressed": true
     },
     {
       "queryId": "zh-general-12",
-      "metric": "responseTimeMs",
-      "baseline": 1223,
-      "current": 3887,
-      "delta": "218%",
-      "regressed": true
-    },
-    {
-      "queryId": "en-stock-10",
-      "metric": "responseTimeMs",
-      "baseline": 2855,
-      "current": 4757,
-      "delta": "67%",
-      "regressed": true
-    },
-    {
-      "queryId": "kr-stock-16",
       "metric": "resultCount",
       "baseline": 10,
       "current": 6,
@@ -1520,19 +1379,51 @@
       "regressed": true
     },
     {
+      "queryId": "zh-general-12",
+      "metric": "responseTimeMs",
+      "baseline": 1223,
+      "current": 2223,
+      "delta": "82%",
+      "regressed": true
+    },
+    {
+      "queryId": "en-stock-10",
+      "metric": "responseTimeMs",
+      "baseline": 2855,
+      "current": 3754,
+      "delta": "31%",
+      "regressed": true
+    },
+    {
+      "queryId": "kr-stock-16",
+      "metric": "resultCount",
+      "baseline": 10,
+      "current": 4,
+      "delta": -6,
+      "regressed": true
+    },
+    {
       "queryId": "kr-stock-16",
       "metric": "responseTimeMs",
       "baseline": 835,
-      "current": 1390,
-      "delta": "66%",
+      "current": 1357,
+      "delta": "63%",
+      "regressed": true
+    },
+    {
+      "queryId": "kr-stock-16",
+      "metric": "passStatus",
+      "baseline": "pass",
+      "current": "fail",
+      "delta": "pass→fail",
       "regressed": true
     },
     {
       "queryId": "zh-tech-27",
       "metric": "resultCount",
       "baseline": 10,
-      "current": 3,
-      "delta": -7,
+      "current": 4,
+      "delta": -6,
       "regressed": true
     },
     {
@@ -1555,8 +1446,8 @@
       "queryId": "en-news-17",
       "metric": "responseTimeMs",
       "baseline": 1061,
-      "current": 2552,
-      "delta": "141%",
+      "current": 2430,
+      "delta": "129%",
       "regressed": true
     },
     {
@@ -1564,14 +1455,6 @@
       "metric": "resultCount",
       "baseline": 3,
       "current": 2,
-      "delta": -1,
-      "regressed": true
-    },
-    {
-      "queryId": "en-news-41",
-      "metric": "resultCount",
-      "baseline": 10,
-      "current": 9,
       "delta": -1,
       "regressed": true
     }

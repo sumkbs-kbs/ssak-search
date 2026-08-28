@@ -626,6 +626,26 @@ npm run build
 
 배포 완료 후 아래 검증을 순서대로 실행합니다.
 
+### 10.0 표준 검증 매트릭스 (2.9.0+ — 프로덕션 실측 프로토콜)
+
+매 배포 후 아래 매트릭스를 통과해야 합니다 (2026-08-28 2.9.0 배포에서 22항목 검증된 프로토콜):
+
+| # | 검증 | 기대 | 비고 |
+|---|------|------|------|
+| V1 | `GET /api/health` version | 배포 버전과 일치 | health.ts 하드코딩 — 릴리스마다 갱신 |
+| V2 | 게이트 라우트 21개 무키 | 전부 401 | `API_AUTH_GATED_PREFIXES` 전수 (agent 3종, research, chat, suggest, video, products, news-hub, queue, spaces, pages, library, profile, canary, monitor + search/extract/keys/blacklist/crawl/usage) |
+| V3 | 공개 라우트 | health/metrics/UI 200 | 과보호 여부 확인 |
+| V4 | 게이트 에러 페이로드 | agent형 구조(`UNAUTHORIZED`+`agent_hint`+`retryable`+`suggested_action`) | 신규 미들웨어 배포 증명 |
+| V5 | `OPTIONS` 프리플라이트 | 401 아님(204/200) | CORS 사전점검이 인증을 뚫지 않아야 함 |
+| V6 | 보안 헤더 | HSTS/X-Frame/X-Content-Type(API), CSP/X-XSS(HTML) | 스코핑 확인 |
+| V7 | `/api/metrics` | Prometheus 형식 | |
+| V8 | 피싱 가드 | 금융 쿼리에서 공식 도메인 clean, 오탐 0 | `phishing_filtered`/`security_warning` 필드 |
+| V9 | 리다이렉트 탐지 | 타 도메인 리다이렉트 추출 시 `metadata.security_warning` | 예: aka.ms |
+| V10 | deep-research | 병렬 추출, 소스별 성공/경고 | MCP 바이너리로 검증 가능 |
+
+> 참고: 무인증 IP 레이트리밋은 per-isolate(인메모리)라 엣지 분산 시 실효 한도가 희석됨 —
+> 볼류메트릭 남용 방어는 Cloudflare 대시보드의 Rate Limiting 룰로 구성 권장.
+
 ### 10.1 기본 엔드포인트
 
 ```bash

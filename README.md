@@ -129,10 +129,16 @@ DuckDuckGo의 html 엔드포인트가 HTTP 202(anti-bot) 반환 시 lite 엔드�
 
 ## 🤖 AI Agent 전용 엔드포인트 (Sub-Second & Stealth)
 
-LLM Function Calling / Tool Use(LangChain, AutoGen, CrewAI, OpenAI)에 최적화된 **초저지연(Sub-second), 제로 노이즈(Zero Boilerplate), 4단계 스텔스 우회** 엔드포인트입니다.
+LLM Function Calling / Tool Use(LangChain, AutoGen, CrewAI, OpenAI)에 최적화된 **초저지연(Sub-second), 제로 노이즈(Zero Boilerplate), 피싱 스크리닝 내장** 엔드포인트입니다.
+
+> **인증**: `/api/agent/*`를 포함한 모든 백엔드 구동 라우트는 `Authorization: Bearer <key>` 또는 `X-API-Key: <key>`가 필요합니다 (전체 정책 테이블: `src/index.tsx`의 `API_AUTH_GATED_PREFIXERS` 참조 — `AUTH_OPEN_MODE=1` 시 로컬 개방).
 
 ### 1. POST /api/agent/search (초저지연 병렬 검색)
 - **특징:** 병렬 프로바이더 레이스 및 조기 반환(Early Return) 메커니즘으로 P95 레이턴시 **< 800ms** 달성.
+- **백엔드:** 한국어 쿼리 → naver+bing(ko-KR), 그 외 → bing+DDG. 전 프로바이더 공백 시 위키피디아 백본(ko/en)이 구조.
+- **피싱/SEO 포이즈닝 스크리닝:** 브랜드 모방 호스트(`kbstar-login.com`, `kbstar.ph.com` 계열) 결과는 차단(`phishing_filtered` 카운터 노출), 소프트 신호는 `security_warning` 부착.
+- **마이크로 캐시(60s) + 단일-플라이트:** 반복/동시 중복 쿼리는 하나의 팬아웃으로 병합, 캐시 히트에 `cached`/`cache_age_ms` 노출.
+- **파라미터:** `query`, `max_results`(1-10), `topic`(general/code/news/finance), `decompose_subqueries`(서브쿼리 분해).
 ```json
 // POST /api/agent/search
 {
@@ -144,9 +150,24 @@ LLM Function Calling / Tool Use(LangChain, AutoGen, CrewAI, OpenAI)에 최적화
 ### 2. POST /api/agent/stream-search (실시간 SSE 스트리밍)
 - **특징:** 첫 번째 검색 결과가 수집되는 즉시 SSE(`event: hit`)로 스트리밍 방출 (TTFT < 300ms).
 
-### 3. POST /api/agent/extract (4단계 스텔스 마크다운 & JSON-LD 추출)
+### 3. POST /api/agent/deep-research (자율 심층 리서치)
+- **특징:** 검색 1회 + 상위 소스 본문 추출을 **동시도 3 병렬 배치**로 수행(과거 직렬 최악 110s → 병렬화). 개별 소스 실패는 격리되어 `error` 페이로드로 전달, 추출기 보안 경고(`security_warning`)는 소스별 전달.
+```json
+// POST /api/agent/deep-research
+{
+  "query": "rust ownership model",
+  "max_sources": 3,
+  "max_token_budget_per_source": 2000
+}
+```
+
+### 4. POST /api/agent/extract (스텔스 마크다운 & JSON-LD 추출)
 - **특징:**
-  - **4단계 스텔스 에스컬레이션:** Static Fetch(Tier 1) ➔ Jina Global Proxy(Tier 2) ➔ Scrapling Sidecar Camoufox/Patchright(Tier 3) ➔ 자율 복구 에러 계약(Tier 4)
+  - **스텔스 에스컬레이션:** Static Fetch(Tier 1) ➔ Jina Global Proxy(Tier 2) ➔ Scrapling Sidecar Camoufox/Patchright(Tier 3, `SIDECAR_URL` 설정 시)
+  - **자율 복구 에러 계약:** 관측 기반 택소노미(`BOT_BLOCKED`/`PAGE_NOT_FOUND`/`AUTH_REQUIRED`/`CONTENT_TOO_SPARSE`/`DNS_NOT_FOUND`/`TIMEOUT`) + `agent_hint`/`suggested_action` — 404/401은 하위 티어 낭비 없이 즉시 확정 실패
+  - **클로킹 탐지:** 리다이렉트가 요청 도메인과 다른 등록 도메인으로 향하면 `metadata.security_warning` 부착 (무리퍼러 페처의 "스캐너 뷰" 활용)
+  - **링크 보존:** 하이퍼링크를 마크다운으로 보존하고 상대 URL을 절대 URL로 정규화
+  - **토큰 예산:** 언어 인식 카운터(한국어/CJK 보정)로 `max_token_budget` 실제 준수
   - **JSON-LD / Schema.org:** `extract_depth: "structured_facts"` 시 기계 판독용 JSON 즉시 추출
   - **온디맨드 섹션 타겟:** `section_target: "Ethics"` 지정 시 해당 헤딩 챕터만 선별 추출 (토큰 낭비 95% 절감)
   - **목차 추출:** `extract_depth: "toc_only"` 지정 시 전체 헤딩 목차만 경량 반환
@@ -160,7 +181,7 @@ LLM Function Calling / Tool Use(LangChain, AutoGen, CrewAI, OpenAI)에 최적화
 }
 ```
 
-### 4. Python Agent SDK (`sdk/agent_tool.py`)
+### 5. Python Agent SDK (`sdk/agent_tool.py`)
 LangChain / OpenAI Function Calling에 1줄로 연동 가능:
 ```python
 from sdk.agent_tool import SsakSearchAgentClient

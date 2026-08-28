@@ -32,10 +32,25 @@ the release notes (if desired) when the patch is published.
     SSRF guard (`assertSafeFetchUrl`) rejects private/loopback/metadata IPs,
     non-http(s) schemes, and credentials-in-URL.
   - `include_domains` / `exclude_domains` arrays capped at 20 entries each.
-- **Authentication**: Optional Bearer / `X-API-Key` auth gated by the
-  `SEARCH_API_KEY` secret. Constant-time comparison prevents trivial
-  timing attacks. When the secret is unset, the API runs in open mode —
-  deploy behind your own gateway or set the secret for public-facing use.
+- **Authentication**: Bearer / `X-API-Key`, **fail-closed by default** —
+  without `SEARCH_API_KEY`/`TENANTS_CONFIG`/`API_KEY_DO` configured (and
+  without explicit `AUTH_OPEN_MODE=1` for local development), protected
+  routes answer 401. Constant-time comparison prevents trivial timing
+  attacks. A single central policy table (`API_AUTH_GATED_PREFIXES` in
+  `src/index.tsx`) gates every backend-driving or data-bearing route
+  (search/extract/agent/research/chat/suggest/video/products/news-hub/
+  spaces/pages/library/profile/canary/monitor/queue/upload); only
+  `/api/health` and `/api/metrics` stay open for monitoring. CORS
+  preflights (OPTIONS) pass through — they carry no credentials by design.
+- **Result safety (phishing / SEO poisoning)**: every result URL passes
+  `src/lib/security/phishing-guard.ts` — hostnames claiming a finance brand
+  they don't own (typosquatting, `.ph.com`-style shared-suffix squatting,
+  title-corroborated impersonation) are blocked from result pools at all
+  three layers (main pipeline filter, agent fast path, deep research);
+  softer signals (punycode hosts, URL shorteners, login paths on
+  suspicious hosts) stay visible with `security_warning` attached. The
+  extractor additionally flags redirect chains that land on a different
+  registrable domain (cloaking signal).
 - **Out-of-scope**:
   - DNS rebinding defenses (we do not perform DNS resolution; Cloudflare's
     fetch already blocks private egress in production).
@@ -48,8 +63,12 @@ the release notes (if desired) when the patch is published.
   an advisory within **7 days** of being notified of a high-severity
   vulnerability in a direct dependency.
 - Security-relevant code paths (`src/lib/auth.ts`, `src/lib/util.ts` SSRF
-  guard, `src/lib/extractor.ts` input validation) are covered by unit tests
-  in `tests/unit/`. Regressions to these paths gate the release.
+  guard, `src/middleware/api-auth.ts`, `src/lib/security/phishing-guard.ts`,
+  `src/lib/extractor.ts` input validation) are covered by unit and workerd
+  integration tests in `tests/` (auth gate pinned by
+  `tests/integration/agent-auth.test.ts`, phishing screen by
+  `tests/unit/phishing-guard.test.ts`). Regressions to these paths gate the
+  release.
 
 ## Known Limitations
 

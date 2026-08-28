@@ -1,10 +1,22 @@
 # 📋 Project Summary: ssak-search
 
 > **프로젝트**: webapp — Tavily-호환 AI 검색 엔진  
-> **버전**: 3.0.0  
-> **마지막 업데이트**: 2026-07-22  
+> **버전**: 2.9.0  
+> **마지막 업데이트**: 2026-08-28  
 > **배포 URL**: https://search-engine-api.pages.dev  
 > **GitHub**: Private (@mr.k/webapp)
+
+---
+
+## 🛡️ 2.9.0 현재 상태 (2026-08-28 실측 기준)
+
+**보안**: 전 백엔드 구동 라우트(21개) 중앙 인증 게이트(`API_AUTH_GATED_PREFIXES`, fail-closed) + 피싱/SEO 포이즈닝 스크리닝 3계층(브랜드 모방 호스트 차단·경고, 리다이렉트 도메인 불일치 클로킹 탐지). 배포 후 검증 22항목 통과.
+
+**에이전트 도구**: deep-research 병렬화(동시도 3), 마이크로 캐시(60s, `cached`/`cache_age_ms`), 동시 중복 단일-플라이트, 도착순 SSE 스트리밍, 관측 기반 에러 택소노미, 언어 인식 토큰 예산, 링크 보존 마크다운, 위키피디아 백본(ko/en).
+
+**품질 인프라**: 골드 평가 샘플 게이트(`npm run eval:sample`, 608쿼리 풀suite 16분 → 12쿼리 2분, 언어 층화 인터리브), 소스별 프로바이더 헬스 리포트, 아티팩트 오염 방지.
+
+**알려진 한계**: 백엔드는 HTML 스크래퍼 3개 + 단일 egress IP(브랜드 API 키·프록시 풀이 근본 해법), 무인증 IP 레이트리밋은 per-isolate(볼류메트릭 방어는 CF WAF 룰 권장), 스탠더얼론 바이너리의 Tier-3 사이드카는 `SIDECAR_URL` 설정 시 활성.
 
 ---
 
@@ -239,14 +251,14 @@
 
 | 메트릭 | 값 |
 |--------|:---:|
-| **TypeScript 소스 파일** | 67개 |
+| **TypeScript 소스 파일** | 90+개 |
 | **Python 소스 파일** | 9개 |
 | **패키지** | 3개 (answer-sdk-ts, answer-sdk-py, hermes-search) |
-| **API 엔드포인트** | 20+ |
+| **API 엔드포인트** | 25+ (agent 4종 포함) |
 | **지원 검색 백엔드** | 12개 (Naver, Bing, DDG, Wiki, GitHub, HN, Reddit, arXiv, Jina, Flickr, Unsplash, YouTube) |
-| **단위 테스트** | 524개 |
+| **단위 테스트** | 3,181개 (+ 통합 7개) |
 | **Durable Objects** | 6개 (1개 활성) |
-| **빌드 크기** | 545.51 kB (138.48 kB gzip) |
+| **빌드 크기** | ~1.2MB (gzip ~355kB) |
 
 ### 품질 메트릭
 

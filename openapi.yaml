@@ -82,6 +82,8 @@ paths:
       operationId: agentSearch
       tags:
         - Agent
+      security:
+        - ApiKeyAuth: []
       requestBody:
         required: true
         content:
@@ -100,6 +102,15 @@ paths:
                   minimum: 1
                   maximum: 10
                   default: 5
+                topic:
+                  type: string
+                  enum: [general, code, news, finance]
+                  default: general
+                  description: Domain focus ("code" boosts first-party docs/code hosts)
+                decompose_subqueries:
+                  type: boolean
+                  default: false
+                  description: Decompose the query into up to 3 facet sub-queries
       responses:
         "200":
           description: Fast search hits with signal confidence
@@ -115,6 +126,15 @@ paths:
                   signal_confidence:
                     type: string
                     enum: [HIGH, MEDIUM, LOW]
+                  cached:
+                    type: boolean
+                    description: Present when served from the 60s micro cache
+                  cache_age_ms:
+                    type: integer
+                    description: Age of the cached copy in ms
+                  phishing_filtered:
+                    type: integer
+                    description: Count of results removed by the phishing/SEO-poisoning screen
                   hits:
                     type: array
                     items:
@@ -138,6 +158,8 @@ paths:
       operationId: agentStreamSearch
       tags:
         - Agent
+      security:
+        - ApiKeyAuth: []
       requestBody:
         required: true
         content:
@@ -160,15 +182,96 @@ paths:
               schema:
                 type: string
 
+  /api/agent/deep-research:
+    post:
+      summary: Autonomous deep research (search + parallel extraction)
+      description: |
+        Runs one fast search, then extracts the top sources' full content in
+        concurrency-3 parallel batches. Individual source failures are isolated
+        and returned with structured error payloads; extractor security signals
+        (redirect-domain mismatch) pass through per source.
+      operationId: agentDeepResearch
+      tags:
+        - Agent
+      security:
+        - ApiKeyAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - query
+              properties:
+                query:
+                  type: string
+                max_sources:
+                  type: integer
+                  minimum: 1
+                  maximum: 5
+                  default: 3
+                max_token_budget_per_source:
+                  type: integer
+                  minimum: 200
+                  maximum: 16000
+                  default: 2000
+      responses:
+        "200":
+          description: Synthesis-ready multi-source context
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  query:
+                    type: string
+                  took_ms:
+                    type: integer
+                  search_took_ms:
+                    type: integer
+                  total_sources_analyzed:
+                    type: integer
+                  sources:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        title:
+                          type: string
+                        url:
+                          type: string
+                        snippet:
+                          type: string
+                        extracted_markdown:
+                          type: string
+                        token_count:
+                          type: integer
+                        toc:
+                          type: array
+                          items:
+                            type: string
+                        success:
+                          type: boolean
+                        security_warning:
+                          type: string
+                          description: Extractor cloaking signal when present
+
   /api/agent/extract:
     post:
       summary: High-density stealth markdown & JSON-LD extraction
       description: |
         Extracts clean, noise-free Markdown or Schema.org JSON-LD structured facts.
-        Features 4-tier anti-bot stealth escalation, TOC extraction, and section targeting.
+        3-tier stealth escalation (static stealth headers -> Jina proxy -> Scrapling sidecar
+        when SIDECAR_URL is set), link-preserving markdown with absolutized URLs,
+        language-aware token budgets, and an observed-status error taxonomy with
+        agent recovery hints. Redirects landing on a different registrable domain
+        are flagged in metadata.security_warning (cloaking signal).
       operationId: agentExtract
       tags:
         - Agent
+      security:
+        - ApiKeyAuth: []
       requestBody:
         required: true
         content:

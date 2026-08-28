@@ -8,9 +8,9 @@
 
 | 도구 이름 (Tool Name) | 주요 파라미터 | 설명 및 특징 |
 |:---|:---|:---|
-| `ssak_search` | `query` (필수), `max_results` (기본 5) | **평균 200~700ms 초저지연 실시간 웹 검색**<br>한국어(네이버/다음) 및 글로벌(빙/덕덕고) 지능형 병렬 레이스 및 조기 반환 적용 |
-| `ssak_extract` | `url` (필수), `extract_depth`, `section_target`, `max_token_budget` | **4단계 스텔스 봇 우회 고밀도 본문 추출**<br>HTML 태그/스크립트 100% 제거, JSON-LD 제로-토큰 추출, 목차(TOC) 및 지정 챕터 온디맨드 필터링 |
-| `ssak_deep_research` | `query` (필수), `max_sources` (기본 3), `max_token_budget_per_source` | **자율 심층 리서치 도구**<br>검색과 상위 URL 고밀도 본문 추출을 원샷으로 수행하여 LLM 합성용 컨텍스트 반환 |
+| `ssak_search` | `query` (필수), `max_results` (기본 5), `topic` (general/code/news/finance), `decompose_subqueries` (기본 false) | **평균 200~700ms 초저지연 실시간 웹 검색**<br>한국어(naver+bing) 및 글로벌(bing+DDG) 병렬 레이스 및 조기 반환, 전 프로바이더 공백 시 위키피디아 백본<br>피싱/SEO 포이즈닝 스크리닝 내장(차단 `phishing_filtered`, 경고 `security_warning`)<br>마이크로 캐시(60s, `cached`/`cache_age_ms` 노출) + 동시 중복 단일-플라이트 |
+| `ssak_extract` | `url` (필수), `extract_depth`, `section_target`, `max_token_budget`, `strip_links` | **스텔스 봇 우회 고밀도 본문 추출 (3-티어 에스컬레이션)**<br>Tier 1 스태틱(스텔스 헤더) ➔ Tier 2 Jina 프록시 ➔ Tier 3 사이드카(`SIDECAR_URL` 설정 시)<br>링크 보존+절대 URL화, 언어 인식 토큰 예산(한국어 보정), 관측 기반 에러 택소노미(`agent_hint`/`suggested_action`), 리다이렉트 도메인 불일치 클로킹 경고 |
+| `ssak_deep_research` | `query` (필수), `max_sources` (기본 3), `max_token_budget_per_source` | **자율 심층 리서치 도구**<br>검색 + 상위 소스 본문 추출을 동시도 3 병렬 배치로 수행(개별 실패 격리), 소스별 보안 경고 전달 |
 
 ---
 

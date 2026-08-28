@@ -127,7 +127,7 @@
     "@hono/vite-dev-server": "^0.26.1",
     "@types/node": "^26.1.1",
     "@vitest/coverage-v8": "^4.1.0",
-    "ai": "^7.0.34",
+    "ai": "^7.0.79",
     "comment-json": "^5.0.0",
     "eslint": "^9.39.5",
     "eslint-config-prettier": "^9.1.2",

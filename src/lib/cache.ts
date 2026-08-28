@@ -6,7 +6,6 @@
  *   Tier 2: KV namespace (slower, cross-region, survives eviction, optional)
  *
  * TTL: 30 minutes for general queries, 5 minutes for news/finance.
- * This eliminates ~90% of redundant upstream scraping under repeated queries.
  * TTL configurable via CACHE_TTL_GENERAL / CACHE_TTL_NEWS env vars (seconds).
  *
  * KV writes are fire-and-forget (async, non-blocking). KV reads are on cache miss
@@ -19,7 +18,10 @@ import { recordCacheHit, recordCacheMiss } from './metrics'
 
 /** Default cache TTL in seconds */
 const DEFAULT_TTL = 1800 // 30 minutes
-const NEWS_TTL = 1800 // 30 minutes — aligned with general (B.1 optimization: longer TTL reduces redundant upstream scraping; news freshness is handled by RSS scheduler + semantic cache exclusion)
+// News/finance: 5 minutes. A 30-minute TTL served stale breaking-news results
+// — freshness for topic=news queries is worth the extra upstream fetches
+// (news backends are cheap RSS/XML round-trips). Env override: CACHE_TTL_NEWS.
+const NEWS_TTL = 300
 
 /** Resolve TTL from env bindings with fallback to defaults */
 function resolveTtl(env: AppBindings | undefined, topic?: string): number {

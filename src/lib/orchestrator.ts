@@ -95,7 +95,10 @@ const MEMORY_CACHE = new Map<string, CacheEntry>()
 // (~1ms) for its whole Cache-API-valid lifetime. The eval keeps median-of-3
 // integrity by clearing this map between runs (see eval/index.ts run loop).
 const MEMORY_CACHE_TTL_GENERAL = 1_800_000 // 30 minutes (Cache API DEFAULT_TTL)
-const MEMORY_CACHE_TTL_NEWS = 1_800_000 // 30 minutes — aligned with general (B.1 optimization: news freshness handled by RSS scheduler + semantic cache exclusion, not cache TTL)
+// 5 minutes — aligned with cache.ts NEWS_TTL. A 30-minute news TTL served
+// stale breaking-news results; news backends are cheap RSS/XML round-trips,
+// so freshness is worth the extra fan-out.
+const MEMORY_CACHE_TTL_NEWS = 300_000
 
 /**
  * Single-flight map: in-flight executeSearch promises keyed by memory cache
@@ -141,6 +144,12 @@ function getMemoryCacheKey(request: SearchRequest, variant?: string): string {
 function getFromMemoryCache(key: string): SearchResponse | undefined {
   const entry = MEMORY_CACHE.get(key)
   if (entry && entry.expiresAt > Date.now()) {
+    // Surface the copy's age so agents can weigh freshness — a 4-minute-old
+    // news result and a fresh one are not the same thing.
+    const cachedAt = entry.response.cached_at
+    if (cachedAt) {
+      return { ...entry.response, cache_age_ms: Date.now() - cachedAt }
+    }
     return entry.response
   }
   if (entry) {
@@ -151,7 +160,8 @@ function getFromMemoryCache(key: string): SearchResponse | undefined {
 
 function setInMemoryCache(key: string, response: SearchResponse, isNewsOrFinance: boolean): void {
   const ttl = isNewsOrFinance ? MEMORY_CACHE_TTL_NEWS : MEMORY_CACHE_TTL_GENERAL
-  MEMORY_CACHE.set(key, { response, expiresAt: Date.now() + ttl })
+  // Stamp the write time — the read path turns it into cache_age_ms.
+  MEMORY_CACHE.set(key, { response: { ...response, cached_at: Date.now() }, expiresAt: Date.now() + ttl })
 
   // Prevent unbounded growth: evict oldest entries if > 500
   if (MEMORY_CACHE.size > 500) {

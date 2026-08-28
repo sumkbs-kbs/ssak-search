@@ -5,6 +5,60 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.8.0] — Agent 도구 최적화 5개 배치: 신뢰성·토큰 경제·보안 (2026-08-28)
+
+### Security
+- **`/api/agent/*` 무인증 구멍 봉인** (`src/routes/agent.ts`): search/stream-search/extract가
+  인증·레이트리밋 없이 노출되어 있던 것을 `/api/search`와 동일 가드(`validateApiKeyAsync` +
+  `checkClientRateLimit` + 감사 로그)로 보호. workerd 통합 테스트 4개로 고정.
+
+### Fixed
+- **deep_research 직렬→병렬**: 도구 설명은 "parallel"이라고 선언했으나 실제 직렬 for-loop
+  (최악 110s)이던 것을 동시도 3 배치로 교체 (~25s). 로직을 `src/lib/agent-deep-research.ts`로
+  분리하고 `POST /api/agent/deep-research` HTTP 패리티 추가.
+- **추출 에러 상태 전파**: 모든 티어 실패 시 하드코딩 403(BOT_BLOCKED 오보) 제거 — 관측된
+  상태로 분류. 404/410/401 조기 확정 실패(하위 티어 17s 낭비 제거), 신규 택소노미
+  `PAGE_NOT_FOUND`/`AUTH_REQUIRED`/`CONTENT_TOO_SPARSE` 활성화.
+- **한국어 토큰 예산 2.5x 초과**: `chars/token 3.5` 단일 가정을 언어 인식(한글 1.5) 보정으로
+  교체 — `estimateTokens`/`charsPerToken` 단일 표준. `truncateToTokens` 동일 적용.
+- **naver 링크 하베스팅 노이즈**: 지식인 프로필/카페·블로그 프론트 도어/"N만 인용" 인플루언서
+  카드 차단 + href `&amp;` 미디코드 버그 수정 + fast-path 노이즈 플로어(0.10).
+  라이브 실측: "클라우드플레어 CPU 제한" 상위 히트가 프로필 카드(0.05) → 공식 문서(0.75).
+- **wikipedia 백본 예산 굶김**: `wikipediaSearch`의 재시도 분할은 파웃 4.5s 천장에 튜닝되어
+  REST 시도당 700ms 고정 — 실측 왕복 540-750ms와 경계라 조용히 실패. 백본을 별도 모듈
+  (`src/lib/wikipedia-backbone.ts`)로 분리해 Action API 단발 호출. 위키미디어 UA
+  `(contact@example.com)` placeholder 17곳 정식 UA로 교체.
+- **MCP JSON-RPC 준수**: 미지원 method 무응답(클라이언트 영구 대기) → `-32601` 응답,
+  `initialize`가 클라이언트 protocolVersion 반영.
+
+### Added
+- **wikipedia 지식 백본**: 모든 프로바이더 빈 결과 시 ko/en 위키피디아로 구조 (빈 경로만,
+  p50 불변). 라이브: 벤치마크 통과율 80%→100%.
+- **fast-path 마이크로 캐시**: 60s TTL + `cached`/`cache_age_ms` 노출. 빈 결과는 캐시하지
+  않음(스크래퍼 허걱 재시도 가능 유지).
+- **메인 검색 캐시 나이 노출**: `cached_at`/`cache_age_ms` (메모리+Cache API 티어).
+- **소스별 프로바이더 헬스 리포트** (`scripts/run-live-benchmark.ts`): KR/EN/NEWS-KR 레인별
+  히트 수·평균 스코어·aborted 원인.
+- **tiered-fanout tier0/tier1 동시 시작**: 콜드 self-index(실효 2.5s)가 웹 백엔드 시작을
+  지연시키던 것 제거. `freePlan` 옵션 실질화(기존 선언만 되고 무시됨).
+
+### Changed
+- **zod→MCP 스키마 단일화**: 수동 inputSchema 이중 정의 제거, 검증 실패 `isError: true`
+  구조화 에러, `z.coerce` 적용, `strip_links` 실구현.
+- **마크다운 품질**: 링크 보존 + 상대 URL 절대화(라이브 0개→33개), 제목 레벨 보존,
+  중첩 article/main 절단 버그 수정(균형 태그 추출), article 내 header(제목) 유지.
+- **fast-path 품질**: authority hostname 절미치 매칭(경로 트릭 차단), medium/dev.to 제외,
+  서브쿼리 언어 판별, 영어 쿼리 bing+DDG 다양화, 스코어 랭크 감쇠 사전값 + signal_confidence
+  정직화(HIGH=2개 이상 0.75+ 히트), DDG 쿨다운 `aborted_backends` 가시화.
+- **뉴스 캐시 TTL 30분→5분** (메모리+Cache API): B.1 결정 번복 — 트렌딩 쿼리의 낡은 결과 방지.
+- **데드코드 삭제 1,900+ 라인**: query-router.ts(955), edge-cache.ts(298), hybrid-ranker.ts(265),
+  fanoutBackends 레거리 실행자 — 참조 전수 검증 후 제거 (PHASES는 부하 모델 의존으로 유지).
+
+### 테스트
+- 유닛 3,152 → 3,161 (agent 경로 신규 61개: 에러 택소노미, 토큰 카운터, 백본, 캐시,
+  authority 매칭, naver 필터, deep-research 격리)
+- 통합 +4 (`tests/integration/agent-auth.test.ts`, 실제 workerd 런타임)
+
 ## [2.7.0] — AI Agent 초저지연 검색 및 4단계 스텔스 에스컬레이션 엔진 (2026-08-27)
 
 ### Added

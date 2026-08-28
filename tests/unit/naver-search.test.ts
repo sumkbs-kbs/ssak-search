@@ -258,3 +258,64 @@ describe('parseLinks (publish-date extraction)', () => {
     expect(r!.published_date!.startsWith('2025-03')).toBe(true)
   })
 })
+
+// ============================================================
+// parseLinks — non-content path shapes (live regression 2026-08-28:
+// "클라우드플레어 CPU 제한" surfaced kin.naver.com/profile author cards
+// as the top naver hits, scoring 0.05)
+// ============================================================
+describe('parseLinks (junk path filtering)', () => {
+  it('drops kin author profile cards', () => {
+    const html = `
+      <ul>
+        <li><a href="https://kin.naver.com/profile/index.naver?u=abcDEF123">컴도깨비 지식인 62.8만 인용 컴퓨터 전문가</a></li>
+        <li><a href="https://kin.naver.com/qna/detail.naver?dSid=123">클라우드플레어 CPU 제한 관련 질문</a></li>
+      </ul>
+    `
+    const results = parseLinks(html, '클라우드플레어 CPU 제한', 5)
+    expect(results.some((r) => r.url.includes('/profile/'))).toBe(false)
+    expect(results.some((r) => r.url.includes('/qna/detail'))).toBe(true)
+  })
+
+  it('drops blog index pages and kin section indexes', () => {
+    const html = `
+      <ul>
+        <li><a href="https://m.blog.naver.com/PostList.naver?blogId=tech">기술 블로그 목록</a></li>
+        <li><a href="https://kin.naver.com/qna/list.naver?dirId=1">지식인 IT 카테고리</a></li>
+        <li><a href="https://m.blog.naver.com/tech/223456789">클라우드플레어 CPU 제한 실측 글</a></li>
+      </ul>
+    `
+    const results = parseLinks(html, '클라우드플레어 CPU 제한', 5)
+    expect(results.some((r) => r.url.includes('PostList'))).toBe(false)
+    expect(results.some((r) => r.url.includes('/qna/list'))).toBe(false)
+    expect(results.some((r) => r.url.endsWith('/tech/223456789'))).toBe(true)
+  })
+})
+
+describe('parseLinks (doorway and influencer-card filtering)', () => {
+  it('drops cafe/blog front doors but keeps real posts', () => {
+    const html = `
+      <ul>
+        <li><a href="https://cafe.naver.com/fx8300">AMD 비쉐라 라이젠 컴퓨터 사용자 모임 카페</a></li>
+        <li><a href="https://blog.naver.com/copy98">IT매니아 블로그</a></li>
+        <li><a href="https://m.blog.naver.com/tech/223456789">클라우드플레어 CPU 제한 실측 포스트</a></li>
+        <li><a href="https://blog.naver.com/PostView.naver?blogId=tech&amp;logNo=2234567">PostView 형식 실글</a></li>
+      </ul>
+    `
+    const results = parseLinks(html, '클라우드플레어 CPU 제한', 5)
+    expect(results.some((r) => r.url.includes('fx8300'))).toBe(false)
+    expect(results.some((r) => r.url.includes('copy98'))).toBe(false)
+    expect(results.some((r) => r.url.includes('/tech/223456789'))).toBe(true)
+    expect(results.some((r) => r.url.includes('logNo=2234567'))).toBe(true)
+  })
+
+  it('drops influencer cards by the "N만 인용" title pattern', () => {
+    const html = `
+      <ul>
+        <li><a href="https://kin.naver.com/qna/detail.naver?dSid=9">컴도깨비 지식인 62.8만 인용 컴퓨터 전문가</a></li>
+      </ul>
+    `
+    const results = parseLinks(html, '클라우드플레어', 5)
+    expect(results).toHaveLength(0)
+  })
+})

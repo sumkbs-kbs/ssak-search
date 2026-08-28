@@ -413,9 +413,28 @@ export function decodeEntities(text: string): string {
     .replace(/&[a-z]+;/gi, (m) => entities[m.toLowerCase()] ?? m)
 }
 
-/** Truncate text to maxTokens approximate (1 token ≈ 4 chars) */
+/**
+ * Approximate chars-per-token for a text sample.
+ * English ≈ 4 chars/token; Korean/CJK tokenize at roughly one token per character.
+ * Blending by dense-script ratio keeps English behavior identical to the old
+ * fixed 4-chars assumption while cutting Korean token-budget overruns ~2.5x.
+ */
+export function charsPerToken(text: string): number {
+  if (!text) return 4
+  const dense = (text.match(/[\uac00-\ud7a3\u4e00-\u9fff\u3040-\u30ff]/g) || []).length
+  const ratio = Math.min(dense / text.length, 1)
+  return 4 - 2.5 * ratio // 4 (pure ASCII) → 1.5 (pure Korean/CJK)
+}
+
+/** Language-aware token estimate — the single token-counting standard for the codebase. */
+export function estimateTokens(text: string): number {
+  if (!text) return 0
+  return Math.ceil(text.length / charsPerToken(text))
+}
+
+/** Truncate text to maxTokens approximate (language-aware; English ≈ 4 chars/token) */
 export function truncateToTokens(text: string, maxTokens: number): string {
-  const maxChars = maxTokens * 4
+  const maxChars = maxTokens * charsPerToken(text)
   if (text.length <= maxChars) return text
   const truncated = text.slice(0, maxChars)
   // Try to cut at a sentence/word boundary

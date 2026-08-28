@@ -3,8 +3,73 @@ import { streamSSE } from 'hono/streaming'
 import type { AppBindings } from '../types'
 import { AgentToolInputSchema, extractWithStealthEscalation, handleExtractionError } from '../lib/agent-extractor'
 import { executeFastAgentSearch } from '../lib/agent-search-orchestrator'
+import { validateApiKeyAsync, checkClientRateLimit, getClientIp } from '../lib/auth'
+import { auditAuthFailure, auditRateLimit } from '../lib/audit'
+import { executeDeepResearch, SsakDeepResearchArgsSchema } from '../lib/agent-deep-research'
 
 export const agentApi = new Hono<{ Bindings: AppBindings }>()
+
+/**
+ * Auth + rate limit for every agent endpoint.
+ *
+ * These routes drive bing/naver/DDG scraping from the deployment's egress
+ * IPs — an unauthenticated hammer here gets those IPs banned for every other
+ * user. Mirrors the /api/search guard (validateApiKeyAsync honors
+ * AUTH_OPEN_MODE=1 for local dev; closed by default).
+ */
+agentApi.use('*', async (c, next) => {
+  const clientIp = getClientIp(c.req.raw.headers)
+
+  const authResult = await validateApiKeyAsync(c.req.raw.headers, c.env)
+  if (!authResult.valid) {
+    auditAuthFailure({
+      reason: authResult.reason || 'Invalid or missing API key',
+      clientIp,
+      resource: c.req.path,
+      attempt: c.req.raw.headers.get('Authorization')?.startsWith('Bearer ')
+        ? 'bearer'
+        : c.req.raw.headers.get('X-API-Key')
+          ? 'x-api-key'
+          : 'none',
+    })
+    return c.json(
+      {
+        error: {
+          code: 'UNAUTHORIZED',
+          detail: authResult.reason || 'Unauthorized',
+          agent_hint: 'Provide Authorization: Bearer <key> or X-API-Key: <key>.',
+          retryable: false,
+          suggested_action: 'RETRY_WITH_AUTH',
+        },
+      },
+      401,
+    )
+  }
+
+  const rateLimit = checkClientRateLimit(clientIp, {
+    tenantId: authResult.tenant?.id,
+    tenantsConfig: c.env.TENANTS_CONFIG,
+    env: c.env,
+  })
+  if (!rateLimit.allowed) {
+    auditRateLimit(clientIp, c.req.path, rateLimit.remaining)
+    return c.json(
+      {
+        error: {
+          code: 'RATE_LIMITED',
+          detail: 'Rate limit exceeded. Try again later.',
+          agent_hint: 'Wait for the window to reset, or batch queries less aggressively.',
+          retryable: true,
+          suggested_action: 'RETRY_WITH_BACKOFF',
+        },
+      },
+      429,
+      { 'Retry-After': '60' },
+    )
+  }
+
+  await next()
+})
 
 /**
  * 1. 초고속 에이전트 검색 엔드포인트
@@ -32,13 +97,15 @@ agentApi.post('/search', async (c) => {
   const decomposeSubqueries = Boolean(body.decompose_subqueries)
 
   // 조기 반환 검색 실행
-  const result = await executeFastAgentSearch(query, maxResults, 0.82, 2500, c.env, topic, decomposeSubqueries)
+  const result = await executeFastAgentSearch(query, maxResults, 2500, c.env, topic, decomposeSubqueries)
 
   return c.json({ ...result, cached: false })
 })
 
 /**
- * 2. 실시간 SSE 스트리밍 에이전트 검색 엔드포인트 (TTFT < 300ms)
+ * 2. 실시간 SSE 스트리밍 에이전트 검색 엔드포인트
+ *    히트는 백엔드 도착순(TTFT = 첫 백엔드 응답, 수백 ms)으로 즉시 방출되고,
+ *    완료 이벤트에서 최종 병합/정렬 통계를 전달한다.
  */
 agentApi.post('/stream-search', async (c) => {
   const body = (await c.req.json().catch(() => null)) as Record<string, unknown> | null
@@ -57,14 +124,23 @@ agentApi.post('/stream-search', async (c) => {
       data: JSON.stringify({ query, timestamp: new Date().toISOString() }),
     })
 
-    const result = await executeFastAgentSearch(query, maxResults, 0.82, 2500, c.env, topic, decomposeSubqueries)
-
-    for (const hit of result.hits) {
-      await stream.writeSSE({
-        event: 'hit',
-        data: JSON.stringify(hit),
-      })
-    }
+    // 히트 배치가 도착하는 즉시 SSE로 방출 — 전체 레이스 완료를 기다리지 않는다.
+    const result = await executeFastAgentSearch(
+      query,
+      maxResults,
+      2500,
+      c.env,
+      topic,
+      decomposeSubqueries,
+      async (batch, source) => {
+        for (const hit of batch) {
+          await stream.writeSSE({
+            event: 'hit',
+            data: JSON.stringify({ ...hit, source }),
+          })
+        }
+      },
+    )
 
     await stream.writeSSE({
       event: 'complete',
@@ -72,6 +148,7 @@ agentApi.post('/stream-search', async (c) => {
         took_ms: result.took_ms,
         confidence: result.signal_confidence,
         total_hits: result.hits.length,
+        aborted_backends: result.aborted_backends,
       }),
     })
   })
@@ -113,5 +190,54 @@ agentApi.post('/extract', async (c) => {
   } catch (err: unknown) {
     const errObj = err instanceof Error ? err.message : String(err)
     return c.json(handleExtractionError(url, 500, errObj || 'Unknown network error'), 200)
+  }
+})
+
+/**
+ * 4. End-to-end deep research — search + parallel extraction of top sources.
+ *    HTTP parity with the MCP server's ssak_deep_research tool (shared
+ *    executeDeepResearch pipeline).
+ */
+agentApi.post('/deep-research', async (c) => {
+  const body = (await c.req.json().catch(() => null)) as Record<string, unknown> | null
+  const parseResult = SsakDeepResearchArgsSchema.safeParse(body)
+  if (!parseResult.success) {
+    return c.json(
+      {
+        error: {
+          code: 'VALIDATION_ERROR',
+          detail: parseResult.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`).join('; '),
+          agent_hint: 'Verify query (non-empty string), max_sources (1-5), token budget (200-16000).',
+          retryable: true,
+          suggested_action: 'RETRY_WITH_CORRECTED_ARGS',
+        },
+      },
+      400,
+    )
+  }
+
+  const { query, max_sources, max_token_budget_per_source } = parseResult.data
+
+  try {
+    const result = await executeDeepResearch(query, {
+      maxSources: max_sources,
+      tokenBudgetPerSource: max_token_budget_per_source,
+      env: c.env,
+    })
+    return c.json(result)
+  } catch (err: unknown) {
+    const errObj = err instanceof Error ? err.message : String(err)
+    return c.json(
+      {
+        error: {
+          code: 'INTERNAL_ERROR',
+          detail: errObj || 'Unknown pipeline failure',
+          agent_hint: 'The research pipeline failed after search. Retry with fewer sources.',
+          retryable: true,
+          suggested_action: 'RETRY_WITH_BACKOFF',
+        },
+      },
+      500,
+    )
   }
 })

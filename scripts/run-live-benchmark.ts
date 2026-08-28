@@ -26,7 +26,7 @@ async function runLiveBenchmark() {
   // -------------------------------------------------------------
   console.log('1️⃣ Running Fast Search: "삼성전자 오늘 주가" ...')
   const t1 = performance.now()
-  const search1 = await executeFastAgentSearch('삼성전자 오늘 주가', 3, 0.8, 3000)
+  const search1 = await executeFastAgentSearch('삼성전자 오늘 주가', 3, 3000)
   const l1 = Math.round(performance.now() - t1)
   console.log(`   └─ Done in ${l1}ms | Hits: ${search1.hits.length} | Confidence: ${search1.signal_confidence}`)
   if (search1.hits[0]) {
@@ -45,7 +45,7 @@ async function runLiveBenchmark() {
   // -------------------------------------------------------------
   console.log('\n2️⃣ Running Fast Search: "Anthropic Claude 3.7 reasoning" ...')
   const t2 = performance.now()
-  const search2 = await executeFastAgentSearch('Anthropic Claude 3.7 reasoning', 3, 0.8, 3000)
+  const search2 = await executeFastAgentSearch('Anthropic Claude 3.7 reasoning', 3, 3000)
   const l2 = Math.round(performance.now() - t2)
   console.log(`   └─ Done in ${l2}ms | Hits: ${search2.hits.length} | Confidence: ${search2.signal_confidence}`)
   if (search2.hits[0]) {
@@ -142,6 +142,58 @@ async function runLiveBenchmark() {
   console.log(`- Pass Rate       : ${passRate}% (${passCount}/${results.length})`)
   console.log(`- Average Latency : ${avgLatency} ms`)
   console.log('======================================================================\n')
+
+  // -------------------------------------------------------------
+  // Provider Health Report — per-source hit counts + mean score, so
+  // scraper regressions (naver doorways, bing selector drift, DDG 202)
+  // show up as a source dropping to 0 hits or a collapsing mean score.
+  // -------------------------------------------------------------
+  console.log('🩺 PROVIDER HEALTH (live, 1 query per lane):')
+  for (const row of await providerHealthReport()) {
+    console.log(
+      `   ${row.lane.padEnd(8)} ${row.source.padEnd(24)} hits=${row.hits}  meanScore=${row.meanScore ?? '-'}  aborted=${row.aborted.join(',') || '-'}`,
+    )
+  }
+  console.log('======================================================================\n')
+}
+
+async function providerHealthReport(): Promise<
+  Array<{ lane: string; source: string; hits: number; meanScore: number | null; aborted: string[] }>
+> {
+  const lanes: Array<{ lane: string; query: string; topic: 'general' | 'news' }> = [
+    { lane: 'KR', query: '삼성전자 반도체 투자', topic: 'general' },
+    { lane: 'EN', query: 'typescript decorators proposal status', topic: 'general' },
+    { lane: 'NEWS-KR', query: '한국 부동산 정책', topic: 'news' },
+  ]
+  const rows: Array<{ lane: string; source: string; hits: number; meanScore: number | null; aborted: string[] }> = []
+  for (const { lane, query, topic } of lanes) {
+    try {
+      const res = await executeFastAgentSearch(query, 5, 3000, undefined, topic)
+      const bySource = new Map<string, { hits: number; sum: number }>()
+      for (const h of res.hits) {
+        const cur = bySource.get(h.source) ?? { hits: 0, sum: 0 }
+        cur.hits++
+        cur.sum += h.score
+        bySource.set(h.source, cur)
+      }
+      if (bySource.size === 0) {
+        rows.push({ lane, source: '(none)', hits: 0, meanScore: null, aborted: res.aborted_backends })
+        continue
+      }
+      for (const [source, v] of bySource) {
+        rows.push({
+          lane,
+          source,
+          hits: v.hits,
+          meanScore: Math.round((v.sum / v.hits) * 100) / 100,
+          aborted: res.aborted_backends,
+        })
+      }
+    } catch (err) {
+      rows.push({ lane, source: `(error: ${String(err).slice(0, 40)})`, hits: 0, meanScore: null, aborted: [] })
+    }
+  }
+  return rows
 }
 
 runLiveBenchmark().catch((err) => {

@@ -172,11 +172,11 @@ describe('setCached', () => {
     expect((putCall[1] as Response).headers.get('CF-Cache-Status')).toBe('HIT')
   })
 
-  it('uses the same TTL for news/finance (B.1: 30min aligned)', async () => {
+  it('uses a shorter TTL for news/finance (5min — breaking-news freshness)', async () => {
     await setCached('s2', {}, 'news')
-    expect((cacheMock.put.mock.calls[0][1] as Response).headers.get('Cache-Control')).toContain('max-age=1800')
+    expect((cacheMock.put.mock.calls[0][1] as Response).headers.get('Cache-Control')).toContain('max-age=300')
     await setCached('s3', {}, 'finance')
-    expect((cacheMock.put.mock.calls[1][1] as Response).headers.get('Cache-Control')).toContain('max-age=1800')
+    expect((cacheMock.put.mock.calls[1][1] as Response).headers.get('Cache-Control')).toContain('max-age=300')
   })
 
   it('reads CACHE_TTL_NEWS from env', async () => {

@@ -215,6 +215,10 @@ export interface SearchResponse {
   related_queries?: string[]
   /** Whether this response was served from cache */
   cached?: boolean
+  /** Epoch ms when this response was cached (stamped at cache-write time) */
+  cached_at?: number
+  /** Age of the cached copy in ms (computed at serve time — freshness signal for agents) */
+  cache_age_ms?: number
   /** Current page number (1-based) */
   page?: number
   /** Total results found (before pagination) */

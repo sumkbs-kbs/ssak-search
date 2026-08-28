@@ -52,6 +52,15 @@ export function resetDdgAntiBotState(): void {
   ddgAntiBotUntil = 0
 }
 
+/**
+ * Whether the 202 anti-bot cooldown is active. Lets callers (fast agent
+ * path) attribute an empty DDG result to the cooldown instead of silently
+ * reporting the provider as healthy.
+ */
+export function isDuckDuckGoCoolingDown(): boolean {
+  return Date.now() < ddgAntiBotUntil
+}
+
 /** Arm the 202 anti-bot cooldown (called on an HTTP 202 challenge). */
 function armDdgAntiBot(): void {
   ddgAntiBotUntil = Date.now() + DDG_ANTIBOT_COOLDOWN_MS

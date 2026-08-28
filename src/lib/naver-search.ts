@@ -492,6 +492,23 @@ export function parseNaverLinksHtml(html: string, query: string, maxResults: num
   return parseLinks(html, query, maxResults)
 }
 
+/**
+ * Blog/cafe front-door detection. A real post URL carries both the author id
+ * and the post id (blog.naver.com/{blogId}/{logNo}); a bare
+ * blog.naver.com/{blogId} is the channel home. PostView.naver?blogId=&logNo=
+ * redirects are real posts and exempted via the logNo query param.
+ */
+function isNaverDoorway(url: string, domain: string): boolean {
+  if (!/(?:^|\.)((?:m\.)?blog|(?:m\.)?cafe)\.naver\.com$/.test(domain)) return false
+  if (/[?&]logNo=/.test(url)) return false
+  try {
+    const segments = new URL(url).pathname.replace(/\/+$/, '').split('/').filter(Boolean)
+    return segments.length <= 1
+  } catch {
+    return false
+  }
+}
+
 export function parseLinks(html: string, query: string, maxResults: number): SearchResult[] {
   const results: SearchResult[] = []
   const seenUrls = new Set<string>()
@@ -515,7 +532,9 @@ export function parseLinks(html: string, query: string, maxResults: number): Sea
   while ((match = linkRegex.exec(html)) !== null) {
     if (results.length >= maxResults) break
 
-    let url = match[1]
+    // Decode entities up front — real hrefs carry &amp; between query params,
+    // and an un-decoded URL breaks the logNo= exemption and later consumers.
+    let url = decodeEntities(match[1])
     const rawTitle = decodeEntities(stripHtml(match[2])).trim()
 
     // Skip empty or very short titles
@@ -565,6 +584,19 @@ export function parseLinks(html: string, query: string, maxResults: number): Sea
         continue
       }
     }
+
+    // Non-content path shapes inside content subdomains. The generic <a>
+    // harvest admits author cards and section indexes — navigation chrome
+    // that steals top-k slots from real content pages (live regression:
+    // "클라우드플레어 CPU 제한" surfaced kin profiles, cafe/blog front doors
+    // and influencer cards as the top naver hits, all scoring 0.05).
+    if (/\/profile\//i.test(url)) continue // kin/cafe author profile cards
+    if (/PostList\.naver/i.test(url)) continue // blog index page, not a post
+    if (/\/qna\/(?:list|top100|honor|rank)/i.test(url)) continue // kin section indexes
+    // Influencer/channel card marker — "62.8만 인용". No \b here: JS \b is
+    // ASCII-\w-based and never fires after a Hangul syllable.
+    if (/\d+(?:\.\d+)?만?\s*인용/.test(rawTitle)) continue
+    if (isNaverDoorway(url, domain)) continue // cafe.naver.com/{id}, blog.naver.com/{id} front doors
 
     // Dedup by URL
     if (seenUrls.has(url)) continue

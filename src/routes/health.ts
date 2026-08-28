@@ -193,7 +193,7 @@ export async function buildLightHealthData(env: AppBindings): Promise<HealthData
 
   return {
     status,
-    version: '2.0.0',
+    version: '2.8.0',
     build_commit: BUILD_COMMIT,
     timestamp: new Date().toISOString(),
     backends,
@@ -327,7 +327,7 @@ export async function runDeepHealthProbe(
 
   const healthData: HealthData = {
     status,
-    version: '2.0.0',
+    version: '2.8.0',
     build_commit: BUILD_COMMIT,
     timestamp: new Date().toISOString(),
     backends,

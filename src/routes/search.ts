@@ -17,6 +17,16 @@ import { cors } from 'hono/cors'
 import type { AppBindings, SearchRequest, SearchResponse, ErrorResponse, FocusMode } from '../types'
 import { executeSearch } from '../lib/orchestrator'
 import { cacheKey, getCached, setCached } from '../lib/cache'
+
+/**
+ * Serve a cached copy with its age — agents weighing freshness need to know
+ * a hit is 25 minutes old. Entries cached before cached_at existed serve
+ * without the age field rather than guessing.
+ */
+function withCacheAge(cached: SearchResponse): SearchResponse {
+  const age = cached.cached_at ? Date.now() - cached.cached_at : undefined
+  return { ...cached, cached: true, ...(age !== undefined ? { cache_age_ms: age } : {}) }
+}
 import { isCryptoQuery } from '../lib/crypto-search'
 import { indexFromSearchResults } from '../lib/search/auto-index'
 import { logSearchImpression } from '../lib/ltr/click-logger'
@@ -237,7 +247,7 @@ searchRoute.post('/', async (c) => {
           )
           c.executionCtx.waitUntil(logExperimentLatency(c.env, experiment, Date.now() - startTime))
         }
-        return c.json<SearchResponse>({ ...cached, cached: true, ...(experiment ? { experiment } : {}) })
+        return c.json<SearchResponse>({ ...withCacheAge(cached), ...(experiment ? { experiment } : {}) })
       }
     }
 
@@ -267,7 +277,7 @@ searchRoute.post('/', async (c) => {
     const notFailed = result.backend !== 'failed' && !result.fallback_used
     const skipForTopic = request.topic === 'news' || request.topic === 'finance' || isCryptoQuery(request.query)
     if (hasUsableResults && notFailed && !skipForTopic) {
-      c.executionCtx.waitUntil(setCached(key, result, request.topic, c.env))
+      c.executionCtx.waitUntil(setCached(key, { ...result, cached_at: Date.now() }, request.topic, c.env))
     }
 
     // Phase A: Auto-index top results for self-index growth (async, best-effort)
@@ -434,7 +444,7 @@ searchRoute.get('/', async (c) => {
           )
           c.executionCtx.waitUntil(logExperimentLatency(c.env, experiment, Date.now() - startTime))
         }
-        const response = c.json<SearchResponse>({ ...cached, cached: true, ...(experiment ? { experiment } : {}) })
+        const response = c.json<SearchResponse>({ ...withCacheAge(cached), ...(experiment ? { experiment } : {}) })
         response.headers.set('X-Cache', 'HIT')
         return response
       }
@@ -462,7 +472,7 @@ searchRoute.get('/', async (c) => {
     const notFailed = result.backend !== 'failed' && !result.fallback_used
     const skipForTopic = request.topic === 'news' || request.topic === 'finance' || isCryptoQuery(request.query)
     if (hasUsableResults && notFailed && !skipForTopic) {
-      c.executionCtx.waitUntil(setCached(key, result, request.topic, c.env))
+      c.executionCtx.waitUntil(setCached(key, { ...result, cached_at: Date.now() }, request.topic, c.env))
     }
 
     // Phase A: Auto-index top results for self-index growth (async, best-effort)

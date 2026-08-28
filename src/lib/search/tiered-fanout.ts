@@ -17,7 +17,7 @@ import type { BackendTask } from './context'
 import { BACKEND_TIERS, TierManager } from './backend-tiers'
 import type { CircuitBreaker } from '../resilience/circuit-breaker'
 import { logger } from '../logger'
-import { backendTimeoutMs } from './fanout'
+import { backendTimeoutMs, FREE_PLAN_TIMEOUT_OVERRIDES } from './fanout'
 import { recordHarvestJunkSuppressed } from '../metrics'
 
 // ============================================================
@@ -124,7 +124,20 @@ export class TieredFanout {
       return false
     }
 
-    for (const tier of BACKEND_TIERS) {
+    // One launch per task: the fetch promise is memoized so a task started
+    // early (tier0/tier1 concurrency below) is awaited later, never re-run.
+    const inflight = new Map<string, Promise<{ backend: string; results: SearchResult[]; rejected: boolean }>>()
+    const launchTask = (t: BackendTask, tierLatencyMs: number) => {
+      let p = inflight.get(t.name)
+      if (!p) {
+        p = this.executeTask(t, tierLatencyMs, options.breakerMap, options.freePlan)
+        inflight.set(t.name, p)
+      }
+      return p
+    }
+
+    for (let tierIdx = 0; tierIdx < BACKEND_TIERS.length; tierIdx++) {
+      const tier = BACKEND_TIERS[tierIdx]
       // Skip tiers with higher latency than target
       if (tier.latencyMs > targetLatencyMs && relevantCount >= minResults && !anyPendingProtected()) {
         break
@@ -141,6 +154,22 @@ export class TieredFanout {
 
       if (tierTasks.length === 0) continue
 
+      // tier0 (self-index) targets 100ms but its effective ceiling is
+      // max(100, backendTimeoutMs=2500)ms — awaiting it serially delayed the
+      // web tier's START by up to 2.5s on cold Vectorize/D1 lookups. Launch
+      // tier1's fetches at the same moment; collection still happens in tier
+      // order, so early-exit and protected-backend semantics are unchanged.
+      // Cost: tier1 subrequests are spent even when tier0 alone would satisfy
+      // minResults — the right trade for cold-start long-tail agent queries.
+      if (tierIdx === 0 && BACKEND_TIERS[1]) {
+        const nextTier = BACKEND_TIERS[1]
+        for (const t of tasks) {
+          if (this.tierManager.getTier(t.name)?.id === nextTier.id) {
+            launchTask(t, nextTier.latencyMs)
+          }
+        }
+      }
+
       logger.debug('[TieredFanout] Executing tier', {
         tier: tier.id,
         tasks: tierTasks.length,
@@ -148,7 +177,7 @@ export class TieredFanout {
       })
 
       // Execute tier with timeout
-      const tierResults = await this.executeTier(tierTasks, tier.latencyMs, options.breakerMap)
+      const tierResults = await Promise.all(tierTasks.map((t) => launchTask(t, tier.latencyMs)))
 
       // Collect results
       for (const result of tierResults) {
@@ -210,25 +239,11 @@ export class TieredFanout {
   // Private methods
   // ============================================================
 
-  private async executeTier(
-    tasks: BackendTask[],
-    timeoutMs: number,
-    breakerMap?: Record<string, CircuitBreaker>,
-  ): Promise<
-    Array<{
-      backend: string
-      results: SearchResult[]
-      rejected: boolean
-    }>
-  > {
-    const promises = tasks.map((task) => this.executeTask(task, timeoutMs, breakerMap))
-    return Promise.all(promises)
-  }
-
   private async executeTask(
     task: BackendTask,
     timeoutMs: number,
     breakerMap?: Record<string, CircuitBreaker>,
+    freePlan?: boolean,
   ): Promise<{
     backend: string
     results: SearchResult[]
@@ -250,7 +265,12 @@ export class TieredFanout {
     // Use the larger of tier timeout and backend timeout
     // This ensures backends with higher timeouts (e.g., CSDN/Juejin at 4000ms)
     // are not prematurely killed by the tier's latency target
-    const effectiveTimeout = Math.max(timeoutMs, backendTimeoutMs(task.name, 0))
+    const ceiling = freePlan
+      ? (FREE_PLAN_TIMEOUT_OVERRIDES[task.name] ?? backendTimeoutMs(task.name, 0))
+      : backendTimeoutMs(task.name, 0)
+    // The tier latency still floors the value — an override below the tier's
+    // own target (e.g. duckduckgo 1500ms in a 2000ms tier) cannot bite here.
+    const effectiveTimeout = Math.max(timeoutMs, ceiling)
 
     try {
       const results = await Promise.race([

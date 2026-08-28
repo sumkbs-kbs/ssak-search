@@ -379,7 +379,10 @@ export async function wikipediaSearch(
               env,
               actionUrl,
               {
-                headers: { Accept: 'application/json', 'User-Agent': 'SearchAPI/1.0 (contact@example.com)' },
+                headers: {
+                  Accept: 'application/json',
+                  'User-Agent': 'ssak-search/2.8.0 (self-hosted; https://github.com/mr.k/webapp)',
+                },
               },
               actionPerAttempt,
             )
@@ -473,7 +476,10 @@ export async function wikipediaSearch(
           env,
           searchUrl,
           {
-            headers: { Accept: 'application/json', 'User-Agent': 'SearchAPI/1.0 (contact@example.com)' },
+            headers: {
+              Accept: 'application/json',
+              'User-Agent': 'ssak-search/2.8.0 (self-hosted; https://github.com/mr.k/webapp)',
+            },
           },
           restPerAttempt,
         )
@@ -628,7 +634,12 @@ export async function dbpediaSearch(
     const response = await fetchWithTimeout(
       env,
       lookupUrl,
-      { headers: { Accept: 'application/json', 'User-Agent': 'SearchAPI/1.0' } },
+      {
+        headers: {
+          Accept: 'application/json',
+          'User-Agent': 'ssak-search/2.8.0 (self-hosted; https://github.com/mr.k/webapp)',
+        },
+      },
       timeoutMs,
     )
     if (!response.ok) {
@@ -850,7 +861,12 @@ export async function wikidataWikiSearch(
       const searchRes = await fetchWithTimeout(
         env,
         searchUrl,
-        { headers: { Accept: 'application/json', 'User-Agent': 'SearchAPI/1.0 (contact@example.com)' } },
+        {
+          headers: {
+            Accept: 'application/json',
+            'User-Agent': 'ssak-search/2.8.0 (self-hosted; https://github.com/mr.k/webapp)',
+          },
+        },
         timeoutMs,
       )
       if (!searchRes.ok) {
@@ -877,7 +893,12 @@ export async function wikidataWikiSearch(
       const entityRes = await fetchWithTimeout(
         env,
         entityUrl,
-        { headers: { Accept: 'application/json', 'User-Agent': 'SearchAPI/1.0 (contact@example.com)' } },
+        {
+          headers: {
+            Accept: 'application/json',
+            'User-Agent': 'ssak-search/2.8.0 (self-hosted; https://github.com/mr.k/webapp)',
+          },
+        },
         timeoutMs,
       )
       if (!entityRes.ok) {
@@ -1023,7 +1044,7 @@ export async function dbpediaLangSearch(
       const response = await fetchWithTimeout(
         env,
         sparqlUrl,
-        { headers: { 'User-Agent': 'SearchAPI/1.0 (contact@example.com)' } },
+        { headers: { 'User-Agent': 'ssak-search/2.8.0 (self-hosted; https://github.com/mr.k/webapp)' } },
         timeoutMs,
       )
       if (!response.ok) {
@@ -1087,7 +1108,10 @@ export async function wikipediaSummary(
       env,
       url,
       {
-        headers: { Accept: 'application/json', 'User-Agent': 'SearchAPI/1.0 (contact@example.com)' },
+        headers: {
+          Accept: 'application/json',
+          'User-Agent': 'ssak-search/2.8.0 (self-hosted; https://github.com/mr.k/webapp)',
+        },
       },
       timeoutMs,
     )
@@ -1325,7 +1349,7 @@ export async function githubSearch(
       {
         headers: {
           Accept: 'application/vnd.github.v3+json',
-          'User-Agent': 'SearchAPI/1.0',
+          'User-Agent': 'ssak-search/2.8.0 (self-hosted; https://github.com/mr.k/webapp)',
         },
       },
       timeoutMs,
@@ -1640,7 +1664,7 @@ export async function githubIssuesSearch(
       {
         headers: {
           Accept: 'application/vnd.github.v3+json',
-          'User-Agent': 'SearchAPI/1.0',
+          'User-Agent': 'ssak-search/2.8.0 (self-hosted; https://github.com/mr.k/webapp)',
         },
       },
       timeoutMs,
@@ -1734,7 +1758,12 @@ export async function hackerNewsSearch(
     const response = await fetchWithTimeout(
       env,
       url,
-      { headers: { Accept: 'application/json', 'User-Agent': 'SearchAPI/1.0' } },
+      {
+        headers: {
+          Accept: 'application/json',
+          'User-Agent': 'ssak-search/2.8.0 (self-hosted; https://github.com/mr.k/webapp)',
+        },
+      },
       timeoutMs,
     )
 
@@ -1885,7 +1914,7 @@ async function redditRssSearch(
       {
         headers: {
           Accept: 'application/rss+xml, application/xml;q=0.9, */*;q=0.8',
-          'User-Agent': 'SearchAPI/1.0 (contact@example.com)',
+          'User-Agent': 'ssak-search/2.8.0 (self-hosted; https://github.com/mr.k/webapp)',
         },
       },
       Math.min(timeoutMs, 2000),
@@ -1955,7 +1984,7 @@ export async function redditSearch(
               {
                 headers: {
                   Accept: 'application/json',
-                  'User-Agent': 'SearchAPI/1.0 (contact@example.com)',
+                  'User-Agent': 'ssak-search/2.8.0 (self-hosted; https://github.com/mr.k/webapp)',
                 },
               },
               perAttemptMs,
@@ -2690,7 +2719,9 @@ export function getSourcesForQueryType(type: QueryType): {
 async function wikipediaToWikidataId(title: string, language = 'en'): Promise<string | null> {
   try {
     const url = `https://${language}.wikipedia.org/w/api.php?action=query&prop=pageprops&titles=${encodeURIComponent(title)}&format=json&redirects=1`
-    const resp = await fetch(url, { headers: { 'User-Agent': 'SearchAPI/1.0' } })
+    const resp = await fetch(url, {
+      headers: { 'User-Agent': 'ssak-search/2.8.0 (self-hosted; https://github.com/mr.k/webapp)' },
+    })
     if (!resp.ok) return null
     const data = (await resp.json()) as Record<string, unknown>
     const pages = (data.query as Record<string, unknown>)?.pages as Record<string, Record<string, unknown>> | undefined
@@ -2718,7 +2749,9 @@ async function wikidataEntityFacts(wikidataId: string): Promise<{
 } | null> {
   try {
     const url = `https://www.wikidata.org/wiki/Special:EntityData/${wikidataId}.json`
-    const resp = await fetch(url, { headers: { 'User-Agent': 'SearchAPI/1.0' } })
+    const resp = await fetch(url, {
+      headers: { 'User-Agent': 'ssak-search/2.8.0 (self-hosted; https://github.com/mr.k/webapp)' },
+    })
     if (!resp.ok) return null
     const data = (await resp.json()) as Record<string, unknown>
     const entities = data.entities as Record<string, Record<string, unknown>>
@@ -2893,7 +2926,10 @@ export async function fetchDbpediaEntity(
       env,
       url,
       {
-        headers: { Accept: 'application/json', 'User-Agent': 'SearchAPI/1.0' },
+        headers: {
+          Accept: 'application/json',
+          'User-Agent': 'ssak-search/2.8.0 (self-hosted; https://github.com/mr.k/webapp)',
+        },
       },
       backendTimeoutMs('dbpedia', 6000),
     )
@@ -2925,7 +2961,9 @@ async function wikipediaInfobox(query: string, language = 'en'): Promise<Record<
   try {
     // Use the Action API to get the page HTML
     const url = `https://${language}.wikipedia.org/w/api.php?action=parse&page=${encodeURIComponent(query)}&prop=text&section=0&format=json&redirects=1`
-    const resp = await fetch(url, { headers: { 'User-Agent': 'SearchAPI/1.0' } })
+    const resp = await fetch(url, {
+      headers: { 'User-Agent': 'ssak-search/2.8.0 (self-hosted; https://github.com/mr.k/webapp)' },
+    })
     if (!resp.ok) return null
     const data = (await resp.json()) as Record<string, unknown>
     const parseData = data.parse as Record<string, unknown> | undefined
@@ -2994,7 +3032,12 @@ export async function getKnowledgeGraph(
     const summaryResp = await fetchWithTimeout(
       env,
       summaryUrl,
-      { headers: { Accept: 'application/json', 'User-Agent': 'SearchAPI/1.0 (contact@example.com)' } },
+      {
+        headers: {
+          Accept: 'application/json',
+          'User-Agent': 'ssak-search/2.8.0 (self-hosted; https://github.com/mr.k/webapp)',
+        },
+      },
       backendTimeoutMs('wikipedia', 6000),
     )
 

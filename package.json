@@ -115,7 +115,7 @@
     "eval:sample:gate": "npx tsx eval/index.ts --sample 12 --ci --summary && npx tsx scripts/verify-ndcg-gate.ts"
   },
   "dependencies": {
-    "@sentry/cloudflare": "^10.67.0",
+    "@sentry/cloudflare": "^10.71.0",
     "hono": "^4.12.30"
   },
   "devDependencies": {
